@@ -44,7 +44,10 @@ Releases are published from GitHub Actions only:
   `gh release verify-asset <tag> <file> --repo ciatlas/flowpact`);
 - release tags (`v*`) can only be created or moved by the release automation and maintainers.
 
-Releases up to 0.11.1 were built before the move: verify them with `--repo rumankazi/flowpact`.
+Releases up to 0.11.1 were built before the move, and GitHub keeps their attestations under the old owner: verify
+them online with `--owner rumankazi`, or offline against the bundle attached to the release with
+`gh attestation verify <file> --bundle <file>.sigstore.json --repo rumankazi/flowpact`. `gh release verify` no longer
+finds their release attestations.
 
 The [security page](https://ciatlas.github.io/flowpact/docs/security) describes what flowpact reads, writes and
 sends, the permissions it needs, and how to verify each artifact.

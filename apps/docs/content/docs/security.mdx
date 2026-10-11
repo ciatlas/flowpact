@@ -99,7 +99,10 @@ The action archive, the SBOMs and draft releases start with 0.9.0.
 ## Verify a release
 
 Download the assets of a release (`gh release download vX.Y.Z --repo ciatlas/flowpact`), then run the commands below.
-Releases up to 0.11.1 were built before the move: verify them with `--repo rumankazi/flowpact`.
+Releases up to 0.11.1 were built before the move, and GitHub keeps their attestations under the old owner: verify
+them online with `--owner rumankazi`, or offline against the bundle attached to the release with
+`gh attestation verify <file> --bundle <file>.sigstore.json --repo rumankazi/flowpact`. `gh release verify` no longer
+finds their release attestations.
 
 ```sh
 # Built by this repository's release workflow:

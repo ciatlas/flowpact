@@ -9,7 +9,7 @@ codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the 
 
 ### ⚠ BREAKING CHANGES
 
-* flowpact moved to the ciatlas organization. Use `uses: ciatlas/flowpact@v0.12` (GitHub redirects the old name). The docs and schemas are now at https://ciatlas.github.io/flowpact, and the old rumankazi.github.io/flowpact URLs no longer resolve. Contracts written by 0.11 or earlier name the old schema and docs URLs: run `flowpact generate` once, or `flowpact check` reports FP802. Releases up to 0.11.1 verify with `--repo rumankazi/flowpact`. See https://ciatlas.github.io/flowpact/docs/upgrading.
+* flowpact moved to the ciatlas organization. Use `uses: ciatlas/flowpact@v0.12` (GitHub redirects the old name). The docs and schemas are now at https://ciatlas.github.io/flowpact, and the old rumankazi.github.io/flowpact URLs no longer resolve. Contracts written by 0.11 or earlier name the old schema and docs URLs: run `flowpact generate` once, or `flowpact check` reports FP802. Releases up to 0.11.1 verify with `gh attestation verify --owner rumankazi`, or offline with the release's `.sigstore.json` bundle and `--repo rumankazi/flowpact`; `gh release verify` no longer finds their release attestations. See https://ciatlas.github.io/flowpact/docs/upgrading.
 
 ### Features
 

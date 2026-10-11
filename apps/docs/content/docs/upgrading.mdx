@@ -29,8 +29,10 @@ point it at `https://ciatlas.github.io/flowpact/schemas/config/v1.json`: the old
 
 ### Verifying older releases
 
-Releases up to 0.11.1 were built before the move: verify them with `--repo rumankazi/flowpact` (see
-[verify a release](/docs/security#verify-a-release)).
+Releases up to 0.11.1 were built before the move, and GitHub keeps their attestations under the old owner: verify
+them online with `--owner rumankazi`, or offline against the bundle attached to the release with
+`gh attestation verify <file> --bundle <file>.sigstore.json --repo rumankazi/flowpact`. `gh release verify` no longer
+finds their release attestations. See [verify a release](/docs/security#verify-a-release).
 
 ## 0.9 → 0.10
 

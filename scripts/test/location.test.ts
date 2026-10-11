@@ -64,11 +64,11 @@ describe('where flowpact lives (packages/lint/src/location.json)', () => {
       re: new RegExp(`${o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`),
     }));
     const leftovers = files.flatMap((file) => {
-      // A line that says flowpact moved may name where it was (e.g. how to verify releases built there).
+      // A paragraph that says flowpact moved may name where it was (e.g. how to verify releases built there).
       const text = read(file)
-        .split('\n')
-        .filter((line) => !/moved from|before the move/.test(line))
-        .join('\n');
+        .split(/\n\s*\n/)
+        .filter((paragraph) => !/moved from|before the move/.test(paragraph))
+        .join('\n\n');
       return patterns.filter(({ re }) => re.test(text)).map(({ o }) => `${file}: ${o}`);
     });
     expect(leftovers).toEqual([]);
