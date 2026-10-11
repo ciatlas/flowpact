@@ -66,7 +66,7 @@ describe('built-in rules', () => {
       expect(r.docs.why.length).toBeGreaterThan(30);
       expect(r.docs.fix.length).toBeGreaterThan(10);
       expect(registry.docsUrl(r)).toBe(
-        `https://rumankazi.github.io/flowpact/docs/rules/${r.code.toLowerCase()}`,
+        `https://ciatlas.github.io/flowpact/docs/rules/${r.code.toLowerCase()}`,
       );
     },
   );

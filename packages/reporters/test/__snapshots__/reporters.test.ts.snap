@@ -24,7 +24,7 @@ exports[`renderPretty > renders the incident with code frame, matrix, context, w
           (e.g. a test configuration) while the run stays green.
   fix     Set \`config\` in every combination, or use a fallback: \`\${{ matrix.config ||
           '<default>' }}\`.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp401
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp401
 
 ╭─ Summary ──────────────────────────────────────────────────╮
 │ ✖ 1 error   ▲ 0 warnings   ● 0 info                        │

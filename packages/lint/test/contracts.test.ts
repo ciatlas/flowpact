@@ -228,7 +228,7 @@ describe('buildContract', () => {
   it('describes a local action and the steps that use it', () => {
     const c = contractOf(base, '.github/actions/setup');
     expect(c).toEqual({
-      $schema: 'https://rumankazi.github.io/flowpact/schemas/contract/v1.json',
+      $schema: 'https://ciatlas.github.io/flowpact/schemas/contract/v1.json',
       version: 1,
       kind: 'action',
       path: '.github/actions/setup',

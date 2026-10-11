@@ -13,7 +13,7 @@ exports[`renderMarkdown > renders nested workflows grouped by severity, errors f
 
 ### ❌ Errors (4)
 
-**[\`FP101\`](https://rumankazi.github.io/flowpact/docs/rules/fp101) missing-required-input** · \`.github/workflows/build.yml:29:11\`
+**[\`FP101\`](https://ciatlas.github.io/flowpact/docs/rules/fp101) missing-required-input** · \`.github/workflows/build.yml:29:11\`
 
 jobs.package calls .github/workflows/package.yml without required input "channel"
 
@@ -30,7 +30,7 @@ jobs.package calls .github/workflows/package.yml without required input "channel
 
 </details>
 
-**[\`FP201\`](https://rumankazi.github.io/flowpact/docs/rules/fp201) missing-required-secret** · \`.github/workflows/build.yml:29:11\`
+**[\`FP201\`](https://ciatlas.github.io/flowpact/docs/rules/fp201) missing-required-secret** · \`.github/workflows/build.yml:29:11\`
 
 jobs.package calls .github/workflows/package.yml without required secret "signing-key"
 
@@ -47,7 +47,7 @@ jobs.package calls .github/workflows/package.yml without required secret "signin
 
 </details>
 
-**[\`FP301\`](https://rumankazi.github.io/flowpact/docs/rules/fp301) undefined-output-ref** · \`.github/workflows/pipeline.yml:33:73\`
+**[\`FP301\`](https://ciatlas.github.io/flowpact/docs/rules/fp301) undefined-output-ref** · \`.github/workflows/pipeline.yml:33:73\`
 
 jobs.build has no output "image-digest"
 
@@ -63,7 +63,7 @@ jobs.build has no output "image-digest"
 
 </details>
 
-**[\`FP302\`](https://rumankazi.github.io/flowpact/docs/rules/fp302) output-ref-without-needs** · \`.github/workflows/pipeline.yml:39:33\`
+**[\`FP302\`](https://ciatlas.github.io/flowpact/docs/rules/fp302) output-ref-without-needs** · \`.github/workflows/pipeline.yml:39:33\`
 
 jobs.notify reads needs.build, which is empty here: "build" is not under needs, and only the job's \`if:\` sees jobs it depends on indirectly
 
@@ -81,7 +81,7 @@ jobs.notify reads needs.build, which is empty here: "build" is not under needs, 
 
 ### ⚠️ Warnings (7)
 
-**[\`FP104\`](https://rumankazi.github.io/flowpact/docs/rules/fp104) unused-input** · \`.github/workflows/build.yml:11:7\`
+**[\`FP104\`](https://ciatlas.github.io/flowpact/docs/rules/fp104) unused-input** · \`.github/workflows/build.yml:11:7\`
 
 Input "verbose" of .github/workflows/build.yml is never read (yet 1 caller passes it)
 
@@ -97,7 +97,7 @@ Input "verbose" of .github/workflows/build.yml is never read (yet 1 caller passe
 
 </details>
 
-**[\`FP303\`](https://rumankazi.github.io/flowpact/docs/rules/fp303) unused-output** · \`.github/workflows/build.yml:22:7\`
+**[\`FP303\`](https://ciatlas.github.io/flowpact/docs/rules/fp303) unused-output** · \`.github/workflows/build.yml:22:7\`
 
 Output "checksum" of jobs.compile is never read
 
@@ -109,7 +109,7 @@ Output "checksum" of jobs.compile is never read
 
 </details>
 
-**[\`FP304\`](https://rumankazi.github.io/flowpact/docs/rules/fp304) step-output-never-written** · \`.github/workflows/build.yml:22:21\`
+**[\`FP304\`](https://ciatlas.github.io/flowpact/docs/rules/fp304) step-output-never-written** · \`.github/workflows/build.yml:22:21\`
 
 Step "sum" never writes output "sha" (it writes sha256) — did you mean "sha256"?
 
@@ -125,7 +125,7 @@ Step "sum" never writes output "sha" (it writes sha256) — did you mean "sha256
 
 </details>
 
-**[\`FP203\`](https://rumankazi.github.io/flowpact/docs/rules/fp203) unused-secret** · \`.github/workflows/package.yml:17:7\`
+**[\`FP203\`](https://ciatlas.github.io/flowpact/docs/rules/fp203) unused-secret** · \`.github/workflows/package.yml:17:7\`
 
 Secret "signing-key" of .github/workflows/package.yml is never read
 
@@ -137,7 +137,7 @@ Secret "signing-key" of .github/workflows/package.yml is never read
 
 </details>
 
-**[\`FP104\`](https://rumankazi.github.io/flowpact/docs/rules/fp104) unused-input** · \`.github/workflows/pipeline.yml:15:7\`
+**[\`FP104\`](https://ciatlas.github.io/flowpact/docs/rules/fp104) unused-input** · \`.github/workflows/pipeline.yml:15:7\`
 
 Input "legacy-flag" of .github/workflows/pipeline.yml is never read
 
@@ -149,7 +149,7 @@ Input "legacy-flag" of .github/workflows/pipeline.yml is never read
 
 </details>
 
-**[\`FP107\`](https://rumankazi.github.io/flowpact/docs/rules/fp107) optional-forwarded-to-required** · \`.github/workflows/pipeline.yml:24:18\`
+**[\`FP107\`](https://ciatlas.github.io/flowpact/docs/rules/fp107) optional-forwarded-to-required** · \`.github/workflows/pipeline.yml:24:18\`
 
 Required input "notes" of .github/workflows/build.yml is fed from optional input "release-notes" without a default
 
@@ -166,7 +166,7 @@ Required input "notes" of .github/workflows/build.yml is fed from optional input
 
 </details>
 
-**[\`FP501\`](https://rumankazi.github.io/flowpact/docs/rules/fp501) undefined-env-ref** · \`.github/workflows/publish.yml:34:36\`
+**[\`FP501\`](https://ciatlas.github.io/flowpact/docs/rules/fp501) undefined-env-ref** · \`.github/workflows/publish.yml:34:36\`
 
 env.TARGET_URL is not defined in this scope
 
@@ -180,7 +180,7 @@ env.TARGET_URL is not defined in this scope
 
 ### ℹ️ Info (2)
 
-**[\`FP106\`](https://rumankazi.github.io/flowpact/docs/rules/fp106) passthrough-dropped** · \`.github/workflows/pipeline.yml:25:7\`
+**[\`FP106\`](https://ciatlas.github.io/flowpact/docs/rules/fp106) passthrough-dropped** · \`.github/workflows/pipeline.yml:25:7\`
 
 jobs.build passes "verbose" to .github/workflows/build.yml, which never reads it
 
@@ -196,7 +196,7 @@ jobs.build passes "verbose" to .github/workflows/build.yml, which never reads it
 
 </details>
 
-**[\`FP204\`](https://rumankazi.github.io/flowpact/docs/rules/fp204) secrets-inherit** · \`.github/workflows/pipeline.yml:26:5\`
+**[\`FP204\`](https://ciatlas.github.io/flowpact/docs/rules/fp204) secrets-inherit** · \`.github/workflows/pipeline.yml:26:5\`
 
 jobs.build inherits all secrets; .github/workflows/build.yml and its callees read REGISTRY_TOKEN
 
@@ -228,7 +228,7 @@ exports[`renderMarkdown > renders the incident report 1`] = `
 
 ### ❌ Errors (1)
 
-**[\`FP401\`](https://rumankazi.github.io/flowpact/docs/rules/fp401) empty-binding-for-matrix-combo** · \`.github/workflows/tests.yml:23:19\`
+**[\`FP401\`](https://ciatlas.github.io/flowpact/docs/rules/fp401) empty-binding-for-matrix-combo** · \`.github/workflows/tests.yml:23:19\`
 
 Input "config" for .github/workflows/run-suite.yml is empty in 1 of 3 matrix combinations — matrix.config is not defined there
 
@@ -264,7 +264,7 @@ exports[`renderMarkdown contracts and suppressions > summarizes contract drift w
 
 ### ❌ Errors (3)
 
-**[\`FP803\`](https://rumankazi.github.io/flowpact/docs/rules/fp803) breaking-interface-change** · \`.github/workflows/deploy.yml:3:3\`
+**[\`FP803\`](https://ciatlas.github.io/flowpact/docs/rules/fp803) breaking-interface-change** · \`.github/workflows/deploy.yml:3:3\`
 
 Breaking change to .github/workflows/deploy.yml: input "region" was removed — callers that pass it will fail
 
@@ -281,7 +281,7 @@ Breaking change to .github/workflows/deploy.yml: input "region" was removed — 
 
 </details>
 
-**[\`FP803\`](https://rumankazi.github.io/flowpact/docs/rules/fp803) breaking-interface-change** · \`.github/workflows/deploy.yml:8:7\`
+**[\`FP803\`](https://ciatlas.github.io/flowpact/docs/rules/fp803) breaking-interface-change** · \`.github/workflows/deploy.yml:8:7\`
 
 Breaking change to .github/workflows/deploy.yml: input "token-scope" was added and must be passed — existing callers do not pass it
 
@@ -298,7 +298,7 @@ Breaking change to .github/workflows/deploy.yml: input "token-scope" was added a
 
 </details>
 
-**[\`FP802\`](https://rumankazi.github.io/flowpact/docs/rules/fp802) contract-outdated** · \`.github/workflows/deploy.yml:11:7\`
+**[\`FP802\`](https://ciatlas.github.io/flowpact/docs/rules/fp802) contract-outdated** · \`.github/workflows/deploy.yml:11:7\`
 
 Contract .github/flowpact/contracts/workflows/deploy.contract.yml is outdated: input "legacy" was added
 
@@ -333,7 +333,7 @@ Run \`flowpact generate\` and commit the result to update the locked contracts.
 
 | Code | Location | Reason | Expires | Owner |
 | --- | --- | --- | --- | --- |
-| [\`FP104\`](https://rumankazi.github.io/flowpact/docs/rules/fp104) | \`.github/workflows/deploy.yml:11:7\` | Kept for callers on v1 \\| removed in v3 | 2099-01-01 | @​platform |
+| [\`FP104\`](https://ciatlas.github.io/flowpact/docs/rules/fp104) | \`.github/workflows/deploy.yml:11:7\` | Kept for callers on v1 \\| removed in v3 | 2099-01-01 | @​platform |
 
 </details>
 "

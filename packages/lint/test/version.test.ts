@@ -15,6 +15,6 @@ describe('version', () => {
     expect(b).toContain(`flowpact v${VERSION}`);
     for (const [k, v] of Object.entries(SCHEMA_VERSIONS)) expect(b).toContain(`${k} schema v${v}`);
     expect(toolMeta()).toMatchObject({ tool: 'flowpact', version: VERSION, node: process.version });
-    expect(schemaUrl('report')).toBe('https://rumankazi.github.io/flowpact/schemas/report/v1.json');
+    expect(schemaUrl('report')).toBe('https://ciatlas.github.io/flowpact/schemas/report/v1.json');
   });
 });

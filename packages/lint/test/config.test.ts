@@ -55,7 +55,7 @@ describe('config', () => {
 
   it('exports a JSON schema', () => {
     const s = configJsonSchema();
-    expect(s.$id).toBe('https://rumankazi.github.io/flowpact/schemas/config/v1.json');
+    expect(s.$id).toBe('https://ciatlas.github.io/flowpact/schemas/config/v1.json');
     expect(JSON.stringify(s)).toContain('nestingDepth');
   });
 

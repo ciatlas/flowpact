@@ -198,7 +198,7 @@ describe('lint mode', () => {
       startColumn: 19,
       endColumn: 32,
     });
-    expect(errors[0]!.message).toContain('https://rumankazi.github.io/flowpact/docs/rules/fp401');
+    expect(errors[0]!.message).toContain('https://ciatlas.github.io/flowpact/docs/rules/fp401');
     expect(s.outputs).toMatchObject({
       errors: '1',
       warnings: '0',
@@ -263,7 +263,7 @@ describe('lint mode', () => {
     const s = await action(join(FIXTURES, 'incident-matrix'), { 'summary-graph': 'true' });
     expect(s.summaryWrites).toBe(1);
     expect(s.summary).toMatch(/^## flowpact lint\n/);
-    expect(s.summary).toContain('[`FP401`](https://rumankazi.github.io/flowpact/docs/rules/fp401)');
+    expect(s.summary).toContain('[`FP401`](https://ciatlas.github.io/flowpact/docs/rules/fp401)');
     expect(s.summary).toContain('```mermaid');
   });
 

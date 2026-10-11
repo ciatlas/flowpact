@@ -350,7 +350,7 @@ describe('graph, trace, rules and explain', () => {
       name: 'empty-binding-for-matrix-combo',
       category: 'matrix',
       severity: r.explain.defaultSeverity,
-      docsUrl: 'https://rumankazi.github.io/flowpact/docs/rules/fp401',
+      docsUrl: 'https://ciatlas.github.io/flowpact/docs/rules/fp401',
       generatedFiles: 'report',
     });
     expect(r.explain).toHaveProperty('why');
@@ -411,7 +411,7 @@ describe('text', () => {
     expect(r.narrow).toBe(await cliOut(['rules'], { COLUMNS: '60' }));
     expect(r.explain).toBe(await cliOut(['explain', 'FP401']));
     expect(r.colored).toMatch(/\u001B\[/);
-    expect(r.colored).toContain('\u001B]8;;https://rumankazi.github.io/flowpact/docs/rules/fp401');
+    expect(r.colored).toContain('\u001B]8;;https://ciatlas.github.io/flowpact/docs/rules/fp401');
     expect(r.tree).not.toMatch(/\u001B/);
   });
 

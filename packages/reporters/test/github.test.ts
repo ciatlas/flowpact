@@ -47,7 +47,7 @@ describe('renderGithub', () => {
       '::error title=FP401 empty-binding-for-matrix-combo,file=.github/workflows/tests.yml,line=23,endLine=23,col=19,endColumn=32::' +
         'Input "config" for .github/workflows/run-suite.yml is empty in 1 of 3 matrix combinations — matrix.config is not defined there' +
         "%0ASet `config` in every combination, or use a fallback: `${{ matrix.config || '<default>' }}`." +
-        '%0Ahttps://rumankazi.github.io/flowpact/docs/rules/fp401\n',
+        '%0Ahttps://ciatlas.github.io/flowpact/docs/rules/fp401\n',
     );
   });
 

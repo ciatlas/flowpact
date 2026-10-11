@@ -30,7 +30,7 @@ describe('renderSarif', () => {
       name: 'flowpact',
       version: VERSION,
       semanticVersion: VERSION,
-      informationUri: 'https://rumankazi.github.io/flowpact',
+      informationUri: 'https://ciatlas.github.io/flowpact',
     });
   });
 
@@ -44,7 +44,7 @@ describe('renderSarif', () => {
     expect(fp101).toMatchObject({
       name: 'missing-required-input',
       shortDescription: { text: def.docs.summary },
-      helpUri: 'https://rumankazi.github.io/flowpact/docs/rules/fp101',
+      helpUri: 'https://ciatlas.github.io/flowpact/docs/rules/fp101',
       defaultConfiguration: { level: 'error' },
       properties: { tags: ['inputs'] },
     });

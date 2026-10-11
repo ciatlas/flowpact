@@ -128,7 +128,7 @@ jobs:
           (e.g. a test configuration) while the run stays green.
   fix     Set `config` in every combination, or use a fallback: `${{ matrix.config ||
           '<default>' }}`.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp401
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp401
 ```
 
 ### An include entry left over after a runner upgrade starts a job of its own
@@ -190,7 +190,7 @@ jobs:
           negations (`matrix.key != ''`, `!matrix.key`), `matrix.key && ...` guards, quoted
           shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}"
           = on ]`), and combinations where the job or step is skipped by its own `if:`.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp402
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp402
 ```
 
 ### An optional input decides an `if:`, and the caller leaves it out
@@ -265,7 +265,7 @@ jobs:
           default the root `action.yml` and reusable workflows whose file name does not start
           with `_`; see `impact.publish`), since callers in other repositories can still omit
           them.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp105
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp105
 ```
 
 ### A required input is fed from an optional input nobody sets
@@ -335,7 +335,7 @@ jobs:
           "required" guarantee is lost one level up.
   fix     Make the outer input required too, give it a default, or add a fallback: `${{ inputs.x
           || 'value' }}`.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp107
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp107
 ```
 
 ### A composite action reads a misspelled input
@@ -397,7 +397,7 @@ runs:
           that go nowhere, and readers assume a knob works when it does not.
   fix     Remove the input (and the callers’ bindings), or wire it to where it was meant to be
           used.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp104
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp104
 
 ✖  ERROR  FP108 undefined-input-ref
   .github/actions/deploy has no input "enviroment" — did you mean "environment"?
@@ -411,7 +411,7 @@ runs:
   why     Undeclared inputs always evaluate to an empty value. This is usually a typo or a
           rename that missed a usage.
   fix     Use `inputs.environment`.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp108
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp108
 ```
 
 ### A local action after a checkout into a subdirectory
@@ -479,7 +479,7 @@ runs:
   fix     A step’s ./path is relative to the workspace, where this repository is at "src": a
           path in it starts with ./src/. Or use $/.github/actions/setup-node, which always means
           this repository.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp606
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp606
 ```
 
 ### A reusable workflow declares one secret and reads another
@@ -546,7 +546,7 @@ jobs:
           use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's
           `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`)
           are not counted: the read never runs for them.
-  docs    https://rumankazi.github.io/flowpact/docs/rules/fp205
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp205
 ```
 
 The difference shows when the repository changes:
@@ -590,7 +590,7 @@ change passes. See [impact mode](/docs/impact-mode).
 
 **Trace.** `flowpact trace` follows a value through reusable workflows down to where it is used, or with `--up` back to
 where it comes from. actionlint has no equivalent. On the
-[`deep-nesting`](https://github.com/rumankazi/flowpact/tree/main/fixtures/deep-nesting) fixture:
+[`deep-nesting`](https://github.com/ciatlas/flowpact/tree/main/fixtures/deep-nesting) fixture:
 
 ```text
 $ flowpact trace pipeline.yml:environment
@@ -637,7 +637,7 @@ open while the GitHub extension runs.
 
 ## Measured on the fixture repositories
 
-The repositories under [`fixtures/`](https://github.com/rumankazi/flowpact/tree/main/fixtures) were linted with both tools
+The repositories under [`fixtures/`](https://github.com/ciatlas/flowpact/tree/main/fixtures) were linted with both tools
 (actionlint 1.7.12):
 
 | Fixture | actionlint | flowpact |

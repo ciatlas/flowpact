@@ -39,6 +39,17 @@ describe('where flowpact lives (packages/lint/src/location.json)', () => {
     expect(vscode.qna).toBe(`${REPOSITORY_URL}/issues`);
   });
 
+  it('is what the docs site links to', () => {
+    // The docs app cannot import location.json across packages, so its two copies are checked here.
+    const [owner, name] = location.repository.split('/');
+    const shared = read('apps/docs/lib/shared.ts');
+    expect(shared).toContain(`user: '${owner}',`);
+    expect(shared).toContain(`repo: '${name}',`);
+    expect(read('apps/docs/app/layout.tsx')).toContain(
+      `metadataBase: new URL('${new URL(location.docsBaseUrl).origin}'),`,
+    );
+  });
+
   it('leaves no previous location outside the history', () => {
     const old = [
       ...previous.repositories,
@@ -47,9 +58,18 @@ describe('where flowpact lives (packages/lint/src/location.json)', () => {
     const files = execFileSync('git', ['ls-files', '-z'], { cwd: ROOT, encoding: 'utf8' })
       .split('\0')
       .filter((f) => f && !HISTORY.includes(f) && !BINARY.test(f));
+    // A whole name only: `owner/flowpact` does not match the separate repository `owner/flowpact-checknames-lab`.
+    const patterns = old.map((o) => ({
+      o,
+      re: new RegExp(`${o.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])`),
+    }));
     const leftovers = files.flatMap((file) => {
-      const text = read(file);
-      return old.filter((o) => text.includes(o)).map((o) => `${file}: ${o}`);
+      // A line that says flowpact moved may name where it was (e.g. how to verify releases built there).
+      const text = read(file)
+        .split('\n')
+        .filter((line) => !/moved from|before the move/.test(line))
+        .join('\n');
+      return patterns.filter(({ re }) => re.test(text)).map(({ o }) => `${file}: ${o}`);
     });
     expect(leftovers).toEqual([]);
   });

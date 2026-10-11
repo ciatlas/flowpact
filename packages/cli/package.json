@@ -16,13 +16,13 @@
     "semver",
     "contracts"
   ],
-  "homepage": "https://rumankazi.github.io/flowpact",
+  "homepage": "https://ciatlas.github.io/flowpact",
   "bugs": {
-    "url": "https://github.com/rumankazi/flowpact/issues"
+    "url": "https://github.com/ciatlas/flowpact/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rumankazi/flowpact.git",
+    "url": "git+https://github.com/ciatlas/flowpact.git",
     "directory": "packages/cli"
   },
   "license": "MIT",

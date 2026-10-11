@@ -65,7 +65,7 @@
     }
   ],
   "minimumReleaseAge": "2 days",
-  "gitIgnoredAuthors": ["290186233+rk-release-bot[bot]@users.noreply.github.com"],
+  "gitIgnoredAuthors": ["340947222+ciatlas-release-bot[bot]@users.noreply.github.com"],
   "platformAutomerge": false,
   "automergeType": "pr",
   "automergeStrategy": "squash",

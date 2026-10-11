@@ -34,13 +34,13 @@ packages inside the repository, which are not published (use the [API](/docs/api
 ## Copy the action
 
 The flowpact action is a self-contained JavaScript action (`node24`): it uses no other actions and installs nothing
-when it runs. Each [release](https://github.com/rumankazi/flowpact/releases) has it as an archive,
+when it runs. Each [release](https://github.com/ciatlas/flowpact/releases) has it as an archive,
 `flowpact-action-X.Y.Z.tar.gz`: `action.yml`, the bundle, its license notices and SBOM. Copy it into a repository of
 your organization, where your action policy allows it:
 
 ```sh
-gh release download vX.Y.Z --repo rumankazi/flowpact --pattern 'flowpact-action-X.Y.Z.tar.gz'
-gh attestation verify flowpact-action-X.Y.Z.tar.gz --repo rumankazi/flowpact
+gh release download vX.Y.Z --repo ciatlas/flowpact --pattern 'flowpact-action-X.Y.Z.tar.gz'
+gh attestation verify flowpact-action-X.Y.Z.tar.gz --repo ciatlas/flowpact
 tar -xzf flowpact-action-X.Y.Z.tar.gz -C acme-flowpact   # a clone of a new repository
 ```
 
@@ -100,9 +100,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FLOWPACT_VERSION: 0.11.1
         run: |
-          gh release download "v$FLOWPACT_VERSION" --repo rumankazi/flowpact \
+          gh release download "v$FLOWPACT_VERSION" --repo ciatlas/flowpact \
             --pattern "flowpact-$FLOWPACT_VERSION.tgz" --dir "$RUNNER_TEMP"
-          gh attestation verify "$RUNNER_TEMP/flowpact-$FLOWPACT_VERSION.tgz" --repo rumankazi/flowpact
+          gh attestation verify "$RUNNER_TEMP/flowpact-$FLOWPACT_VERSION.tgz" --repo ciatlas/flowpact
           tar -xzf "$RUNNER_TEMP/flowpact-$FLOWPACT_VERSION.tgz" -C "$RUNNER_TEMP"
           node "$RUNNER_TEMP/package/dist/index.js" lint --format github -o markdown:"$GITHUB_STEP_SUMMARY"
 ```
@@ -188,7 +188,7 @@ Repositories use it like any action, after `actions/checkout`. With `--root` (a 
 workspace), the paths in annotations, SARIF and Markdown links stay relative to the repository.
 
 Without access to the npm registry, install the npm package from a release instead: each
-[GitHub release](https://github.com/rumankazi/flowpact/releases) has `flowpact-X.Y.Z.tgz` with build provenance.
+[GitHub release](https://github.com/ciatlas/flowpact/releases) has `flowpact-X.Y.Z.tgz` with build provenance.
 [Verify it](/docs/security#verify-a-release), commit it to the wrapper and depend on the file
 (`npm install --save-exact ./flowpact-X.Y.Z.tgz`).
 
@@ -268,7 +268,7 @@ Renovate updates the wrapper's npm dependency, and pinned action references wher
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
   "packageRules": [
     {
-      "matchPackageNames": ["flowpact", "rumankazi/flowpact"],
+      "matchPackageNames": ["flowpact", "ciatlas/flowpact"],
       "groupName": "flowpact",
       "minimumReleaseAge": "3 days"
     }
@@ -301,4 +301,4 @@ for two reasons:
 A fork that changes flowpact's code has to be rebuilt, re-verified and merged on every release, and its bundle no
 longer matches the signed release. A wrapper keeps flowpact unmodified and adds what your organization needs around it.
 If it needs something flowpact does not offer — a flag, an output, an extension point —
-[open an issue](https://github.com/rumankazi/flowpact/issues).
+[open an issue](https://github.com/ciatlas/flowpact/issues).

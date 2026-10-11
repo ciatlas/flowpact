@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/rumankazi/flowpact/main/assets/brand/app-icon-128.png" alt="" width="64" height="64">
+<img src="https://raw.githubusercontent.com/ciatlas/flowpact/main/assets/brand/app-icon-128.png" alt="" width="64" height="64">
 
 # flowpact (`flowpact`)
 
@@ -11,7 +11,7 @@ or an upload stops running without anyone noticing. flowpact follows every input
 output across those calls, evaluates every combination of the matrices written in your workflows, and reports where a
 value goes missing. Use it next to actionlint, which checks each file in depth.
 
-![flowpact lint reporting a matrix combination that passes an empty input](https://rumankazi.github.io/flowpact/screenshots/lint-incident.svg)
+![flowpact lint reporting a matrix combination that passes an empty input](https://ciatlas.github.io/flowpact/screenshots/lint-incident.svg)
 
 ```sh
 npx flowpact lint                         # lint .github/workflows and local actions
@@ -31,7 +31,7 @@ npm install --save-dev flowpact   # per project: npx flowpact lint
 Requires Node.js 22 or newer. Exit codes: `0` clean, `1` findings at or above `--fail-on`, `2` usage or
 configuration error, `3` internal error.
 
-In GitHub Actions, use the action instead: `uses: rumankazi/flowpact@v0.11` (job summary, annotations, SARIF and a
+In GitHub Actions, use the action instead: `uses: ciatlas/flowpact@v0.11` (job summary, annotations, SARIF and a
 downloadable patch when contracts drift).
 
 ## API
@@ -48,8 +48,8 @@ process.exitCode = analysis.exitCode(); // 1 when there are errors, as for `flow
 ```
 
 The results give the JSON report, GitHub annotations, SARIF, Markdown and the terminal report; the types are included.
-Reference and a complete action: https://rumankazi.github.io/flowpact/docs/api
+Reference and a complete action: https://ciatlas.github.io/flowpact/docs/api
 
-📖 **Docs:** https://rumankazi.github.io/flowpact — every rule has its own page.
+📖 **Docs:** https://ciatlas.github.io/flowpact — every rule has its own page.
 
 MIT licensed.

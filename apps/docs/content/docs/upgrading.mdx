@@ -6,6 +6,32 @@ description: What changes between flowpact releases, and what to do when you mov
 flowpact is before 1.0: a minor release (0.7 → 0.8) can change what is reported. Each section below lists what to do
 when you move to that release.
 
+## 0.11 → 0.12
+
+flowpact moved to the [ciatlas](https://github.com/ciatlas) organization: the repository is now `ciatlas/flowpact` and
+the docs are at <https://ciatlas.github.io/flowpact>. The npm package, the VS Code extension and the GitHub Marketplace
+listing keep their names, and nothing changes in what flowpact reports.
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.12`. GitHub redirects the old name, so `rumankazi/flowpact@v0.11` and
+  older references keep working, but use the new one from now on.
+- **CLI:** `npx flowpact@0.12`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Regenerate your contracts
+
+Contracts name their schema and docs by URL, and both moved. Until you run `flowpact generate` once and commit the
+result, `flowpact check` reports [FP802](/docs/rules/fp802) for every contract written by 0.11 or earlier. If your
+`.github/flowpact/flowpact.config.yml` starts with a `# yaml-language-server: $schema=` line (for editor completion),
+point it at `https://ciatlas.github.io/flowpact/schemas/config/v1.json`: the old docs and schema URLs under
+`rumankazi.github.io/flowpact` no longer resolve.
+
+### Verifying older releases
+
+Releases up to 0.11.1 were built before the move: verify them with `--repo rumankazi/flowpact` (see
+[verify a release](/docs/security#verify-a-release)).
+
 ## 0.9 → 0.10
 
 0.10 is for organizations that build on flowpact: a [programmatic API](/docs/api) with a function per command, the

@@ -98,7 +98,7 @@ describe('renderMarkdown', () => {
     expect(out.startsWith('## flowpact report\n')).toBe(true);
     expect(out).toContain('config schema v1 · contract schema v1 · report schema v1');
     expect(out).toContain('❌ **1 error**');
-    expect(out).toContain('[`FP401`](https://rumankazi.github.io/flowpact/docs/rules/fp401)');
+    expect(out).toContain('[`FP401`](https://ciatlas.github.io/flowpact/docs/rules/fp401)');
     expect(out).toContain('Matrix: `{ name: windows }`');
     expect(out).toContain('<details><summary>Why / fix</summary>');
   });
@@ -122,7 +122,7 @@ describe('renderMarkdown', () => {
       validateSchema: false,
     });
     expect(renderMarkdown(normalize(r))).toContain(
-      '<sub>1 finding about the internals of [generated files](https://rumankazi.github.io/flowpact/docs/configuration#generated-files) is not reported.</sub>',
+      '<sub>1 finding about the internals of [generated files](https://ciatlas.github.io/flowpact/docs/configuration#generated-files) is not reported.</sub>',
     );
     expect(renderMarkdown(fixture('clean'))).not.toContain('generated files');
   });

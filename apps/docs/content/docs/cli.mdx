@@ -98,7 +98,7 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
 
 ```json
 {
-  "$schema": "https://rumankazi.github.io/flowpact/schemas/report/v1.json",
+  "$schema": "https://ciatlas.github.io/flowpact/schemas/report/v1.json",
   "meta": { "tool": "flowpact", "version": "0.11.1", "schemas": { "config": 1, "contract": 1, "report": 1 }, "node": "v24.4.0", "platform": "linux-x64", "root": "/home/runner/work/app/app", "durationMs": 31 },
   "summary": { "errors": 1, "warnings": 0, "infos": 0, "suppressed": 0, "byCode": { "FP401": 1 } },
   "findings": [
@@ -112,7 +112,7 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
       "combos": ["{ name: windows }"],
       "symbol": ".github/workflows/run-suite.yml#inputs.config",
       "why": "…", "fix": "…",
-      "docsUrl": "https://rumankazi.github.io/flowpact/docs/rules/fp401",
+      "docsUrl": "https://ciatlas.github.io/flowpact/docs/rules/fp401",
       "fingerprint": "3f2a9c0d81b7e645"
     }
   ],
@@ -284,7 +284,7 @@ Logs go to stderr, so `--format json` output stays parseable.
 | `0` | No findings at or above `--fail-on` (default: `error`). |
 | `1` | Findings at or above `--fail-on` — including contract findings in `flowpact check`. |
 | `2` | Usage or configuration error (unknown rule, invalid config, plugin that fails to load, nothing to analyze). |
-| `3` | Internal error — please [report it](https://github.com/rumankazi/flowpact/issues) with `--debug` output. |
+| `3` | Internal error — please [report it](https://github.com/ciatlas/flowpact/issues) with `--debug` output. |
 
 `flowpact graph`, `flowpact trace`, `flowpact explain` and `flowpact rules` exit `0` on success. `flowpact generate`
 exits `0` too, or `1` when a file with YAML syntax errors could not be regenerated (its committed contract is kept).

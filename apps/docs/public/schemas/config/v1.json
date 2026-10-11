@@ -1,5 +1,5 @@
 {
-  "$id": "https://rumankazi.github.io/flowpact/schemas/config/v1.json",
+  "$id": "https://ciatlas.github.io/flowpact/schemas/config/v1.json",
   "title": "flowpact configuration",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",

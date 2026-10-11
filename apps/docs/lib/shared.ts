@@ -6,7 +6,7 @@ export const docsContentRoute = '/llms.mdx/docs';
 export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 export const gitConfig = {
-  user: 'rumankazi',
+  user: 'ciatlas',
   repo: 'flowpact',
   branch: 'main',
   /** Where the MDX sources live inside the repository. */

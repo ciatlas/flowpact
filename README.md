@@ -12,15 +12,15 @@
   <a href="https://open-vsx.org/extension/flowpact/vscode-flowpact">Open VSX</a> ·
   <a href="https://github.com/marketplace/actions/flowpact">GitHub Action</a> ·
   <a href="https://www.npmjs.com/package/flowpact">npm</a> ·
-  <a href="https://rumankazi.github.io/flowpact">Docs</a>
+  <a href="https://ciatlas.github.io/flowpact">Docs</a>
 </p>
 
-[![CI](https://github.com/rumankazi/flowpact/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/rumankazi/flowpact/actions/workflows/ci.yml)
-[![Release](https://github.com/rumankazi/flowpact/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/rumankazi/flowpact/actions/workflows/release.yml)
+[![CI](https://github.com/ciatlas/flowpact/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ciatlas/flowpact/actions/workflows/ci.yml)
+[![Release](https://github.com/ciatlas/flowpact/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/ciatlas/flowpact/actions/workflows/release.yml)
 [![npm](https://img.shields.io/npm/v/flowpact?logo=npm)](https://www.npmjs.com/package/flowpact)
 [![Node.js](https://img.shields.io/node/v/flowpact?logo=nodedotjs)](https://www.npmjs.com/package/flowpact)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/rumankazi/flowpact/badge)](https://scorecard.dev/viewer/?uri=github.com/rumankazi/flowpact)
-[![License: MIT](https://img.shields.io/github/license/rumankazi/flowpact)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ciatlas/flowpact/badge)](https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact)
+[![License: MIT](https://img.shields.io/github/license/ciatlas/flowpact)](LICENSE)
 
 **Data-flow linter for GitHub Actions.**
 
@@ -47,7 +47,7 @@ reports nothing here.*
   [extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact).
 
 It adds little to a few standalone workflows. Calls to reusable workflows in other repositories are reported as
-unverified, not checked (cross-repository resolution is on the [roadmap](https://rumankazi.github.io/flowpact/docs/roadmap));
+unverified, not checked (cross-repository resolution is on the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap));
 the repository that publishes them can still lint them and lock their interfaces with contracts.
 
 ## Get started
@@ -62,13 +62,13 @@ In CI, add the action; it lints by default and annotates the pull request:
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: rumankazi/flowpact@v0.11
+- uses: ciatlas/flowpact@v0.11
 ```
 
 Findings you accept go into `.github/flowpact/flowpact.config.yml` as **overrides** with a reason, an owner and an
 expiry date; expired overrides bring the findings back.
 
-📖 **Docs:** https://rumankazi.github.io/flowpact — getting started, how it works, the CLI (`generate`, `check`,
+📖 **Docs:** https://ciatlas.github.io/flowpact — getting started, how it works, the CLI (`generate`, `check`,
 `graph`, `lsp`), CI and action usage, contracts, impact mode, configuration, and a page for every rule.
 
 ## What it finds that other tools miss
@@ -87,7 +87,7 @@ while declaring no secrets, called from 31 places and none with `secrets: inheri
 Both tools report a missing or unknown input on a direct call to a local reusable workflow or action, and actionlint
 also checks shell scripts, runner labels, expression types, cron schedules and the inputs of popular actions such as
 `actions/checkout`. Use flowpact next to it, and zizmor for security. The
-[comparison](https://rumankazi.github.io/flowpact/docs/comparison) shows both tools' output side by side.
+[comparison](https://ciatlas.github.io/flowpact/docs/comparison) shows both tools' output side by side.
 
 ## For publishers of actions and reusable workflows
 
@@ -131,21 +131,21 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: rumankazi/flowpact@v0.11
+      - uses: ciatlas/flowpact@v0.11
         with:
           mode: check   # lint, and compare with the committed contracts
           impact: auto  # grade the change against the pull request title
 ```
 
-See [contracts](https://rumankazi.github.io/flowpact/docs/contracts) and
-[impact mode](https://rumankazi.github.io/flowpact/docs/impact-mode).
+See [contracts](https://ciatlas.github.io/flowpact/docs/contracts) and
+[impact mode](https://ciatlas.github.io/flowpact/docs/impact-mode).
 
 ## In your editor
 
 The [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (also on
 [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)) reports the same findings as you type, traces
 inputs, secrets and outputs on hover, and goes to definitions and references across workflow calls. Other editors can
-use the language server, `flowpact lsp` ([editors](https://rumankazi.github.io/flowpact/docs/editors)).
+use the language server, `flowpact lsp` ([editors](https://ciatlas.github.io/flowpact/docs/editors)).
 
 ![VS Code showing a finding as you type: the windows matrix entry passes an empty config to a reusable workflow](apps/docs/public/screenshots/editor-diagnostics.png)
 
@@ -156,7 +156,7 @@ the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`), the GitHub 
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (diagnostics as you
 type, hover traces, go to definition across workflow calls; also on
 [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor, then
-cross-repository resolution — see the [roadmap](https://rumankazi.github.io/flowpact/docs/roadmap).
+cross-repository resolution — see the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
 
 ## License
 

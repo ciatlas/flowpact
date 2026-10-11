@@ -12,14 +12,14 @@
     "color": "#0a7a8a",
     "theme": "dark"
   },
-  "qna": "https://github.com/rumankazi/flowpact/issues",
-  "homepage": "https://rumankazi.github.io/flowpact/docs/editors",
+  "qna": "https://github.com/ciatlas/flowpact/issues",
+  "homepage": "https://ciatlas.github.io/flowpact/docs/editors",
   "bugs": {
-    "url": "https://github.com/rumankazi/flowpact/issues"
+    "url": "https://github.com/ciatlas/flowpact/issues"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/rumankazi/flowpact.git",
+    "url": "https://github.com/ciatlas/flowpact.git",
     "directory": "packages/vscode"
   },
   "engines": {
@@ -104,7 +104,7 @@
           "scope": "window",
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Load the [plugins](https://rumankazi.github.io/flowpact/docs/custom-rules) the flowpact config lists. They run JavaScript from the repository, so they never load in an untrusted workspace, whatever this setting says."
+          "markdownDescription": "Load the [plugins](https://ciatlas.github.io/flowpact/docs/custom-rules) the flowpact config lists. They run JavaScript from the repository, so they never load in an untrusted workspace, whatever this setting says."
         },
         "flowpact.contracts": {
           "scope": "window",
@@ -120,7 +120,7 @@
             "Never compare with the committed contracts."
           ],
           "default": "auto",
-          "markdownDescription": "Report [contract](https://rumankazi.github.io/flowpact/docs/contracts) drift and breaking interface changes (`FP801`–`FP805`), as `flowpact check` does."
+          "markdownDescription": "Report [contract](https://ciatlas.github.io/flowpact/docs/contracts) drift and breaking interface changes (`FP801`–`FP805`), as `flowpact check` does."
         },
         "flowpact.overlappingRules": {
           "scope": "window",

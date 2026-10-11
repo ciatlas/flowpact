@@ -25,7 +25,7 @@ jobs:
     name: Release pull request
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
-    # Writes go through the rk-release-bot app: unlike GITHUB_TOKEN, its pull requests, pushes and tags start the
+    # Writes go through the ciatlas-release-bot app: unlike GITHUB_TOKEN, its pull requests, pushes and tags start the
     # usual workflows, so the release pull request gets the required checks like any other.
     permissions:
       contents: read
@@ -69,7 +69,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm --filter @flowpact/action build
-          # `uses: rumankazi/flowpact@v0.<minor>` and friends in the docs and READMEs follow the new release line.
+          # `uses: ciatlas/flowpact@v0.<minor>` and friends in the docs and READMEs follow the new release line.
           node scripts/sync-version-refs.mjs
           if [ -n "$(git status --porcelain)" ]; then
             git config user.name "$BOT"
@@ -300,7 +300,7 @@ jobs:
 
   release-assets:
     # Signed release assets: the published npm tarball with a Sigstore bundle and its in-toto provenance, so a release
-    # can be verified without the registry (`gh attestation verify <tgz> --repo rumankazi/flowpact`).
+    # can be verified without the registry (`gh attestation verify <tgz> --repo ciatlas/flowpact`).
     name: Attach the signed package to the release
     needs: [resolve, npm]
     if: ${{ !cancelled() && needs.npm.result == 'success' }}
@@ -421,7 +421,7 @@ jobs:
   action-archive:
     # The GitHub Action as released: action.yml and its committed bundle in a reproducible archive with provenance, so a
     # mirror can check that it copies exactly what this workflow built (`gh attestation verify <archive> --repo
-    # rumankazi/flowpact`).
+    # ciatlas/flowpact`).
     name: Attach the signed action to the release
     needs: resolve
     if: ${{ !cancelled() && needs.resolve.result == 'success' }}

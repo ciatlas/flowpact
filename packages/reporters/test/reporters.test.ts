@@ -30,7 +30,7 @@ describe('renderPretty', () => {
     expect(out).toMatchSnapshot();
     expect(out).toContain('23 │       config: ${{ matrix.config }}');
     expect(out).toContain('━━━━━━━━━━━━━');
-    expect(out).toContain('docs    https://rumankazi.github.io/flowpact/docs/rules/fp401');
+    expect(out).toContain('docs    https://ciatlas.github.io/flowpact/docs/rules/fp401');
   });
 
   it('renders every fixture without throwing and keeps lines within width', () => {
@@ -72,7 +72,7 @@ describe('renderPretty', () => {
   it('emits ANSI colors and OSC 8 hyperlinks only when asked', () => {
     const colored = renderPretty(result('incident-matrix'), { color: true, width: 100, hyperlinks: true });
     expect(colored).toMatch(/\u001B\[31m/);
-    expect(colored).toContain('\u001B]8;;https://rumankazi.github.io/flowpact/docs/rules/fp401\u0007');
+    expect(colored).toContain('\u001B]8;;https://ciatlas.github.io/flowpact/docs/rules/fp401\u0007');
     expect(renderPretty(result('incident-matrix'), plain)).not.toMatch(/\u001B/);
   });
 
@@ -148,7 +148,7 @@ describe('rules and explain', () => {
     expect(out).toContain('configured: warning');
     expect(out).toContain('✗ problem');
     expect(out).toContain('✓ fixed');
-    expect(out).toContain('https://rumankazi.github.io/flowpact/docs/rules/fp401');
+    expect(out).toContain('https://ciatlas.github.io/flowpact/docs/rules/fp401');
     expect(out).not.toContain('scope');
   });
   it('explains what a rule leaves out', () => {

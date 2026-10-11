@@ -1,4 +1,4 @@
 {
-  "repositories": ["rumankazi/wfc"],
-  "docsBaseUrls": ["https://rumankazi.github.io/wfc"]
+  "repositories": ["rumankazi/flowpact", "rumankazi/wfc"],
+  "docsBaseUrls": ["https://rumankazi.github.io/flowpact", "https://rumankazi.github.io/wfc"]
 }

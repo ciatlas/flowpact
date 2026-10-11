@@ -5,7 +5,7 @@ description: What flowpact reads, writes and sends, the permissions it needs, ho
 
 flowpact is a static analyzer: it reads the workflow, action, config and contract files of a repository and reports
 on them. This page is for the people who review it before it runs in their organization. To report a vulnerability,
-see the [security policy](https://github.com/rumankazi/flowpact/security/policy).
+see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
 
 ## What it reads and writes
 
@@ -30,7 +30,7 @@ flowpact treats the analyzed files as untrusted input:
 - it caps matrix expansion (the YAML parser limits alias expansion).
 
 Reports of a way around any of this are in scope of the
-[security policy](https://github.com/rumankazi/flowpact/security/policy).
+[security policy](https://github.com/ciatlas/flowpact/security/policy).
 
 ## Network and telemetry
 
@@ -74,7 +74,7 @@ If you do not use plugins, set `plugins: false` in the action.
 ## How releases are built
 
 - **Built only by GitHub Actions**, from a tag, in this repository's
-  [release workflow](https://github.com/rumankazi/flowpact/blob/main/.github/workflows/release.yml). Release tags (`v*`)
+  [release workflow](https://github.com/ciatlas/flowpact/blob/main/.github/workflows/release.yml). Release tags (`v*`)
   can only be created or moved by the release automation and maintainers. Every workflow pins its actions to commit
   SHAs.
 - **npm:** published with npm trusted publishing (no long-lived token) and npm provenance.
@@ -98,16 +98,17 @@ The action archive, the SBOMs and draft releases start with 0.9.0.
 
 ## Verify a release
 
-Download the assets of a release (`gh release download vX.Y.Z --repo rumankazi/flowpact`), then:
+Download the assets of a release (`gh release download vX.Y.Z --repo ciatlas/flowpact`), then run the commands below.
+Releases up to 0.11.1 were built before the move: verify them with `--repo rumankazi/flowpact`.
 
 ```sh
 # Built by this repository's release workflow:
-gh attestation verify flowpact-X.Y.Z.tgz --repo rumankazi/flowpact
-gh attestation verify flowpact-action-X.Y.Z.tar.gz --repo rumankazi/flowpact
-gh attestation verify flowpact-vscode-X.Y.Z.vsix --repo rumankazi/flowpact
+gh attestation verify flowpact-X.Y.Z.tgz --repo ciatlas/flowpact
+gh attestation verify flowpact-action-X.Y.Z.tar.gz --repo ciatlas/flowpact
+gh attestation verify flowpact-vscode-X.Y.Z.vsix --repo ciatlas/flowpact
 
 # An SBOM was attested for that artifact, and the attached copy is the attested one:
-gh attestation verify flowpact-X.Y.Z.tgz --repo rumankazi/flowpact --predicate-type https://cyclonedx.org/bom \
+gh attestation verify flowpact-X.Y.Z.tgz --repo ciatlas/flowpact --predicate-type https://cyclonedx.org/bom \
   --format json --jq '.[0].verificationResult.statement.predicate' | jq -S . > attested.cdx.json
 jq -S . flowpact-X.Y.Z.cdx.json | diff - attested.cdx.json
 
@@ -115,25 +116,25 @@ jq -S . flowpact-X.Y.Z.cdx.json | diff - attested.cdx.json
 npm audit signatures
 
 # From 0.10.0: the release is immutable, and each file is the one GitHub attested for it:
-gh release verify vX.Y.Z --repo rumankazi/flowpact
-gh release verify-asset vX.Y.Z flowpact-X.Y.Z.tgz --repo rumankazi/flowpact
+gh release verify vX.Y.Z --repo ciatlas/flowpact
+gh release verify-asset vX.Y.Z flowpact-X.Y.Z.tgz --repo ciatlas/flowpact
 ```
 
 To check that the GitHub Action at a tag is the released one, compare the archive's files with the tag:
 
 ```sh
 mkdir action && tar -xzf flowpact-action-X.Y.Z.tar.gz -C action
-git clone --depth 1 --branch vX.Y.Z https://github.com/rumankazi/flowpact.git source
+git clone --depth 1 --branch vX.Y.Z https://github.com/ciatlas/flowpact.git source
 diff -r action/packages/action/dist source/packages/action/dist && cmp action/action.yml source/action.yml
 ```
 
-Pin the action to the commit you verified: `uses: rumankazi/flowpact@<commit-sha> # vX.Y.Z`.
+Pin the action to the commit you verified: `uses: ciatlas/flowpact@<commit-sha> # vX.Y.Z`.
 
 ## Repository practices
 
 - Changes reach `main` through pull requests that must pass CI, including flowpact's lint of its own workflows (the
   maintainer can bypass the rules).
 - CodeQL (extended queries), secret scanning with push protection, dependency updates (Renovate) and the
-  [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/rumankazi/flowpact) run on the repository.
+  [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact) run on the repository.
 - Vulnerabilities are reported privately, and only the latest release receives fixes; see the
-  [security policy](https://github.com/rumankazi/flowpact/security/policy).
+  [security policy](https://github.com/ciatlas/flowpact/security/policy).

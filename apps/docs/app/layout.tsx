@@ -4,7 +4,7 @@ import './global.css';
 
 export const metadata: Metadata = {
   // Absolute URLs for the Open Graph image (app/opengraph-image.png); Next.js adds the base path.
-  metadataBase: new URL('https://rumankazi.github.io'),
+  metadataBase: new URL('https://ciatlas.github.io'),
   title: { template: '%s · flowpact', default: 'flowpact — data-flow linter for GitHub Actions' },
   description: 'Find the GitHub Actions values that arrive empty while the run stays green.',
 };

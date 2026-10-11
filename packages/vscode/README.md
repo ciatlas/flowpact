@@ -1,7 +1,7 @@
 # flowpact for VS Code
 
 GitHub Actions turns a missing matrix value, an undeclared secret or an optional input without a default into an empty value,
-and the run stays green. [flowpact](https://rumankazi.github.io/flowpact) finds these across reusable workflows, local
+and the run stays green. [flowpact](https://ciatlas.github.io/flowpact) finds these across reusable workflows, local
 actions and every combination of the matrices written in your workflows, and shows them as you type. It helps most when
 your workflows call reusable workflows or local actions, or use `include` matrices.
 
@@ -27,13 +27,13 @@ reported twice.
 - **Go to definition** across workflow calls and local actions: from `with: config:` to the callee's input, from
   `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output.
 - **Find references** and **highlights** across files.
-- **Contract drift** as you edit, when the repository [locks its contracts](https://rumankazi.github.io/flowpact/docs/contracts).
+- **Contract drift** as you edit, when the repository [locks its contracts](https://ciatlas.github.io/flowpact/docs/contracts).
 
 ![Hover on an input: a required string that comes from pipeline.yml and goes on to package.yml](../../apps/docs/public/screenshots/editor-hover.png)
 
 ![Peek References on an input: its declaration, two reads, and the caller that passes it](../../apps/docs/public/screenshots/editor-references.png)
 
-Your [flowpact config](https://rumankazi.github.io/flowpact/docs/configuration) applies as in the CLI and in CI:
+Your [flowpact config](https://ciatlas.github.io/flowpact/docs/configuration) applies as in the CLI and in CI:
 severities, overrides, ignores and plugins.
 
 ## Also in CI
@@ -65,6 +65,6 @@ only for repositories inside the workspace folders.
 
 ## More
 
-- [Editor documentation](https://rumankazi.github.io/flowpact/docs/editors), including other editors (`flowpact lsp`)
-- [Rules](https://rumankazi.github.io/flowpact/docs/rules)
-- [Issues](https://github.com/rumankazi/flowpact/issues)
+- [Editor documentation](https://ciatlas.github.io/flowpact/docs/editors), including other editors (`flowpact lsp`)
+- [Rules](https://ciatlas.github.io/flowpact/docs/rules)
+- [Issues](https://github.com/ciatlas/flowpact/issues)

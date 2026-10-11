@@ -36899,8 +36899,8 @@ function date4(params) {
 
 // ../lint/src/location.json
 var location_default = {
-  repository: "rumankazi/flowpact",
-  docsBaseUrl: "https://rumankazi.github.io/flowpact"
+  repository: "ciatlas/flowpact",
+  docsBaseUrl: "https://ciatlas.github.io/flowpact"
 };
 
 // ../lint/src/version.ts

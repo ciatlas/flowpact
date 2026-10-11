@@ -1,6 +1,6 @@
 /**
  * flowpact's programmatic API: one function per CLI command, for programs that run flowpact themselves, such as an
- * organization's own JavaScript action. https://rumankazi.github.io/flowpact/docs/api
+ * organization's own JavaScript action. https://ciatlas.github.io/flowpact/docs/api
  *
  * - Options are the command's flags in camelCase. Relative paths are read from the working directory, like the CLI's;
  *   `paths` are relative to `root`.
@@ -121,7 +121,7 @@ export interface RulesOptions extends CommonOptions, PluginOptions {}
 export interface ExplainOptions extends CommonOptions, PluginOptions {}
 
 // ---------------------------------------------------------------------------------------------------------------------
-// The JSON report (https://rumankazi.github.io/flowpact/schemas/report/v1.json)
+// The JSON report (https://ciatlas.github.io/flowpact/schemas/report/v1.json)
 
 export type Severity = 'error' | 'warning' | 'info';
 export type SeveritySetting = Severity | 'off';
@@ -570,7 +570,7 @@ export declare function formatGeneration(
 export declare function terminalOptions(): Required<TextOptions>;
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Plugin rules (https://rumankazi.github.io/flowpact/docs/custom-rules)
+// Plugin rules (https://ciatlas.github.io/flowpact/docs/custom-rules)
 
 /** Returns the rule as is; it gives a rule written in TypeScript its type. */
 export declare function defineRule(rule: RuleDefinition): RuleDefinition;

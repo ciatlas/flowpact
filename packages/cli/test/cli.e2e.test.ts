@@ -51,7 +51,7 @@ describe('flowpact lint', () => {
     );
     expect(r.stdout).toContain('FP401 empty-binding-for-matrix-combo');
     expect(r.stdout).toContain('{ name: windows }');
-    expect(r.stdout).toContain('https://rumankazi.github.io/flowpact/docs/rules/fp401');
+    expect(r.stdout).toContain('https://ciatlas.github.io/flowpact/docs/rules/fp401');
     expect(r.stdout).not.toMatch(/\u001B\[/);
   });
 

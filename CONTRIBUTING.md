@@ -83,7 +83,10 @@ bumps the minor version. Useful scopes: `core`, `lint`, `rules`, `contracts`, `c
 ## Releases
 
 Releases are automated with [release-please](https://github.com/googleapis/release-please), acting as the
-`rk-release-bot` GitHub App (so its pull requests and tags run the usual workflows):
+`ciatlas-release-bot` GitHub App (so its pull requests and tags run the usual workflows). Its client id and private
+key are the `ciatlas` organization variable `RELEASE_BOT_CLIENT_ID` and secret `RELEASE_BOT_PRIVATE_KEY`. To rotate
+the key, generate a new one (the app's **Credentials → Key pairs**), update the secret, run a workflow that uses it,
+then delete the old key; the app accepts both until then.
 
 1. Every push to `main` updates a **release pull request** that bumps the version in every package, rebuilds the
    action bundle, moves the version references in the docs and READMEs to the new release line
@@ -102,7 +105,7 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
    `scripts/action-archive.sh`), each with its Sigstore bundle and in-toto provenance, and a CycloneDX SBOM of each,
    attested against it. Only when every one of them is on the release does it publish the release (a failed extension
    build keeps it a draft too), and only after that does it move the floating tag used by
-   `uses: rumankazi/flowpact@v0.11` (before 1.0 one tag per minor line, because a 0.x minor may be breaking; from 1.0
+   `uses: ciatlas/flowpact@v0.11` (before 1.0 one tag per minor line, because a 0.x minor may be breaking; from 1.0
    the major, `v1`). **Immutable releases** are enabled in the repository settings (since 0.9.0 went out), so a
    published release's tag and assets cannot change, and what a mirror verified stays what was released.
 
@@ -133,10 +136,10 @@ on 2026-12-01):
    az group create --name flowpact-publishing --location swedencentral
    az identity create --name flowpact-marketplace --resource-group flowpact-publishing --location swedencentral
    # GitHub names this repository's jobs by owner and repository id (immutable subjects); the subject must match
-   # exactly. `gh api repos/rumankazi/flowpact/actions/oidc/customization/sub` shows the prefix.
+   # exactly. `gh api repos/ciatlas/flowpact/actions/oidc/customization/sub` shows the prefix.
    az identity federated-credential create --name github-release --identity-name flowpact-marketplace \
      --resource-group flowpact-publishing --issuer https://token.actions.githubusercontent.com \
-     --subject 'repo:rumankazi@37704746/flowpact@1408943843:environment:vscode-marketplace' \
+     --subject 'repo:ciatlas@340914892/flowpact@1408943843:environment:vscode-marketplace' \
      --audiences api://AzureADTokenExchange
    az identity show --name flowpact-marketplace --resource-group flowpact-publishing --query clientId -o tsv
    az account show --query tenantId -o tsv
@@ -158,7 +161,7 @@ on 2026-12-01):
    granted, the namespace is unverified and trusted publishing cannot be set up.
 4. Add the token as the secret `OVSX_PAT` in the `open-vsx` environment, and set the repository variable
    `OPEN_VSX_PUBLISH` to `true`. The next release (or a re-run) publishes the first version with the token.
-5. Then, under **Settings → Trusted Publishers** on open-vsx.org, add a GitHub Actions publisher: owner `rumankazi`,
+5. Then, under **Settings → Trusted Publishers** on open-vsx.org, add a GitHub Actions publisher: owner `ciatlas`,
    repository `flowpact`, workflow `release.yml`, environment `open-vsx`. Delete `OVSX_PAT` here and the token on
    open-vsx.org; later releases publish through trusted publishing.
 
