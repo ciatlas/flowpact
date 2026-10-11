@@ -15,8 +15,8 @@ const previous = JSON.parse(read('scripts/previous-locations.json')) as {
   repositories: string[];
   docsBaseUrls: string[];
 };
-/** Files that describe the past on purpose. */
-const HISTORY = ['CHANGELOG.md', 'apps/docs/content/docs/upgrading.mdx'];
+/** Files that describe the past on purpose, including the list of previous locations itself. */
+const HISTORY = ['CHANGELOG.md', 'apps/docs/content/docs/upgrading.mdx', 'scripts/previous-locations.json'];
 const BINARY = /\.(png|jpe?g|gif|ico|webp|woff2?|ttf|otf|pdf|zip|gz|tgz|vsix)$/i;
 
 describe('where flowpact lives (packages/lint/src/location.json)', () => {
