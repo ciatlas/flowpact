@@ -11489,10 +11489,19 @@ function toNumber(v) {
   }
   return Number.NaN;
 }
+function formatNumber(n) {
+  if (!Number.isFinite(n)) return String(n);
+  if (n === 0) return "0";
+  const trim = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+  const [m, x] = n.toExponential(14).split("e");
+  const power = Number(x);
+  if (power > -5 && power < 15) return trim(n.toPrecision(15));
+  return `${trim(m)}E${power < 0 ? "-" : "+"}${String(Math.abs(power)).padStart(2, "0")}`;
+}
 function toStr(v) {
   if (v === null) return "";
   if (typeof v === "boolean") return v ? "true" : "false";
-  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(v);
+  if (typeof v === "number") return formatNumber(v);
   if (typeof v === "string") return v;
   return Array.isArray(v) ? "Array" : "Object";
 }
@@ -11617,8 +11626,8 @@ function refChain(e, resolve7) {
 }
 function indexInto(base, idx) {
   if (Array.isArray(base)) {
-    const n = toNumber(idx);
-    return Number.isInteger(n) && n >= 0 && n < base.length ? base[n] ?? null : null;
+    const n = Math.floor(toNumber(idx));
+    return n >= 0 && n < base.length ? base[n] ?? null : null;
   }
   if (base && typeof base === "object") {
     const key = toStr(idx).toLowerCase();
@@ -11627,14 +11636,15 @@ function indexInto(base, idx) {
   }
   return null;
 }
+var RUNTIME_FUNCTIONS = /* @__PURE__ */ new Set(["success", "failure", "cancelled", "hashfiles"]);
 function evalCall(e, resolve7) {
   const name = e.functionName.lexeme.toLowerCase();
   const args = e.args.map((a) => evaluate(a, resolve7));
   const taint = mergeTaint(...args);
   const allKnown = args.every((a) => a.known);
   const vals = args.map((a) => a.known ? a.value : null);
-  if (["success", "failure", "cancelled", "always", "hashfiles"].includes(name))
-    return { known: false, taint };
+  if (name === "always") return known(true, taint);
+  if (RUNTIME_FUNCTIONS.has(name)) return { known: false, taint };
   if (!allKnown) return { known: false, taint };
   switch (name) {
     case "format": {
@@ -11690,7 +11700,7 @@ function isConstant(e) {
   if (e instanceof Logical) return e.args.every(isConstant);
   if (e instanceof FunctionCall) {
     const name = e.functionName.lexeme.toLowerCase();
-    return !["success", "failure", "cancelled", "always", "hashfiles"].includes(name) && e.args.every(isConstant);
+    return !RUNTIME_FUNCTIONS.has(name) && e.args.every(isConstant);
   }
   return false;
 }
@@ -11830,7 +11840,7 @@ function evaluateTemplate(text3, resolve7) {
 
 // ../core/src/ir.ts
 function lookup(rec, key) {
-  if (key in rec) return rec[key];
+  if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
   for (const k of Object.keys(rec)) if (k.toLowerCase() === lower) return rec[k];
   return void 0;
@@ -11851,7 +11861,9 @@ function jsonEqual(a, b) {
     return a.length === b.length && a.every((x, i) => jsonEqual(x, b[i]));
   const ka = Object.keys(a);
   const kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => jsonEqual(a[k], b[k] ?? null));
+  return ka.length === kb.length && ka.every(
+    (k) => Object.hasOwn(b, k) && jsonEqual(a[k], b[k])
+  );
 }
 function cellMatches(cell2, value) {
   if (!cell2) return false;
@@ -11863,7 +11875,7 @@ function minJobsAfterExclude(m, productSize) {
   if (m.dims.some((d) => d.values === null || d.unknownIndexes.length > 0)) return void 0;
   if (m.exclude.some((e) => e.dynamicKeys.length > 0)) return void 0;
   const size = new Map(m.dims.map((d) => [d.name, Math.max(1, d.values.length)]));
-  const named = m.dims.filter((d) => m.exclude.some((e) => d.name in e.values));
+  const named = m.dims.filter((d) => m.exclude.some((e) => Object.hasOwn(e.values, d.name)));
   const subSize = named.reduce((n, d) => n * size.get(d.name), 1);
   const effective = m.exclude.filter((e) => Object.keys(e.values).every((k) => size.has(k)));
   if (subSize <= MAX_COMBINATIONS) {
@@ -12001,7 +12013,7 @@ function expandMatrix(m) {
 }
 function comboLabel(combo, keys) {
   const shown = keys ?? Object.keys(combo.values);
-  const parts = shown.filter((k) => k in combo.values).map((k) => {
+  const parts = shown.filter((k) => Object.hasOwn(combo.values, k)).map((k) => {
     const c = combo.values[k];
     return `${k}: ${c.known ? typeof c.value === "string" ? c.value : JSON.stringify(c.value) : "<expr>"}`;
   });
@@ -12018,7 +12030,7 @@ function matrixResolver(combo) {
     let value = cell2.value;
     for (const seg of path.slice(1)) {
       if (value && typeof value === "object" && !Array.isArray(value)) value = lookup(value, seg) ?? null;
-      else if (Array.isArray(value)) value = value[Number(seg)] ?? null;
+      else if (Array.isArray(value)) value = value[Math.floor(Number(seg))] ?? null;
       else value = null;
     }
     return known(value);
@@ -12040,18 +12052,6 @@ function declaredMatrix(keys) {
 }
 
 // ../core/src/checks.ts
-function formatNumber(n) {
-  if (!Number.isFinite(n)) return String(n);
-  if (n === 0) return "0";
-  const exp = Math.floor(Math.log10(Math.abs(n)));
-  const [mantissa, e] = n.toPrecision(15).split("e");
-  const trim = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
-  if (exp > -5 && exp < 15 && e === void 0) return trim(mantissa);
-  const sci = n.toExponential(14);
-  const [m, x] = sci.split("e");
-  const power = Number(x);
-  return `${trim(m)}E${power < 0 ? "-" : "+"}${String(Math.abs(power)).padStart(2, "0")}`;
-}
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12157,9 +12157,10 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   const values = {};
   for (const [name, input3] of Object.entries(wf.call?.inputs ?? {})) {
     const given = inputs === "consumer" ? { known: false } : lookup(inputs, name);
-    if (given) values[name] = given;
-    else if (input3.hasDefault) values[name] = { known: true, value: input3.default };
-    else values[name] = { known: true, value: null };
+    const empty = input3.type === "boolean" ? false : input3.type === "number" ? 0 : "";
+    const value = input3.hasDefault ? input3.default : empty;
+    const computed = typeof value === "string" && value.includes("${{");
+    values[name] = given ?? (computed ? { known: false } : { known: true, value });
   }
   const out = [];
   for (const job of Object.values(wf.jobs)) {
@@ -12266,6 +12267,8 @@ function didYouMean(name, candidates) {
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
+var MAX_LINKS = 40;
+var MAX_LINKED_DIRS = 1e3;
 function git(root, args, input3) {
   try {
     return execFileSync("git", ["-C", root, ...args], {
@@ -12292,46 +12295,78 @@ function resolveCommit(root, ref) {
   try {
     return git(root, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]).toString().trim();
   } catch {
+    const branch = ref.replace(/^(refs\/remotes\/)?origin\//, "");
     throw new GitError(
-      `${ref} is not available in this clone. Fetch it first (for example \`git fetch origin ${ref}\`, or check out with fetch-depth: 0).`
+      `${ref} is not available in this clone. Fetch it first (for example \`git fetch origin ${branch}\`, or check out with fetch-depth: 0).`
     );
   }
 }
 function gitFileSystem(root, commit) {
   const prefix = git(root, ["rev-parse", "--show-prefix"]).toString().trim();
-  const files = /* @__PURE__ */ new Set();
-  const links = [];
+  const blobs = /* @__PURE__ */ new Set();
+  const links = /* @__PURE__ */ new Set();
   const out = git(root, ["ls-tree", "-r", "-z", "--full-tree", commit]).toString();
   for (const entry of out.split("\0")) {
     if (!entry) continue;
     const tab = entry.indexOf("	");
     const [mode, type] = entry.slice(0, tab).split(" ");
     const path = entry.slice(tab + 1);
-    if (prefix && !path.startsWith(prefix)) continue;
-    if (type === "blob" && mode === "120000") links.push(path);
-    else if (type === "blob" && (mode === "100644" || mode === "100755"))
-      files.add(path.slice(prefix.length));
+    if (type === "blob" && mode === "120000") links.add(path);
+    else if (type === "blob" && (mode === "100644" || mode === "100755")) blobs.add(path);
   }
-  const alias = /* @__PURE__ */ new Map();
-  for (const link of links) {
-    const target = posix.normalize(
-      posix.join(posix.dirname(link), git(root, ["cat-file", "blob", `${commit}:${link}`]).toString())
-    );
-    if (target.startsWith("../") || target === ".." || target === ".git" || target.startsWith(".git/"))
-      continue;
-    if (prefix && !target.startsWith(prefix)) continue;
-    const from = link.slice(prefix.length);
-    const to = target.slice(prefix.length);
-    if (files.has(to)) {
-      alias.set(from, to);
-      files.add(from);
-      continue;
+  const targets = /* @__PURE__ */ new Map();
+  const target = (link) => {
+    if (!targets.has(link))
+      targets.set(link, git(root, ["cat-file", "blob", `${commit}:${link}`]).toString());
+    return targets.get(link);
+  };
+  const resolve7 = (path) => {
+    let p = path;
+    for (let followed = 0; ; followed++) {
+      const parts = p.split("/");
+      const end = parts.findIndex((_, i) => links.has(parts.slice(0, i + 1).join("/")));
+      if (end < 0) return p;
+      if (followed === MAX_LINKS) return void 0;
+      const link = parts.slice(0, end + 1).join("/");
+      const to = target(link);
+      if (!to || posix.isAbsolute(to)) return void 0;
+      p = trimChar(posix.join(posix.dirname(link), to, ...parts.slice(end + 1)), "/");
+      if (p === ".." || p.startsWith("../") || p === ".git" || p.startsWith(".git/")) return void 0;
+      if (p === ".") p = "";
     }
-    for (const f of [...files]) {
-      if (!f.startsWith(`${to}/`)) continue;
-      const virtual = `${from}/${f.slice(to.length + 1)}`;
-      alias.set(virtual, f);
-      files.add(virtual);
+  };
+  const top = trimChar(prefix, "/");
+  const inRoot = (p) => top === "" || p === top || p.startsWith(`${top}/`);
+  const files = /* @__PURE__ */ new Map();
+  const sortedBlobs = [...blobs].sort();
+  const sortedLinks = [...links].sort();
+  const within2 = (paths, prefix2) => {
+    let lo = 0;
+    let hi = paths.length;
+    while (lo < hi) {
+      const mid = lo + hi >>> 1;
+      if (paths[mid] < prefix2) lo = mid + 1;
+      else hi = mid;
+    }
+    const out2 = [];
+    for (let i = lo; i < paths.length && paths[i].startsWith(prefix2); i++) out2.push(paths[i]);
+    return out2;
+  };
+  let expanded = 0;
+  const queue = [{ dir: top, as: "", via: [] }];
+  for (let i = 0; i < queue.length; i++) {
+    const { dir, as, via } = queue[i];
+    if (via.length && expanded++ >= MAX_LINKED_DIRS) continue;
+    const d = dir ? `${dir}/` : "";
+    for (const f of within2(sortedBlobs, d)) files.set(`${as}${f.slice(d.length)}`, f);
+    for (const link of within2(sortedLinks, d)) {
+      const to = resolve7(link);
+      if (to === void 0 || !inRoot(to)) continue;
+      const at = `${as}${link.slice(d.length)}`;
+      const chain = [...via, link];
+      if (blobs.has(to)) files.set(at, to);
+      else if (chain.length <= MAX_LINKS && !chain.some((l) => to === "" || l.startsWith(`${to}/`)))
+        queue.push({ dir: to, as: `${at}/`, via: chain });
     }
   }
   const cache = /* @__PURE__ */ new Map();
@@ -12346,23 +12381,20 @@ function gitFileSystem(root, commit) {
       const p = norm(path);
       if (!files.has(p)) return void 0;
       if (!cache.has(p))
-        cache.set(
-          p,
-          git(root, ["cat-file", "blob", `${commit}:${prefix}${alias.get(p) ?? p}`]).toString("utf8")
-        );
+        cache.set(p, git(root, ["cat-file", "blob", `${commit}:${files.get(p)}`]).toString("utf8"));
       return cache.get(p);
     },
     list(dir) {
       const d = under(dir);
-      return [...files].filter((f) => f.startsWith(d) && !f.slice(d.length).includes("/")).sort();
+      return [...files.keys()].filter((f) => f.startsWith(d) && !f.slice(d.length).includes("/")).sort();
     },
     walk(dir) {
       const d = under(dir);
-      return [...files].filter((f) => f.startsWith(d)).sort();
+      return [...files.keys()].filter((f) => f.startsWith(d)).sort();
     },
     isDir(path) {
       const d = under(path);
-      return [...files].some((f) => f.startsWith(d));
+      return [...files.keys()].some((f) => f.startsWith(d));
     }
   };
 }
@@ -12683,6 +12715,8 @@ var ProjectIndex = class {
       }
       case "env": {
         if (!a || a === "*" || a === "?") return void 0;
+        const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+        if (step && lookup(step.env, a)) return void 0;
         if (unit.kind === "workflow" && site.job) {
           const job = unit.jobs[site.job];
           if (job && lookup(job.env, a)) return sym.env(unit.path, job.id, lookup(job.env, a).name);
@@ -12706,6 +12740,10 @@ var ProjectIndex = class {
     if (one) return [one];
     const [a, b, c] = ref.path;
     const computed = (s) => s === void 0 || s === "*" || s === "?";
+    if (ref.context === "env" && !computed(a) && site.field !== "step.env") {
+      const own2 = lookup(this.stepOf(unit, site)?.env ?? {}, a)?.site;
+      return own2 ? own2.segments.flatMap((s) => s.refs.flatMap((r) => this.readsOf(unit, own2, r))) : [];
+    }
     const pick2 = (names) => {
       if (computed(b)) return names;
       if (b.toLowerCase() !== "outputs") return [];
@@ -12801,8 +12839,9 @@ var SourceFile = class {
   lineCounter = new import_yaml.LineCounter();
   /** Converts a [start, end) character offset range to a {@link Loc}. Requires the line counter to be populated by the YAML parser. */
   loc(start, end = start) {
-    const a = this.lineCounter.linePos(Math.max(0, start));
-    const b = this.lineCounter.linePos(Math.max(start, end));
+    const from = Math.max(0, start);
+    const a = this.lineCounter.linePos(from);
+    const b = this.lineCounter.linePos(Math.max(from, end));
     return { file: this.path, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
   }
 };
@@ -13558,7 +13597,7 @@ function parseActionFile(dir, file2, text3, ctx) {
 }
 
 // ../core/src/project.ts
-import { existsSync as existsSync2, readdirSync, readFileSync, realpathSync, statSync } from "fs";
+import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
 // ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/types.js
@@ -16248,19 +16287,38 @@ function classifyExpressions(unit, diagnostics) {
   }
   return out;
 }
-function workflowContext() {
+var parserSchemas = /* @__PURE__ */ new Map();
+function parserSchema(kind) {
+  const cached2 = parserSchemas.get(kind);
+  if (cached2) return cached2;
+  const base = schemaFor(kind);
+  const definitions = { ...base.definitions };
+  for (const [name, def] of Object.entries(definitions)) {
+    if (def.definitionType !== DefinitionType.Mapping) continue;
+    const { properties } = def;
+    definitions[name] = clone2(def, { properties: Object.assign(/* @__PURE__ */ Object.create(null), properties) });
+  }
+  const schema3 = clone2(base, { definitions });
+  parserSchemas.set(kind, schema3);
+  return schema3;
+}
+function clone2(value, overrides) {
+  return Object.assign(Object.create(Object.getPrototypeOf(value)), value, overrides);
+}
+function parserContext(kind) {
   const context = new TemplateContext(
     new TemplateValidationErrors(),
-    workflowSchema(),
+    parserSchema(kind),
     new NoOperationTraceWriter()
   );
-  context.state.featureFlags = WORKFLOW_FEATURES;
+  if (kind === "workflow") context.state.featureFlags = WORKFLOW_FEATURES;
   return context;
 }
 function validateSchema(unit, logger) {
   try {
     const file2 = { name: unit.file, content: unit.source.text };
-    const result = unit.kind === "workflow" ? parseWorkflow(file2, workflowContext()) : parseAction(file2, new NoOperationTraceWriter());
+    const context = parserContext(unit.kind);
+    const result = unit.kind === "workflow" ? parseWorkflow(file2, context) : parseAction(file2, context);
     const errors = result.context.errors.getErrors();
     const diagnostics = errors.filter((e) => !(unit.kind === "action" && LOCAL_ACTION_NOISE.test(e.message))).map((e) => {
       const r = e.range;
@@ -16330,7 +16388,7 @@ function explain(unit, diagnostics) {
   if (!diagnostics.some((d) => !d.kind)) return diagnostics;
   const shape = shapeOf(unit);
   if (!shape) return diagnostics;
-  const schema3 = schemaFor(unit.kind);
+  const schema3 = parserSchema(unit.kind);
   const root = SCHEMA_ROOT[unit.kind];
   const keyOf = /* @__PURE__ */ new Map();
   const groups = /* @__PURE__ */ new Map();
@@ -16993,6 +17051,8 @@ function workspaceResolver(opts) {
 
 // ../core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
+var MAX_LINKS2 = 40;
+var MAX_LINKED_DIRS2 = 1e3;
 var ACTIONS_DIR = ".github/actions";
 var toPosix = (p) => p.split("\\").join("/");
 function insideRepository(root, abs) {
@@ -17017,7 +17077,7 @@ function insideRepository(root, abs) {
   }
   const rel = toPosix(relative(realRoot, target));
   if (rel === "") return true;
-  if (rel.startsWith("..") || isAbsolute(rel)) return false;
+  if (escapesRoot(rel)) return false;
   return rel !== ".git" && !rel.startsWith(".git/");
 }
 function nodeFileSystem(root) {
@@ -17051,7 +17111,28 @@ function nodeFileSystem(root) {
     },
     walk: (dir) => {
       if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
-      return readdirSync(abs(dir), { recursive: true, withFileTypes: true }).map((e) => toPosix(relative(root, join2(e.parentPath, e.name)))).filter((f) => !/(^|\/)(node_modules|\.git)\//.test(f) && isFile(f));
+      const out = [];
+      let linked = 0;
+      const queue = [
+        { dir: toPosix(dir), above: /* @__PURE__ */ new Set(), links: 0 }
+      ];
+      for (let i = 0; i < queue.length; i++) {
+        const next = queue[i];
+        const real = realpathSync(abs(next.dir));
+        if (next.above.has(real)) continue;
+        const above = new Set(next.above).add(real);
+        for (const name of readdirSync(abs(next.dir))) {
+          if (name === "node_modules" || name === ".git") continue;
+          const p = toPosix(join2(next.dir, name));
+          if (isFile(p)) out.push(p);
+          else if (inside(p) && statSync(abs(p)).isDirectory()) {
+            const link = lstatSync(abs(p)).isSymbolicLink();
+            if (link && (next.links >= MAX_LINKS2 || linked++ >= MAX_LINKED_DIRS2)) continue;
+            queue.push({ dir: p, above, links: next.links + (link ? 1 : 0) });
+          }
+        }
+      }
+      return out;
     },
     isDir: (p) => inside(p) && statSync(abs(p)).isDirectory()
   };
@@ -17066,7 +17147,7 @@ function detectRepository(root, env = process.env) {
   const gitConfig = join2(root, ".git", "config");
   if (!existsSync2(gitConfig)) return void 0;
   const text3 = readFileSync(gitConfig, "utf8");
-  const origin = /\[remote "origin"\][^[]*?url\s*=\s*(\S+)/.exec(text3)?.[1];
+  const origin = /\[remote "origin"\][^[]*?^[ \t]*url\s*=\s*(\S+)/m.exec(text3)?.[1];
   const m = origin && /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(origin);
   return m ? m[1] : void 0;
 }
@@ -17091,11 +17172,14 @@ function loadProject(opts) {
     });
     return wf;
   };
+  const actionFile = (dir) => {
+    const base = dir === "." ? "" : `${dir}/`;
+    return [`${base}action.yml`, `${base}action.yaml`].find((f) => fs3.read(f) !== void 0);
+  };
   const loadAction = (dir) => {
     if (actions.has(dir)) return actions.get(dir);
     if (escapesRoot(dir)) return void 0;
-    const base = dir === "." ? "" : `${dir}/`;
-    const file2 = [`${base}action.yml`, `${base}action.yaml`].find((f) => fs3.read(f) !== void 0);
+    const file2 = actionFile(dir);
     if (!file2) return void 0;
     const action = logger.time(`parse ${file2}`, () => parseActionFile(dir, file2, fs3.read(file2), ctx));
     actions.set(dir, action);
@@ -17103,13 +17187,14 @@ function loadProject(opts) {
     return action;
   };
   const discovered = fs3.list(WORKFLOWS_DIR).filter(isYaml).sort();
-  const actionFiles = fs3.walk(ACTIONS_DIR).filter(isActionFile).sort();
-  if (["action.yml", "action.yaml"].some((f) => fs3.read(f) !== void 0)) actionFiles.push("action.yml");
-  for (const pattern of opts.publish ?? []) {
+  const actionFiles = new Set(fs3.walk(ACTIONS_DIR).filter(isActionFile).sort());
+  const rootAction = actionFile(".");
+  if (rootAction) actionFiles.add(rootAction);
+  for (const raw of opts.publish ?? []) {
+    const pattern = toPosix(raw).replace(/^\.\//, "") || ".";
     if (!/[*?[]/.test(pattern)) {
-      const file2 = isActionFile(pattern) ? pattern : `${pattern.replace(/\/$/, "")}/action.yml`;
-      if (isActionFile(file2) && !file2.startsWith(".github/actions/") && fs3.read(file2) !== void 0)
-        actionFiles.push(file2);
+      const file2 = isActionFile(pattern) ? pattern : actionFile(pattern.replace(/\/$/, ""));
+      if (file2 && !file2.startsWith(".github/actions/") && fs3.read(file2) !== void 0) actionFiles.add(file2);
       continue;
     }
     const literal2 = pattern.split(/[*?[]/)[0];
@@ -17117,11 +17202,11 @@ function loadProject(opts) {
     for (const f of dir ? fs3.walk(dir) : fs3.walk(".")) {
       if (!isActionFile(f) || f.startsWith(".github/actions/")) continue;
       const unitDir = f.replace(/\/?action\.ya?ml$/i, "") || ".";
-      if (matchesPattern(f, pattern) || matchesPattern(unitDir, pattern)) actionFiles.push(f);
+      if (matchesPattern(f, pattern) || matchesPattern(unitDir, pattern)) actionFiles.add(f);
     }
   }
-  logger.info(`discovered ${discovered.length} workflow(s) and ${actionFiles.length} local action(s)`);
-  logger.debug("files", { workflows: discovered, actions: actionFiles });
+  logger.info(`discovered ${discovered.length} workflow(s) and ${actionFiles.size} local action(s)`);
+  logger.debug("files", { workflows: discovered, actions: [...actionFiles] });
   const targets = /* @__PURE__ */ new Set();
   const missingTargets = [];
   let wholeRepository = false;
@@ -17333,7 +17418,7 @@ __export(external_exports, {
   check: () => check,
   cidrv4: () => cidrv42,
   cidrv6: () => cidrv62,
-  clone: () => clone2,
+  clone: () => clone3,
   codec: () => codec,
   coerce: () => coerce_exports,
   compile: () => compile,
@@ -17746,7 +17831,7 @@ __export(core_exports2, {
   base64Charset: () => base64Charset,
   base64urlCharset: () => base64urlCharset,
   canParseURL: () => canParseURL,
-  clone: () => clone2,
+  clone: () => clone3,
   compile: () => compile,
   compileFn: () => compileFn,
   config: () => config,
@@ -17831,7 +17916,7 @@ __export(util_exports, {
   captureStackTrace: () => captureStackTrace,
   cleanEnum: () => cleanEnum,
   cleanRegex: () => cleanRegex,
-  clone: () => clone2,
+  clone: () => clone3,
   cloneDef: () => cloneDef,
   codePointLength: () => codePointLength,
   constantCatch: () => constantCatch,
@@ -18187,7 +18272,7 @@ var primitiveTypes = /* @__PURE__ */ new Set([
 function escapeRegex(str2) {
   return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function clone2(inst, def, params) {
+function clone3(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
   if (!def || params?.parent)
     cl._zod.parent = inst;
@@ -18274,7 +18359,7 @@ function pick(schema3, mask) {
   }
   const newShape = {};
   mirrorShape(newShape, schema3, maskedKeys(schema3, mask));
-  return clone2(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
+  return clone3(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
 }
 function maskedKeys(schema3, mask) {
   const raw = sourceShape(schema3);
@@ -18298,7 +18383,7 @@ function omit(schema3, mask) {
   const omitted = new Set(maskedKeys(schema3, mask));
   const newShape = {};
   mirrorShape(newShape, schema3, Reflect.ownKeys(sourceShape(schema3)).filter((key) => !omitted.has(key)));
-  return clone2(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
+  return clone3(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
 }
 function extend(schema3, shape) {
   if (!isPlainObject(shape)) {
@@ -18314,7 +18399,7 @@ function extend(schema3, shape) {
       }
     }
   }
-  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
+  return clone3(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
 }
 function extended(schema3, shape) {
   const newShape = {};
@@ -18326,7 +18411,7 @@ function safeExtend(schema3, shape) {
   if (!isPlainObject(shape)) {
     throw new Error("Invalid input to safeExtend: expected a plain object");
   }
-  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
+  return clone3(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
 }
 function merge(a, b) {
   if (!b?._zod?.def) {
@@ -18345,7 +18430,7 @@ function merge(a, b) {
     },
     checks: b._zod.def.checks ?? []
   });
-  return clone2(a, def);
+  return clone3(a, def);
 }
 function partial(Class2, schema3, mask, name = "partial") {
   const currDef = schema3._zod.def;
@@ -18357,7 +18442,7 @@ function partial(Class2, schema3, mask, name = "partial") {
   const selected = mask ? new Set(maskedKeys(schema3, mask)) : void 0;
   const newShape = {};
   mirrorShape(newShape, schema3, Reflect.ownKeys(sourceShape(schema3)), Class2 && ((value, key) => selected && !selected.has(key) ? value : new Class2({ type: "optional", innerType: value })));
-  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: newShape, checks: [] }));
+  return clone3(schema3, mergeDefs(schema3._zod.def, { shape: newShape, checks: [] }));
 }
 function required(Class2, schema3, mask) {
   const selected = mask ? new Set(maskedKeys(schema3, mask)) : void 0;
@@ -18366,7 +18451,7 @@ function required(Class2, schema3, mask) {
     // overwrite with non-optional
     selected && !selected.has(key) ? value : new Class2({ type: "nonoptional", innerType: value })
   ));
-  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: newShape }));
+  return clone3(schema3, mergeDefs(schema3._zod.def, { shape: newShape }));
 }
 function aborted(x, startIndex = 0) {
   if (x.aborted === true)
@@ -30156,9 +30241,9 @@ function compileValidator(schema3, parser) {
 function compile(schema3, options) {
   try {
     const parser = compileFn(schema3);
-    const clone3 = withParser(schema3, parser);
-    clone3._zod.bag.validator = compileValidator(schema3, parser);
-    return clone3;
+    const clone4 = withParser(schema3, parser);
+    clone4._zod.bag.validator = compileValidator(schema3, parser);
+    return clone4;
   } catch (err) {
     if (options?.strict)
       throw err;
@@ -30169,7 +30254,7 @@ function withParser(schema3, parser) {
   if (isRecursiveSchema(schema3)) {
     throw new ZodCompileUnsupportedError("a schema whose subtree contains a reference cycle");
   }
-  const clone3 = clone2(schema3);
+  const clone4 = clone3(schema3);
   const liveRun = schema3._zod.run;
   const originalRun = liveRun.__originalRun ?? liveRun;
   const wrapped = (payload, ctx) => {
@@ -30189,12 +30274,12 @@ function withParser(schema3, parser) {
     return originalRun(payload, ctx);
   };
   wrapped.__originalRun = originalRun;
-  clone3._zod.bag.fallbackRun = originalRun;
-  clone3._zod.bag.validator = parser;
-  clone3._zod.run = wrapped;
+  clone4._zod.bag.fallbackRun = originalRun;
+  clone4._zod.bag.validator = parser;
+  clone4._zod.run = wrapped;
   if (!liveRun.__originalRun)
-    installCompiledUserMethods(clone3, schema3, parser);
-  return clone3;
+    installCompiledUserMethods(clone4, schema3, parser);
+  return clone4;
 }
 function installCompiledUserMethods(target, source, parser) {
   const targetAny = target;
@@ -34455,7 +34540,7 @@ var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
     return this.check(...chks);
   },
   clone(def, params) {
-    return clone2(this, def, params);
+    return clone3(this, def, params);
   },
   brand() {
     return this;
@@ -36720,11 +36805,11 @@ function visit2(schema3, fnOrHandlers) {
           if (newCatchall !== def.catchall)
             changed = true;
         }
-        return changed ? clone2(s, { ...def, shape: newShape, catchall: newCatchall }) : s;
+        return changed ? clone3(s, { ...def, shape: newShape, catchall: newCatchall }) : s;
       }
       case "array": {
         const mapped = run2(def.element);
-        return mapped === def.element ? s : clone2(s, { ...def, element: mapped });
+        return mapped === def.element ? s : clone3(s, { ...def, element: mapped });
       }
       case "tuple": {
         const oldItems = def.items;
@@ -36742,17 +36827,17 @@ function visit2(schema3, fnOrHandlers) {
           if (newRest !== def.rest)
             changed = true;
         }
-        return changed ? clone2(s, { ...def, items: newItems, rest: newRest }) : s;
+        return changed ? clone3(s, { ...def, items: newItems, rest: newRest }) : s;
       }
       case "record":
       case "map": {
         const newKey = run2(def.keyType);
         const newVal = run2(def.valueType);
-        return newKey === def.keyType && newVal === def.valueType ? s : clone2(s, { ...def, keyType: newKey, valueType: newVal });
+        return newKey === def.keyType && newVal === def.valueType ? s : clone3(s, { ...def, keyType: newKey, valueType: newVal });
       }
       case "set": {
         const newVal = run2(def.valueType);
-        return newVal === def.valueType ? s : clone2(s, { ...def, valueType: newVal });
+        return newVal === def.valueType ? s : clone3(s, { ...def, valueType: newVal });
       }
       case "union": {
         const oldOptions = def.options;
@@ -36764,12 +36849,12 @@ function visit2(schema3, fnOrHandlers) {
             changed = true;
           newOptions.push(mapped);
         }
-        return changed ? clone2(s, { ...def, options: newOptions }) : s;
+        return changed ? clone3(s, { ...def, options: newOptions }) : s;
       }
       case "intersection": {
         const newLeft = run2(def.left);
         const newRight = run2(def.right);
-        return newLeft === def.left && newRight === def.right ? s : clone2(s, { ...def, left: newLeft, right: newRight });
+        return newLeft === def.left && newRight === def.right ? s : clone3(s, { ...def, left: newLeft, right: newRight });
       }
       case "optional":
       case "nullable":
@@ -36781,22 +36866,22 @@ function visit2(schema3, fnOrHandlers) {
       case "promise":
       case "success": {
         const newInner = run2(def.innerType);
-        return newInner === def.innerType ? s : clone2(s, { ...def, innerType: newInner });
+        return newInner === def.innerType ? s : clone3(s, { ...def, innerType: newInner });
       }
       case "pipe": {
         const newIn = run2(def.in);
         const newOut = run2(def.out);
-        return newIn === def.in && newOut === def.out ? s : clone2(s, { ...def, in: newIn, out: newOut });
+        return newIn === def.in && newOut === def.out ? s : clone3(s, { ...def, in: newIn, out: newOut });
       }
       case "function": {
         const newInput = run2(def.input);
         const newOutput = run2(def.output);
-        return newInput === def.input && newOutput === def.output ? s : clone2(s, { ...def, input: newInput, output: newOutput });
+        return newInput === def.input && newOutput === def.output ? s : clone3(s, { ...def, input: newInput, output: newOutput });
       }
       case "lazy": {
         const original = def.getter;
         const { _cachedInner, ...rest } = def;
-        return clone2(s, { ...rest, getter: () => run2(original()) });
+        return clone3(s, { ...rest, getter: () => run2(original()) });
       }
       // A leaf by choice: `parts` are regex fragments, not data positions.
       case "template_literal":
@@ -36847,7 +36932,7 @@ function withChecks(side, checks) {
   if (!checks?.length)
     return side;
   const def = side._zod.def;
-  return clone2(side, mergeDefs(def, { checks: [...def.checks ?? [], ...checks] }), { parent: true });
+  return clone3(side, mergeDefs(def, { checks: [...def.checks ?? [], ...checks] }), { parent: true });
 }
 function outSide(def) {
   return withChecks(def.out, def.checks);
@@ -37113,7 +37198,7 @@ function parseConfig(raw, file2) {
 }
 
 // ../lint/src/contracts.ts
-import { existsSync as existsSync4, lstatSync, mkdirSync, realpathSync as realpathSync2, rmSync, writeFileSync } from "fs";
+import { existsSync as existsSync4, lstatSync as lstatSync2, mkdirSync, realpathSync as realpathSync2, rmSync, writeFileSync } from "fs";
 import { basename as basename3, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, relative as relative3, resolve as resolve3, sep } from "path";
 
 // ../../node_modules/.pnpm/diff@9.0.0/node_modules/diff/libesm/diff/base.js
@@ -38081,7 +38166,7 @@ var UnsafePathError = class extends Error {
 };
 function isSymlink(abs) {
   try {
-    return lstatSync(abs).isSymbolicLink();
+    return lstatSync2(abs).isSymbolicLink();
   } catch {
     return false;
   }
