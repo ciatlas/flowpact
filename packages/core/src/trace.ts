@@ -1,16 +1,8 @@
-import {
-  comboLabel,
-  type ExprSite,
-  expandMatrix,
-  type GraphNode,
-  type Loc,
-  lookup,
-  type ProjectIndex,
-  type SiteField,
-  sym,
-  type Usage,
-} from '@flowpact/core';
-import { secretsNeededBy } from './rules/secrets';
+import { type GraphNode, type ProjectIndex, sym, type Usage } from './graph';
+import { type ExprSite, lookup, type SiteField } from './ir';
+import { comboLabel, expandMatrix } from './matrix';
+import { secretsNeededBy } from './queries';
+import type { Loc } from './source';
 
 export interface TraceLeaf {
   /** What the value is used for, e.g. `run script`, `condition`, `runs-on`. */

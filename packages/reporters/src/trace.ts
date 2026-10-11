@@ -1,5 +1,4 @@
-import { formatLoc } from '@flowpact/core';
-import type { TraceDirection, TraceNode } from '@flowpact/lint';
+import { formatLoc, type TraceDirection, type TraceNode } from '@flowpact/core';
 import { createTheme, finalize, type RenderOptions, safe, type Theme } from './theme';
 
 const KIND_COLOR: Record<string, 'green' | 'yellow' | 'magenta' | 'cyan' | 'blue'> = {

@@ -6,6 +6,4 @@ export * from './impact-run';
 export * from './plugins';
 export * from './report';
 export * from './rules/index';
-export { chainTo } from './rules/util';
-export * from './trace';
 export * from './version';

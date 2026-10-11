@@ -1,6 +1,6 @@
 /** Regressions for CodeQL code-scanning alerts: inputs that made regexes backtrack quadratically. */
-import { classifyUses, createParseContext, memoryFileSystem, trimChar } from '@flowpact/core';
-import { analyze, trace } from '@flowpact/lint';
+import { classifyUses, createParseContext, memoryFileSystem, trace, trimChar } from '@flowpact/core';
+import { analyze } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 
 const loc = { file: 'x.yml', line: 1, column: 1, endLine: 1, endColumn: 1 };

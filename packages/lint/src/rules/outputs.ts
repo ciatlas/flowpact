@@ -1,7 +1,15 @@
-import { didYouMean, lookup, type StepDecl, sym, type UnitDecl } from '@flowpact/core';
+import {
+  didYouMean,
+  lookup,
+  readsContextDynamically,
+  refsOf,
+  type StepDecl,
+  sym,
+  type UnitDecl,
+} from '@flowpact/core';
 import { isPublished } from '../impact';
 import { defineRule, type RuleDefinition } from './types';
-import { listNames, quote, readsContextDynamically, refsOf } from './util';
+import { listNames, quote } from './util';
 
 /** FP303's fix for an output of a unit that other repositories might use: published units are not judged. */
 function publishedFix(kind: 'workflow' | 'action', file: string, publish: string[] | undefined): string {

@@ -1,6 +1,8 @@
 import {
+  BUILTIN_SECRETS,
   type CallSite,
   type ContextResolver,
+  chainTo,
   definitelyFalsy,
   didYouMean,
   type ExprSite,
@@ -8,54 +10,15 @@ import {
   evaluateTemplate,
   known,
   lookup,
-  type ProjectIndex,
+  readsContextDynamically,
+  refsOf,
+  secretsNeededBy,
   sym,
   UNKNOWN,
   type WorkflowDecl,
 } from '@flowpact/core';
 import { defineRule, type RuleDefinition } from './types';
-import {
-  chainRelated,
-  chainTo,
-  type Guard,
-  guardOf,
-  isWholeExpression,
-  listNames,
-  quote,
-  readsContextDynamically,
-  refsOf,
-} from './util';
-
-const BUILTIN_SECRETS = new Set(['github_token']);
-
-/** Secrets a workflow reads directly, plus those read by callees it hands every secret to via `secrets: inherit`. */
-export function secretsNeededBy(
-  index: ProjectIndex,
-  wf: WorkflowDecl,
-  seen = new Set<string>(),
-): Set<string> {
-  const out = new Set<string>();
-  if (seen.has(wf.path)) return out;
-  seen.add(wf.path);
-  for (const { ref } of refsOf(wf)) {
-    const name = ref.path[0];
-    if (
-      ref.context === 'secrets' &&
-      name &&
-      name !== '*' &&
-      name !== '?' &&
-      !BUILTIN_SECRETS.has(name.toLowerCase())
-    ) {
-      out.add(name);
-    }
-  }
-  for (const job of Object.values(wf.jobs)) {
-    if (!job.secretsInherit) continue;
-    const callee = index.calleeOf(job);
-    if (callee) for (const s of secretsNeededBy(index, callee, seen)) out.add(s);
-  }
-  return out;
-}
+import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, quote } from './util';
 
 export const missingRequiredSecret = defineRule({
   code: 'FP201',

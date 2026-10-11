@@ -12454,7 +12454,7 @@ var ProjectIndex = class {
   usersOf(actionPath) {
     return this.actionUses.filter((u) => u.action.path === actionPath);
   }
-  /** The reusable workflow a job calls. Workflows without `on.workflow_call` are not callable (see FP609). */
+  /** The reusable workflow a job calls. Workflows without `on.workflow_call` are not callable (see `targetOf`). */
   calleeOf(job) {
     const wf = this.targetOf(job);
     return wf?.call ? wf : void 0;
@@ -12480,7 +12480,7 @@ var ProjectIndex = class {
   incoming(symbol2, kind) {
     return this.edges.filter((e) => e.to === symbol2 && (!kind || e.kind === kind));
   }
-  /** Serializable snapshot (used by `--dump-graph` and the JSON report). */
+  /** Serializable snapshot: every node and edge, in a stable order. */
   toJSON() {
     return {
       nodes: [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
@@ -12854,11 +12854,12 @@ function compareLoc(a, b) {
 
 // ../core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
+var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
   const level = options.level ?? "info";
   const sink = options.sink ?? { write() {
   } };
-  const scope = options.scope ?? "flowpact";
+  const scope = options.scope ?? DEFAULTS.scope;
   const log = (lvl, message, data) => {
     if (ORDER[lvl] > ORDER[level]) return;
     sink.write({ level: lvl, scope, message, ...data ? { data } : {}, time: Date.now() });
@@ -12896,9 +12897,9 @@ var silentLogger = createLogger({ level: "silent" });
 function resolveLogLevel(opts, env = process.env) {
   if (opts.quiet) return "error";
   if ((opts.verbose ?? 0) >= 2) return "trace";
-  const envDebug = truthy3(env.FLOWPACT_DEBUG) || truthy3(env.RUNNER_DEBUG) || truthy3(env.ACTIONS_STEP_DEBUG);
-  if (opts.debug || (opts.verbose ?? 0) >= 1 || envDebug)
-    return env.FLOWPACT_DEBUG === "trace" ? "trace" : "debug";
+  const own2 = env[opts.debugEnv ?? DEFAULTS.debugEnv];
+  const envDebug = truthy3(own2) || truthy3(env.RUNNER_DEBUG) || truthy3(env.ACTIONS_STEP_DEBUG);
+  if (opts.debug || (opts.verbose ?? 0) >= 1 || envDebug) return own2 === "trace" ? "trace" : "debug";
   return "info";
 }
 function truthy3(v) {
@@ -16261,14 +16262,14 @@ function isContextError(message) {
   const fn = /Unrecognized function: '([^']+)'/i.exec(message);
   return fn ? FUNCTION_NAMES.has(fn[1].toLowerCase()) : false;
 }
-function againstFP502(unit, d) {
+function againstSite(unit, d) {
   const site = d.at && siteAt(unit.sites, d.at);
-  if (!site) return "own";
+  if (!site) return "parser";
   if (site.loc.endLine > site.loc.line) {
-    return site.segments.some((seg) => seg.expr.error) ? "fp502" : "misread";
+    return site.segments.some((seg) => seg.expr.error) ? "site" : "misread";
   }
   const message = UNCLOSED.test(d.message) ? UNTERMINATED_EXPRESSION : d.message;
-  return site.segments.some((seg) => seg.expr.error?.message === message) ? "fp502" : "own";
+  return site.segments.some((seg) => seg.expr.error?.message === message) ? "site" : "parser";
 }
 var isExpressionError = (d) => d.kind !== "context" && !!d.at && EXPRESSION_ERROR.test(d.message);
 var atKey = (d) => d.at ? `${d.at.line}:${d.at.column}` : "";
@@ -16281,9 +16282,9 @@ function classifyExpressions(unit, diagnostics) {
       out.push(d);
       continue;
     }
-    const relation = againstFP502(unit, d);
+    const relation = againstSite(unit, d);
     if (relation === "misread") continue;
-    out.push(relation === "fp502" ? { ...d, kind: "expression" } : d);
+    out.push({ ...d, kind: "expression", siteError: relation === "site" });
   }
   return out;
 }
@@ -17304,6 +17305,66 @@ function loadProject(opts) {
     invalidTargets: invalid,
     unverified
   };
+}
+
+// ../core/src/queries.ts
+function* refsOf(unit) {
+  for (const site of unit.sites)
+    for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
+}
+function readsContextDynamically(unit, context) {
+  if (unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error)))
+    return true;
+  for (const { ref } of refsOf(unit)) {
+    if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
+    if (context === "inputs" && ref.context === "github" && ref.path[0] === "event") {
+      if (ref.path.length === 1 || ref.path[1] === "inputs" && (ref.path.length === 2 || ref.path[2] === "?"))
+        return true;
+    }
+  }
+  return false;
+}
+function namesOwner(ref) {
+  const owner = ref.path[0];
+  return (ref.context === "needs" || ref.context === "jobs" || ref.context === "steps") && owner !== void 0 && owner !== "?" && owner !== "*";
+}
+function chainTo(index, target) {
+  const queue = [{ path: target, chain: [] }];
+  const seen = /* @__PURE__ */ new Set([target]);
+  let fallback = [];
+  while (queue.length) {
+    const { path, chain } = queue.shift();
+    const callers = index.callersOf(path);
+    if (callers.length === 0) return chain;
+    if (chain.length > fallback.length) fallback = chain;
+    for (const c of callers) {
+      if (seen.has(c.caller.path)) continue;
+      seen.add(c.caller.path);
+      queue.push({ path: c.caller.path, chain: [c, ...chain] });
+    }
+  }
+  return fallback;
+}
+function isCallOnly(wf) {
+  return wf.triggers.length === 1 && wf.triggers[0] === "workflow_call";
+}
+var BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
+function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
+  const out = /* @__PURE__ */ new Set();
+  if (seen.has(wf.path)) return out;
+  seen.add(wf.path);
+  for (const { ref } of refsOf(wf)) {
+    const name = ref.path[0];
+    if (ref.context === "secrets" && name && name !== "*" && name !== "?" && !BUILTIN_SECRETS.has(name.toLowerCase())) {
+      out.add(name);
+    }
+  }
+  for (const job of Object.values(wf.jobs)) {
+    if (!job.secretsInherit) continue;
+    const callee = index.calleeOf(job);
+    if (callee) for (const s of secretsNeededBy(index, callee, seen)) out.add(s);
+  }
+  return out;
 }
 
 // ../lint/src/analyze.ts
@@ -38645,43 +38706,6 @@ function useInCondition(site, ref) {
   const seg = site.segments.find((s) => s.refs.includes(ref));
   return seg ? conditionUses(seg.expr, isWholeExpression(site)).get(ref.start) : void 0;
 }
-function* refsOf(unit) {
-  for (const site of unit.sites)
-    for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
-}
-function readsContextDynamically(unit, context) {
-  if (unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error)))
-    return true;
-  for (const { ref } of refsOf(unit)) {
-    if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
-    if (context === "inputs" && ref.context === "github" && ref.path[0] === "event") {
-      if (ref.path.length === 1 || ref.path[1] === "inputs" && (ref.path.length === 2 || ref.path[2] === "?"))
-        return true;
-    }
-  }
-  return false;
-}
-function namesOwner(ref) {
-  const owner = ref.path[0];
-  return (ref.context === "needs" || ref.context === "jobs" || ref.context === "steps") && owner !== void 0 && owner !== "?" && owner !== "*";
-}
-function chainTo(index, target) {
-  const queue = [{ path: target, chain: [] }];
-  const seen = /* @__PURE__ */ new Set([target]);
-  let fallback = [];
-  while (queue.length) {
-    const { path, chain } = queue.shift();
-    const callers = index.callersOf(path);
-    if (callers.length === 0) return chain;
-    if (chain.length > fallback.length) fallback = chain;
-    for (const c of callers) {
-      if (seen.has(c.caller.path)) continue;
-      seen.add(c.caller.path);
-      queue.push({ path: c.caller.path, chain: [c, ...chain] });
-    }
-  }
-  return fallback;
-}
 function chainRelated(chain) {
   return chain.map((c) => ({
     loc: c.job.uses?.loc ?? c.job.loc,
@@ -38693,9 +38717,6 @@ function listNames(names, max = 6) {
   if (names.length === 0) return "(none)";
   const shown = names.slice(0, max).join(", ");
   return names.length > max ? `${shown}, \u2026 (+${names.length - max})` : shown;
-}
-function isCallOnly(wf) {
-  return wf.triggers.length === 1 && wf.triggers[0] === "workflow_call";
 }
 
 // ../lint/src/rules/contracts.ts
@@ -38992,7 +39013,7 @@ runs:
     for (const unit of ctx.index.units()) {
       const fp502 = ctx.runs("FP502");
       for (const e of unit.schemaErrors) {
-        if (e.kind === "context" || e.kind === "expression" && fp502) continue;
+        if (e.kind === "context" || e.kind === "expression" && e.siteError && fp502) continue;
         ctx.report({
           message: e.message,
           loc: e.loc,
@@ -40568,24 +40589,6 @@ var RuleRegistry = class {
 };
 
 // ../lint/src/rules/secrets.ts
-var BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
-function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
-  const out = /* @__PURE__ */ new Set();
-  if (seen.has(wf.path)) return out;
-  seen.add(wf.path);
-  for (const { ref } of refsOf(wf)) {
-    const name = ref.path[0];
-    if (ref.context === "secrets" && name && name !== "*" && name !== "?" && !BUILTIN_SECRETS.has(name.toLowerCase())) {
-      out.add(name);
-    }
-  }
-  for (const job of Object.values(wf.jobs)) {
-    if (!job.secretsInherit) continue;
-    const callee = index.calleeOf(job);
-    if (callee) for (const s of secretsNeededBy(index, callee, seen)) out.add(s);
-  }
-  return out;
-}
 var missingRequiredSecret = defineRule({
   code: "FP201",
   name: "missing-required-secret",
@@ -42123,7 +42126,33 @@ function toJsonReport(result, opts = {}) {
       }
     } : {},
     rules: result.rules,
-    ...opts.includeGraph ? { graph: result.index.toJSON() } : {}
+    ...opts.includeGraph ? { graph: reportGraph(result.index) } : {}
+  };
+}
+function reportGraph(index) {
+  const { nodes, edges } = index.toJSON();
+  const loc = (l) => ({
+    file: l.file,
+    line: l.line,
+    column: l.column,
+    endLine: l.endLine,
+    endColumn: l.endColumn
+  });
+  return {
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      kind: n.kind,
+      label: n.label,
+      ...n.unit !== void 0 ? { unit: n.unit } : {},
+      ...n.loc ? { loc: loc(n.loc) } : {}
+    })),
+    edges: edges.map((e) => ({
+      from: e.from,
+      to: e.to,
+      kind: e.kind,
+      ...e.loc ? { loc: loc(e.loc) } : {},
+      ...e.siteId !== void 0 ? { siteId: e.siteId } : {}
+    }))
   };
 }
 
@@ -42999,7 +43028,7 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
 }
 
 // src/main.ts
-var DEFAULTS = {
+var DEFAULTS2 = {
   mode: "lint",
   paths: "",
   "working-directory": ".",
@@ -43032,7 +43061,7 @@ var ARTIFACT_DIR = "flowpact-contracts";
 var InputError = class extends Error {
 };
 function input2(name) {
-  return getInput(name).trim() || DEFAULTS[name];
+  return getInput(name).trim() || DEFAULTS2[name];
 }
 function oneOf(name, options) {
   const value = input2(name);
@@ -43070,7 +43099,7 @@ function declaredDefaultsOf(actionYml) {
 var declaredDefaults;
 function declaredDefault(name) {
   declaredDefaults ??= declaredDefaultsOf(join6(ACTION_DIR, "action.yml"));
-  return declaredDefaults[name]?.trim() || DEFAULTS[name];
+  return declaredDefaults[name]?.trim() || DEFAULTS2[name];
 }
 var orgInput = (name) => getInput(name).trim() || declaredDefault(name);
 function readInputs() {

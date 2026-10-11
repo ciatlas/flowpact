@@ -1,3 +1,4 @@
+import type { Loc, ProjectIndex } from '@flowpact/core';
 import { z } from 'zod';
 import type { AnalysisResult } from './analyze';
 import { schemaUrl } from './version';
@@ -173,7 +174,38 @@ export function toJsonReport(result: AnalysisResult, opts: { includeGraph?: bool
         }
       : {}),
     rules: result.rules,
-    ...(opts.includeGraph ? { graph: result.index.toJSON() } : {}),
+    ...(opts.includeGraph ? { graph: reportGraph(result.index) } : {}),
+  };
+}
+
+/**
+ * The graph with the fields the report schema documents, copied one by one: a field the workflow model adds to its
+ * nodes, edges or locations does not reach the published report.
+ */
+function reportGraph(index: ProjectIndex): NonNullable<JsonReport['graph']> {
+  const { nodes, edges } = index.toJSON();
+  const loc = (l: Loc) => ({
+    file: l.file,
+    line: l.line,
+    column: l.column,
+    endLine: l.endLine,
+    endColumn: l.endColumn,
+  });
+  return {
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      kind: n.kind,
+      label: n.label,
+      ...(n.unit !== undefined ? { unit: n.unit } : {}),
+      ...(n.loc ? { loc: loc(n.loc) } : {}),
+    })),
+    edges: edges.map((e) => ({
+      from: e.from,
+      to: e.to,
+      kind: e.kind,
+      ...(e.loc ? { loc: loc(e.loc) } : {}),
+      ...(e.siteId !== undefined ? { siteId: e.siteId } : {}),
+    })),
   };
 }
 

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import { memoryFileSystem, sym } from '@flowpact/core';
-import { analyze, createRegistry, reportSchema, toolMeta, trace } from '@flowpact/lint';
+import { memoryFileSystem, sym, trace } from '@flowpact/core';
+import { analyze, createRegistry, reportSchema, toolMeta } from '@flowpact/lint';
 import {
   codeFrame,
   createTheme,

@@ -2,6 +2,7 @@ import {
   type Binding,
   type Combination,
   type ContextResolver,
+  chainTo,
   comboLabel,
   definitelyFalsy,
   didYouMean,
@@ -29,7 +30,7 @@ import {
   type WorkflowDecl,
 } from '@flowpact/core';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
-import { chainRelated, chainTo, type Guard, guardOf, isWholeExpression, quote, useInCondition } from './util';
+import { chainRelated, type Guard, guardOf, isWholeExpression, quote, useInCondition } from './util';
 
 const hasMatrixRef = (site: ExprSite) =>
   site.segments.some((s) => s.refs.some((r) => r.context === 'matrix'));

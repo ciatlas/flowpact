@@ -1,6 +1,6 @@
-import { type CallSite, type Loc, lookup, sym } from '@flowpact/core';
+import { type CallSite, isCallOnly, type Loc, lookup, refsOf, sym } from '@flowpact/core';
 import { defineRule, type RelatedLocation, type RuleDefinition } from './types';
-import { chainRelated, isCallOnly, listNames, quote, refsOf } from './util';
+import { chainRelated, listNames, quote } from './util';
 
 export const callCycle = defineRule({
   code: 'FP601',

@@ -17,7 +17,6 @@ import {
   UnsafePathError,
   writeContracts,
 } from '@flowpact/lint';
-import { buildCallGraph, renderMarkdown } from '@flowpact/reporters';
 import { describe, expect, it } from 'vitest';
 import { byCode, codes, lint, WF, yaml } from './helpers';
 
@@ -53,30 +52,9 @@ describe('FP602 with call cycles (#21)', () => {
   });
 });
 
+// The cases that render the FP204 snippet as Markdown, and the call-graph case, are in
+// packages/reporters/test/review-round3.test.ts.
 describe('untrusted names in output (#9)', () => {
-  const inheritCall = (name: string) => ({
-    [`${WF}/c.yml`]: 'on: push\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n    secrets: inherit\n',
-    [`${WF}/r.yml`]: `on: workflow_call\njobs:\n  j:\n    runs-on: x\n    steps:\n      - run: |\n          echo "\${{ secrets['${name.replaceAll('\n', '\n          ')}'] }}"\n`,
-  });
-
-  it('escapes secret names inside the FP204 snippet', () => {
-    const r = lint(
-      inheritCall('A\n```\n</details><img src=https://e.vil/p.png> @octocat\n::error title=x::pwned\n'),
-    );
-    const fix = byCode(r, 'FP204')[0]!.fix;
-    expect(fix.split('\n')).toHaveLength(3);
-    expect(fix).toContain('\\n```\\n');
-    const md = renderMarkdown(r);
-    expect(md).not.toMatch(/^<\/details><img/m);
-    expect(md).not.toMatch(/^\s*::error/m);
-  });
-
-  it('fences a snippet with a longer fence than any backtick run in it', () => {
-    const r = lint(inheritCall('A````B'));
-    const md = renderMarkdown(r);
-    expect(md).toContain('`````yaml');
-  });
-
   it('neutralizes lines that GitHub would run as workflow commands', () => {
     expect(neutralizeWorkflowCommands('ok\n  ::error title=x::pwned\n::warning::y')).toBe(
       'ok\n  :\u200b:error title=x::pwned\n:\u200b:warning::y',
@@ -472,19 +450,6 @@ describe('calls by path (#18, #23)', () => {
       '.GitHub/workflows/r.yml': 'on: workflow_call\njobs:\n  j:\n    runs-on: x\n    steps: [{ run: x }]\n',
     });
     expect(codes(r)).toContain('FP606');
-  });
-
-  it('draws calls to files outside .github/workflows in the graph', () => {
-    const r = lint({
-      [`${WF}/c.yml`]: 'on: push\njobs:\n  x:\n    uses: ./ci/r.yml\n',
-      'ci/r.yml': 'on: workflow_call\njobs:\n  j:\n    runs-on: x\n    steps: [{ run: x }]\n',
-    });
-    expect(codes(r)).toContain('FP606');
-    const g = buildCallGraph(r.index);
-    expect(g.nodes.find((n) => n.id === 'ci/r.yml')?.kind).toBe('invalid');
-    expect(g.edges).toContainEqual(
-      expect.objectContaining({ from: `${WF}/c.yml`, to: 'ci/r.yml', via: 'jobs.x' }),
-    );
   });
 });
 

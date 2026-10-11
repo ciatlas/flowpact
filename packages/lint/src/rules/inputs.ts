@@ -1,11 +1,14 @@
 import {
   type Binding,
+  chainTo,
   didYouMean,
   evaluateTemplate,
   type InputDecl,
   type Json,
   lookup,
   type ProjectIndex,
+  readsContextDynamically,
+  refsOf,
   sym,
   UNKNOWN,
   type UnitDecl,
@@ -13,15 +16,7 @@ import {
 } from '@flowpact/core';
 import { isPublished } from '../impact';
 import { defineRule, type RuleDefinition } from './types';
-import {
-  chainRelated,
-  chainTo,
-  listNames,
-  quote,
-  readsContextDynamically,
-  refsOf,
-  useInCondition,
-} from './util';
+import { chainRelated, listNames, quote, useInCondition } from './util';
 
 /**
  * For every workflow with `workflow_dispatch`: input names read as `github.event.inputs.<name>` in the workflows and
