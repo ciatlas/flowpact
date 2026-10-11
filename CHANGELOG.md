@@ -4,6 +4,17 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.12.0](https://github.com/ciatlas/flowpact/compare/v0.11.1...v0.12.0) (2026-10-11)
+
+
+### ⚠ BREAKING CHANGES
+
+* flowpact moved to the ciatlas organization. Use `uses: ciatlas/flowpact@v0.12` (GitHub redirects the old name). The docs and schemas are now at https://ciatlas.github.io/flowpact, and the old rumankazi.github.io/flowpact URLs no longer resolve. Contracts written by 0.11 or earlier name the old schema and docs URLs: run `flowpact generate` once, or `flowpact check` reports FP802. Releases up to 0.11.1 verify with `--repo rumankazi/flowpact`. See https://ciatlas.github.io/flowpact/docs/upgrading.
+
+### Features
+
+* flowpact moves to ciatlas/flowpact and https://ciatlas.github.io/flowpact ([#90](https://github.com/ciatlas/flowpact/issues/90)) ([634431c](https://github.com/ciatlas/flowpact/commit/634431c224224755e36287c77e933ee1dc751dba))
+
 ## [0.11.1](https://github.com/rumankazi/flowpact/compare/v0.11.0...v0.11.1) (2026-10-11)
 
 
