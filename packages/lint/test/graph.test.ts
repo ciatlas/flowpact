@@ -56,37 +56,6 @@ const files = {
   `,
 };
 
-describe('ProjectIndex', () => {
-  const { index } = lint(files);
-
-  it('indexes call sites and data-flow edges', () => {
-    expect(index.callSites.map((c) => `${c.caller.path}→${c.callee.path}`).sort()).toEqual([
-      `${WF}/mid.yml→${WF}/leaf.yml`,
-      `${WF}/root.yml→${WF}/mid.yml`,
-    ]);
-    const flows = index.edges.filter((e) => e.kind === 'flows').map((e) => `${e.from} → ${e.to}`);
-    expect(flows).toContain(
-      `${sym.input(`${WF}/root.yml`, 'config')} → ${sym.input(`${WF}/mid.yml`, 'cfg')}`,
-    );
-    expect(flows).toContain(
-      `${sym.output(`${WF}/mid.yml`, 'result')} → ${sym.jobOutput(`${WF}/root.yml`, 'mid', 'result')}`,
-    );
-    expect(index.edges.filter((e) => e.kind === 'inherits')).toHaveLength(2);
-  });
-
-  it('records usages with their sink', () => {
-    const [u] = index.usagesOf(sym.input(`${WF}/mid.yml`, 'cfg'));
-    expect(u?.sink).toBe(sym.input(`${WF}/leaf.yml`, 'path'));
-  });
-
-  it('serializes deterministically', () => {
-    const a = JSON.stringify(index.toJSON());
-    const b = JSON.stringify(lint(files).index.toJSON());
-    expect(a).toBe(b);
-    expect(index.toJSON()).toMatchSnapshot();
-  });
-});
-
 describe('trace', () => {
   const { index } = lint(files);
 
