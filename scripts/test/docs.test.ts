@@ -88,11 +88,14 @@ describe('version references', () => {
 
   it('move to the next release line', async () => {
     // @ts-expect-error -- plain JavaScript module without types
-    const { syncRefs } = await import('../sync-version-refs.mjs');
+    const { syncRefs: sync } = await import('../sync-version-refs.mjs');
+    // An explicit location, so the test does not depend on where flowpact lives.
+    const location = { repository: 'acme/flowpact', previousRepositories: ['old/flowpact'] };
+    const syncRefs = (text: string, version: string) => sync(text, version, location);
     const text =
-      'uses: rumankazi/flowpact@v0.3\nuses: rumankazi/flowpact@v0.3.2\nnpx flowpact@0.3 lint\n`flowpact` on npm, flowpact@ v0\nFLOWPACT_VERSION: 0.3.2';
+      'uses: acme/flowpact@v0.3\nuses: acme/flowpact@v0.3.2\nnpx flowpact@0.3 lint\n`flowpact` on npm, flowpact@ v0\nFLOWPACT_VERSION: 0.3.2';
     expect(syncRefs(text, '0.4.0')).toBe(
-      'uses: rumankazi/flowpact@v0.4\nuses: rumankazi/flowpact@v0.4.0\nnpx flowpact@0.4 lint\n`flowpact` on npm, flowpact@ v0\nFLOWPACT_VERSION: 0.4.0',
+      'uses: acme/flowpact@v0.4\nuses: acme/flowpact@v0.4.0\nnpx flowpact@0.4 lint\n`flowpact` on npm, flowpact@ v0\nFLOWPACT_VERSION: 0.4.0',
     );
     expect(
       syncRefs(
@@ -107,9 +110,13 @@ describe('version references', () => {
       `<text y="67"><tspan x="28.4" textLength="67.2" fill="#3b4252">flowpact</tspan><tspan x="112.4" textLength="${w}" lengthAdjust="spacingAndGlyphs" fill="#d8dee9">${v}</tspan><tspan x="${x}" textLength="50.4">config</tspan></text>`;
     expect(syncRefs(banner('v0.3.2', '50.4', '179.6'), '0.10.0')).toBe(banner('v0.10.0', '58.8', '188.0'));
     expect(syncRefs(banner('v1.0.0-rc.1', '92.4', '221.6'), '1.0.0')).toBe(banner('v1.0.0', '50.4', '179.6'));
-    expect(syncRefs('uses: rumankazi/flowpact@v1.0.0-rc.1', '1.0.0')).toBe('uses: rumankazi/flowpact@v1.0.0');
+    expect(syncRefs('uses: acme/flowpact@v1.0.0-rc.1', '1.0.0')).toBe('uses: acme/flowpact@v1.0.0');
     expect(syncRefs(text, '1.2.0')).toBe(
-      'uses: rumankazi/flowpact@v1\nuses: rumankazi/flowpact@v1.2.0\nnpx flowpact@1 lint\n`flowpact` on npm, flowpact@ v0\nFLOWPACT_VERSION: 1.2.0',
+      'uses: acme/flowpact@v1\nuses: acme/flowpact@v1.2.0\nnpx flowpact@1 lint\n`flowpact` on npm, flowpact@ v0\nFLOWPACT_VERSION: 1.2.0',
     );
+    // After a move, references through a previous repository follow it; another owner's copy (a mirror) does not.
+    expect(
+      syncRefs('uses: old/flowpact@v0.3\nuses: old/flowpact@v0.3.2\nuses: mirror/flowpact@v0.3', '0.4.0'),
+    ).toBe('uses: acme/flowpact@v0.4\nuses: acme/flowpact@v0.4.0\nuses: mirror/flowpact@v0.3');
   });
 });

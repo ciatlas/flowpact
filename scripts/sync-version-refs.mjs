@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Keeps the version references in the docs and READMEs on the current release line, from release-please's manifest:
-// - `rumankazi/flowpact@v0.3`: the action's floating tag (`v0.<minor>` before 1.0, `v<major>` from 1.0);
-// - `rumankazi/flowpact@v0.3.2`: an exact pin of the action;
+// - `<repository>@v0.3`: the action's floating tag (`v0.<minor>` before 1.0, `v<major>` from 1.0);
+// - `<repository>@v0.3.2`: an exact pin of the action;
+//   `<repository>` is the one in packages/lint/src/location.json; references through a previous repository
+//   (scripts/previous-locations.json, after a move) are rewritten to it;
 // - `flowpact@0.3`: an npm range for the CLI (`0.<minor>` before 1.0, `<major>` from 1.0);
 // - `FLOWPACT_VERSION: 0.3.2`: the exact version a vendored-CLI example downloads;
 // - the version in output samples: the banner (`flowpact v0.3.2 · config schema v1`) and the JSON report's `meta`,
@@ -31,6 +33,15 @@ export const FILES = [
     .map((f) => `${SHOTS}/${f}`),
 ];
 
+/** Where flowpact lives (packages/lint/src/location.json) and the repositories it lived at before. */
+export const LOCATION = {
+  repository: JSON.parse(readFileSync(join(ROOT, 'packages/lint/src/location.json'), 'utf8')).repository,
+  previousRepositories: JSON.parse(readFileSync(join(ROOT, 'scripts/previous-locations.json'), 'utf8'))
+    .repositories,
+};
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 export function currentVersion() {
   return JSON.parse(readFileSync(join(ROOT, '.release-please-manifest.json'), 'utf8'))['.'];
 }
@@ -38,16 +49,21 @@ export function currentVersion() {
 /** A release version, prereleases included (`1.0.0-rc.1`). */
 const VERSION = String.raw`\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?`;
 
-/** `text` with every version reference moved to `version`'s release line. */
-export function syncRefs(text, version) {
+/** `text` with every version reference moved to `version`'s release line, and action references to `location`'s repository. */
+export function syncRefs(text, version, location = LOCATION) {
   const [major, minor] = version.split('.').map(Number);
   const line = major >= 1 ? `${major}` : `0.${minor}`;
+  const repo = location.repository;
+  const repos = [repo, ...location.previousRepositories].map(escapeRegExp).join('|');
   return text
     .replace(
-      new RegExp(String.raw`rumankazi/flowpact@v${VERSION}(?![\w.-])`, 'g'),
-      `rumankazi/flowpact@v${version}`,
+      new RegExp(String.raw`(?<![\w.-])(?:${repos})@v${VERSION}(?![\w.-])`, 'g'),
+      `${repo}@v${version}`,
     )
-    .replace(/rumankazi\/flowpact@v\d+(?:\.\d+)?(?![\w.-])/g, `rumankazi/flowpact@v${line}`)
+    .replace(
+      new RegExp(String.raw`(?<![\w.-])(?:${repos})@v\d+(?:\.\d+)?(?![\w.-])`, 'g'),
+      `${repo}@v${line}`,
+    )
     .replace(/(?<![\w/@.-])flowpact@\d+(?:\.\d+)?(?![\w.-])/g, `flowpact@${line}`)
     .replace(new RegExp(`(FLOWPACT_VERSION: )${VERSION}(?![\\w.-])`, 'g'), `$1${version}`)
     .replace(new RegExp(`(flowpact {1,2}v)${VERSION}(?= {1,2}(?:· )?config schema)`, 'g'), `$1${version}`)

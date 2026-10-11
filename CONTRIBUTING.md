@@ -35,6 +35,12 @@ result whenever `packages/core`, `packages/lint`, `packages/reporters` or `packa
 | `fixtures/` | Small repositories used by tests, screenshots and docs |
 | `scripts/` | Rule-doc, schema and screenshot generators; link checker |
 
+`packages/lint/src/location.json` says where flowpact lives: its repository and its docs URL. The docs and schema
+URLs flowpact prints, `scripts/sync-version-refs.mjs` (action references) and `scripts/check-pack.mjs` (npm's
+`repository.url`) all read it. When flowpact moves, change it and add the old values to
+`scripts/previous-locations.json`: `scripts/test/location.test.ts` then lists every file that still names the old
+location, and the sync script moves the action references.
+
 Rule pages under `apps/docs/content/docs/rules/` are generated from the rule definitions (`pnpm docs:gen`); a test
 fails when they are out of date.
 

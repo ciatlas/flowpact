@@ -76,6 +76,9 @@ jobs:
       - name: Pack the CLI and check the tarball
         shell: bash
         working-directory: packages/cli
+        env:
+          # The repository must match packages/lint/src/location.json (npm provenance); a fork's own CI skips that check.
+          FLOWPACT_EXPECT_REPOSITORY: ${{ !github.event.repository.fork && github.repository || '' }}
         run: |
           # The package.json release.yml publishes: without what only builds the package here.
           npm pkg delete devDependencies scripts

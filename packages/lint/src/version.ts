@@ -1,3 +1,5 @@
+import location from './location.json' with { type: 'json' };
+
 /** Tool identity. `VERSION` is asserted against package.json by a test so it cannot drift. */
 export const TOOL_NAME = 'flowpact';
 export const VERSION = '0.11.1'; // x-release-please-version
@@ -9,7 +11,14 @@ export const SCHEMA_VERSIONS = {
   report: 1,
 } as const;
 
-export const DOCS_BASE_URL = 'https://rumankazi.github.io/flowpact';
+/**
+ * Where flowpact lives, from location.json: the GitHub repository (`owner/name`) and the docs site. When it moves,
+ * change that file and add the old values to scripts/previous-locations.json (scripts/test/location.test.ts then
+ * lists every leftover).
+ */
+export const REPOSITORY: string = location.repository;
+export const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
+export const DOCS_BASE_URL: string = location.docsBaseUrl;
 
 export const schemaUrl = (name: keyof typeof SCHEMA_VERSIONS): string =>
   `${DOCS_BASE_URL}/schemas/${name}/v${SCHEMA_VERSIONS[name]}.json`;

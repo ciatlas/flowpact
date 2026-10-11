@@ -8,7 +8,14 @@ import {
   neutralizeWorkflowCommands,
   resolveLogLevel,
 } from '@flowpact/core';
-import { assertSafeWritePath, ConfigError, type LoadedConfig, toolMeta } from '@flowpact/lint';
+import {
+  assertSafeWritePath,
+  ConfigError,
+  DOCS_BASE_URL,
+  type LoadedConfig,
+  REPOSITORY_URL,
+  toolMeta,
+} from '@flowpact/lint';
 import { type RenderOptions, renderBanner } from '@flowpact/reporters';
 import type { ArgsDef } from 'citty';
 import pc from 'picocolors';
@@ -316,7 +323,7 @@ export async function guard(fn: () => Promise<number> | number): Promise<void> {
         `${c.red(c.bold('Config error'))}${err.file ? c.dim(` (${err.file})`) : ''}: ${err.message}\n`,
       );
       for (const i of err.issues) process.stderr.write(`  ${c.red('•')} ${i}\n`);
-      process.stderr.write(c.dim('  docs: https://rumankazi.github.io/flowpact/docs/configuration\n'));
+      process.stderr.write(c.dim(`  docs: ${DOCS_BASE_URL}/docs/configuration\n`));
       process.exitCode = EXIT.usage;
       return;
     }
@@ -328,9 +335,7 @@ export async function guard(fn: () => Promise<number> | number): Promise<void> {
     process.stderr.write(
       `${c.red(c.bold('flowpact crashed'))}: ${(thrown as Error).stack ?? String(thrown)}\n`,
     );
-    process.stderr.write(
-      c.dim('Please report this at https://github.com/rumankazi/flowpact/issues with the --debug output.\n'),
-    );
+    process.stderr.write(c.dim(`Please report this at ${REPOSITORY_URL}/issues with the --debug output.\n`));
     process.exitCode = EXIT.internal;
   }
 }

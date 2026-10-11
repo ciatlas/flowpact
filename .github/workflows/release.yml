@@ -182,6 +182,8 @@ jobs:
           PRERELEASE: ${{ needs.resolve.outputs.prerelease }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           TAG: ${{ needs.resolve.outputs.tag }}
+          # check-pack.mjs fails before publishing when packages/lint/src/location.json names another repository.
+          FLOWPACT_EXPECT_REPOSITORY: ${{ github.repository }}
         run: |
           # devDependencies and scripts only build the package in this repository; where it is vendored into an npm
           # workspace, npm cannot install their workspace:* packages and workspace-wide scripts would run tsup. Then the

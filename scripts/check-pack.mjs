@@ -54,4 +54,22 @@ if (
   exported?.types !== './dist/api.d.ts'
 )
   fail('package.json must keep "bin" (dist/index.js) and export dist/api.js with its types (dist/api.d.ts)');
-console.log(`tarball contents ok: ${files.join(', ')}; no dependencies or scripts`);
+// npm provenance needs repository.url to name the publishing repository exactly; a mismatch fails (E422) only after the
+// tarball is in the transparency log. packages/lint/src/location.json says where flowpact lives, and the release job
+// passes the repository it runs in (FLOWPACT_EXPECT_REPOSITORY), so a move without updating that file fails here.
+const location = JSON.parse(
+  readFileSync(new URL('../packages/lint/src/location.json', import.meta.url), 'utf8'),
+);
+const repositoryUrl = `git+https://github.com/${location.repository}.git`;
+if (pkg.repository?.url !== repositoryUrl)
+  fail(
+    `package.json repository.url is ${pkg.repository?.url}; expected ${repositoryUrl} (packages/lint/src/location.json)`,
+  );
+const runningIn = process.env.FLOWPACT_EXPECT_REPOSITORY;
+if (runningIn && runningIn !== location.repository)
+  fail(
+    `this runs in ${runningIn}, but packages/lint/src/location.json says ${location.repository}: update it`,
+  );
+console.log(
+  `tarball contents ok: ${files.join(', ')}; no dependencies or scripts; repository ${location.repository}`,
+);
