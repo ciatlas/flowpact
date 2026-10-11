@@ -95,7 +95,7 @@ Releases are automated with [release-please](https://github.com/googleapis/relea
    `scripts/action-archive.sh`), each with its Sigstore bundle and in-toto provenance, and a CycloneDX SBOM of each,
    attested against it. Only when every one of them is on the release does it publish the release (a failed extension
    build keeps it a draft too), and only after that does it move the floating tag used by
-   `uses: rumankazi/flowpact@v0.10` (before 1.0 one tag per minor line, because a 0.x minor may be breaking; from 1.0
+   `uses: rumankazi/flowpact@v0.11` (before 1.0 one tag per minor line, because a 0.x minor may be breaking; from 1.0
    the major, `v1`). **Immutable releases** are enabled in the repository settings (since 0.9.0 went out), so a
    published release's tag and assets cannot change, and what a mirror verified stays what was released.
 
