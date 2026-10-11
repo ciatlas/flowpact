@@ -31936,6 +31936,8 @@ function steps(unit, node2, base, at, ctx) {
     const name = str(get(item, "name"));
     const usesRaw = str(usesNode);
     const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
+    const ifNode = get(item, "if");
+    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
     void at;
     return {
       index,
@@ -31946,6 +31948,7 @@ function steps(unit, node2, base, at, ctx) {
       ...run2 !== void 0 ? { run: run2, runLoc: nodeLoc(unit.source, runNode) } : {},
       with: bindings(unit, get(item, "with"), [...p, "with"]),
       env: bindings(unit, get(item, "env"), [...p, "env"]),
+      ...ifValue !== void 0 ? { ifValue } : {},
       ...ifSite ? { ifSite } : {},
       writesOutputs: run2 !== void 0 ? scanRunWrites(run2, "GITHUB_OUTPUT") : scriptWrites(item, "GITHUB_OUTPUT"),
       writesEnv: (() => {
@@ -34893,6 +34896,9 @@ function isWholeExpression(site) {
   if (site.segments.length !== 1) return false;
   const templated = findTemplateSegments(site.text);
   return templated.length === 0 || templated.length === 1 && site.text.trim() === site.text.slice(templated[0].start, templated[0].end);
+}
+function guardOf(decl) {
+  return decl.ifValue === false ? false : decl.ifSite;
 }
 function useInCondition(site, ref) {
   const seg = site.segments.find((s) => s.refs.includes(ref));
@@ -39539,13 +39545,17 @@ function unhandledReads(site, key) {
   return { text: text3 + site.text.slice(at), tested };
 }
 function skippedIn(guard, combo) {
-  const seg = guard.segments[0];
-  if (guard.segments.length !== 1 || !seg?.expr.ast) return false;
-  return definitelyFalsy(seg.expr.ast, matrixResolver(combo));
+  if (guard === false) return true;
+  const ast = isWholeExpression(guard) ? guard.segments[0]?.expr.ast : void 0;
+  return ast !== void 0 && definitelyFalsy(ast, matrixResolver(combo));
 }
 function guardsOf(job, site) {
   const step = site.step !== void 0 ? job.steps[site.step] : void 0;
-  return [step?.ifSite].filter((g) => g !== void 0 && g !== site);
+  const jobGuard = guardOf(job);
+  return [
+    jobGuard !== false && jobGuard && hasMatrixRef(jobGuard) ? void 0 : jobGuard,
+    step && guardOf(step)
+  ].filter((g) => g !== void 0 && g !== site);
 }
 function affectedCombos(site, exp, predicate, guards = [], onlyKey, text3 = site.text) {
   const known2 = new Set(exp.keys.map((k) => k.toLowerCase()));
@@ -39846,7 +39856,9 @@ function onlyFallbacks(site, key, job, exp) {
   if (exp && didYouMean(key, exp.keys)) return false;
   const lower = key.toLowerCase();
   const guards = guardsOf(job, site);
-  const combos = combosOf(exp).filter((c) => !guards.some((g) => skippedIn(g, c)));
+  const all = combosOf(exp);
+  const live = all.filter((c) => !guards.some((g) => skippedIn(g, c)));
+  const combos = live.length > 0 ? live : all;
   if (site.isCondition && isWholeExpression(site)) {
     const ast = site.segments[0].expr.ast;
     if (!ast) return false;
@@ -40516,7 +40528,7 @@ var undeclaredSecretRef = defineRule({
   docs: {
     summary: "A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`.",
     why: "Inside a called workflow only declared (or inherited) secrets exist. Reading anything else yields an empty string, so authentication steps fail late or, worse, fall back to anonymous access.",
-    fix: "Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them."
+    fix: "Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`)."
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -40562,9 +40574,12 @@ function callerInputsResolver(callee, call) {
 function guardsOf2(wf, site) {
   const job = site.job !== void 0 ? wf.jobs[site.job] : void 0;
   const step = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return [job?.ifSite, step?.ifSite].filter((g) => g !== void 0 && g !== site);
+  return [job && guardOf(job), step && guardOf(step)].filter(
+    (g) => g !== void 0 && g !== site
+  );
 }
 function isFalse(guard, resolve7) {
+  if (guard === false) return true;
   const ast = isWholeExpression(guard) ? guard.segments[0].expr.ast : void 0;
   return ast !== void 0 && definitelyFalsy(ast, resolve7);
 }

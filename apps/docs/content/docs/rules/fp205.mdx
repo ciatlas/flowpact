@@ -15,7 +15,7 @@ Inside a called workflow only declared (or inherited) secrets exist. Reading any
 
 ## How to fix
 
-Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them.
+Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`).
 
 ## Configure
 
