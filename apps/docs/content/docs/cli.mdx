@@ -210,7 +210,8 @@ flowpact trace <symbol> [--up] [--depth n] [--format pretty|json]
 
 Each symbol is expanded once per trace; where the same value is reached again through another path (for example
 shared callees), the tree says `↑ shown above` instead of repeating it. `--format json` always prints
-`{ "query", "direction", "traces": [...] }`, however many symbols matched.
+`{ "query", "direction", "traces": [...] }`, however many symbols matched; for a workflow or action without inputs,
+secrets or outputs, `traces` is empty and `"unit"` names it.
 
 Symbols can be written in several ways:
 

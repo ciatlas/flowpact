@@ -47,6 +47,8 @@ export interface ContractGeneration {
   entries: ContractEntry[];
   /** Workflows and actions whose contracts were kept because their files have YAML syntax errors. */
   skipped: string[];
+  /** Nothing was written: the `dryRun` option. */
+  dryRun: boolean;
   /** The files written or removed, relative to the root (or to `out`); empty with `dryRun`. */
   written: string[];
   /** The changes as a patch for `git apply`, or undefined when nothing changes. */
@@ -83,9 +85,8 @@ export async function runGenerate(
   const plan = result.project.targets.size > 0 ? scopePlan(all, contractsInScope(result.index)) : all;
   const out = options.out ? resolve(process.cwd(), options.out) : undefined;
   // Every target is checked before anything is written, so a refusal leaves the repository as it was.
-  const written = bool('dryRun', options.dryRun)
-    ? []
-    : attempt(() => writeContracts(root, plan, out, protectedTrees(root)));
+  const dryRun = bool('dryRun', options.dryRun) ?? false;
+  const written = dryRun ? [] : attempt(() => writeContracts(root, plan, out, protectedTrees(root)));
   return {
     drift: plan.drift,
     breaking: plan.breaking,
@@ -98,6 +99,7 @@ export async function runGenerate(
       changes: e.changes,
     })),
     skipped: [...plan.skipped],
+    dryRun,
     written,
     patch: () => (plan.drift ? contractPatch(plan) : undefined),
   };

@@ -290,18 +290,22 @@ export interface MarkdownOptions {
   artifact?: { name: string; runId?: string; patchFile?: string };
 }
 
-/** The terminal report (`--format pretty`). */
-export interface PrettyOptions {
+/** How terminal text is rendered: what the CLI decides from `--no-color`, `--ascii` and the terminal. */
+export interface TextOptions {
   /** ANSI colors. Default: false. */
   color?: boolean;
   /** Columns to wrap at. Default: 100. */
   width?: number;
   /** ASCII instead of box-drawing characters and symbols. */
   ascii?: boolean;
-  /** Do not list info-level findings (still counted). */
-  hideInfo?: boolean;
   /** OSC 8 hyperlinks for docs links, for terminals that support them. */
   hyperlinks?: boolean;
+}
+
+/** The terminal report (`--format pretty`). */
+export interface PrettyOptions extends TextOptions {
+  /** Do not list info-level findings (still counted). */
+  hideInfo?: boolean;
 }
 
 export type FailOn = 'error' | 'warning' | 'never';
@@ -324,12 +328,18 @@ export interface Analysis {
   /** The CLI's exit code for `--fail-on` (default `error`): 1 when there are findings at that level. */
   exitCode(failOn?: FailOn): 0 | 1;
   annotations(options?: PathPrefixOptions): Annotation[];
+  /**
+   * The annotations as GitHub workflow commands, one line each (`--format github`): printed in a GitHub Actions step,
+   * they annotate the run and the pull request. Every value in them is escaped.
+   */
+  github(options?: PathPrefixOptions): string;
   /** SARIF 2.1.0, for code scanning. */
   sarif(options?: PathPrefixOptions): string;
   /** The Markdown report, for job summaries and pull request comments. */
   markdown(options?: MarkdownOptions): string;
   /** The JSON report as `--format json` prints it; `includeGraph` adds the data-flow graph. */
   json(options?: { includeGraph?: boolean }): string;
+  /** The terminal report (`--format pretty`). */
   pretty(options?: PrettyOptions): string;
 }
 
@@ -343,6 +353,8 @@ export interface ContractGeneration {
   entries: ContractEntry[];
   /** Workflows and actions whose contracts were kept because their files have YAML syntax errors. */
   skipped: string[];
+  /** Nothing was written: the `dryRun` option. */
+  dryRun: boolean;
   /** The files written or removed, relative to the root (or to `out`); empty with `dryRun`. */
   written: string[];
   /** The changes as a patch for `git apply`, or undefined when nothing changes. */
@@ -418,6 +430,8 @@ export interface TraceResult {
   query: string;
   direction: 'down' | 'up';
   traces: TraceNode[];
+  /** The workflow or action the query names, when it declares no inputs, secrets or outputs (`traces` is empty). */
+  unit?: string;
 }
 
 export type RuleCategory =
@@ -509,6 +523,51 @@ export declare function rules(options?: RulesOptions): Promise<RuleInfo[]>;
 
 /** `flowpact explain`: a rule's documentation, by code (`FP401`) or name. */
 export declare function explain(codeOrName: string, options?: ExplainOptions): Promise<RuleDocs>;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Text: what the commands print, from what they return. The same text as the CLI's for the same options, and like
+// it, safe to print in a CI log: no line of it is read as a GitHub workflow command. Written for people; parse the
+// data instead, its wording can change in any minor release.
+
+export interface GraphFormatOptions extends TextOptions {
+  /**
+   * `tree` (default), as `flowpact graph` prints it; `mermaid`, a Mermaid flowchart without code fences; or `dot`,
+   * Graphviz DOT. The other options apply to the tree.
+   */
+  format?: 'tree' | 'mermaid' | 'dot';
+}
+
+export interface GenerationFormatOptions extends TextOptions {
+  /** Add the changes as a diff, as `flowpact generate --dry-run` prints them (colored with `color`). */
+  diff?: boolean;
+}
+
+/** `flowpact graph` (`--format tree`, `mermaid` or `dot`). */
+export declare function formatGraph(graph: CallGraph, options?: GraphFormatOptions): string;
+
+/** `flowpact trace`: a tree per traced symbol, or why there is nothing to trace. */
+export declare function formatTrace(result: TraceResult, options?: TextOptions): string;
+
+/** `flowpact rules`: every rule by category, with its severity after the config. */
+export declare function formatRules(rules: RuleInfo[], options?: TextOptions): string;
+
+/** `flowpact explain`: the rule's documentation. */
+export declare function formatExplain(rule: RuleDocs, options?: TextOptions): string;
+
+/** `flowpact generate`: each contract file with its status and changes, then what was written, or after a `dryRun`, what would be. */
+export declare function formatGeneration(
+  generation: ContractGeneration,
+  options?: GenerationFormatOptions,
+): string;
+
+/**
+ * The options the CLI uses for its standard output, for text printed there. Colors: off with `NO_COLOR` or
+ * `FORCE_COLOR=0`, on with `FORCE_COLOR`, else on in a terminal or in CI (the `CI` variable, set on GitHub Actions
+ * runners; a `--color` or `--no-color` argument of the program decides too). Width: the terminal's, else `COLUMNS`,
+ * from 40 to 140 columns (100 when neither is known). Hyperlinks: in a terminal with colors, unless
+ * `FLOWPACT_NO_HYPERLINKS` is set.
+ */
+export declare function terminalOptions(): Required<TextOptions>;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Plugin rules (https://rumankazi.github.io/flowpact/docs/custom-rules)

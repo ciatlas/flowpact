@@ -1,6 +1,6 @@
-import { renderContractPlan, renderPatch } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { runGenerate } from '../lib/generate';
+import { generationText } from '../lib/text';
 import {
   commonArgs,
   createContext,
@@ -55,12 +55,9 @@ export const generateCommand = defineCommand({
         dryRun: dryRun || Boolean(args.patch),
         ...(args.out ? { out: args.out } : {}),
       });
-      ctx.stdout(renderContractPlan(generated, ctx.render, { applied: !dryRun && !args.patch }));
-      if (dryRun) {
-        const patch = generated.patch();
-        if (patch !== undefined) ctx.stdout(renderPatch(patch, ctx.render));
-        return EXIT.ok;
-      }
+      // --dry-run and --patch write nothing (the text says what would be); --dry-run adds the diff.
+      ctx.stdout(generationText(generated, ctx.render, dryRun));
+      if (dryRun) return EXIT.ok;
       if (args.patch) {
         writeOutput(args.patch, generated.patch() ?? '', ctx, 'data');
         return EXIT.ok;

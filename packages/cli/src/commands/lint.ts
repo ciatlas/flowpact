@@ -1,5 +1,5 @@
 import { type ImpactLevel, jsonSafe } from '@flowpact/core';
-import { type MarkdownOptions, workflowCommands } from '@flowpact/reporters';
+import type { MarkdownOptions } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { type FailOn, runReport as runAnalysis } from '../lib/report';
 import {
@@ -225,7 +225,7 @@ export async function runReport(
       case 'sarif':
         return analysis.sarif({ pathPrefix });
       case 'github':
-        return workflowCommands(analysis.annotations({ pathPrefix }));
+        return analysis.github({ pathPrefix });
       case 'markdown':
         return analysis.markdown({ ...markdownOptionsFromEnv(pathPrefix), includeGraph });
       default:

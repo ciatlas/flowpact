@@ -41,16 +41,12 @@ export interface TraceResult {
   query: string;
   direction: TraceDirection;
   traces: TraceNode[];
+  /** The workflow or action the query names when it declares no inputs, secrets or outputs (`traces` is empty). */
+  unit?: string;
 }
 
-/**
- * Traces a symbol. `unit` is set when the query names a workflow or action that declares no inputs, secrets or
- * outputs (`traces` is then empty).
- */
-export async function traceSymbol(
-  session: Session,
-  options: TraceOptions,
-): Promise<{ result: TraceResult; unit?: string }> {
+/** Traces a symbol. */
+export async function traceSymbol(session: Session, options: TraceOptions): Promise<TraceResult> {
   const query = options?.symbol;
   if (typeof query !== 'string') throw usage('symbol must be a string');
   const depth = options.depth ?? 12;
@@ -75,7 +71,7 @@ export async function traceSymbol(
   const matches = resolveSymbols(analysis.index, query);
   if (matches.length === 0) {
     const unit = analysis.index.units().find((u) => u.path === query || u.path.endsWith(`/${query}`));
-    if (unit) return { result: { query, direction, traces: [] }, unit: unit.path };
+    if (unit) return { query, direction, traces: [], unit: unit.path };
     const traceable = new Set(
       [...analysis.index.nodes.values()]
         .filter((n) => ['input', 'secret', 'output'].includes(n.kind))
@@ -93,7 +89,7 @@ export async function traceSymbol(
     );
   }
   const traces = matches.map((m) => trace(analysis.index, m.id, { direction, maxDepth: depth }));
-  return { result: { query, direction, traces } };
+  return { query, direction, traces };
 }
 
 /** A rule as `rules --format json` lists it. */

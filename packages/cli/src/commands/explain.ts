@@ -1,7 +1,7 @@
-import { renderExplain } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { FlowpactError } from '../lib/errors';
 import { explainRule } from '../lib/inspect';
+import { explainText } from '../lib/text';
 import { commonArgs, createContext, EXIT, guard, pluginArgs, UsageError } from '../shared';
 
 export const explainCommand = defineCommand({
@@ -30,28 +30,7 @@ export const explainCommand = defineCommand({
           throw new UsageError(`${err.message} Run \`flowpact rules\` for the list.`);
         throw err;
       }
-      const { summary, why, fix, scope, examples } = rule;
-      ctx.stdout(
-        renderExplain(
-          {
-            code: rule.code,
-            name: rule.name,
-            category: rule.category,
-            defaultSeverity: rule.defaultSeverity,
-            generatedFiles: rule.generatedFiles,
-            docs: {
-              summary,
-              why,
-              fix,
-              ...(scope !== undefined ? { scope } : {}),
-              ...(examples ? { examples } : {}),
-            },
-          },
-          rule.docsUrl,
-          rule.severity,
-          ctx.render,
-        ),
-      );
+      ctx.stdout(explainText(rule, ctx.render));
       return EXIT.ok;
     }),
 });

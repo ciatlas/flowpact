@@ -40,7 +40,9 @@ process.exitCode = analysis.exitCode();
 | `rules(options?)` | `flowpact rules --format json` | `RuleInfo[]` |
 | `explain(codeOrName, options?)` | `flowpact explain` | `RuleDocs` |
 
-Each returns a promise. `flowpact lsp` has no function: editors start the language server through the CLI.
+Each returns a promise. `flowpact lsp` has no function: editors start the language server through the CLI. What the
+commands print in the terminal comes from these results: `pretty()` and the other methods of an `Analysis`, and the
+[format functions](#text) for the rest.
 
 Every function takes these options:
 
@@ -82,6 +84,7 @@ Impact mode compares with the baseline commit, which must be in the clone: check
 | `report` | The [JSON report](/docs/cli#json-report): what `--format json` prints, as an object. |
 | `exitCode(failOn?)` | The CLI's exit code for `--fail-on` (`'error'` by default, `'warning'` or `'never'`): `1` when there are findings at that level, else `0`. |
 | `annotations({ pathPrefix }?)` | One [annotation](/docs/action#annotations) per finding, for `@actions/core`'s `error()`, `warning()` and `notice()`: `level`, `message`, `title`, `file`, `startLine`, `endLine`, and for a finding on one line `startColumn` and `endColumn`. |
+| `github({ pathPrefix }?)` | The annotations as GitHub workflow commands (`--format github`), one line each: printed in a GitHub Actions step, they annotate the run and the pull request, without `@actions/core`. |
 | `sarif({ pathPrefix }?)` | SARIF 2.1.0 for code scanning, as text. |
 | `markdown(options?)` | The Markdown report, for job summaries and pull request comments. Options: `title`, `maxFindings` (default 50), `repoUrl` and `sha` (to link locations to the files at that commit), `includeGraph`. |
 | `json({ includeGraph }?)` | The JSON report as `--format json` prints it. |
@@ -91,7 +94,8 @@ Impact mode compares with the baseline commit, which must be in the clone: check
 | `notes` | What the CLI prints as `impact: …` lines: impact mode skipped, or notes about its baseline. |
 
 `pathPrefix` is the root relative to the repository, when the root is a subdirectory of it. GitHub resolves annotation
-and SARIF paths against the repository; flowpact reports them relative to the root.
+and SARIF paths against the repository; flowpact reports them relative to the root. `pretty()` and `markdown()` are safe
+to print in a GitHub Actions log, like the [text](#text) of the other commands.
 
 ## generate
 
@@ -108,6 +112,7 @@ yourself. The result has:
 
 - `drift` and `breaking`: whether any contract changes, and how many of the changes are breaking;
 - `counts` and `entries`: each contract file with its status (`create`, `update`, `delete`, `unchanged`) and changes;
+- `dryRun`: whether nothing was written (the option);
 - `written`: the files written, relative to the root (or to `out`); none with `dryRun`;
 - `skipped`: workflows and actions with YAML syntax errors, whose contracts were kept;
 - `patch()`: the changes as a patch for `git apply`, or `undefined` when nothing changes.
@@ -130,11 +135,48 @@ const { summary, why, fix, docsUrl } = await explain('FP401');
 - `graph()`: `nodes` (workflows, actions, remote workflows, missing targets) and `edges`, who calls whom `via` which job
   or step.
 - `trace({ symbol, up, depth })`: one tree per matching symbol, as in [`flowpact trace`](/docs/cli#flowpact-trace);
-  `traces` is empty for a workflow or action without inputs, secrets or outputs.
+  for a workflow or action without inputs, secrets or outputs, `traces` is empty and `unit` names it.
 - `rules()`: each rule's `code`, `name`, `category`, `defaultSeverity`, `severity` after the config, `summary` and
   `docsUrl`.
 - `explain(codeOrName)`: the same for one rule, with `why`, `fix`, `examples` and `generatedFiles`, and `scope` when the
   rule has one.
+
+## Text
+
+What the commands print, from what the functions return: the same text as the CLI's for the same options.
+
+```js
+import { formatGraph, formatTrace, graph, terminalOptions, trace } from 'flowpact';
+
+const calls = await graph();
+console.log(formatGraph(calls, terminalOptions())); // the tree `flowpact graph` prints in this terminal
+const diagram = formatGraph(calls, { format: 'mermaid' }); // for a job summary, in a mermaid code block
+console.log(formatTrace(await trace({ symbol: 'pipeline.yml#inputs.config' })));
+```
+
+| Function | Prints what |
+| --- | --- |
+| `formatGraph(graph, options?)` | `flowpact graph`. `format`: `tree` (default), `mermaid` (without code fences) or `dot`. |
+| `formatTrace(result, options?)` | `flowpact trace` |
+| `formatRules(rules, options?)` | `flowpact rules` |
+| `formatExplain(rule, options?)` | `flowpact explain` |
+| `formatGeneration(generation, options?)` | `flowpact generate`: what was written, or after a `dryRun`, what would be. `diff: true` adds the diff, as `--dry-run` prints it. |
+
+For the reports of `lint`, `check` and `impact`, use the [`Analysis`](#analysis) methods: `pretty()` is
+`--format pretty`.
+
+- The options are those of `pretty()` except `hideInfo`: `color`, `width` (default 100), `ascii` and `hyperlinks`. The
+  functions never look at the terminal: without options, the text has no colors, and what wraps (rules, explanations
+  and `pretty()`) wraps at 100 columns. That is the text for files and job summaries.
+- `terminalOptions()` is for text printed to the standard output: it returns what the CLI would use there. Colors are
+  off with `NO_COLOR` or `FORCE_COLOR=0` and on with `FORCE_COLOR`; otherwise they are on in a terminal and in CI (on
+  GitHub Actions runners too). The width is the terminal's, else `COLUMNS`, from 40 to 140 columns.
+- `graph`, `trace` and `rules` results are plain data, so JSON that the CLI printed with `--format json` renders as
+  well.
+- Like the CLI's output, the text is safe to print in a GitHub Actions log: no line of it is read as a workflow command,
+  whatever names the workflows use. `github()` is the exception by design: its lines are workflow commands, with every
+  value escaped.
+- The text is written for people: its wording can change in any minor release. A program reads the results instead.
 
 ## Errors
 

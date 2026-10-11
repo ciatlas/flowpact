@@ -12,7 +12,8 @@ import { lintCommand } from './commands/lint';
 import { lspCommand } from './commands/lsp';
 import { rulesCommand } from './commands/rules';
 import { traceCommand } from './commands/trace';
-import { colorEnabled, normalizeArgv } from './shared';
+import { colorEnabled } from './lib/text';
+import { normalizeArgv } from './shared';
 
 const COMMANDS = {
   lint: lintCommand,

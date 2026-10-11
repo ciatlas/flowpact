@@ -1,7 +1,7 @@
 import { jsonSafe } from '@flowpact/core';
-import { renderDot, renderGraphTree, renderMermaid } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { callGraph } from '../lib/inspect';
+import { graphText } from '../lib/text';
 import { commonArgs, createContext, displayPath, EXIT, guard, printBanner } from '../shared';
 
 export const graphCommand = defineCommand({
@@ -23,19 +23,8 @@ export const graphCommand = defineCommand({
       const ctx = createContext(args, rawArgs, cmd.args as ArgsDef);
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
       const graph = await callGraph(ctx.session);
-      switch (args.format) {
-        case 'mermaid':
-          ctx.stdout(renderMermaid(graph));
-          break;
-        case 'dot':
-          ctx.stdout(renderDot(graph));
-          break;
-        case 'json':
-          ctx.stdout(jsonSafe(JSON.stringify(graph, null, 2)));
-          break;
-        default:
-          ctx.stdout(renderGraphTree(graph, ctx.render));
-      }
+      if (args.format === 'json') ctx.stdout(jsonSafe(JSON.stringify(graph, null, 2)));
+      else ctx.stdout(graphText(graph, args.format as 'tree' | 'mermaid' | 'dot', ctx.render));
       return EXIT.ok;
     }),
 });

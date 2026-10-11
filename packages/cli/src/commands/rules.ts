@@ -1,7 +1,7 @@
 import { jsonSafe } from '@flowpact/core';
-import { renderRules } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { listRules } from '../lib/inspect';
+import { rulesText } from '../lib/text';
 import { commonArgs, createContext, EXIT, guard, pluginArgs } from '../shared';
 
 export const rulesCommand = defineCommand({
@@ -16,7 +16,7 @@ export const rulesCommand = defineCommand({
       const ctx = createContext(args, rawArgs, cmd.args as ArgsDef);
       const rules = await listRules(ctx.session);
       if (args.format === 'json') ctx.stdout(jsonSafe(JSON.stringify(rules, null, 2)));
-      else ctx.stdout(renderRules(rules, ctx.render));
+      else ctx.stdout(rulesText(rules, ctx.render));
       return EXIT.ok;
     }),
 });

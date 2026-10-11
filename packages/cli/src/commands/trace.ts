@@ -1,9 +1,9 @@
 import { jsonSafe } from '@flowpact/core';
-import { renderTrace } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import pc from 'picocolors';
 import { NoSymbolMatchError } from '../lib/errors';
 import { traceSymbol } from '../lib/inspect';
+import { traceText } from '../lib/text';
 import { commonArgs, createContext, EXIT, guard, pluginArgs, printBanner, UsageError } from '../shared';
 
 export const traceCommand = defineCommand({
@@ -31,9 +31,9 @@ export const traceCommand = defineCommand({
       const depth = Number(args.depth);
       if (!Number.isInteger(depth) || depth < 1)
         throw new UsageError(`--depth must be a positive integer (got ${args.depth})`);
-      let traced: Awaited<ReturnType<typeof traceSymbol>>;
+      let result: Awaited<ReturnType<typeof traceSymbol>>;
       try {
-        traced = await traceSymbol(ctx.session, { symbol: args.symbol, up: Boolean(args.up), depth });
+        result = await traceSymbol(ctx.session, { symbol: args.symbol, up: Boolean(args.up), depth });
       } catch (err) {
         // No match: the API lists the files that have an interface to trace; suggest commands for them.
         if (!(err instanceof NoSymbolMatchError && err.traceable.length)) throw err;
@@ -45,15 +45,9 @@ export const traceCommand = defineCommand({
             .join('\n')}`,
         );
       }
-      const { result, unit } = traced;
-      if (args.format === 'json') {
-        // Always the same shape, however many symbols matched.
-        ctx.stdout(jsonSafe(JSON.stringify(result, null, 2)));
-      } else if (unit) {
-        ctx.stdout(`${unit} declares no inputs, secrets or outputs — nothing to trace.`);
-      } else {
-        ctx.stdout(result.traces.map((t) => renderTrace(t, result.direction, ctx.render)).join('\n\n'));
-      }
+      // JSON is always the same shape, however many symbols matched.
+      if (args.format === 'json') ctx.stdout(jsonSafe(JSON.stringify(result, null, 2)));
+      else ctx.stdout(traceText(result, ctx.render));
       return EXIT.ok;
     }),
 });

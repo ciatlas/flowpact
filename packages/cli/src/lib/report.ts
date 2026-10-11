@@ -9,6 +9,7 @@ import {
   IMPACT_CODES,
   type ImpactLevel,
   type JsonReport,
+  neutralizeWorkflowCommands,
   type PreparedImpact,
   prepareImpact,
 } from '@flowpact/core';
@@ -16,6 +17,7 @@ import {
   type GithubAnnotation,
   githubAnnotation,
   type MarkdownOptions,
+  renderGithub,
   renderJson,
   renderMarkdown,
   renderPretty,
@@ -24,6 +26,7 @@ import {
 import { attempt, usage } from './errors';
 import { bool, loadRegistry, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets } from './targets';
+import { renderOptions, type TextOptions } from './text';
 
 export type ReportCommand = 'lint' | 'check' | 'impact';
 export type FailOn = 'error' | 'warning' | 'never';
@@ -56,15 +59,9 @@ export interface ReportOptions extends ImpactFlags {
   now?: Date;
 }
 
-export interface PrettyOptions {
-  color?: boolean;
-  /** Columns to wrap at. Default: 100. */
-  width?: number;
-  ascii?: boolean;
+export interface PrettyOptions extends TextOptions {
   /** Do not list info-level findings (they are still counted). */
   hideInfo?: boolean;
-  /** OSC 8 hyperlinks for docs links, for terminals that support them. */
-  hyperlinks?: boolean;
 }
 
 export interface Analysis {
@@ -78,6 +75,8 @@ export interface Analysis {
   readonly impact?: JsonReport['impact'];
   exitCode(failOn?: FailOn): 0 | 1;
   annotations(options?: { pathPrefix?: string }): GithubAnnotation[];
+  /** The annotations as workflow commands (`--format github`), every value escaped. */
+  github(options?: { pathPrefix?: string }): string;
   sarif(options?: { pathPrefix?: string }): string;
   markdown(options?: MarkdownOptions): string;
   json(options?: { includeGraph?: boolean }): string;
@@ -173,18 +172,6 @@ export async function runReport(
   return analysisOf(result, notes);
 }
 
-function prettyOptions(o: PrettyOptions) {
-  if (o.width !== undefined && !(Number.isInteger(o.width) && o.width > 0))
-    throw usage(`width must be a positive integer (got ${JSON.stringify(o.width)})`);
-  return {
-    color: Boolean(o.color),
-    width: o.width ?? 100,
-    hyperlinks: Boolean(o.hyperlinks),
-    ascii: Boolean(o.ascii),
-    hideInfo: Boolean(o.hideInfo),
-  };
-}
-
 /** The result of an analysis, and every report rendered from it. */
 function analysisOf(result: AnalysisResult, notes: string[]): Analysis {
   let report: JsonReport | undefined;
@@ -212,9 +199,16 @@ function analysisOf(result: AnalysisResult, notes: string[]): Analysis {
       exitCodeFor(result.summary, oneOf('failOn', failOn, FAIL_ON) ?? 'error') as 0 | 1,
     annotations: ({ pathPrefix } = {}) =>
       result.findings.map((f) => githubAnnotation(f, pathPrefix ? { pathPrefix } : {})),
+    // Workflow commands on purpose: every value in them is escaped, so a finding cannot start a command of its own.
+    github: ({ pathPrefix } = {}) => renderGithub(result, pathPrefix ? { pathPrefix } : {}),
     sarif: ({ pathPrefix } = {}) => renderSarif(result, pathPrefix ? { pathPrefix } : {}),
-    markdown: (options = {}) => renderMarkdown(result, options),
+    // Text embeds names from the analyzed YAML: none of it may become a workflow command in a CI log (the CLI's
+    // stdout and report files guarantee the same).
+    markdown: (options = {}) => neutralizeWorkflowCommands(renderMarkdown(result, options)),
     json: ({ includeGraph } = {}) => renderJson(result, { includeGraph: Boolean(includeGraph) }),
-    pretty: (options = {}) => renderPretty(result, prettyOptions(options)),
+    pretty: (options = {}) =>
+      neutralizeWorkflowCommands(
+        renderPretty(result, { ...renderOptions(options), hideInfo: Boolean(options.hideInfo) }),
+      ),
   };
 }

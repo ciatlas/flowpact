@@ -18,6 +18,7 @@ import pc from 'picocolors';
 import { FlowpactError, toFlowpactError } from './lib/errors';
 import { openSession, type Session } from './lib/session';
 import { displayPath, protectedTrees } from './lib/targets';
+import { colorEnabled, terminalRender } from './lib/text';
 
 export { displayPath };
 
@@ -221,29 +222,10 @@ export function stderrSink(color: boolean) {
   };
 }
 
-/** One color decision for all CLI output: --no-color, NO_COLOR, FORCE_COLOR (0/false = off), then TTY detection. */
-export function colorEnabled(
-  flagColor: boolean | undefined = true,
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  const noColor = env.NO_COLOR !== undefined && env.NO_COLOR !== '';
-  const forceOff = env.FORCE_COLOR === '0' || env.FORCE_COLOR === 'false';
-  const forceOn = env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== '' && !forceOff;
-  return flagColor !== false && !noColor && !forceOff && (forceOn || pc.isColorSupported);
-}
-
 /** `def`: the command's flags (citty's `cmd.args`), to read repeated flags as citty reads the others. */
 export function createContext(flags: CommonFlags, rawArgs: string[], def: ArgsDef): CliContext {
-  const env = process.env;
-  const color = colorEnabled(flags.color, env);
-  const isTTY = Boolean(process.stdout.isTTY);
-  const columns = process.stdout.columns ?? Number(env.COLUMNS ?? 100);
-  const render: RenderOptions = {
-    color,
-    width: Math.max(40, Math.min(140, columns || 100)),
-    hyperlinks: color && isTTY && env.FLOWPACT_NO_HYPERLINKS === undefined,
-    ascii: Boolean(flags.ascii),
-  };
+  const render = terminalRender({ color: flags.color, ascii: Boolean(flags.ascii) });
+  const { color } = render;
   const resolved = resolveLogLevel({
     debug: Boolean(flags.debug),
     // Every -v counts, also in a cluster such as -vvo; read like any flag, so a value never does.

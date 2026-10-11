@@ -187,7 +187,12 @@ describe('flowpact trace', () => {
     );
     const r = await flowpact(['trace', 'plain.yml', '--root', root, '-q', '--format', 'json']);
     expect(r.exitCode).toBe(0);
-    expect(JSON.parse(r.stdout)).toEqual({ query: 'plain.yml', direction: 'down', traces: [] });
+    expect(JSON.parse(r.stdout)).toEqual({
+      query: 'plain.yml',
+      direction: 'down',
+      traces: [],
+      unit: '.github/workflows/plain.yml',
+    });
   });
 
   it('never prints a line that GitHub would run as a workflow command', async () => {

@@ -11,6 +11,7 @@ import {
   mkdtempSync,
   readFileSync,
   realpathSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -139,14 +140,20 @@ describe('the package', () => {
       'check',
       'defineRule',
       'explain',
+      'formatExplain',
+      'formatGeneration',
+      'formatGraph',
+      'formatRules',
+      'formatTrace',
       'generate',
       'graph',
       'impact',
       'lint',
       'rules',
+      'terminalOptions',
       'trace',
     ]);
-    expect(r.types).toEqual(['function', 'string', ...Array.from({ length: 9 }, () => 'function')]);
+    expect(r.types).toEqual(['function', 'string', ...Array.from({ length: 15 }, () => 'function')]);
     expect(r.version).toBe(VERSION);
     expect(fileURLToPath(r.resolved)).toBe(realpathSync(join(PKG, 'dist/api.js')));
     const pkg = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'));
@@ -164,6 +171,8 @@ describe('lint', () => {
       markdown: string;
       pretty: string;
       ascii: string;
+      github: string;
+      githubPrefixed: string;
       annotations: { level: string; title: string; file: string; startLine: number }[];
       prefixed: string[];
       exit: number[];
@@ -176,6 +185,7 @@ describe('lint', () => {
       out({
         report: a.report, json: a.json(), sarif: a.sarif(), markdown: a.markdown(), pretty: a.pretty(),
         ascii: a.pretty({ ascii: true, hideInfo: true, width: 80 }), annotations: a.annotations(),
+        github: a.github(), githubPrefixed: a.github({ pathPrefix: 'sub' }),
         prefixed: a.annotations({ pathPrefix: 'sub' }).map((x) => x.file),
         exit: [a.exitCode(), a.exitCode('error'), a.exitCode('warning'), a.exitCode('never')],
         notes: a.notes, contracts: a.contracts ?? null, impact: a.impact ?? null, exitCodeAfter: process.exitCode ?? null,
@@ -195,11 +205,14 @@ describe('lint', () => {
     expect(untimed((await cli(['lint', '--root', root])).stdout)).toBe(untimed(r.pretty).trimEnd());
     expect(r.ascii).not.toMatch(/[✖▲●│]/);
     expect(r.pretty).not.toMatch(/\u001B\[/);
-    const github = (await cli(['lint', '--root', root, '--format', 'github'])).stdout.trim().split('\n');
-    expect(github).toHaveLength(r.annotations.length);
+    const github = (await cli(['lint', '--root', root, '--format', 'github'])).stdout;
+    expect(r.github).toBe(`${github}\n`);
+    const lines = github.split('\n');
+    expect(lines).toHaveLength(r.annotations.length);
     r.annotations.forEach((a, i) => {
-      expect(github[i]).toContain(`::${a.level} title=${a.title},file=${a.file},line=${a.startLine},`);
+      expect(lines[i]).toContain(`::${a.level} title=${a.title},file=${a.file},line=${a.startLine},`);
     });
+    expect(r.githubPrefixed.split('\n')[0]).toContain(',file=sub/.github/workflows/');
     expect(r.prefixed.every((f) => f.startsWith('sub/.github/workflows/'))).toBe(true);
   });
 
@@ -325,7 +338,12 @@ describe('graph, trace, rules and explain', () => {
     expect(r.up).toEqual(
       await json(['trace', 'run-suite.yml:config', '--up', '--depth', '3', '--root', incident]),
     );
-    expect(r.plain).toEqual({ query: 'ci.yml', direction: 'down', traces: [] });
+    expect(r.plain).toEqual({
+      query: 'ci.yml',
+      direction: 'down',
+      traces: [],
+      unit: '.github/workflows/ci.yml',
+    });
     expect(r.rules).toEqual(await json(['rules']));
     expect(r.explain).toMatchObject({
       code: 'FP401',
@@ -338,6 +356,174 @@ describe('graph, trace, rules and explain', () => {
     expect(r.explain).toHaveProperty('why');
     expect(r.explain).toHaveProperty('examples.bad');
     expect(r.byName).toBe('FP401');
+  });
+});
+
+describe('text', () => {
+  it('is what each command prints, from what the functions return', async () => {
+    const deep = fixture('deep-nesting');
+    const incident = fixture('incident-matrix');
+    const r = await api<
+      Record<
+        | 'tree'
+        | 'mermaid'
+        | 'dot'
+        | 'asciiTree'
+        | 'down'
+        | 'up'
+        | 'plain'
+        | 'plainAscii'
+        | 'rules'
+        | 'narrow'
+        | 'explain'
+        | 'colored',
+        string
+      >
+    >(`
+      const g = await flowpact.graph({ root: ${JSON.stringify(deep)} });
+      const down = await flowpact.trace({ root: ${JSON.stringify(incident)}, symbol: 'tests.yml#inputs.suite' });
+      const up = await flowpact.trace({ root: ${JSON.stringify(incident)}, symbol: 'run-suite.yml:config', up: true, depth: 3 });
+      const plain = await flowpact.trace({ root: ${JSON.stringify(fixture('clean'))}, symbol: 'ci.yml' });
+      out({
+        tree: flowpact.formatGraph(g), mermaid: flowpact.formatGraph(g, { format: 'mermaid' }),
+        dot: flowpact.formatGraph(g, { format: 'dot' }), asciiTree: flowpact.formatGraph(g, { ascii: true }),
+        down: flowpact.formatTrace(down), up: flowpact.formatTrace(up), plain: flowpact.formatTrace(plain),
+        plainAscii: flowpact.formatTrace(plain, { ascii: true }),
+        rules: flowpact.formatRules(await flowpact.rules()), narrow: flowpact.formatRules(await flowpact.rules(), { width: 60 }),
+        explain: flowpact.formatExplain(await flowpact.explain('FP401')),
+        colored: flowpact.formatExplain(await flowpact.explain('FP401'), { color: true, hyperlinks: true }),
+      });`);
+    const cliOut = async (args: string[], env: Record<string, string> = {}) => (await cli(args, env)).stdout;
+    expect(r.tree).toBe(await cliOut(['graph', '--root', deep]));
+    expect(r.mermaid.trimEnd()).toBe(await cliOut(['graph', '--root', deep, '--format', 'mermaid']));
+    expect(r.dot.trimEnd()).toBe(await cliOut(['graph', '--root', deep, '--format', 'dot']));
+    expect(r.asciiTree).toBe(await cliOut(['graph', '--root', deep, '--ascii']));
+    expect(r.down).toBe(await cliOut(['trace', 'tests.yml#inputs.suite', '--root', incident]));
+    expect(r.up).toBe(
+      await cliOut(['trace', 'run-suite.yml:config', '--up', '--depth', '3', '--root', incident]),
+    );
+    expect(r.plain).toBe(await cliOut(['trace', 'ci.yml', '--root', fixture('clean')]));
+    expect(r.plain).toBe(
+      '.github/workflows/ci.yml declares no inputs, secrets or outputs — nothing to trace.',
+    );
+    expect(r.plainAscii).not.toContain('—');
+    expect(r.rules).toBe(await cliOut(['rules']));
+    expect(r.narrow).toBe(await cliOut(['rules'], { COLUMNS: '60' }));
+    expect(r.explain).toBe(await cliOut(['explain', 'FP401']));
+    expect(r.colored).toMatch(/\u001B\[/);
+    expect(r.colored).toContain('\u001B]8;;https://rumankazi.github.io/flowpact/docs/rules/fp401');
+    expect(r.tree).not.toMatch(/\u001B/);
+  });
+
+  it('is what generate prints, previewed, with its diff, and written', async () => {
+    const [mine, theirs] = [copy('clean'), copy('clean')];
+    const r = await api<Record<'preview' | 'diff' | 'written' | 'current', string>>(`
+      const root = ${JSON.stringify(mine)};
+      const preview = await flowpact.generate({ root, dryRun: true });
+      out({
+        preview: flowpact.formatGeneration(preview),
+        diff: flowpact.formatGeneration(preview, { diff: true }),
+        written: flowpact.formatGeneration(await flowpact.generate({ root })),
+        current: flowpact.formatGeneration(await flowpact.generate({ root, dryRun: true }), { diff: true }),
+      });`);
+    const patch = join(mkdtempSync(join(tmpdir(), 'flowpact-api-patch-')), 'contracts.patch');
+    const cliOut = async (args: string[]) => (await cli(['generate', '--root', theirs, ...args])).stdout;
+    expect(r.diff.trimEnd()).toBe(await cliOut(['--dry-run']));
+    expect(r.preview).toBe(await cliOut(['--patch', patch]));
+    expect(r.written).toBe(await cliOut([]));
+    expect(r.current).toBe(await cliOut(['--dry-run']));
+    expect(r.preview).toContain('Would write: 3 new');
+    expect(r.diff.startsWith(r.preview)).toBe(true);
+    expect(r.diff).toContain('new file mode 100644');
+    expect(r.written).toContain('Wrote: 3 new');
+    expect(r.current).toContain('Contracts are up to date');
+  });
+
+  it('says what a run wrote even when nothing was, as with only deletions under out', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-api-out-del-'));
+    const job = 'on: push\njobs:\n  j:\n    runs-on: x\n    steps: [{ run: x }]\n';
+    // b.yml gets a contract and goes; a.yml has a YAML error, so its (missing) contract is left alone.
+    write(root, { '.github/workflows/a.yml': 'on: [push\njobs:\n', '.github/workflows/b.yml': job });
+    await cli(['generate', '--root', root]);
+    rmSync(join(root, '.github/workflows/b.yml'));
+    // Out of the repository, a removed contract is not written anywhere: `written` is empty, but the run wrote.
+    const [mine, theirs] = [
+      mkdtempSync(join(tmpdir(), 'flowpact-api-out-')),
+      mkdtempSync(join(tmpdir(), 'flowpact-api-out-')),
+    ];
+    const r = await api<{ text: string; dryRun: boolean; written: string[]; preview: boolean }>(`
+      const g = await flowpact.generate({ root: ${JSON.stringify(root)}, out: ${JSON.stringify(mine)} });
+      out({ text: flowpact.formatGeneration(g), dryRun: g.dryRun, written: g.written,
+        preview: (await flowpact.generate({ root: ${JSON.stringify(root)}, dryRun: true })).dryRun });`);
+    expect(r).toMatchObject({ dryRun: false, written: [], preview: true });
+    expect(r.text).toContain('Wrote: 0 new, 0 changed, 1 removed');
+    expect(r.text).toBe((await cli(['generate', '--root', root, '--out', theirs])).stdout);
+  });
+
+  it('renders JSON saved from the CLI, checks its options, and follows the terminal like the CLI', async () => {
+    const deep = fixture('deep-nesting');
+    const saved = join(mkdtempSync(join(tmpdir(), 'flowpact-api-graph-')), 'graph.json');
+    writeFileSync(saved, (await cli(['graph', '--root', deep, '--format', 'json'])).stdout);
+    const script = `
+      import { readFileSync } from 'node:fs';
+      const g = await flowpact.graph({ root: ${JSON.stringify(deep)} });
+      out({
+        same: flowpact.formatGraph(JSON.parse(readFileSync(${JSON.stringify(saved)}, 'utf8'))) === flowpact.formatGraph(g),
+        format: await failure(Promise.resolve().then(() => flowpact.formatGraph(g, { format: 'svg' }))),
+        width: await failure(Promise.resolve().then(() => flowpact.formatRules([], { width: 0 }))),
+        terminal: flowpact.terminalOptions(),
+      });`;
+    const r = await api<{
+      same: boolean;
+      format: { kind: string; message: string };
+      width: { kind: string; message: string };
+      terminal: Record<string, unknown>;
+    }>(script);
+    expect(r.same).toBe(true);
+    expect(r.format).toMatchObject({
+      kind: 'usage',
+      message: 'format must be one of tree, mermaid, dot (got "svg")',
+    });
+    expect(r.width).toMatchObject({ kind: 'usage', message: 'width must be a positive integer (got 0)' });
+    // Not a terminal, NO_COLOR set: what the CLI uses when its output is piped.
+    expect(r.terminal).toEqual({ color: false, width: 100, hyperlinks: false, ascii: false });
+    // COLUMNS set by hand to a fraction: whole columns, which every format function accepts.
+    const fraction = await api<{ terminal: Record<string, unknown> }>(script, { COLUMNS: '80.5' });
+    expect(fraction.terminal).toMatchObject({ width: 80 });
+    expect((await cli(['lint', '--root', fixture('clean')], { COLUMNS: '80.5' })).code).toBe(0);
+    const forced = await api<{ terminal: Record<string, unknown> }>(script, {
+      NO_COLOR: '',
+      FORCE_COLOR: '1',
+      COLUMNS: '60',
+    });
+    expect(forced.terminal).toEqual({ color: true, width: 60, hyperlinks: false, ascii: false });
+  });
+
+  it('never has a line that GitHub would run as a workflow command, like the CLI', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-api-cmd-'));
+    write(root, {
+      '.github/workflows/w.yml': `name: "##[error]pwned"\non:\n  workflow_call:\n    inputs:\n      "${'a'.repeat(70)} ::error title=wrap::pwned": { type: string }\njobs:\n  j:\n    runs-on: x\n    steps: [{ run: x }]\n`,
+      '.github/workflows/caller.yml': 'on: push\njobs:\n  call:\n    uses: ./.github/workflows/w.yml\n',
+    });
+    const r = await api<
+      Record<'pretty' | 'narrow' | 'markdown' | 'tree' | 'mermaid' | 'dot' | 'trace', string>
+    >(`
+      const root = ${JSON.stringify(root)};
+      const a = await flowpact.lint({ root });
+      const g = await flowpact.graph({ root });
+      out({
+        pretty: a.pretty(), narrow: a.pretty({ width: 40 }), markdown: a.markdown(),
+        tree: flowpact.formatGraph(g), mermaid: flowpact.formatGraph(g, { format: 'mermaid' }),
+        dot: flowpact.formatGraph(g, { format: 'dot' }),
+        trace: flowpact.formatTrace(await flowpact.trace({ root, symbol: 'w.yml' })),
+      });`);
+    expect(r.pretty).toContain('pwned');
+    expect(r.tree).toContain('pwned');
+    for (const [name, text] of Object.entries(r)) {
+      expect(text, name).not.toMatch(/^\s*::/m);
+      expect(text, name).not.toContain('##[');
+    }
+    expect(untimed(r.pretty)).toBe(untimed((await cli(['lint', '--root', root])).stdout));
   });
 });
 
@@ -604,8 +790,9 @@ describe('the declarations', () => {
         files: ['consumer.ts'],
       }),
       'consumer.ts': `import {
-  type Analysis, type Annotation, check, defineRule, explain, type Finding, FlowpactError, generate, graph, impact,
-  lint, type Loc, type Report, type RuleContext, rules, type Severity, trace, VERSION,
+  type Analysis, type Annotation, check, defineRule, explain, type Finding, FlowpactError, formatExplain,
+  formatGeneration, formatGraph, formatRules, formatTrace, generate, graph, impact, lint, type Loc, type Report,
+  type RuleContext, rules, type Severity, terminalOptions, type TextOptions, trace, VERSION,
 } from 'flowpact';
 
 const log: string[] = [];
@@ -623,10 +810,21 @@ const outputs: string[] = [a.json({ includeGraph: true }), a.sarif(), a.markdown
 const patch: string | undefined = (await check()).contracts?.patch();
 const required = (await impact({ base: 'main', expect: 'patch', title: 'fix: x', labels: ['a'] })).impact?.required;
 const written: string[] = (await generate({ dryRun: true, out: 'x' })).written;
+const preview: boolean = (await generate({ dryRun: true })).dryRun;
 const nodes = (await graph()).nodes.map((n) => n.kind);
 const traced = (await trace({ symbol: 'ci.yml#inputs.x', up: true, depth: 2 })).traces[0]?.children;
 const listed = (await rules({ repositoryPlugins: false })).map((r) => r.severity);
 const why: string = (await explain('FP401', { root: '.' })).why;
+const options: TextOptions = terminalOptions();
+const texts: string[] = [
+  a.github({ pathPrefix: 'sub' }),
+  formatGraph(await graph(), { format: 'mermaid' }),
+  formatTrace(await trace({ symbol: 'ci.yml' }), options),
+  formatRules(await rules(), { ...options, ascii: true }),
+  formatExplain(await explain('FP401'), { width: 72 }),
+  formatGeneration(await generate({ dryRun: true }), { diff: true, color: options.color }),
+];
+const unit: string | undefined = (await trace({ symbol: 'ci.yml' })).unit;
 
 const rule = defineRule({
   code: 'ACME601', name: 'prod-deploy-needs-approval', category: 'structure', defaultSeverity: 'error',
@@ -654,12 +852,14 @@ try {
 await lint({ format: 'json' });
 // @ts-expect-error: a symbol is required
 await trace({});
+// @ts-expect-error: not a graph format
+formatGraph(await graph(), { format: 'svg' });
 // @ts-expect-error: not a level
 a.exitCode('sometimes');
 // @ts-expect-error: the report is read-only
 a.report = report;
 
-export { VERSION, code, outputs, patch, required, written, nodes, traced, listed, why, rule, where, severity, annotations };
+export { VERSION, code, outputs, patch, required, written, nodes, traced, listed, why, rule, where, severity, annotations, texts, unit, preview };
 `,
     });
     const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');
