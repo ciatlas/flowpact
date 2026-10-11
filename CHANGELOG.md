@@ -4,6 +4,18 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.11.0](https://github.com/rumankazi/flowpact/compare/v0.10.1...v0.11.0) (2026-10-11)
+
+
+### Features
+
+* **cli:** every command's text in the API: formatGraph, formatTrace, formatRules, formatExplain, formatGeneration, Analysis.github() and terminalOptions() ([#84](https://github.com/rumankazi/flowpact/issues/84)) ([e076cb9](https://github.com/rumankazi/flowpact/commit/e076cb9f24f713ce0f23c3ad198723a2137c4185))
+
+
+### Bug Fixes
+
+* **cli:** a fractional COLUMNS no longer makes flowpact lint fail ([#84](https://github.com/rumankazi/flowpact/issues/84)) ([e076cb9](https://github.com/rumankazi/flowpact/commit/e076cb9f24f713ce0f23c3ad198723a2137c4185))
+
 ## [0.10.1](https://github.com/rumankazi/flowpact/compare/v0.10.0...v0.10.1) (2026-10-10)
 
 
