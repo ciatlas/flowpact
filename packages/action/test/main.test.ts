@@ -13,7 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { analyze, writeContracts } from '@flowpact/core';
+import { analyze, writeContracts } from '@flowpact/lint';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 
@@ -542,7 +542,7 @@ describe('action.yml', () => {
   });
 
   it('has the same version as the engine', async () => {
-    const { VERSION } = await import('@flowpact/core');
+    const { VERSION } = await import('@flowpact/lint');
     const pkg = JSON.parse(readFileSync(join(REPO, 'packages/action/package.json'), 'utf8'));
     expect(pkg.version).toBe(VERSION);
   });
@@ -682,7 +682,8 @@ describe('review fixes', () => {
   });
 
   it('shortens the job summary to stay within GitHub’s limit', async () => {
-    const { analyze: run2, memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@flowpact/core');
+    const { analyze: run2 } = await import('@flowpact/lint');
     const files: Record<string, string> = {};
     for (let i = 0; i < 200; i++) {
       const inputs = Array.from({ length: 30 }, (_, j) => `      i${j}: { type: string }`).join('\n');
@@ -694,7 +695,7 @@ describe('review fixes', () => {
       fs: memoryFileSystem(files),
       validateSchema: false,
       repository: 'a/b',
-      config: (await import('@flowpact/core')).parseConfig({
+      config: (await import('@flowpact/lint')).parseConfig({
         overrides: [{ rule: 'unused-input', target: '**', reason: 'accepted while migrating (JIRA-1)' }],
       }),
     });

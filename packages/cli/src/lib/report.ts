@@ -1,5 +1,6 @@
 /** `lint`, `check` and `impact`: the analysis, and the reports rendered from it. */
 import { resolve } from 'node:path';
+import { neutralizeWorkflowCommands } from '@flowpact/core';
 import {
   type AnalysisResult,
   analyze,
@@ -9,10 +10,9 @@ import {
   IMPACT_CODES,
   type ImpactLevel,
   type JsonReport,
-  neutralizeWorkflowCommands,
   type PreparedImpact,
   prepareImpact,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import {
   type GithubAnnotation,
   githubAnnotation,

@@ -1,5 +1,5 @@
 import { posix } from 'node:path';
-import type { AnalysisResult, Finding, Severity } from '@flowpact/core';
+import type { AnalysisResult, Finding, Severity } from '@flowpact/lint';
 
 /** A finding as a GitHub annotation: what the action passes to `@actions/core`, and `--format github` prints. */
 export interface GithubAnnotation {

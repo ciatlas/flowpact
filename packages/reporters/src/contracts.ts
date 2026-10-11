@@ -1,4 +1,4 @@
-import type { ContractPlan } from '@flowpact/core';
+import type { ContractPlan } from '@flowpact/lint';
 import { createTheme, finalize, padEnd, type RenderOptions, visibleWidth } from './theme';
 
 const STATUS = {

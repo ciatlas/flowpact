@@ -1,4 +1,5 @@
-import { type ImpactLevel, jsonSafe } from '@flowpact/core';
+import { jsonSafe } from '@flowpact/core';
+import type { ImpactLevel } from '@flowpact/lint';
 import type { MarkdownOptions } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { type FailOn, runReport as runAnalysis } from '../lib/report';

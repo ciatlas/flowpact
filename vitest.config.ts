@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@flowpact/core': src('core'),
+      '@flowpact/lint': src('lint'),
       '@flowpact/reporters': src('reporters'),
       '@flowpact/language-server': src('language-server'),
     },
@@ -33,6 +34,7 @@ export default defineConfig({
       thresholds: {
         lines: 80,
         'packages/core/src/**': { lines: 90 },
+        'packages/lint/src/**': { lines: 90 },
       },
     },
   },

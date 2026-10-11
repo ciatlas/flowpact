@@ -1,7 +1,6 @@
 import {
   type Binding,
   type Declaration,
-  DOCS_BASE_URL,
   expandMatrix,
   type GraphNode,
   type Json,
@@ -10,9 +9,8 @@ import {
   type Occurrence,
   type ProjectIndex,
   type SymbolLocator,
-  type TraceNode,
-  trace,
 } from '@flowpact/core';
+import { DOCS_BASE_URL, type TraceNode, trace } from '@flowpact/lint';
 
 /**
  * The hover sits above other extensions' hovers (GitHub Actions adds its own), so it stays short: a header naming

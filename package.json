@@ -27,6 +27,7 @@
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "@flowpact/core": "workspace:*",
+    "@flowpact/lint": "workspace:*",
     "@flowpact/reporters": "workspace:*",
     "fast-check": "^4.10.2",
     "tsx": "^4.23.15",

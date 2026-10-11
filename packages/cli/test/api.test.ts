@@ -19,7 +19,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { reportSchema, VERSION } from '@flowpact/core';
+import { reportSchema, VERSION } from '@flowpact/lint';
 import { build } from 'esbuild';
 import { execa } from 'execa';
 import { beforeAll, describe, expect, it } from 'vitest';

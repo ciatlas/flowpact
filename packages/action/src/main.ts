@@ -5,6 +5,17 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as core from '@actions/core';
 import {
+  createLogger,
+  type Logger,
+  type LogLevel,
+  type LogRecord,
+  type LogSink,
+  loadProject,
+  neutralizeWorkflowCommands,
+  resolveCommit,
+  resolveLogLevel,
+} from '@flowpact/core';
+import {
   type AnalysisResult,
   type AnalyzeOptions,
   analyze,
@@ -13,7 +24,6 @@ import {
   ConfigError,
   type ContractPlan,
   contractPatch,
-  createLogger,
   createRegistry,
   exitCodeFor,
   type Finding,
@@ -23,21 +33,13 @@ import {
   ImpactSetupError,
   isPublished,
   type LoadedConfig,
-  type Logger,
-  type LogLevel,
-  type LogRecord,
-  type LogSink,
   loadConfig,
   loadPlugins,
-  loadProject,
-  neutralizeWorkflowCommands,
   pathInside,
   prepareImpact,
-  resolveCommit,
-  resolveLogLevel,
   UnsafePathError,
   writeContracts,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import {
   githubAnnotation,
   inRepository,

@@ -11,7 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DOCS_BASE_URL, reportSchema, VERSION } from '@flowpact/core';
+import { DOCS_BASE_URL, reportSchema, VERSION } from '@flowpact/lint';
 import { execa } from 'execa';
 import { describe, expect, it } from 'vitest';
 

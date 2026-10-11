@@ -172,6 +172,9 @@ importers:
       '@flowpact/core':
         specifier: workspace:*
         version: link:packages/core
+      '@flowpact/lint':
+        specifier: workspace:*
+        version: link:packages/lint
       '@flowpact/reporters':
         specifier: workspace:*
         version: link:packages/reporters
@@ -261,6 +264,9 @@ importers:
       '@flowpact/core':
         specifier: workspace:*
         version: link:../core
+      '@flowpact/lint':
+        specifier: workspace:*
+        version: link:../lint
       '@flowpact/reporters':
         specifier: workspace:*
         version: link:../reporters
@@ -279,6 +285,9 @@ importers:
       '@flowpact/language-server':
         specifier: workspace:*
         version: link:../language-server
+      '@flowpact/lint':
+        specifier: workspace:*
+        version: link:../lint
       '@flowpact/reporters':
         specifier: workspace:*
         version: link:../reporters
@@ -309,15 +318,9 @@ importers:
       '@actions/workflow-parser':
         specifier: ^0.3.61
         version: 0.3.61
-      diff:
-        specifier: ^9.0.0
-        version: 9.0.0
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
-      zod:
-        specifier: ^4.6.5
-        version: 4.6.5
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -328,6 +331,9 @@ importers:
       '@flowpact/core':
         specifier: workspace:*
         version: link:../core
+      '@flowpact/lint':
+        specifier: workspace:*
+        version: link:../lint
       vscode-languageserver:
         specifier: ^10.1.2
         version: 10.1.2
@@ -342,11 +348,33 @@ importers:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.29)(supports-color@7.2.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)
 
+  packages/lint:
+    dependencies:
+      '@flowpact/core':
+        specifier: workspace:*
+        version: link:../core
+      diff:
+        specifier: ^9.0.0
+        version: 9.0.0
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.7.0)(postcss@8.5.29)(supports-color@7.2.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)
+
   packages/reporters:
     dependencies:
       '@flowpact/core':
         specifier: workspace:*
         version: link:../core
+      '@flowpact/lint':
+        specifier: workspace:*
+        version: link:../lint
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1

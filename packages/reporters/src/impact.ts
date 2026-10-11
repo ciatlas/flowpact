@@ -1,4 +1,4 @@
-import type { ImpactLevel, ImpactResult } from '@flowpact/core';
+import type { ImpactLevel, ImpactResult } from '@flowpact/lint';
 
 const ORDER: ImpactLevel[] = ['major', 'minor', 'patch', 'none'];
 

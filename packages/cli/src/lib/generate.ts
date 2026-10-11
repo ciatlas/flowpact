@@ -1,16 +1,16 @@
 /** `generate`: the contracts of every workflow and local action, written or previewed. */
 import { resolve } from 'node:path';
+import { nodeFileSystem } from '@flowpact/core';
 import {
   analyze,
   type ContractChange,
   type ContractStatus,
   contractPatch,
   contractsInScope,
-  nodeFileSystem,
   planContracts,
   scopePlan,
   writeContracts,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { attempt, usage } from './errors';
 import { bool, loadRegistry, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, protectedTrees } from './targets';

@@ -3,15 +3,14 @@
  * `pnpm typecheck`; there is nothing to run. src/api.ts is typed with the declarations too, so its functions must
  * return what they promise.
  */
+import type { ProjectIndex as EngineIndex, Loc as EngineLoc } from '@flowpact/core';
 import type {
   Finding as EngineFinding,
-  ProjectIndex as EngineIndex,
-  Loc as EngineLoc,
   RuleContext as EngineRuleContext,
   RuleDefinition as EngineRuleDefinition,
   JsonReport,
   RuleRegistry,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import type { CallGraph as EngineCallGraph, GithubAnnotation, MarkdownOptions } from '@flowpact/reporters';
 import type * as Api from '../api';
 import type { Analysis as EngineAnalysis } from '../src/lib/report';

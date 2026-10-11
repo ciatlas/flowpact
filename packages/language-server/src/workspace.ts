@@ -1,6 +1,13 @@
 import { statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
+  type Logger,
+  nodeFileSystem,
+  type Occurrence,
+  overlayFileSystem,
+  SymbolLocator,
+} from '@flowpact/core';
+import {
   type AnalysisResult,
   analyze,
   CONFIG_DIR,
@@ -10,15 +17,10 @@ import {
   createRegistry,
   defaultConfig,
   type LoadedConfig,
-  type Logger,
   loadPlugins,
-  nodeFileSystem,
-  type Occurrence,
-  overlayFileSystem,
   parseConfigText,
   RuleRegistryError,
-  SymbolLocator,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import type { Diagnostic } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { pathToUri, toDiagnostic, toPosix } from './convert';

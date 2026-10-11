@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
-import { analyze, createRegistry, defineRule, memoryFileSystem, type Severity } from '@flowpact/core';
+import { memoryFileSystem } from '@flowpact/core';
+import { analyze, createRegistry, defineRule, type Severity } from '@flowpact/lint';
 import { githubAnnotation, renderGithub, renderJson, renderSarif } from '@flowpact/reporters';
 import { describe, expect, it } from 'vitest';
 

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createRegistry, DOCS_BASE_URL } from '@flowpact/core';
+import { createRegistry, DOCS_BASE_URL } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { indexPage, rulePage } from '../gen-rule-docs';
 
@@ -36,7 +36,7 @@ describe('rule docs', () => {
   });
 
   it('published schemas match the code', async () => {
-    const { configJsonSchema, contractJsonSchema, reportJsonSchema } = await import('@flowpact/core');
+    const { configJsonSchema, contractJsonSchema, reportJsonSchema } = await import('@flowpact/lint');
     const pub = (n: string) =>
       JSON.parse(
         readFileSync(join(import.meta.dirname, `../../apps/docs/public/schemas/${n}/v1.json`), 'utf8'),

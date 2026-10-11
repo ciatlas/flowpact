@@ -57,6 +57,7 @@
   },
   "devDependencies": {
     "@flowpact/core": "workspace:*",
+    "@flowpact/lint": "workspace:*",
     "@flowpact/language-server": "workspace:*",
     "@flowpact/reporters": "workspace:*",
     "@vercel/ncc": "^0.45.0",

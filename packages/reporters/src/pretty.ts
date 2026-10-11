@@ -1,16 +1,14 @@
+import { formatLoc, type Loc, type SourceFile } from '@flowpact/core';
 import {
   type AnalysisResult,
   CATEGORIES,
   type Finding,
-  formatLoc,
   type ImpactResult,
-  type Loc,
   type RuleDefinition,
   type RuleRegistry,
   type Severity,
-  type SourceFile,
   type ToolMeta,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { describeDeclared, listedChanges, shortCommit } from './impact';
 import {
   box,

@@ -3,18 +3,14 @@
  * functions (src/api.ts) and the CLI's commands are both built on these, so they cannot drift apart.
  */
 import { resolve } from 'node:path';
+import { createLogger, type Logger, type LogLevel, type LogSink, silentLogger } from '@flowpact/core';
 import {
-  createLogger,
   createRegistry,
   type LoadedConfig,
-  type Logger,
-  type LogLevel,
-  type LogSink,
   loadConfig,
   loadPlugins,
   type RuleRegistry,
-  silentLogger,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { attempt, attemptAsync, usage } from './errors';
 
 /** Where log records go; without it, nothing is logged. */

@@ -11,20 +11,21 @@ pnpm test         # unit, property and end-to-end tests
 pnpm lint         # Biome
 pnpm typecheck
 pnpm docs:gen     # regenerate rule pages and JSON schemas after changing a rule or schema
-pnpm coverage     # tests with coverage thresholds (core ≥ 90 % lines)
+pnpm coverage     # tests with coverage thresholds (core and lint ≥ 90 % lines)
 pnpm docs:dev     # docs site with generated rule pages
 pnpm docs:screenshots                      # terminal screenshots from real CLI output
 pnpm --filter vscode-flowpact screenshots  # editor screenshots in a real VS Code (after pnpm build; opens windows)
 ```
 
 `packages/action/dist` is committed (GitHub runs the action from it). Rebuild it with `pnpm build` and commit the
-result whenever `packages/core`, `packages/reporters` or `packages/action` change; CI fails otherwise.
+result whenever `packages/core`, `packages/lint`, `packages/reporters` or `packages/action` change; CI fails otherwise.
 
 ## Repository layout
 
 | Path | What |
 | --- | --- |
-| `packages/core` | Engine: YAML → IR → expressions → graph → matrix expansion → rules |
+| `packages/core` | Workflow model: YAML → IR → expressions → graph → matrix expansion. No rules: it is the foundation flowpact's checks are built on |
+| `packages/lint` | flowpact's checks on the model: rules, config, contracts, impact mode, plugins, the JSON report and trace |
 | `packages/reporters` | Terminal (pretty), JSON, Markdown, SARIF, trace, graph and contract renderers |
 | `packages/cli` | The `flowpact` command and the API (published as `flowpact`): `src/lib` implements each command once, `src/api.ts` exports it as a function and `src/commands` prints it; the API's types are hand-written in `api.d.ts` |
 | `packages/action` | The GitHub Action (`action.yml` at the root runs `packages/action/dist/index.js`): job summary, annotations, SARIF, contract patch artifact |
@@ -71,7 +72,7 @@ Retitle GitHub's `Revert "…"` pull requests as `revert: …`.
 | `docs`, `refactor`, `test`, `build`, `ci`, `chore`, `style` | everything else | none |
 
 Mark a breaking change with `!` (`feat(config)!: …`) or a `BREAKING CHANGE:` footer. Before 1.0 a breaking change
-bumps the minor version. Useful scopes: `core`, `rules`, `contracts`, `config`, `cli`, `action`, `reporters`, `docs`.
+bumps the minor version. Useful scopes: `core`, `lint`, `rules`, `contracts`, `config`, `cli`, `action`, `reporters`, `docs`.
 
 ## Releases
 

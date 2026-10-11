@@ -1,13 +1,13 @@
 import { fileURLToPath } from 'node:url';
+import { memoryFileSystem } from '@flowpact/core';
 import {
   type AnalysisResult,
   analyze,
   createRegistry,
   defineRule,
-  memoryFileSystem,
   parseConfig,
   VERSION,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { renderSarif } from '@flowpact/reporters';
 import { describe, expect, it } from 'vitest';
 

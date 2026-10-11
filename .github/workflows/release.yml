@@ -136,7 +136,7 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          for pkg in packages/core packages/reporters packages/cli packages/action packages/language-server packages/vscode; do
+          for pkg in packages/core packages/lint packages/reporters packages/cli packages/action packages/language-server packages/vscode; do
             # Older tags (re-published by hand) predate some packages.
             [ -f "$pkg/package.json" ] || continue
             actual=$(node -p "require('./$pkg/package.json').version")
@@ -145,7 +145,10 @@ jobs:
               exit 1
             fi
           done
-          grep -q "VERSION = '$VERSION'" packages/core/src/version.ts || { echo "::error file=packages/core/src/version.ts::VERSION is not $VERSION"; exit 1; }
+          # version.ts moved from packages/core to packages/lint; older tags have it in core.
+          version_ts=packages/lint/src/version.ts
+          [ -f "$version_ts" ] || version_ts=packages/core/src/version.ts
+          grep -q "VERSION = '$VERSION'" "$version_ts" || { echo "::error file=$version_ts::VERSION is not $VERSION"; exit 1; }
       - name: Already published?
         id: published
         env:

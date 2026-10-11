@@ -1,5 +1,6 @@
 import { join } from 'node:path';
-import { createLogger, type Logger, type LogRecord, VERSION } from '@flowpact/core';
+import { createLogger, type Logger, type LogRecord } from '@flowpact/core';
+import { VERSION } from '@flowpact/lint';
 import {
   type Connection,
   createConnection,

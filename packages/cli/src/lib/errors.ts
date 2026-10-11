@@ -1,4 +1,4 @@
-import { ConfigError, ImpactSetupError, RuleRegistryError, UnsafePathError } from '@flowpact/core';
+import { ConfigError, ImpactSetupError, RuleRegistryError, UnsafePathError } from '@flowpact/lint';
 
 /**
  * What went wrong, for a program to act on:

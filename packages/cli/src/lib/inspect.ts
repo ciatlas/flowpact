@@ -1,7 +1,7 @@
 /** `graph`, `trace`, `rules` and `explain`: what flowpact knows about a repository and its rules. */
+import { didYouMean } from '@flowpact/core';
 import {
   analyze,
-  didYouMean,
   type RuleCategory,
   resolveSeverities,
   resolveSymbols,
@@ -9,7 +9,7 @@ import {
   type TraceDirection,
   type TraceNode,
   trace,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { buildCallGraph, type CallGraph } from '@flowpact/reporters';
 import { attempt, NoSymbolMatchError, usage } from './errors';
 import { bool, loadRegistry, type Session } from './session';

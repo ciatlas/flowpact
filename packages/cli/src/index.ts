@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The `flowpact` command. Its hashbang stays at the top of dist/index.js (the API's dist/api.js has none).
-import { bannerText, DOCS_BASE_URL, neutralizeWorkflowCommands, VERSION } from '@flowpact/core';
+import { neutralizeWorkflowCommands } from '@flowpact/core';
+import { bannerText, DOCS_BASE_URL, VERSION } from '@flowpact/lint';
 import { type ArgsDef, type CommandDef, defineCommand, renderUsage, runCommand, runMain } from 'citty';
 import pc from 'picocolors';
 import { checkCommand } from './commands/check';

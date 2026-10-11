@@ -2,16 +2,13 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import {
-  assertSafeWritePath,
-  ConfigError,
-  type LoadedConfig,
   type Logger,
   type LogLevel,
   type LogRecord,
   neutralizeWorkflowCommands,
   resolveLogLevel,
-  toolMeta,
 } from '@flowpact/core';
+import { assertSafeWritePath, ConfigError, type LoadedConfig, toolMeta } from '@flowpact/lint';
 import { type RenderOptions, renderBanner } from '@flowpact/reporters';
 import type { ArgsDef } from 'citty';
 import pc from 'picocolors';

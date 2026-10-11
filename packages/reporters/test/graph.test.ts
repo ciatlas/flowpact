@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { analyze } from '@flowpact/core';
+import { analyze } from '@flowpact/lint';
 import {
   buildCallGraph,
   edgeLabel,
@@ -122,7 +122,8 @@ describe('renderMermaid and renderDot', () => {
 
 describe('calls to workflows that are not reusable (review #23)', () => {
   it('keeps the edge and marks it', async () => {
-    const { analyze, memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@flowpact/core');
+    const { analyze } = await import('@flowpact/lint');
     const r = analyze({
       root: '/v',
       fs: memoryFileSystem({
@@ -143,7 +144,8 @@ describe('calls to workflows that are not reusable (review #23)', () => {
 
 describe('$/ and workspace-relative uses:', () => {
   it('draws $/ calls and checkout-relative action uses as local edges', async () => {
-    const { analyze, memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@flowpact/core');
+    const { analyze } = await import('@flowpact/lint');
     const r = analyze({
       root: '/v',
       fs: memoryFileSystem({
@@ -184,7 +186,8 @@ describe('$/ and workspace-relative uses:', () => {
 
 describe('local uses: outside the workspace (review of workspace-relative uses:)', () => {
   it('draws an action that is in the repository but not in the workspace as itself, and a missing one as missing', async () => {
-    const { analyze, memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@flowpact/core');
+    const { analyze } = await import('@flowpact/lint');
     const r = analyze({
       root: '/v',
       fs: memoryFileSystem({

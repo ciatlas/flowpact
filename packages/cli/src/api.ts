@@ -3,7 +3,7 @@
  * the same code as the commands (src/lib). Its types are the hand-written ../api.d.ts, which the build copies to
  * dist/api.d.ts; each export here is typed with them, so the type check fails when the two disagree.
  */
-import { VERSION as ENGINE_VERSION } from '@flowpact/core';
+import { VERSION as ENGINE_VERSION } from '@flowpact/lint';
 import type * as Api from '../api';
 import { FlowpactError as FlowpactErrorClass } from './lib/errors';
 import { runGenerate } from './lib/generate';

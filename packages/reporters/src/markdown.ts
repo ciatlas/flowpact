@@ -1,13 +1,12 @@
+import { type Loc, trimChar } from '@flowpact/core';
 import {
   type AnalysisResult,
   type ContractPlan,
   DOCS_BASE_URL,
   type Finding,
   type ImpactResult,
-  type Loc,
   type Severity,
-  trimChar,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { buildCallGraph, renderMermaid } from './graph';
 import { describeDeclared, listedChanges, shortCommit } from './impact';
 

@@ -9956,13 +9956,7278 @@ function group(name, fn) {
   });
 }
 
-// ../core/src/analyze.ts
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
+var Expr = class {
+};
+var Literal = class extends Expr {
+  constructor(literal2, token) {
+    super();
+    this.literal = literal2;
+    this.token = token;
+  }
+  accept(v) {
+    return v.visitLiteral(this);
+  }
+};
+var Unary = class extends Expr {
+  constructor(operator, expr) {
+    super();
+    this.operator = operator;
+    this.expr = expr;
+  }
+  accept(v) {
+    return v.visitUnary(this);
+  }
+};
+var FunctionCall = class extends Expr {
+  constructor(functionName, args) {
+    super();
+    this.functionName = functionName;
+    this.args = args;
+  }
+  accept(v) {
+    return v.visitFunctionCall(this);
+  }
+};
+var Binary = class extends Expr {
+  constructor(left, operator, right) {
+    super();
+    this.left = left;
+    this.operator = operator;
+    this.right = right;
+  }
+  accept(v) {
+    return v.visitBinary(this);
+  }
+};
+var Logical = class extends Expr {
+  constructor(operator, args) {
+    super();
+    this.operator = operator;
+    this.args = args;
+  }
+  accept(v) {
+    return v.visitLogical(this);
+  }
+};
+var Grouping = class extends Expr {
+  constructor(group2) {
+    super();
+    this.group = group2;
+  }
+  accept(v) {
+    return v.visitGrouping(this);
+  }
+};
+var ContextAccess = class extends Expr {
+  constructor(name) {
+    super();
+    this.name = name;
+  }
+  accept(v) {
+    return v.visitContextAccess(this);
+  }
+};
+var IndexAccess = class extends Expr {
+  constructor(expr, index) {
+    super();
+    this.expr = expr;
+    this.index = index;
+  }
+  accept(v) {
+    return v.visitIndexAccess(this);
+  }
+};
+var Star = class extends Expr {
+  accept() {
+    throw new Error("Method not implemented.");
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/expressiondata.js
+var Kind;
+(function(Kind2) {
+  Kind2[Kind2["String"] = 0] = "String";
+  Kind2[Kind2["Array"] = 1] = "Array";
+  Kind2[Kind2["Dictionary"] = 2] = "Dictionary";
+  Kind2[Kind2["Boolean"] = 3] = "Boolean";
+  Kind2[Kind2["Number"] = 4] = "Number";
+  Kind2[Kind2["CaseSensitiveDictionary"] = 5] = "CaseSensitiveDictionary";
+  Kind2[Kind2["Null"] = 6] = "Null";
+})(Kind || (Kind = {}));
+function kindStr(k) {
+  switch (k) {
+    case Kind.Array:
+      return "Array";
+    case Kind.Boolean:
+      return "Boolean";
+    case Kind.Null:
+      return "Null";
+    case Kind.Number:
+      return "Number";
+    case Kind.Dictionary:
+      return "Object";
+    case Kind.String:
+      return "String";
+  }
+  return "unknown";
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/dictionary.js
+var Dictionary = class {
+  constructor(...pairs2) {
+    this.keys = [];
+    this.v = [];
+    this.indexMap = {};
+    this.kind = Kind.Dictionary;
+    this.primitive = false;
+    for (const p of pairs2) {
+      this.add(p.key, p.value);
+    }
+  }
+  coerceString() {
+    return kindStr(this.kind);
+  }
+  number() {
+    return NaN;
+  }
+  add(key, value) {
+    if (key.toLowerCase() in this.indexMap) {
+      return;
+    }
+    this.keys.push(key);
+    this.v.push(value);
+    this.indexMap[key.toLowerCase()] = this.v.length - 1;
+  }
+  get(key) {
+    const index = this.indexMap[key.toLowerCase()];
+    if (index === void 0) {
+      return void 0;
+    }
+    return this.v[index];
+  }
+  values() {
+    return this.v;
+  }
+  pairs() {
+    const result = [];
+    for (const key of this.keys) {
+      result.push({ key, value: this.v[this.indexMap[key.toLowerCase()]] });
+    }
+    return result;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/array.js
+var Array2 = class {
+  constructor(...data) {
+    this.v = [];
+    this.kind = Kind.Array;
+    this.primitive = false;
+    for (const d of data) {
+      this.add(d);
+    }
+  }
+  coerceString() {
+    return kindStr(this.kind);
+  }
+  number() {
+    return NaN;
+  }
+  add(value) {
+    this.v.push(value);
+  }
+  get(index) {
+    return this.v[index];
+  }
+  values() {
+    return this.v;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/boolean.js
+var BooleanData = class {
+  constructor(value) {
+    this.value = value;
+    this.kind = Kind.Boolean;
+    this.primitive = true;
+  }
+  coerceString() {
+    if (this.value) {
+      return "true";
+    }
+    return "false";
+  }
+  number() {
+    if (this.value) {
+      return 1;
+    }
+    return 0;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/null.js
+var Null = class {
+  constructor() {
+    this.kind = Kind.Null;
+    this.primitive = true;
+  }
+  coerceString() {
+    return "";
+  }
+  number() {
+    return 0;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/number.js
+var NumberData = class {
+  constructor(value) {
+    this.value = value;
+    this.kind = Kind.Number;
+    this.primitive = true;
+  }
+  coerceString() {
+    if (this.value === 0) {
+      return "0";
+    }
+    return (+this.value.toFixed(15)).toString();
+  }
+  number() {
+    return this.value;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/string.js
+var StringData = class {
+  constructor(value) {
+    this.value = value;
+    this.kind = Kind.String;
+    this.primitive = true;
+  }
+  coerceString() {
+    return this.value;
+  }
+  number() {
+    return Number(this.value);
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/replacer.js
+function replacer(_key, value) {
+  if (value instanceof Null) {
+    return null;
+  }
+  if (value instanceof BooleanData) {
+    return value.value;
+  }
+  if (value instanceof NumberData) {
+    return value.number();
+  }
+  if (value instanceof StringData) {
+    return value.coerceString();
+  }
+  if (value instanceof Array2) {
+    return value.values();
+  }
+  if (value instanceof Dictionary) {
+    const pairs2 = value.pairs();
+    const r = {};
+    for (const p of pairs2) {
+      r[p.key] = p.value;
+    }
+    return r;
+  }
+  return value;
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/reviver.js
+function reviver(_key, val) {
+  if (val === null) {
+    return new Null();
+  }
+  if (typeof val === "string") {
+    return new StringData(val);
+  }
+  if (typeof val === "number") {
+    return new NumberData(val);
+  }
+  if (typeof val === "boolean") {
+    return new BooleanData(val);
+  }
+  if (Array.isArray(val)) {
+    return new Array2(...val);
+  }
+  if (typeof val === "object") {
+    return new Dictionary(...Object.keys(val).map((k) => ({
+      key: k,
+      value: val[k]
+    })));
+  }
+  return val;
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/lexer.js
+var TokenType;
+(function(TokenType3) {
+  TokenType3[TokenType3["UNKNOWN"] = 0] = "UNKNOWN";
+  TokenType3[TokenType3["LEFT_PAREN"] = 1] = "LEFT_PAREN";
+  TokenType3[TokenType3["RIGHT_PAREN"] = 2] = "RIGHT_PAREN";
+  TokenType3[TokenType3["LEFT_BRACKET"] = 3] = "LEFT_BRACKET";
+  TokenType3[TokenType3["RIGHT_BRACKET"] = 4] = "RIGHT_BRACKET";
+  TokenType3[TokenType3["COMMA"] = 5] = "COMMA";
+  TokenType3[TokenType3["DOT"] = 6] = "DOT";
+  TokenType3[TokenType3["BANG"] = 7] = "BANG";
+  TokenType3[TokenType3["BANG_EQUAL"] = 8] = "BANG_EQUAL";
+  TokenType3[TokenType3["EQUAL_EQUAL"] = 9] = "EQUAL_EQUAL";
+  TokenType3[TokenType3["GREATER"] = 10] = "GREATER";
+  TokenType3[TokenType3["GREATER_EQUAL"] = 11] = "GREATER_EQUAL";
+  TokenType3[TokenType3["LESS"] = 12] = "LESS";
+  TokenType3[TokenType3["LESS_EQUAL"] = 13] = "LESS_EQUAL";
+  TokenType3[TokenType3["AND"] = 14] = "AND";
+  TokenType3[TokenType3["OR"] = 15] = "OR";
+  TokenType3[TokenType3["STAR"] = 16] = "STAR";
+  TokenType3[TokenType3["NUMBER"] = 17] = "NUMBER";
+  TokenType3[TokenType3["STRING"] = 18] = "STRING";
+  TokenType3[TokenType3["IDENTIFIER"] = 19] = "IDENTIFIER";
+  TokenType3[TokenType3["TRUE"] = 20] = "TRUE";
+  TokenType3[TokenType3["FALSE"] = 21] = "FALSE";
+  TokenType3[TokenType3["NULL"] = 22] = "NULL";
+  TokenType3[TokenType3["EOF"] = 23] = "EOF";
+})(TokenType || (TokenType = {}));
+function tokenString(tok) {
+  switch (tok.type) {
+    case TokenType.EOF:
+      return "EOF";
+    case TokenType.NUMBER:
+      return tok.lexeme;
+    case TokenType.STRING:
+      return tok.value.toString();
+    default:
+      return tok.lexeme;
+  }
+}
+var Lexer = class {
+  constructor(input3) {
+    this.input = input3;
+    this.start = 0;
+    this.offset = 0;
+    this.line = 0;
+    this.lastLineOffset = 0;
+    this.tokens = [];
+  }
+  lex() {
+    if (this.input.length > MAX_EXPRESSION_LENGTH) {
+      throw new Error("ErrorExceededMaxLength");
+    }
+    while (!this.atEnd()) {
+      this.start = this.offset;
+      const c = this.next();
+      switch (c) {
+        case "(":
+          this.addToken(TokenType.LEFT_PAREN);
+          break;
+        case ")":
+          this.addToken(TokenType.RIGHT_PAREN);
+          break;
+        case "[":
+          this.addToken(TokenType.LEFT_BRACKET);
+          break;
+        case "]":
+          this.addToken(TokenType.RIGHT_BRACKET);
+          break;
+        case ",":
+          this.addToken(TokenType.COMMA);
+          break;
+        case ".":
+          if (this.previous() != TokenType.IDENTIFIER && this.previous() != TokenType.RIGHT_BRACKET && this.previous() != TokenType.RIGHT_PAREN && this.previous() != TokenType.STAR) {
+            this.consumeNumber();
+          } else {
+            this.addToken(TokenType.DOT);
+          }
+          break;
+        case "-":
+        case "+":
+          this.consumeNumber();
+          break;
+        case "!":
+          this.addToken(this.match("=") ? TokenType.BANG_EQUAL : TokenType.BANG);
+          break;
+        case "=":
+          if (!this.match("=")) {
+            this.consumeIdentifier();
+            break;
+          }
+          this.addToken(TokenType.EQUAL_EQUAL);
+          break;
+        case "<":
+          this.addToken(this.match("=") ? TokenType.LESS_EQUAL : TokenType.LESS);
+          break;
+        case ">":
+          this.addToken(this.match("=") ? TokenType.GREATER_EQUAL : TokenType.GREATER);
+          break;
+        case "&":
+          if (!this.match("&")) {
+            this.consumeIdentifier();
+            break;
+          }
+          this.addToken(TokenType.AND);
+          break;
+        case "|":
+          if (!this.match("|")) {
+            this.consumeIdentifier();
+            break;
+          }
+          this.addToken(TokenType.OR);
+          break;
+        case "*":
+          this.addToken(TokenType.STAR);
+          break;
+        // Ignore whitespace.
+        case " ":
+        case "\r":
+        case "	":
+          break;
+        case "\n":
+          ++this.line;
+          this.lastLineOffset = this.offset;
+          break;
+        case "'":
+          this.consumeString();
+          break;
+        default:
+          switch (true) {
+            case isDigit(c):
+              this.consumeNumber();
+              break;
+            default:
+              this.consumeIdentifier();
+              break;
+          }
+      }
+    }
+    this.tokens.push({
+      type: TokenType.EOF,
+      lexeme: "",
+      range: this.range()
+    });
+    return {
+      tokens: this.tokens
+    };
+  }
+  pos() {
+    return {
+      line: this.line,
+      column: this.start - this.lastLineOffset
+    };
+  }
+  endPos() {
+    return {
+      line: this.line,
+      column: this.offset - this.lastLineOffset
+    };
+  }
+  range() {
+    return {
+      start: this.pos(),
+      end: this.endPos()
+    };
+  }
+  atEnd() {
+    return this.offset >= this.input.length;
+  }
+  peek() {
+    if (this.atEnd()) {
+      return "\0";
+    }
+    return this.input[this.offset];
+  }
+  peekNext() {
+    if (this.offset + 1 >= this.input.length) {
+      return "\0";
+    }
+    return this.input[this.offset + 1];
+  }
+  previous() {
+    const l = this.tokens.length;
+    if (l == 0) {
+      return TokenType.EOF;
+    }
+    return this.tokens[l - 1].type;
+  }
+  next() {
+    return this.input[this.offset++];
+  }
+  match(expected) {
+    if (this.atEnd()) {
+      return false;
+    }
+    if (this.input[this.offset] !== expected) {
+      return false;
+    }
+    this.offset++;
+    return true;
+  }
+  addToken(type, value) {
+    this.tokens.push({
+      type,
+      lexeme: this.input.substring(this.start, this.offset),
+      range: this.range(),
+      value
+    });
+  }
+  consumeNumber() {
+    while (!this.atEnd() && (!isBoundary(this.peek()) || this.peek() == ".")) {
+      this.next();
+    }
+    const lexeme = this.input.substring(this.start, this.offset);
+    const value = new StringData(lexeme).number();
+    if (isNaN(value)) {
+      throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
+    }
+    this.addToken(TokenType.NUMBER, value);
+  }
+  consumeString() {
+    while ((this.peek() !== "'" || this.peekNext() === "'") && !this.atEnd()) {
+      if (this.peek() === "\n")
+        this.line++;
+      if (this.peek() === "'" && this.peekNext() === "'") {
+        this.next();
+      }
+      this.next();
+    }
+    if (this.atEnd()) {
+      throw new Error(`Unexpected symbol: '${this.input.substring(this.start)}'. Located at position ${this.start + 1} within expression: ${this.input}`);
+    }
+    this.next();
+    let value = this.input.substring(this.start + 1, this.offset - 1);
+    value = value.replace("''", "'");
+    this.addToken(TokenType.STRING, value);
+  }
+  consumeIdentifier() {
+    while (!this.atEnd() && !isBoundary(this.peek())) {
+      this.next();
+    }
+    let tokenType = TokenType.IDENTIFIER;
+    let tokenValue = void 0;
+    const lexeme = this.input.substring(this.start, this.offset);
+    if (this.previous() != TokenType.DOT) {
+      switch (lexeme) {
+        case "true":
+          tokenType = TokenType.TRUE;
+          break;
+        case "false":
+          tokenType = TokenType.FALSE;
+          break;
+        case "null":
+          tokenType = TokenType.NULL;
+          break;
+        case "NaN":
+          tokenType = TokenType.NUMBER;
+          tokenValue = NaN;
+          break;
+        case "Infinity":
+          tokenType = TokenType.NUMBER;
+          tokenValue = Infinity;
+          break;
+      }
+    }
+    if (!isLegalIdentifier(lexeme)) {
+      throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
+    }
+    this.addToken(tokenType, tokenValue);
+  }
+};
+function isDigit(c) {
+  return c >= "0" && c <= "9";
+}
+function isBoundary(c) {
+  switch (c) {
+    case "(":
+    case "[":
+    case ")":
+    case "]":
+    case ",":
+    case ".":
+    case "!":
+    case ">":
+    case "<":
+    case "=":
+    case "&":
+    case "|":
+      return true;
+  }
+  return /\s/.test(c);
+}
+function isLegalIdentifier(str2) {
+  if (str2 == "") {
+    return false;
+  }
+  const first = str2[0];
+  if (first >= "a" && first <= "z" || first >= "A" && first <= "Z" || first == "_") {
+    for (const c of str2.substring(1).split("")) {
+      if (c >= "a" && c <= "z" || c >= "A" && c <= "Z" || c >= "0" && c <= "9" || c == "_" || c == "-") {
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/errors.js
+var MAX_PARSER_DEPTH = 50;
+var MAX_EXPRESSION_LENGTH = 21e3;
+var ErrorType;
+(function(ErrorType2) {
+  ErrorType2[ErrorType2["ErrorUnexpectedSymbol"] = 0] = "ErrorUnexpectedSymbol";
+  ErrorType2[ErrorType2["ErrorUnrecognizedNamedValue"] = 1] = "ErrorUnrecognizedNamedValue";
+  ErrorType2[ErrorType2["ErrorUnexpectedEndOfExpression"] = 2] = "ErrorUnexpectedEndOfExpression";
+  ErrorType2[ErrorType2["ErrorExceededMaxDepth"] = 3] = "ErrorExceededMaxDepth";
+  ErrorType2[ErrorType2["ErrorExceededMaxLength"] = 4] = "ErrorExceededMaxLength";
+  ErrorType2[ErrorType2["ErrorTooFewParameters"] = 5] = "ErrorTooFewParameters";
+  ErrorType2[ErrorType2["ErrorTooManyParameters"] = 6] = "ErrorTooManyParameters";
+  ErrorType2[ErrorType2["ErrorEvenParameters"] = 7] = "ErrorEvenParameters";
+  ErrorType2[ErrorType2["ErrorUnrecognizedContext"] = 8] = "ErrorUnrecognizedContext";
+  ErrorType2[ErrorType2["ErrorUnrecognizedFunction"] = 9] = "ErrorUnrecognizedFunction";
+})(ErrorType || (ErrorType = {}));
+var ExpressionError = class extends Error {
+  constructor(typ, tok) {
+    super(`${errorDescription(typ)}: '${tokenString(tok)}'`);
+    this.typ = typ;
+    this.tok = tok;
+    this.pos = this.tok.range.start;
+  }
+};
+function errorDescription(typ) {
+  switch (typ) {
+    case ErrorType.ErrorUnexpectedEndOfExpression:
+      return "Unexpected end of expression";
+    case ErrorType.ErrorUnexpectedSymbol:
+      return "Unexpected symbol";
+    case ErrorType.ErrorUnrecognizedNamedValue:
+      return "Unrecognized named-value";
+    case ErrorType.ErrorExceededMaxDepth:
+      return `Exceeded max expression depth ${MAX_PARSER_DEPTH}`;
+    case ErrorType.ErrorExceededMaxLength:
+      return `Exceeded max expression length ${MAX_EXPRESSION_LENGTH}`;
+    case ErrorType.ErrorTooFewParameters:
+      return "Too few parameters supplied";
+    case ErrorType.ErrorTooManyParameters:
+      return "Too many parameters supplied";
+    case ErrorType.ErrorEvenParameters:
+      return "Even number of parameters supplied, requires an odd number of parameters";
+    case ErrorType.ErrorUnrecognizedContext:
+      return "Unrecognized named-value";
+    case ErrorType.ErrorUnrecognizedFunction:
+      return "Unrecognized function";
+    default:
+      return "Unknown error";
+  }
+}
+var ExpressionEvaluationError = class extends Error {
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/case.js
+var caseFunc = {
+  name: "case",
+  description: "`case( pred1, val1, pred2, val2, ..., default )`\n\nEvaluates predicates in order and returns the value corresponding to the first predicate that evaluates to `true`. If no predicate matches, it returns the last argument as the default value.",
+  minArgs: 3,
+  maxArgs: Number.MAX_SAFE_INTEGER,
+  call: (...args) => {
+    for (let i = 0; i < args.length - 1; i += 2) {
+      const predicate = args[i];
+      if (predicate.kind !== Kind.Boolean) {
+        throw new Error("case predicate must evaluate to a boolean value");
+      }
+      if (predicate.value) {
+        return args[i + 1];
+      }
+    }
+    return args[args.length - 1];
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/result.js
+function coerceTypes(li, ri) {
+  let lv = li;
+  let rv = ri;
+  if (li.kind === ri.kind) {
+    return [lv, rv];
+  }
+  switch (li.kind) {
+    // Number, String
+    case Kind.Number:
+      if (ri.kind === Kind.String) {
+        rv = new NumberData(ri.number());
+        return [lv, rv];
+      }
+      break;
+    // String, Number
+    case Kind.String:
+      if (ri.kind === Kind.Number) {
+        lv = new NumberData(li.number());
+        return [lv, rv];
+      }
+      break;
+    // Boolean|Null, Any
+    case Kind.Null:
+    case Kind.Boolean:
+      lv = new NumberData(li.number());
+      return coerceTypes(lv, rv);
+  }
+  switch (ri.kind) {
+    case Kind.Null:
+    case Kind.Boolean:
+      rv = new NumberData(ri.number());
+      return coerceTypes(lv, rv);
+  }
+  return [lv, rv];
+}
+function equals(lhs, rhs) {
+  const [lv, rv] = coerceTypes(lhs, rhs);
+  if (lv.kind != rv.kind) {
+    return false;
+  }
+  switch (lv.kind) {
+    // Null, Null
+    case Kind.Null:
+      return true;
+    // Number, Number
+    case Kind.Number: {
+      const ld = lv.value;
+      const rd = rv.value;
+      if (isNaN(ld) || isNaN(rd)) {
+        return false;
+      }
+      return ld == rd;
+    }
+    // String, String
+    case Kind.String: {
+      const ls = lv.value;
+      const rs = rv.value;
+      return toUpperSpecial(ls) === toUpperSpecial(rs);
+    }
+    // Boolean, Boolean
+    case Kind.Boolean: {
+      const lb = lv.value;
+      const rb = rv.value;
+      return lb == rb;
+    }
+    // Object, Object
+    case Kind.Dictionary:
+    case Kind.Array:
+      return lv === rv;
+  }
+  return false;
+}
+function toUpperSpecial(s) {
+  const sb = [];
+  let i = 0;
+  const len = s.length;
+  let found = s.indexOf("\u0131");
+  while (i < len) {
+    if (i < found) {
+      sb.push(s.substring(i, found).toUpperCase());
+      i = found;
+    } else if (i == found) {
+      sb.push(s.substring(i, i + 1));
+      i += 1;
+      found = s.indexOf("\u0131", i);
+    } else {
+      sb.push(s.substring(i).toUpperCase());
+      break;
+    }
+  }
+  return sb.join("");
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/contains.js
+var contains = {
+  name: "contains",
+  description: "`contains( search, item )`\n\nReturns `true` if `search` contains `item`. If `search` is an array, this function returns `true` if the `item` is an element in the array. If `search` is a string, this function returns `true` if the `item` is a substring of `search`. This function is not case sensitive. Casts values to a string.",
+  minArgs: 2,
+  maxArgs: 2,
+  call: (...args) => {
+    const left = args[0];
+    const right = args[1];
+    if (left.primitive) {
+      const ls = left.coerceString();
+      if (right.primitive) {
+        const rs = right.coerceString();
+        return new BooleanData(ls.toLowerCase().includes(rs.toLowerCase()));
+      }
+    } else if (left.kind === Kind.Array) {
+      const la = left;
+      if (la.values().length === 0) {
+        return new BooleanData(false);
+      }
+      for (const v of la.values()) {
+        if (equals(right, v)) {
+          return new BooleanData(true);
+        }
+      }
+    }
+    return new BooleanData(false);
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/endswith.js
+var endswith = {
+  name: "endsWith",
+  description: "`endsWith( searchString, searchValue )`\n\nReturns `true` if `searchString` ends with `searchValue`. This function is not case sensitive. Casts values to a string.",
+  minArgs: 2,
+  maxArgs: 2,
+  call: (...args) => {
+    const left = args[0];
+    if (!left.primitive) {
+      return new BooleanData(false);
+    }
+    const right = args[1];
+    if (!right.primitive) {
+      return new BooleanData(false);
+    }
+    const ls = toUpperSpecial(left.coerceString());
+    const rs = toUpperSpecial(right.coerceString());
+    return new BooleanData(ls.endsWith(rs));
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/format.js
+var format = {
+  name: "format",
+  description: "`format( string, replaceValue0, replaceValue1, ..., replaceValueN)`\n\nReplaces values in the `string`, with the variable `replaceValueN`. Variables in the `string` are specified using the `{N}` syntax, where `N` is an integer. You must specify at least one `replaceValue` and `string`. There is no maximum for the number of variables (`replaceValueN`) you can use. Escape curly braces using double braces.",
+  minArgs: 1,
+  maxArgs: 255,
+  call: (...args) => {
+    const fs3 = args[0].coerceString();
+    const result = [];
+    let index = 0;
+    while (index < fs3.length) {
+      const lbrace = fs3.indexOf("{", index);
+      const rbrace = fs3.indexOf("}", index);
+      if (lbrace >= 0 && (rbrace < 0 || rbrace > lbrace)) {
+        if (safeCharAt(fs3, lbrace + 1) === "{") {
+          result.push(fs3.substr(index, lbrace - index + 1));
+          index = lbrace + 2;
+          continue;
+        }
+        if (rbrace > lbrace + 1) {
+          const argIndex = readArgIndex(fs3, lbrace + 1);
+          if (argIndex.success) {
+            if (1 + argIndex.result > args.length - 1) {
+              throw new Error(`The following format string references more arguments than were supplied: ${fs3}`);
+            }
+            if (lbrace > index) {
+              result.push(fs3.substr(index, lbrace - index));
+            }
+            result.push(`${args[1 + argIndex.result].coerceString()}`);
+            index = rbrace + 1;
+            continue;
+          }
+        }
+        throw new Error(`The following format string is invalid: ${fs3}`);
+      } else if (rbrace >= 0) {
+        if (safeCharAt(fs3, rbrace + 1) === "}") {
+          result.push(fs3.substr(index, rbrace - index + 1));
+          index = rbrace + 2;
+        } else {
+          throw new Error(`The following format string is invalid: ${fs3}`);
+        }
+      } else {
+        result.push(fs3.substr(index));
+        break;
+      }
+    }
+    return new StringData(result.join(""));
+  }
+};
+function safeCharAt(string4, index) {
+  if (string4.length > index) {
+    return string4[index];
+  }
+  return "\0";
+}
+function readArgIndex(string4, startIndex) {
+  let length = 0;
+  for (; ; ) {
+    const nextChar = safeCharAt(string4, startIndex + length);
+    if (nextChar >= "0" && nextChar <= "9") {
+      length++;
+    } else {
+      break;
+    }
+  }
+  if (length < 1) {
+    return {
+      success: false
+    };
+  }
+  const endIndex = startIndex + length - 1;
+  const result = parseInt(string4.substr(startIndex, length));
+  return {
+    success: !isNaN(result),
+    result,
+    endIndex
+  };
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/fromjson.js
+var fromjson = {
+  name: "fromJson",
+  description: "`fromJSON(value)`\n\nReturns a JSON object or JSON data type for `value`. You can use this function to provide a JSON object as an evaluated expression or to convert environment variables from a string.",
+  minArgs: 1,
+  maxArgs: 1,
+  call: (...args) => {
+    const input3 = args[0];
+    const is = input3.coerceString();
+    if (is.trim() === "") {
+      throw new Error("empty input");
+    }
+    try {
+      return JSON.parse(is, reviver);
+    } catch (e) {
+      throw new ExpressionEvaluationError("Error parsing JSON when evaluating fromJson", { cause: e });
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/join.js
+var join = {
+  name: "join",
+  description: "`join( array, optionalSeparator )`\n\nThe value for `array` can be an array or a string. All values in `array` are concatenated into a string. If you provide `optionalSeparator`, it is inserted between the concatenated values. Otherwise, the default separator `,` is used. Casts values to a string.",
+  minArgs: 1,
+  maxArgs: 2,
+  call: (...args) => {
+    if (args[0].primitive) {
+      return new StringData(args[0].coerceString());
+    }
+    if (args[0].kind === Kind.Array) {
+      let separator = ",";
+      if (args.length > 1 && args[1].primitive) {
+        separator = args[1].coerceString();
+      }
+      return new StringData(args[0].values().map((item) => item.coerceString()).join(separator));
+    }
+    return new StringData("");
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/startswith.js
+var startswith = {
+  name: "startsWith",
+  description: "`startsWith( searchString, searchValue )`\n\nReturns `true` when `searchString` starts with `searchValue`. This function is not case sensitive. Casts values to a string.",
+  minArgs: 2,
+  maxArgs: 2,
+  call: (...args) => {
+    const left = args[0];
+    if (!left.primitive) {
+      return new BooleanData(false);
+    }
+    const right = args[1];
+    if (!right.primitive) {
+      return new BooleanData(false);
+    }
+    const ls = toUpperSpecial(left.coerceString());
+    const rs = toUpperSpecial(right.coerceString());
+    return new BooleanData(ls.startsWith(rs));
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/tojson.js
+var tojson = {
+  name: "toJson",
+  description: "`toJSON(value)`\n\nReturns a pretty-print JSON representation of `value`. You can use this function to debug the information provided in contexts.",
+  minArgs: 1,
+  maxArgs: 1,
+  call: (...args) => {
+    return new StringData(JSON.stringify(args[0], replacer, "  "));
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs.js
+var wellKnownFunctions = {
+  case: caseFunc,
+  contains,
+  endswith,
+  format,
+  fromjson,
+  join,
+  startswith,
+  tojson
+};
+function validateFunction(context, identifier, argCount) {
+  const name = identifier.lexeme.toLowerCase();
+  let f;
+  f = wellKnownFunctions[name];
+  if (!f) {
+    f = context.extensionFunctions.get(name);
+    if (!f) {
+      if (!context.allowUnknownKeywords) {
+        throw new ExpressionError(ErrorType.ErrorUnrecognizedFunction, identifier);
+      }
+      return;
+    }
+  }
+  if (argCount < f.minArgs) {
+    throw new ExpressionError(ErrorType.ErrorTooFewParameters, identifier);
+  }
+  if (argCount > f.maxArgs) {
+    throw new ExpressionError(ErrorType.ErrorTooManyParameters, identifier);
+  }
+  if (name === "case" && argCount % 2 === 0) {
+    throw new ExpressionError(ErrorType.ErrorEvenParameters, identifier);
+  }
+}
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/features.js
+var allFeatureKeys = [
+  "missingInputsQuickfix",
+  "blockScalarChompingWarning",
+  "allowCaseFunction",
+  "allowCopilotRequestsPermission",
+  "allowDrivesPermissionAutocomplete",
+  "allowBackgroundSteps"
+];
+var FeatureFlags = class {
+  constructor(features) {
+    this.features = features ?? {};
+  }
+  /**
+   * Check if an experimental feature is enabled.
+   *
+   * Resolution order:
+   * 1. Explicit feature flag (if set)
+   * 2. `all` flag (if set)
+   * 3. false (default)
+   */
+  isEnabled(feature) {
+    const explicit = this.features[feature];
+    if (explicit !== void 0) {
+      return explicit;
+    }
+    return this.features.all ?? false;
+  }
+  /**
+   * Returns list of all enabled experimental features.
+   */
+  getEnabledFeatures() {
+    return allFeatureKeys.filter((key) => this.isEnabled(key));
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/parser.js
+var Parser = class {
+  /**
+   * Constructs a new parser for the given tokens
+   *
+   * @param tokens Tokens to build a parse tree from
+   * @param extensionContexts Available context names
+   * @param extensionFunctions Available functions (beyond the built-in ones)
+   */
+  constructor(tokens, extensionContexts, extensionFunctions) {
+    this.tokens = tokens;
+    this.offset = 0;
+    this.depth = 0;
+    this.extContexts = /* @__PURE__ */ new Map();
+    this.extFuncs = /* @__PURE__ */ new Map();
+    for (const contextName of extensionContexts) {
+      this.extContexts.set(contextName.toLowerCase(), true);
+    }
+    for (const { name, func } of extensionFunctions.map((x) => ({
+      name: x.name,
+      func: x
+    }))) {
+      this.extFuncs.set(name.toLowerCase(), func);
+    }
+    this.context = {
+      allowUnknownKeywords: false,
+      extensionContexts: this.extContexts,
+      extensionFunctions: this.extFuncs
+    };
+  }
+  parse() {
+    let result;
+    if (this.atEnd()) {
+      return result;
+    }
+    result = this.expression();
+    if (!this.atEnd()) {
+      throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
+    }
+    return result;
+  }
+  expression() {
+    this.incrDepth();
+    try {
+      return this.logicalOr();
+    } finally {
+      this.decrDepth();
+    }
+  }
+  logicalOr() {
+    let expr = this.logicalAnd();
+    if (this.check(TokenType.OR)) {
+      this.incrDepth();
+      try {
+        const logical = new Logical(this.peek(), [expr]);
+        expr = logical;
+        while (this.match(TokenType.OR)) {
+          const right = this.logicalAnd();
+          logical.args.push(right);
+        }
+      } finally {
+        this.decrDepth();
+      }
+    }
+    return expr;
+  }
+  logicalAnd() {
+    let expr = this.equality();
+    if (this.check(TokenType.AND)) {
+      this.incrDepth();
+      try {
+        const logical = new Logical(this.peek(), [expr]);
+        expr = logical;
+        while (this.match(TokenType.AND)) {
+          const right = this.equality();
+          logical.args.push(right);
+        }
+      } finally {
+        this.decrDepth();
+      }
+    }
+    return expr;
+  }
+  equality() {
+    let expr = this.comparison();
+    while (this.match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL)) {
+      const operator = this.previous();
+      const right = this.comparison();
+      expr = new Binary(expr, operator, right);
+    }
+    return expr;
+  }
+  comparison() {
+    let expr = this.unary();
+    while (this.match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL)) {
+      const operator = this.previous();
+      const right = this.unary();
+      expr = new Binary(expr, operator, right);
+    }
+    return expr;
+  }
+  unary() {
+    if (this.match(TokenType.BANG)) {
+      this.incrDepth();
+      const operator = this.previous();
+      const unary = this.unary();
+      try {
+        return new Unary(operator, unary);
+      } finally {
+        this.decrDepth();
+      }
+    }
+    return this.index();
+  }
+  index() {
+    let expr = this.call();
+    let depthIncreased = 0;
+    if (expr instanceof Grouping || expr instanceof FunctionCall || expr instanceof ContextAccess) {
+      let cont = true;
+      while (cont) {
+        switch (true) {
+          case this.match(TokenType.LEFT_BRACKET): {
+            let indexExpr;
+            if (this.match(TokenType.STAR)) {
+              indexExpr = new Star();
+            } else {
+              indexExpr = this.expression();
+            }
+            this.consume(TokenType.RIGHT_BRACKET, ErrorType.ErrorUnexpectedSymbol);
+            this.incrDepth();
+            depthIncreased++;
+            expr = new IndexAccess(expr, indexExpr);
+            break;
+          }
+          case this.match(TokenType.DOT):
+            this.incrDepth();
+            depthIncreased++;
+            if (this.match(TokenType.IDENTIFIER)) {
+              const property = this.previous();
+              expr = new IndexAccess(expr, new Literal(new StringData(property.lexeme), property));
+            } else if (this.match(TokenType.STAR)) {
+              expr = new IndexAccess(expr, new Star());
+            } else {
+              throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
+            }
+            break;
+          default:
+            cont = false;
+        }
+      }
+    }
+    for (let i = 0; i < depthIncreased; i++) {
+      this.decrDepth();
+    }
+    return expr;
+  }
+  call() {
+    if (!this.check(TokenType.IDENTIFIER)) {
+      return this.primary();
+    }
+    const identifier = this.next();
+    if (!this.match(TokenType.LEFT_PAREN)) {
+      if (!this.extContexts.has(identifier.lexeme.toLowerCase())) {
+        throw this.buildError(ErrorType.ErrorUnrecognizedContext, identifier);
+      }
+      return new ContextAccess(identifier);
+    }
+    const args = [];
+    while (!this.match(TokenType.RIGHT_PAREN)) {
+      const aexp = this.expression();
+      args.push(aexp);
+      if (!this.check(TokenType.RIGHT_PAREN)) {
+        this.consume(TokenType.COMMA, ErrorType.ErrorUnexpectedSymbol);
+      }
+    }
+    validateFunction(this.context, identifier, args.length);
+    return new FunctionCall(identifier, args);
+  }
+  primary() {
+    switch (true) {
+      case this.match(TokenType.FALSE):
+        return new Literal(new BooleanData(false), this.previous());
+      case this.match(TokenType.TRUE):
+        return new Literal(new BooleanData(true), this.previous());
+      case this.match(TokenType.NULL):
+        return new Literal(new Null(), this.previous());
+      case this.match(TokenType.NUMBER):
+        return new Literal(new NumberData(this.previous().value), this.previous());
+      case this.match(TokenType.STRING):
+        return new Literal(new StringData(this.previous().value), this.previous());
+      case this.match(TokenType.LEFT_PAREN): {
+        const expr = this.expression();
+        if (this.atEnd()) {
+          throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
+        }
+        this.consume(TokenType.RIGHT_PAREN, ErrorType.ErrorUnexpectedSymbol);
+        return new Grouping(expr);
+      }
+      case this.atEnd():
+        throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
+    }
+    throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
+  }
+  // match consumes the next token if it matches any of the given types
+  match(...tokenTypes) {
+    for (const tokenType of tokenTypes) {
+      if (this.check(tokenType)) {
+        this.next();
+        return true;
+      }
+    }
+    return false;
+  }
+  // check peeks whether the next token is of the given type
+  check(tokenType) {
+    if (this.atEnd()) {
+      return false;
+    }
+    return this.peek().type == tokenType;
+  }
+  // atEnd peeks whether the next token is EOF
+  atEnd() {
+    return this.peek().type == TokenType.EOF;
+  }
+  next() {
+    if (!this.atEnd()) {
+      this.offset++;
+    }
+    return this.previous();
+  }
+  peek() {
+    return this.tokens[this.offset];
+  }
+  // previous returns the previous token
+  previous() {
+    return this.tokens[this.offset - 1];
+  }
+  // consume attempts to consume the next token if it matches the given type. It returns an error of
+  // the given ParseErrorKind otherwise.
+  consume(tokenType, errorType) {
+    if (this.check(tokenType)) {
+      this.next();
+      return;
+    }
+    throw this.buildError(errorType, this.peek());
+  }
+  incrDepth() {
+    this.depth++;
+    if (this.depth > MAX_PARSER_DEPTH) {
+      throw this.buildError(ErrorType.ErrorExceededMaxDepth, this.peek());
+    }
+  }
+  decrDepth() {
+    this.depth--;
+  }
+  buildError(errType, token) {
+    return new ExpressionError(errType, token);
+  }
+};
+
+// ../core/src/expressions.ts
+var KNOWN_CONTEXTS = [
+  "github",
+  "env",
+  "vars",
+  "job",
+  "jobs",
+  "steps",
+  "runner",
+  "secrets",
+  "strategy",
+  "matrix",
+  "needs",
+  "inputs"
+];
+var UNTERMINATED_EXPRESSION = "Unterminated expression: missing closing '}}'";
+function findTemplateSegments(text3) {
+  const segments = [];
+  let i = 0;
+  while (i < text3.length) {
+    const open3 = text3.indexOf("${{", i);
+    if (open3 < 0) break;
+    let j = open3 + 3;
+    let inString = false;
+    let close = -1;
+    while (j < text3.length) {
+      const ch = text3[j];
+      if (inString) {
+        if (ch === "'") {
+          if (text3[j + 1] === "'") j++;
+          else inString = false;
+        }
+      } else if (ch === "'") {
+        inString = true;
+      } else if (ch === "}" && text3[j + 1] === "}") {
+        close = j;
+        break;
+      }
+      j++;
+    }
+    if (close < 0) {
+      const inner = text3.slice(open3 + 3);
+      segments.push({
+        start: open3,
+        end: text3.length,
+        innerStart: open3 + 3,
+        expr: {
+          source: inner.trim(),
+          refs: [],
+          error: { message: UNTERMINATED_EXPRESSION, offset: 0 }
+        }
+      });
+      break;
+    }
+    const rawInner = text3.slice(open3 + 3, close);
+    const lead = rawInner.length - rawInner.trimStart().length;
+    segments.push({
+      start: open3,
+      end: close + 2,
+      innerStart: open3 + 3 + lead,
+      expr: parseExpression(rawInner.trim())
+    });
+    i = close + 2;
+  }
+  return segments;
+}
+function withoutPosition(message) {
+  const at = message.indexOf("Located at position");
+  if (at < 0) return message;
+  let end = at;
+  while (end > 0 && /\s/.test(message[end - 1])) end--;
+  if (message[end - 1] === ".") end--;
+  return message.slice(0, end);
+}
+var CONTEXT_FUNCTIONS = [
+  { name: "hashFiles", minArgs: 1, maxArgs: 255 },
+  { name: "success", minArgs: 0, maxArgs: 0 },
+  { name: "always", minArgs: 0, maxArgs: 0 },
+  { name: "failure", minArgs: 0, maxArgs: 0 },
+  { name: "cancelled", minArgs: 0, maxArgs: 0 }
+];
+var exprCache = /* @__PURE__ */ new Map();
+function parseExpression(source) {
+  const cached2 = exprCache.get(source);
+  if (cached2) return cached2;
+  let result;
+  try {
+    const tokens = new Lexer(source).lex().tokens;
+    const ast = new Parser(tokens, [...KNOWN_CONTEXTS], CONTEXT_FUNCTIONS).parse();
+    result = { source, ast, refs: collectRefs(ast, source) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const tokRange = err.tok?.range;
+    const posMatch = /Located at position (\d+)/.exec(message);
+    const offset = tokRange ? offsetOf(source, tokRange.start.line, tokRange.start.column) : posMatch ? Math.max(0, Number(posMatch[1]) - 1) : 0;
+    result = {
+      source,
+      refs: [],
+      error: { message: withoutPosition(message), offset }
+    };
+  }
+  exprCache.set(source, result);
+  return result;
+}
+function offsetOf(source, line, column) {
+  let offset = 0;
+  for (let l = 0; l < line; l++) {
+    const nl = source.indexOf("\n", offset);
+    if (nl < 0) break;
+    offset = nl + 1;
+  }
+  return offset + column;
+}
+function collectRefs(root, source) {
+  const refs = [];
+  const startOf = (t) => offsetOf(source, t.range.start.line, t.range.start.column);
+  const endOf = (t) => offsetOf(source, t.range.end.line, t.range.end.column);
+  const chainOf = (e) => {
+    if (e instanceof ContextAccess) {
+      return { ctx: e, path: [], end: endOf(e.name) };
+    }
+    if (e instanceof IndexAccess) {
+      const base = chainOf(e.expr);
+      if (!base) return void 0;
+      const idx = e.index;
+      if (idx instanceof Star) return { ...base, path: [...base.path, "*"] };
+      if (idx instanceof Literal && idx.literal.kind === Kind.String) {
+        return {
+          ...base,
+          path: [...base.path, idx.literal.coerceString()],
+          end: Math.max(
+            base.end,
+            endOf(idx.token) + (source[endOf(idx.token)] === "]" ? 1 : 0)
+          )
+        };
+      }
+      if (idx instanceof Literal && idx.literal.kind === Kind.Number) {
+        return { ...base, path: [...base.path, String(idx.literal.number())], end: base.end };
+      }
+      return { ...base, path: [...base.path, "?"] };
+    }
+    return void 0;
+  };
+  const visit3 = (e) => {
+    if (e instanceof ContextAccess || e instanceof IndexAccess) {
+      const chain = chainOf(e);
+      if (chain) {
+        refs.push({
+          context: chain.ctx.name.lexeme.toLowerCase(),
+          path: chain.path,
+          dynamic: chain.path.length === 0 || chain.path.includes("?"),
+          start: startOf(chain.ctx.name),
+          end: chain.end
+        });
+        let cur = e;
+        while (cur instanceof IndexAccess) {
+          if (!(cur.index instanceof Literal) && !(cur.index instanceof Star)) visit3(cur.index);
+          cur = cur.expr;
+        }
+        return;
+      }
+      if (e instanceof IndexAccess) {
+        visit3(e.expr);
+        if (!(e.index instanceof Literal) && !(e.index instanceof Star)) visit3(e.index);
+      }
+      return;
+    }
+    if (e instanceof Unary) visit3(e.expr);
+    else if (e instanceof Binary) {
+      visit3(e.left);
+      visit3(e.right);
+    } else if (e instanceof Logical || e instanceof FunctionCall) {
+      for (const arg of e.args) visit3(arg);
+    } else if (e instanceof Grouping) visit3(e.group);
+  };
+  visit3(root);
+  for (const r of refs) r.end = Math.max(r.end, refEndFromSource(source, r));
+  return refs;
+}
+function refEndFromSource(source, ref) {
+  const re = /^[A-Za-z_][\w-]*(?:\s*(?:\.\s*(?:[A-Za-z_*][\w-]*)|\[\s*'(?:[^']|'')*'\s*\]|\[\s*\d+\s*\]|\[\s*\*\s*\]))*/;
+  const m = re.exec(source.slice(ref.start));
+  return m ? ref.start + m[0].length : ref.end;
+}
+var UNKNOWN = { known: false, taint: [] };
+var known = (value, taint = []) => ({ known: true, value, taint });
+var mergeTaint = (...vals) => {
+  const out = [];
+  for (const v of vals) for (const t of v.taint) if (!out.some((o) => o.key === t.key)) out.push(t);
+  return out;
+};
+function truthy2(v) {
+  if (v === null) return false;
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
+  if (typeof v === "string") return v.length > 0;
+  return true;
+}
+function toNumber(v) {
+  if (v === null) return 0;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  if (typeof v === "number") return v;
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (s === "") return 0;
+    if (/^0x[0-9a-f]+$/i.test(s)) return Number.parseInt(s, 16);
+    if (/^0o[0-7]+$/i.test(s)) return Number.parseInt(s.slice(2), 8);
+    const n = Number(s);
+    return Number.isNaN(n) ? Number.NaN : n;
+  }
+  return Number.NaN;
+}
+function toStr(v) {
+  if (v === null) return "";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(v);
+  if (typeof v === "string") return v;
+  return Array.isArray(v) ? "Array" : "Object";
+}
+function looseEquals(a, b) {
+  const ta = jsonType(a);
+  const tb = jsonType(b);
+  if (ta !== tb) {
+    if (ta === "object" || tb === "object" || ta === "array" || tb === "array") return false;
+    return toNumber(a) === toNumber(b);
+  }
+  if (ta === "string") return a.toUpperCase() === b.toUpperCase();
+  if (ta === "number" || ta === "boolean" || ta === "null") return a === b;
+  return a === b;
+}
+function compare(a, b) {
+  if (typeof a === "string" && typeof b === "string") {
+    const x2 = a.toUpperCase();
+    const y2 = b.toUpperCase();
+    return x2 < y2 ? -1 : x2 > y2 ? 1 : 0;
+  }
+  const x = toNumber(a);
+  const y = toNumber(b);
+  if (Number.isNaN(x) || Number.isNaN(y)) return void 0;
+  return x - y;
+}
+function jsonType(v) {
+  if (v === null) return "null";
+  if (Array.isArray(v)) return "array";
+  return typeof v;
+}
+function literalToJson(lit) {
+  switch (lit.literal.kind) {
+    case Kind.String:
+      return lit.literal.coerceString();
+    case Kind.Number:
+      return lit.literal.number();
+    case Kind.Boolean:
+      return lit.token.type === TokenType.TRUE;
+    case Kind.Null:
+      return null;
+    default:
+      return null;
+  }
+}
+function evaluate(e, resolve7) {
+  if (e instanceof Literal) return known(literalToJson(e));
+  if (e instanceof Grouping) return evaluate(e.group, resolve7);
+  if (e instanceof ContextAccess || e instanceof IndexAccess) {
+    const chain = refChain(e, resolve7);
+    if (chain) {
+      const resolved = resolve7(chain);
+      return resolved ?? UNKNOWN;
+    }
+    if (e instanceof IndexAccess) {
+      const base = evaluate(e.expr, resolve7);
+      const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve7);
+      if (!base.known || !idx?.known) return { known: false, taint: mergeTaint(base, ...idx ? [idx] : []) };
+      return known(indexInto(base.value, idx.value), mergeTaint(base, idx));
+    }
+    return UNKNOWN;
+  }
+  if (e instanceof Unary) {
+    const v = evaluate(e.expr, resolve7);
+    return v.known ? known(!truthy2(v.value)) : UNKNOWN;
+  }
+  if (e instanceof Logical) {
+    const isAnd = e.operator.type === TokenType.AND;
+    let last = UNKNOWN;
+    for (const [i, arg] of e.args.entries()) {
+      const v = evaluate(arg, resolve7);
+      last = v;
+      if (!v.known) return v;
+      if (isAnd ? !truthy2(v.value) : truthy2(v.value)) {
+        return isAnd && i < e.args.length - 1 ? { ...v, taint: [] } : v;
+      }
+    }
+    return last;
+  }
+  if (e instanceof Binary) {
+    const l = evaluate(e.left, resolve7);
+    const r = evaluate(e.right, resolve7);
+    const taint = [];
+    if (!l.known || !r.known) return UNKNOWN;
+    switch (e.operator.type) {
+      case TokenType.EQUAL_EQUAL:
+        return known(looseEquals(l.value, r.value), taint);
+      case TokenType.BANG_EQUAL:
+        return known(!looseEquals(l.value, r.value), taint);
+      case TokenType.GREATER:
+      case TokenType.GREATER_EQUAL:
+      case TokenType.LESS:
+      case TokenType.LESS_EQUAL: {
+        const c = compare(l.value, r.value);
+        if (c === void 0) return known(false, taint);
+        const t = e.operator.type;
+        return known(
+          t === TokenType.GREATER ? c > 0 : t === TokenType.GREATER_EQUAL ? c >= 0 : t === TokenType.LESS ? c < 0 : c <= 0,
+          taint
+        );
+      }
+      default:
+        return { known: false, taint };
+    }
+  }
+  if (e instanceof FunctionCall) return evalCall(e, resolve7);
+  return UNKNOWN;
+}
+function refChain(e, resolve7) {
+  if (e instanceof ContextAccess) return { context: e.name.lexeme.toLowerCase(), path: [] };
+  if (e instanceof IndexAccess) {
+    const base = refChain(e.expr, resolve7);
+    if (!base) return void 0;
+    if (e.index instanceof Star) return void 0;
+    if (e.index instanceof Literal) return { ...base, path: [...base.path, toStr(literalToJson(e.index))] };
+    const idx = evaluate(e.index, resolve7);
+    if (idx.known && (typeof idx.value === "string" || typeof idx.value === "number")) {
+      return { ...base, path: [...base.path, String(idx.value)] };
+    }
+    return void 0;
+  }
+  return void 0;
+}
+function indexInto(base, idx) {
+  if (Array.isArray(base)) {
+    const n = toNumber(idx);
+    return Number.isInteger(n) && n >= 0 && n < base.length ? base[n] ?? null : null;
+  }
+  if (base && typeof base === "object") {
+    const key = toStr(idx).toLowerCase();
+    const hit = Object.keys(base).find((k) => k.toLowerCase() === key);
+    return hit === void 0 ? null : base[hit] ?? null;
+  }
+  return null;
+}
+function evalCall(e, resolve7) {
+  const name = e.functionName.lexeme.toLowerCase();
+  const args = e.args.map((a) => evaluate(a, resolve7));
+  const taint = mergeTaint(...args);
+  const allKnown = args.every((a) => a.known);
+  const vals = args.map((a) => a.known ? a.value : null);
+  if (["success", "failure", "cancelled", "always", "hashfiles"].includes(name))
+    return { known: false, taint };
+  if (!allKnown) return { known: false, taint };
+  switch (name) {
+    case "format": {
+      const fmt = toStr(vals[0] ?? null);
+      const out = fmt.replace(/\{\{|\}\}|\{(\d+)\}/g, (m, d) => {
+        if (m === "{{") return "{";
+        if (m === "}}") return "}";
+        return toStr(vals[Number(d) + 1] ?? null);
+      });
+      return known(out, taint);
+    }
+    case "contains": {
+      const [hay, needle] = [vals[0] ?? null, vals[1] ?? null];
+      if (Array.isArray(hay))
+        return known(
+          hay.some((h) => looseEquals(h, needle)),
+          []
+        );
+      return known(toStr(hay).toUpperCase().includes(toStr(needle).toUpperCase()), []);
+    }
+    case "startswith":
+      return known(
+        toStr(vals[0] ?? null).toUpperCase().startsWith(toStr(vals[1] ?? null).toUpperCase()),
+        []
+      );
+    case "endswith":
+      return known(
+        toStr(vals[0] ?? null).toUpperCase().endsWith(toStr(vals[1] ?? null).toUpperCase()),
+        []
+      );
+    case "join": {
+      const arr = vals[0] ?? null;
+      const sep4 = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
+      return known(Array.isArray(arr) ? arr.map(toStr).join(sep4) : toStr(arr), taint);
+    }
+    case "tojson":
+      return known(JSON.stringify(vals[0] ?? null, null, 2), taint);
+    case "fromjson":
+      try {
+        return known(JSON.parse(toStr(vals[0] ?? null)), taint);
+      } catch {
+        return { known: false, taint };
+      }
+    default:
+      return { known: false, taint };
+  }
+}
+function isConstant(e) {
+  if (e instanceof Literal) return true;
+  if (e instanceof Grouping) return isConstant(e.group);
+  if (e instanceof Unary) return isConstant(e.expr);
+  if (e instanceof Binary) return isConstant(e.left) && isConstant(e.right);
+  if (e instanceof Logical) return e.args.every(isConstant);
+  if (e instanceof FunctionCall) {
+    const name = e.functionName.lexeme.toLowerCase();
+    return !["success", "failure", "cancelled", "always", "hashfiles"].includes(name) && e.args.every(isConstant);
+  }
+  return false;
+}
+var TEST_FUNCTIONS = /* @__PURE__ */ new Set(["contains", "startswith", "endswith"]);
+var VALUE_FUNCTIONS = /* @__PURE__ */ new Set(["format", "join", "tojson"]);
+function conditionUses(expr, whole = true) {
+  const out = /* @__PURE__ */ new Map();
+  if (!expr.ast) return out;
+  const source = expr.source;
+  const visit3 = (e, use) => {
+    if (e instanceof Grouping) {
+      visit3(e.group, use);
+      return;
+    }
+    if (e instanceof ContextAccess || e instanceof IndexAccess) {
+      let cur = e;
+      while (cur instanceof IndexAccess) {
+        if (!(cur.index instanceof Literal) && !(cur.index instanceof Star)) visit3(cur.index, "value");
+        cur = cur.expr;
+      }
+      if (cur instanceof ContextAccess) {
+        const t = cur.name;
+        out.set(offsetOf(source, t.range.start.line, t.range.start.column), use);
+      } else visit3(cur, "value");
+      return;
+    }
+    if (e instanceof Unary) {
+      visit3(e.expr, "truthiness");
+      return;
+    }
+    if (e instanceof Logical) {
+      const isAnd = e.operator.type === TokenType.AND;
+      for (const [i, arg] of e.args.entries()) {
+        const fallback = !isAnd && i < e.args.length - 1 && use !== "truthiness";
+        visit3(arg, fallback ? "fallback" : use);
+      }
+      return;
+    }
+    if (e instanceof Binary) {
+      const [l, r] = [isConstant(e.left), isConstant(e.right)];
+      visit3(e.left, r ? "compared" : "value");
+      visit3(e.right, l ? "compared" : "value");
+      return;
+    }
+    if (e instanceof FunctionCall) {
+      const name = e.functionName.lexeme.toLowerCase();
+      if (TEST_FUNCTIONS.has(name)) {
+        for (const [i, arg] of e.args.entries()) {
+          const other = e.args.some((a, j) => j !== i && isConstant(a));
+          visit3(arg, other ? "compared" : "value");
+        }
+        return;
+      }
+      const passes = VALUE_FUNCTIONS.has(name) && use === "compared";
+      for (const arg of e.args) visit3(arg, passes ? "compared" : "value");
+    }
+  };
+  visit3(expr.ast, whole ? "truthiness" : "value");
+  return out;
+}
+function fallbacksOf(expr) {
+  const out = /* @__PURE__ */ new Map();
+  if (!expr.ast) return out;
+  const unwrap = (e) => e instanceof Grouping ? unwrap(e.group) : e;
+  const isOr = (e) => e instanceof Logical && e.operator.type === TokenType.OR;
+  const operands = (e) => {
+    const u = unwrap(e);
+    return isOr(u) ? u.args.flatMap(operands) : [u];
+  };
+  const refStart = (e) => {
+    let cur = e;
+    while (cur instanceof IndexAccess) cur = cur.expr;
+    if (!(cur instanceof ContextAccess)) return void 0;
+    const t = cur.name;
+    return offsetOf(expr.source, t.range.start.line, t.range.start.column);
+  };
+  const visit3 = (e) => {
+    const u = unwrap(e);
+    if (isOr(u)) {
+      const ops = operands(u);
+      for (const [i, op] of ops.entries()) {
+        const start = i < ops.length - 1 ? refStart(op) : void 0;
+        if (start !== void 0) out.set(start, u);
+        visit3(op);
+      }
+    } else if (u instanceof IndexAccess) {
+      visit3(u.expr);
+      if (!(u.index instanceof Literal) && !(u.index instanceof Star)) visit3(u.index);
+    } else if (u instanceof Unary) visit3(u.expr);
+    else if (u instanceof Binary) {
+      visit3(u.left);
+      visit3(u.right);
+    } else if (u instanceof Logical || u instanceof FunctionCall) for (const arg of u.args) visit3(arg);
+  };
+  visit3(expr.ast);
+  return out;
+}
+function definitelyFalsy(e, resolve7) {
+  if (e instanceof Grouping) return definitelyFalsy(e.group, resolve7);
+  if (e instanceof Logical) {
+    return e.operator.type === TokenType.AND ? e.args.some((a) => definitelyFalsy(a, resolve7)) : e.args.every((a) => definitelyFalsy(a, resolve7));
+  }
+  if (e instanceof Unary) return definitelyTruthy(e.expr, resolve7);
+  const v = evaluate(e, resolve7);
+  return v.known && !truthy2(v.value);
+}
+function definitelyTruthy(e, resolve7) {
+  if (e instanceof Grouping) return definitelyTruthy(e.group, resolve7);
+  if (e instanceof Logical) {
+    return e.operator.type === TokenType.AND ? e.args.every((a) => definitelyTruthy(a, resolve7)) : e.args.some((a) => definitelyTruthy(a, resolve7));
+  }
+  if (e instanceof Unary) return definitelyFalsy(e.expr, resolve7);
+  const v = evaluate(e, resolve7);
+  return v.known && truthy2(v.value);
+}
+function evaluateTemplate(text3, resolve7) {
+  const segments = findTemplateSegments(text3);
+  if (segments.length === 0) return known(text3);
+  const first = segments[0];
+  if (segments.length === 1 && first.start === 0 && first.end === text3.length) {
+    return first.expr.ast ? evaluate(first.expr.ast, resolve7) : UNKNOWN;
+  }
+  let out = "";
+  let cursor = 0;
+  const parts = [];
+  for (const seg of segments) {
+    out += text3.slice(cursor, seg.start);
+    const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve7) : UNKNOWN;
+    parts.push(v);
+    if (!v.known) return { known: false, taint: mergeTaint(...parts) };
+    out += toStr(v.value);
+    cursor = seg.end;
+  }
+  out += text3.slice(cursor);
+  return known(out, mergeTaint(...parts));
+}
+
+// ../core/src/ir.ts
+function lookup(rec, key) {
+  if (key in rec) return rec[key];
+  const lower = key.toLowerCase();
+  for (const k of Object.keys(rec)) if (k.toLowerCase() === lower) return rec[k];
+  return void 0;
+}
+function siteAt(sites, at) {
+  return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
+}
+
+// ../core/src/matrix.ts
+var GITHUB_MATRIX_LIMIT = 256;
+var MAX_COMBINATIONS = 2e4;
+function jsonEqual(a, b) {
+  if (a === b) return true;
+  if (typeof a === "string" && typeof b === "string") return a === b;
+  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a) && Array.isArray(b))
+    return a.length === b.length && a.every((x, i) => jsonEqual(x, b[i]));
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  return ka.length === kb.length && ka.every((k) => jsonEqual(a[k], b[k] ?? null));
+}
+function cellMatches(cell2, value) {
+  if (!cell2) return false;
+  if (!cell2.known) return void 0;
+  return jsonEqual(cell2.value, value);
+}
+function minJobsAfterExclude(m, productSize) {
+  if (m.excludeDynamic || m.includeDynamic) return void 0;
+  if (m.dims.some((d) => d.values === null || d.unknownIndexes.length > 0)) return void 0;
+  if (m.exclude.some((e) => e.dynamicKeys.length > 0)) return void 0;
+  const size = new Map(m.dims.map((d) => [d.name, Math.max(1, d.values.length)]));
+  const named = m.dims.filter((d) => m.exclude.some((e) => d.name in e.values));
+  const subSize = named.reduce((n, d) => n * size.get(d.name), 1);
+  const effective = m.exclude.filter((e) => Object.keys(e.values).every((k) => size.has(k)));
+  if (subSize <= MAX_COMBINATIONS) {
+    let survivors = 0;
+    const walk = (i, values) => {
+      if (i === named.length) {
+        if (!effective.some((e) => Object.entries(e.values).every(([k, v]) => jsonEqual(values[k], v))))
+          survivors++;
+        return;
+      }
+      const d = named[i];
+      for (const v of d.values) walk(i + 1, { ...values, [d.name]: v });
+    };
+    walk(0, {});
+    return survivors * (productSize / subSize);
+  }
+  const removed = effective.reduce(
+    (n, e) => n + productSize / Object.keys(e.values).reduce((p, k) => p * size.get(k), 1),
+    0
+  );
+  return Math.max(0, productSize - removed);
+}
+function expandMatrix(m) {
+  if (!m) return { combos: [], keys: [], exact: true, dynamic: false, truncated: false };
+  if (m.dynamic) return { combos: [], keys: [], exact: false, dynamic: true, truncated: false };
+  let exact = !m.includeDynamic && !m.excludeDynamic;
+  const truncated = false;
+  const dimNames = m.dims.map((d) => d.name);
+  const productSize = m.dims.reduce((n, d) => n * (d.values === null ? 1 : Math.max(1, d.values.length)), 1);
+  const truncatedResult = (minJobs) => {
+    const keys2 = [...dimNames];
+    for (const e of m.include) for (const k of Object.keys(e.values)) if (!keys2.includes(k)) keys2.push(k);
+    return {
+      combos: [],
+      keys: keys2,
+      exact: false,
+      dynamic: false,
+      truncated: true,
+      productSize,
+      ...minJobs !== void 0 ? { minJobs } : {}
+    };
+  };
+  const large = m.dims.length > 0 && productSize > MAX_COMBINATIONS;
+  if (large) {
+    const minJobs = minJobsAfterExclude(m, productSize);
+    if (minJobs === void 0 || minJobs > MAX_COMBINATIONS) return truncatedResult(minJobs);
+  }
+  const pruneAt = /* @__PURE__ */ new Map();
+  for (const ex of m.exclude) {
+    const idx = Object.keys(ex.values).map((k) => dimNames.indexOf(k));
+    if (ex.dynamicKeys.length || idx.length === 0 || idx.includes(-1)) continue;
+    const at = Math.max(...idx);
+    pruneAt.set(at, [...pruneAt.get(at) ?? [], ex]);
+  }
+  let product = [];
+  if (m.dims.length > 0) {
+    product = [{ values: {}, origin: "product", includes: [] }];
+    for (const [i, dim] of m.dims.entries()) {
+      const cells = dim.values === null ? [{ known: false }] : dim.values.map(
+        (v, i2) => dim.unknownIndexes.includes(i2) ? { known: false } : { known: true, value: v }
+      );
+      if (dim.values === null || dim.unknownIndexes.length > 0) exact = false;
+      const prune = pruneAt.get(i) ?? [];
+      const next = [];
+      for (const combo of product) {
+        for (const cell2 of cells) {
+          const values = { ...combo.values, [dim.name]: cell2 };
+          if (prune.some(
+            (ex) => Object.entries(ex.values).every(([k, v]) => cellMatches(values[k], v) === true)
+          ))
+            continue;
+          next.push({ origin: "product", includes: [], values });
+        }
+      }
+      if (large && next.length > MAX_COMBINATIONS)
+        return truncatedResult(minJobsAfterExclude(m, productSize));
+      product = next;
+    }
+  }
+  for (const ex of m.exclude) {
+    product = product.filter((combo) => {
+      let all = true;
+      for (const [k, v] of Object.entries(ex.values)) {
+        if (ex.dynamicKeys.includes(k)) {
+          exact = false;
+          all = false;
+          break;
+        }
+        const r = cellMatches(combo.values[k], v);
+        if (r === void 0) exact = false;
+        if (r !== true) {
+          all = false;
+          break;
+        }
+      }
+      return !all;
+    });
+  }
+  const originals = product;
+  const created = [];
+  m.include.forEach((entry, idx) => {
+    const entryCells = {};
+    for (const [k, v] of Object.entries(entry.values)) {
+      entryCells[k] = entry.dynamicKeys.includes(k) ? { known: false } : { known: true, value: v };
+    }
+    let merged2 = false;
+    for (const combo of originals) {
+      let fits = true;
+      for (const [k, cell2] of Object.entries(entryCells)) {
+        if (!dimNames.includes(k)) continue;
+        if (!cell2.known) {
+          exact = false;
+          continue;
+        }
+        const r = cellMatches(combo.values[k], cell2.value);
+        if (r === void 0) exact = false;
+        if (r === false) {
+          fits = false;
+          break;
+        }
+      }
+      if (!fits) continue;
+      for (const [k, cell2] of Object.entries(entryCells)) {
+        if (!dimNames.includes(k)) combo.values[k] = cell2;
+      }
+      combo.includes.push(idx);
+      merged2 = true;
+    }
+    if (!merged2) created.push({ values: { ...entryCells }, origin: "include", includes: [idx] });
+  });
+  const combos = [...originals, ...created];
+  const keys = [];
+  for (const c of combos) for (const k of Object.keys(c.values)) if (!keys.includes(k)) keys.push(k);
+  return { combos, keys, exact, dynamic: false, truncated, productSize };
+}
+function comboLabel(combo, keys) {
+  const shown = keys ?? Object.keys(combo.values);
+  const parts = shown.filter((k) => k in combo.values).map((k) => {
+    const c = combo.values[k];
+    return `${k}: ${c.known ? typeof c.value === "string" ? c.value : JSON.stringify(c.value) : "<expr>"}`;
+  });
+  return `{ ${parts.join(", ")} }`;
+}
+function matrixResolver(combo) {
+  return ({ context, path }) => {
+    if (context !== "matrix") return void 0;
+    if (path.length === 0) return UNKNOWN;
+    const key = path[0];
+    const cell2 = lookup(combo.values, key);
+    if (!cell2) return known(null, [{ kind: "missing-matrix-key", key }]);
+    if (!cell2.known) return UNKNOWN;
+    let value = cell2.value;
+    for (const seg of path.slice(1)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) value = lookup(value, seg) ?? null;
+      else if (Array.isArray(value)) value = value[Number(seg)] ?? null;
+      else value = null;
+    }
+    return known(value);
+  };
+}
+function isEmptyValue(v) {
+  return v.known && (v.value === null || v.value === "");
+}
+function declaredMatrix(keys) {
+  const values = Object.fromEntries(keys.map((k) => [k, { known: false }]));
+  return {
+    combos: [{ values, origin: "product", includes: [] }],
+    keys,
+    exact: false,
+    dynamic: false,
+    truncated: false,
+    declared: true
+  };
+}
+
+// ../core/src/checks.ts
+function formatNumber(n) {
+  if (!Number.isFinite(n)) return String(n);
+  if (n === 0) return "0";
+  const exp = Math.floor(Math.log10(Math.abs(n)));
+  const [mantissa, e] = n.toPrecision(15).split("e");
+  const trim = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
+  if (exp > -5 && exp < 15 && e === void 0) return trim(mantissa);
+  const sci = n.toExponential(14);
+  const [m, x] = sci.split("e");
+  const power = Number(x);
+  return `${trim(m)}E${power < 0 ? "-" : "+"}${String(Math.abs(power)).padStart(2, "0")}`;
+}
+function suffixValues(value) {
+  if (value === null || value === "") return [];
+  if (typeof value === "boolean") return [value ? "true" : "false"];
+  if (typeof value === "number") return [formatNumber(value)];
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(suffixValues);
+  return Object.values(value).flatMap(suffixValues);
+}
+var toText = (v) => {
+  if (!v.known) return void 0;
+  const value = v.value;
+  if (value === null) return "";
+  if (typeof value === "number") return formatNumber(value);
+  if (typeof value === "string" || typeof value === "boolean") return String(value);
+  return void 0;
+};
+function nameKind(job) {
+  const raw = job.name ?? "";
+  const segments = findTemplateSegments(raw);
+  if (segments.length === 0) return { kind: "static", text: raw.trim() };
+  const only = segments.length === 1 && raw.trim() === raw.slice(segments[0].start, segments[0].end).trim();
+  const ast = segments[0].expr.ast;
+  if (only && ast instanceof Literal) {
+    return { kind: "static", text: (toText(evaluate(ast, () => void 0)) ?? "").trim() };
+  }
+  return { kind: "dynamic", template: raw, segments };
+}
+function suffix(combo, exp, job) {
+  const m = job.matrix;
+  const keys = combo.origin === "include" ? Object.keys(m.include[combo.includes[0]]?.values ?? {}) : m.dims.map((d) => d.name);
+  let certain = exp.exact;
+  const parts = [];
+  for (const key of keys) {
+    const cell2 = lookup(combo.values, key);
+    if (!cell2) continue;
+    if (!cell2.known) {
+      certain = false;
+      continue;
+    }
+    parts.push(...suffixValues(cell2.value));
+  }
+  return { text: parts.length ? ` (${parts.join(", ")})` : "", certain };
+}
+function templateStem(template, segments) {
+  let out = "";
+  let at = 0;
+  for (const seg of segments) {
+    out += `${template.slice(at, seg.start)}\u2026`;
+    at = seg.end;
+  }
+  return (out + template.slice(at)).trim();
+}
+function nameResolver(combo, inputs) {
+  const matrix2 = combo ? matrixResolver(combo) : void 0;
+  return (ref) => {
+    if (ref.context === "matrix") return matrix2 ? matrix2(ref) : known(null);
+    if (ref.context === "inputs") {
+      if (ref.path.length !== 1) return UNKNOWN;
+      const v = lookup(inputs, ref.path[0]);
+      return v?.known ? known(v.value) : UNKNOWN;
+    }
+    return void 0;
+  };
+}
+function jobSegments(job, inputs = {}) {
+  const kind = nameKind(job);
+  const exp = job.matrix ? expandMatrix(job.matrix) : void 0;
+  const combos = exp && !exp.dynamic && !exp.truncated && exp.combos.length ? exp.combos : [void 0];
+  const matrixUnknown = !!exp && (exp.dynamic || exp.truncated);
+  const stem = kind.kind === "static" ? `${kind.text || job.id}${exp ? " (\u2026)" : ""}` : templateStem(kind.template, kind.segments);
+  return combos.map((combo) => {
+    if (kind.kind === "static") {
+      const base = kind.text || job.id;
+      if (!combo || !exp)
+        return { name: matrixUnknown ? `${base} (\u2026)` : base, stem, certain: !matrixUnknown };
+      const s = suffix(combo, exp, job);
+      return { name: `${base}${s.text}`, stem, certain: s.certain, combo };
+    }
+    const text3 = toText(evaluateTemplate(kind.template, nameResolver(combo, inputs)))?.trim();
+    const certain = text3 !== void 0 && !matrixUnknown && (!exp || exp.exact);
+    return {
+      name: text3 === void 0 ? kind.template.trim() : text3 || job.id,
+      stem,
+      certain,
+      ...combo ? { combo } : {}
+    };
+  });
+}
+function callerInputs(job, combo, own2) {
+  const out = {};
+  for (const [name, b] of Object.entries(job.with)) {
+    if (!b.site) {
+      out[name] = { known: true, value: b.value };
+      continue;
+    }
+    const v = evaluateTemplate(b.site.text, nameResolver(combo, own2));
+    out[name] = v.known ? { known: true, value: v.value } : { known: false };
+  }
+  return out;
+}
+var MAX_DEPTH = 12;
+function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ */ new Set()) {
+  const values = {};
+  for (const [name, input3] of Object.entries(wf.call?.inputs ?? {})) {
+    const given = inputs === "consumer" ? { known: false } : lookup(inputs, name);
+    if (given) values[name] = given;
+    else if (input3.hasDefault) values[name] = { known: true, value: input3.default };
+    else values[name] = { known: true, value: null };
+  }
+  const out = [];
+  for (const job of Object.values(wf.jobs)) {
+    const id = `${wf.path}#${job.id}`;
+    const callee = job.uses ? index.calleeOf(job) : void 0;
+    for (const seg of jobSegments(job, values)) {
+      if (!callee) {
+        out.push({ name: seg.name, stem: seg.stem, certain: seg.certain, jobs: [id] });
+        continue;
+      }
+      if (depth >= MAX_DEPTH || seen.has(callee.path)) continue;
+      const nested = workflowChecks(
+        index,
+        callee,
+        callerInputs(job, seg.combo, values),
+        depth + 1,
+        /* @__PURE__ */ new Set([...seen, wf.path])
+      );
+      for (const c of nested) {
+        out.push({
+          name: `${seg.name} / ${c.name}`,
+          stem: `${seg.stem} / ${c.stem}`,
+          certain: seg.certain && c.certain,
+          jobs: [id, ...c.jobs]
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// ../core/src/git.ts
+import { execFileSync } from "child_process";
+import { posix } from "path";
+
+// ../core/src/text.ts
+function escapeControl(s, keepNewlines = false) {
+  return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
+    if (keepNewlines && ch === "\n") return ch;
+    if (ch === "\n") return "\\n";
+    if (ch === "	") return "\\t";
+    return `\\x${ch.charCodeAt(0).toString(16).padStart(2, "0")}`;
+  });
+}
+function neutralizeWorkflowCommands(s) {
+  return s.replace(/^((?:\s|\u0085|\u001b\[[\d;]*m)*):(?=:)/gm, "$1:\u200B").replace(/##\[/g, "##\u200B[");
+}
+function jsonSafe(json2) {
+  return json2.replace(/##\[/g, "##\\u005b").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+}
+function trimChar(s, ch, { start = false } = {}) {
+  let from = 0;
+  let to = s.length;
+  if (start) while (from < to && s[from] === ch) from++;
+  while (to > from && s[to - 1] === ch) to--;
+  return s.slice(from, to);
+}
+function editDistance(a, b) {
+  const x = a.toLowerCase();
+  const y = b.toLowerCase();
+  const dp = Array.from({ length: x.length + 1 }, (_, i) => [i, ...Array(y.length).fill(0)]);
+  for (let j = 1; j <= y.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= x.length; i++) {
+    for (let j = 1; j <= y.length; j++) {
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)
+      );
+    }
+  }
+  return dp[x.length][y.length];
+}
+function typoDistance(x, y) {
+  const d = Array.from(
+    { length: x.length + 1 },
+    (_, i) => Array.from({ length: y.length + 1 }, (_2, j) => i === 0 ? j : j === 0 ? i : 0)
+  );
+  for (let i = 1; i <= x.length; i++) {
+    for (let j = 1; j <= y.length; j++) {
+      const cost = x[i - 1] === y[j - 1] ? 0 : 1;
+      let best = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && x[i - 1] === y[j - 2] && x[i - 2] === y[j - 1])
+        best = Math.min(best, d[i - 2][j - 2] + 1);
+      d[i][j] = best;
+    }
+  }
+  return d[x.length][y.length];
+}
+function didYouMean(name, candidates) {
+  const norm = (s) => s.toLowerCase().replace(/[-_]/g, "");
+  let best;
+  for (const c of candidates) {
+    const [a, b] = [norm(name), norm(c)];
+    const prefix = Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a));
+    const d = a === b ? 0 : prefix ? 1 : editDistance(name, c);
+    if (!best || d < best.d) best = { c, d };
+  }
+  if (!best) return void 0;
+  return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
+}
+
+// ../core/src/git.ts
+var GitError = class extends Error {
+};
+var MAX_BUFFER = 256 * 1024 * 1024;
+function git(root, args, input3) {
+  try {
+    return execFileSync("git", ["-C", root, ...args], {
+      maxBuffer: MAX_BUFFER,
+      stdio: ["pipe", "pipe", "pipe"],
+      ...input3 !== void 0 ? { input: input3 } : {}
+    });
+  } catch (err) {
+    const e = err;
+    if (e.code === "ENOENT") throw new GitError("git is not installed or not on PATH");
+    const detail = e.stderr?.toString().trim().split("\n")[0] ?? err.message;
+    throw new GitError(detail);
+  }
+}
+function gitTopLevel(root) {
+  try {
+    return git(root, ["rev-parse", "--show-toplevel"]).toString().trim() || void 0;
+  } catch {
+    return void 0;
+  }
+}
+function resolveCommit(root, ref) {
+  if (!ref || ref.startsWith("-")) throw new GitError(`invalid ref: ${JSON.stringify(ref)}`);
+  try {
+    return git(root, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]).toString().trim();
+  } catch {
+    throw new GitError(
+      `${ref} is not available in this clone. Fetch it first (for example \`git fetch origin ${ref}\`, or check out with fetch-depth: 0).`
+    );
+  }
+}
+function gitFileSystem(root, commit) {
+  const prefix = git(root, ["rev-parse", "--show-prefix"]).toString().trim();
+  const files = /* @__PURE__ */ new Set();
+  const links = [];
+  const out = git(root, ["ls-tree", "-r", "-z", "--full-tree", commit]).toString();
+  for (const entry of out.split("\0")) {
+    if (!entry) continue;
+    const tab = entry.indexOf("	");
+    const [mode, type] = entry.slice(0, tab).split(" ");
+    const path = entry.slice(tab + 1);
+    if (prefix && !path.startsWith(prefix)) continue;
+    if (type === "blob" && mode === "120000") links.push(path);
+    else if (type === "blob" && (mode === "100644" || mode === "100755"))
+      files.add(path.slice(prefix.length));
+  }
+  const alias = /* @__PURE__ */ new Map();
+  for (const link of links) {
+    const target = posix.normalize(
+      posix.join(posix.dirname(link), git(root, ["cat-file", "blob", `${commit}:${link}`]).toString())
+    );
+    if (target.startsWith("../") || target === ".." || target === ".git" || target.startsWith(".git/"))
+      continue;
+    if (prefix && !target.startsWith(prefix)) continue;
+    const from = link.slice(prefix.length);
+    const to = target.slice(prefix.length);
+    if (files.has(to)) {
+      alias.set(from, to);
+      files.add(from);
+      continue;
+    }
+    for (const f of [...files]) {
+      if (!f.startsWith(`${to}/`)) continue;
+      const virtual = `${from}/${f.slice(to.length + 1)}`;
+      alias.set(virtual, f);
+      files.add(virtual);
+    }
+  }
+  const cache = /* @__PURE__ */ new Map();
+  const norm = (p) => trimChar(p.startsWith("./") ? p.slice(2) : p, "/");
+  const under = (dir) => {
+    const d = norm(dir);
+    return d === "" || d === "." ? "" : `${d}/`;
+  };
+  return {
+    commit,
+    read(path) {
+      const p = norm(path);
+      if (!files.has(p)) return void 0;
+      if (!cache.has(p))
+        cache.set(
+          p,
+          git(root, ["cat-file", "blob", `${commit}:${prefix}${alias.get(p) ?? p}`]).toString("utf8")
+        );
+      return cache.get(p);
+    },
+    list(dir) {
+      const d = under(dir);
+      return [...files].filter((f) => f.startsWith(d) && !f.slice(d.length).includes("/")).sort();
+    },
+    walk(dir) {
+      const d = under(dir);
+      return [...files].filter((f) => f.startsWith(d)).sort();
+    },
+    isDir(path) {
+      const d = under(path);
+      return [...files].some((f) => f.startsWith(d));
+    }
+  };
+}
+
+// ../core/src/glob.ts
+function matchesPattern(path, pattern) {
+  if (!pattern.includes("*"))
+    return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
+  const re = new RegExp(
+    `^${pattern.split("**/").map(
+      (chunk) => chunk.split("**").map((part) => part.split("*").map(escapeRe).join("[^/]*")).join(".*")
+    ).join("(?:[^/]*/)*")}$`
+  );
+  return re.test(path);
+}
+var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+
+// ../core/src/graph.ts
+var sym = {
+  input: (unit, name) => `${unit}#inputs.${name}`,
+  secret: (unit, name) => `${unit}#secrets.${name}`,
+  output: (unit, name) => `${unit}#outputs.${name}`,
+  job: (unit, job) => `${unit}#jobs.${job}`,
+  jobOutput: (unit, job, name) => `${unit}#jobs.${job}.outputs.${name}`,
+  stepOutput: (unit, job, step, name) => job === void 0 ? `${unit}#steps.${step}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step}.outputs.${name}`,
+  env: (unit, job, name) => job === void 0 ? `${unit}#env.${name}` : `${unit}#jobs.${job}.env.${name}`,
+  matrix: (unit, job, key) => `${unit}#jobs.${job}.matrix.${key}`,
+  var: (name) => `vars.${name}`,
+  remote: (raw) => `remote:${raw}`
+};
+var ProjectIndex = class {
+  constructor(project) {
+    this.project = project;
+    for (const wf of project.workflows.values()) this.indexWorkflow(wf);
+    for (const a of project.actions.values()) this.indexAction(a);
+    for (const unit of this.units()) for (const site of unit.sites) this.indexSite(unit, site);
+  }
+  project;
+  nodes = /* @__PURE__ */ new Map();
+  edges = [];
+  usages = /* @__PURE__ */ new Map();
+  callSites = [];
+  actionUses = [];
+  sitesById = /* @__PURE__ */ new Map();
+  units() {
+    return [...this.project.workflows.values(), ...this.project.actions.values()];
+  }
+  unit(path) {
+    return this.project.workflows.get(path) ?? this.project.actions.get(path);
+  }
+  site(id) {
+    return this.sitesById.get(id);
+  }
+  callersOf(workflowPath) {
+    return this.callSites.filter((c) => c.callee.path === workflowPath);
+  }
+  usersOf(actionPath) {
+    return this.actionUses.filter((u) => u.action.path === actionPath);
+  }
+  /** The reusable workflow a job calls. Workflows without `on.workflow_call` are not callable (see FP609). */
+  calleeOf(job) {
+    const wf = this.targetOf(job);
+    return wf?.call ? wf : void 0;
+  }
+  /** The local workflow file a job's `uses:` points at, reusable or not. */
+  targetOf(job) {
+    if (job.uses?.kind !== "local-workflow" || !job.uses.target || job.uses.selfRef !== void 0)
+      return void 0;
+    if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
+    return this.project.workflows.get(job.uses.target);
+  }
+  actionOf(step) {
+    if (step.uses?.kind !== "local-action" || !step.uses.target || step.uses.selfRef !== void 0)
+      return void 0;
+    return this.project.actions.get(step.uses.target);
+  }
+  usagesOf(symbol2) {
+    return this.usages.get(symbol2) ?? [];
+  }
+  outgoing(symbol2, kind) {
+    return this.edges.filter((e) => e.from === symbol2 && (!kind || e.kind === kind));
+  }
+  incoming(symbol2, kind) {
+    return this.edges.filter((e) => e.to === symbol2 && (!kind || e.kind === kind));
+  }
+  /** Serializable snapshot (used by `--dump-graph` and the JSON report). */
+  toJSON() {
+    return {
+      nodes: [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
+      edges: [...this.edges].sort(
+        (a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.kind.localeCompare(b.kind)
+      )
+    };
+  }
+  node(n) {
+    if (!this.nodes.has(n.id)) this.nodes.set(n.id, n);
+    return n.id;
+  }
+  edge(e) {
+    this.edges.push(e);
+  }
+  indexWorkflow(wf) {
+    const u = wf.path;
+    this.node({ id: u, kind: "workflow", label: wf.name ?? u, unit: u });
+    for (const i of Object.values(wf.call?.inputs ?? {}))
+      this.node({ id: sym.input(u, i.name), kind: "input", label: `inputs.${i.name}`, unit: u, loc: i.loc });
+    for (const i of Object.values(wf.dispatch?.inputs ?? {}))
+      this.node({ id: sym.input(u, i.name), kind: "input", label: `inputs.${i.name}`, unit: u, loc: i.loc });
+    for (const s of Object.values(wf.call?.secrets ?? {}))
+      this.node({
+        id: sym.secret(u, s.name),
+        kind: "secret",
+        label: `secrets.${s.name}`,
+        unit: u,
+        loc: s.loc
+      });
+    for (const o of Object.values(wf.call?.outputs ?? {}))
+      this.node({
+        id: sym.output(u, o.name),
+        kind: "output",
+        label: `outputs.${o.name}`,
+        unit: u,
+        loc: o.loc
+      });
+    for (const e of Object.values(wf.env))
+      this.node({
+        id: sym.env(u, void 0, e.name),
+        kind: "env",
+        label: `env.${e.name}`,
+        unit: u,
+        loc: e.loc
+      });
+    for (const job of Object.values(wf.jobs)) {
+      const jid = this.node({
+        id: sym.job(u, job.id),
+        kind: "job",
+        label: `jobs.${job.id}`,
+        unit: u,
+        loc: job.loc
+      });
+      for (const n of job.needs) this.edge({ from: jid, to: sym.job(u, n.id), kind: "needs", loc: n.loc });
+      for (const o of Object.values(job.outputs))
+        this.node({
+          id: sym.jobOutput(u, job.id, o.name),
+          kind: "job-output",
+          label: `jobs.${job.id}.outputs.${o.name}`,
+          unit: u,
+          loc: o.loc
+        });
+      for (const e of Object.values(job.env))
+        this.node({
+          id: sym.env(u, job.id, e.name),
+          kind: "env",
+          label: `env.${e.name}`,
+          unit: u,
+          loc: e.loc
+        });
+      for (const d of job.matrix?.dims ?? [])
+        this.node({
+          id: sym.matrix(u, job.id, d.name),
+          kind: "matrix",
+          label: `matrix.${d.name}`,
+          unit: u,
+          loc: d.loc
+        });
+      for (const inc of job.matrix?.include ?? [])
+        for (const [k, loc] of Object.entries(inc.keyLocs))
+          this.node({ id: sym.matrix(u, job.id, k), kind: "matrix", label: `matrix.${k}`, unit: u, loc });
+      if (job.uses) {
+        const callee = this.calleeOf(job);
+        if (callee) {
+          this.callSites.push({ caller: wf, job, callee });
+          this.edge({ from: jid, to: callee.path, kind: "calls", loc: job.uses.loc });
+          for (const o of Object.values(callee.call?.outputs ?? {})) {
+            const jo = this.node({
+              id: sym.jobOutput(u, job.id, o.name),
+              kind: "job-output",
+              label: `jobs.${job.id}.outputs.${o.name}`,
+              unit: u,
+              loc: job.loc
+            });
+            this.edge({ from: sym.output(callee.path, o.name), to: jo, kind: "flows", loc: o.loc });
+          }
+          if (job.secretsInherit) {
+            this.edge({
+              from: jid,
+              to: callee.path,
+              kind: "inherits",
+              ...job.secretsLoc ? { loc: job.secretsLoc } : {}
+            });
+          }
+        } else if (job.uses.kind === "remote-workflow") {
+          const r = this.node({ id: sym.remote(job.uses.raw), kind: "remote", label: job.uses.raw });
+          this.edge({ from: jid, to: r, kind: "calls", loc: job.uses.loc });
+        }
+      }
+      for (const step of job.steps) this.indexStep(wf, job, step);
+    }
+  }
+  indexStep(unit, job, step) {
+    const action = this.actionOf(step);
+    if (!action) return;
+    this.actionUses.push({ unit, ...job ? { job } : {}, step, action });
+    if (step.uses) {
+      const from = job ? sym.job(unit.path, job.id) : unit.path;
+      this.edge({ from, to: action.path, kind: "uses", loc: step.uses.loc });
+    }
+    if (step.id) {
+      for (const o of Object.values(action.outputs)) {
+        const so = this.node({
+          id: sym.stepOutput(unit.path, job?.id, step.id, o.name),
+          kind: "step-output",
+          label: `steps.${step.id}.outputs.${o.name}`,
+          unit: unit.path,
+          loc: step.idLoc ?? step.loc
+        });
+        this.edge({ from: sym.output(action.path, o.name), to: so, kind: "flows", loc: o.loc });
+      }
+    }
+  }
+  indexAction(a) {
+    const u = a.path;
+    this.node({ id: u, kind: "action", label: a.name ?? u, unit: u });
+    for (const i of Object.values(a.inputs))
+      this.node({ id: sym.input(u, i.name), kind: "input", label: `inputs.${i.name}`, unit: u, loc: i.loc });
+    for (const o of Object.values(a.outputs))
+      this.node({
+        id: sym.output(u, o.name),
+        kind: "output",
+        label: `outputs.${o.name}`,
+        unit: u,
+        loc: o.loc
+      });
+    for (const step of a.steps) this.indexStep(a, void 0, step);
+  }
+  /** Which symbol does the site's value define? (e.g. `with: { foo: ... }` on a reusable call defines the callee's `inputs.foo`). */
+  sinkOf(unit, site) {
+    const key = site.key;
+    if (key === void 0) return void 0;
+    switch (site.field) {
+      case "job.with":
+      case "job.secrets": {
+        const job = unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
+        const callee = job && this.calleeOf(job);
+        if (!callee) return void 0;
+        const decls = site.field === "job.with" ? callee.call?.inputs : callee.call?.secrets;
+        const name = (decls && lookup(decls, key)?.name) ?? key;
+        return site.field === "job.with" ? sym.input(callee.path, name) : sym.secret(callee.path, name);
+      }
+      case "step.with": {
+        const step = this.stepOf(unit, site);
+        const action = step && this.actionOf(step);
+        if (!action) return void 0;
+        return sym.input(action.path, lookup(action.inputs, key)?.name ?? key);
+      }
+      case "job.output":
+        return site.job ? sym.jobOutput(unit.path, site.job, key) : void 0;
+      case "workflow.output":
+      case "action.output":
+        return sym.output(unit.path, key);
+      case "workflow.env":
+        return sym.env(unit.path, void 0, key);
+      case "job.env":
+        return site.job ? sym.env(unit.path, site.job, key) : void 0;
+      default:
+        return void 0;
+    }
+  }
+  stepOf(unit, site) {
+    if (site.step === void 0) return void 0;
+    if (unit.kind === "action") return unit.steps[site.step];
+    return site.job ? unit.jobs[site.job]?.steps[site.step] : void 0;
+  }
+  /** Resolves a reference inside `site` to the symbol it reads, or `undefined` for runtime-only contexts. */
+  resolveRef(unit, site, ref) {
+    const [a, b, c] = ref.path;
+    switch (ref.context) {
+      case "inputs": {
+        if (!a || a === "*" || a === "?") return void 0;
+        return sym.input(unit.path, this.canonicalInput(unit, a));
+      }
+      case "github":
+        if (a === "event" && b === "inputs" && c && c !== "*" && c !== "?" && unit.kind === "workflow" && unit.dispatch) {
+          return sym.input(unit.path, this.canonicalInput(unit, c));
+        }
+        return void 0;
+      case "secrets": {
+        if (!a || a === "*" || a === "?" || unit.kind !== "workflow") return void 0;
+        const decl = unit.call ? lookup(unit.call.secrets, a) : void 0;
+        return sym.secret(unit.path, decl?.name ?? a);
+      }
+      case "vars":
+        return a && a !== "?" && a !== "*" ? sym.var(a) : void 0;
+      case "matrix":
+        return a && site.job && a !== "?" && a !== "*" ? sym.matrix(unit.path, site.job, a) : void 0;
+      case "needs": {
+        if (unit.kind !== "workflow" || !a || b !== "outputs" || !c || c === "*" || c === "?")
+          return void 0;
+        const job = lookup(unit.jobs, a);
+        if (!job) return void 0;
+        return sym.jobOutput(unit.path, job.id, this.canonicalJobOutput(job, c));
+      }
+      case "jobs": {
+        if (unit.kind !== "workflow" || site.field !== "workflow.output" || !a || b !== "outputs" || !c || c === "*" || c === "?")
+          return void 0;
+        const job = lookup(unit.jobs, a);
+        if (!job) return void 0;
+        return sym.jobOutput(unit.path, job.id, this.canonicalJobOutput(job, c));
+      }
+      case "steps": {
+        if (!a || b !== "outputs" || !c || c === "*" || c === "?") return void 0;
+        const steps2 = unit.kind === "action" ? unit.steps : site.job ? unit.jobs[site.job]?.steps ?? [] : [];
+        const step = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
+        if (!step?.id) return void 0;
+        const action = this.actionOf(step);
+        const name = (action && lookup(action.outputs, c)?.name) ?? c;
+        return sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, step.id, name);
+      }
+      case "env": {
+        if (!a || a === "*" || a === "?") return void 0;
+        if (unit.kind === "workflow" && site.job) {
+          const job = unit.jobs[site.job];
+          if (job && lookup(job.env, a)) return sym.env(unit.path, job.id, lookup(job.env, a).name);
+        }
+        if (unit.kind === "workflow" && lookup(unit.env, a))
+          return sym.env(unit.path, void 0, lookup(unit.env, a).name);
+        return void 0;
+      }
+      default:
+        return void 0;
+    }
+  }
+  /**
+   * Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
+   * of outputs reads each of them: `toJSON(needs.build.outputs)`, `needs.build`, `steps.meta.outputs`,
+   * `needs.build.outputs[matrix.key]`, `toJSON(needs)` (every job the reading job needs), or `toJSON(steps)` (every
+   * step that ran before the reading step).
+   */
+  readsOf(unit, site, ref) {
+    const one = this.resolveRef(unit, site, ref);
+    if (one) return [one];
+    const [a, b, c] = ref.path;
+    const computed = (s) => s === void 0 || s === "*" || s === "?";
+    const pick2 = (names) => {
+      if (computed(b)) return names;
+      if (b.toLowerCase() !== "outputs") return [];
+      if (computed(c)) return names;
+      return names.filter((n) => n.toLowerCase() === c.toLowerCase());
+    };
+    switch (ref.context) {
+      case "needs":
+      case "jobs": {
+        if (unit.kind !== "workflow") return [];
+        if (ref.context === "jobs" && site.field !== "workflow.output") return [];
+        let jobs2;
+        if (!computed(a)) {
+          const job = lookup(unit.jobs, a);
+          jobs2 = job ? [job] : [];
+        } else if (ref.context === "jobs") {
+          jobs2 = Object.values(unit.jobs);
+        } else {
+          const reader = site.job ? unit.jobs[site.job] : void 0;
+          jobs2 = (reader?.needs ?? []).flatMap((n) => lookup(unit.jobs, n.id) ?? []);
+        }
+        return jobs2.flatMap(
+          (job) => pick2(this.jobOutputNames(job)).map((n) => sym.jobOutput(unit.path, job.id, n))
+        );
+      }
+      case "steps": {
+        const steps2 = unit.kind === "action" ? unit.steps : site.job ? unit.jobs[site.job]?.steps ?? [] : [];
+        const named = computed(a) ? steps2.filter((s) => site.step === void 0 || s.index < site.step) : steps2.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
+        return named.flatMap((step) => {
+          const action = this.actionOf(step);
+          if (!step.id || !action) return [];
+          return pick2(Object.keys(action.outputs)).map(
+            (n) => sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, step.id, n)
+          );
+        });
+      }
+      default:
+        return [];
+    }
+  }
+  /** Output names of a job: its own `outputs:`, or the callee's workflow outputs for a reusable call. */
+  jobOutputNames(job) {
+    const callee = this.calleeOf(job);
+    return Object.keys(callee ? callee.call?.outputs ?? {} : job.outputs);
+  }
+  canonicalInput(unit, name) {
+    if (unit.kind === "action") return lookup(unit.inputs, name)?.name ?? name;
+    return lookup(unit.call?.inputs ?? {}, name)?.name ?? lookup(unit.dispatch?.inputs ?? {}, name)?.name ?? name;
+  }
+  canonicalJobOutput(job, name) {
+    const own2 = lookup(job.outputs, name);
+    if (own2) return own2.name;
+    const callee = this.calleeOf(job);
+    return (callee?.call && lookup(callee.call.outputs, name)?.name) ?? name;
+  }
+  indexSite(unit, site) {
+    this.sitesById.set(site.id, site);
+    const sink = this.sinkOf(unit, site);
+    for (const seg of site.segments) {
+      for (const ref of seg.refs) {
+        for (const symbol2 of this.readsOf(unit, site, ref)) this.addUsage(unit, site, ref, symbol2, sink);
+      }
+    }
+  }
+  addUsage(unit, site, ref, symbol2, sink) {
+    if (!this.nodes.has(symbol2)) {
+      this.node({
+        id: symbol2,
+        kind: ref.context === "vars" ? "var" : "unresolved",
+        label: `${ref.context}.${ref.path.join(".")}`,
+        unit: unit.path
+      });
+    }
+    const usage = { symbol: symbol2, site, ref, ...sink ? { sink } : {} };
+    const list = this.usages.get(symbol2);
+    if (list) list.push(usage);
+    else this.usages.set(symbol2, [usage]);
+    if (sink) this.edge({ from: symbol2, to: sink, kind: "flows", loc: ref.loc, siteId: site.id });
+  }
+};
+
+// ../core/src/source.ts
+var import_yaml = __toESM(require_dist(), 1);
+var SourceFile = class {
+  constructor(path, text3) {
+    this.path = path;
+    this.text = text3;
+    this.lines = text3.split(/\r?\n/);
+  }
+  path;
+  text;
+  lines;
+  lineCounter = new import_yaml.LineCounter();
+  /** Converts a [start, end) character offset range to a {@link Loc}. Requires the line counter to be populated by the YAML parser. */
+  loc(start, end = start) {
+    const a = this.lineCounter.linePos(Math.max(0, start));
+    const b = this.lineCounter.linePos(Math.max(start, end));
+    return { file: this.path, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
+  }
+};
+function formatLoc(loc) {
+  return `${loc.file}:${loc.line}:${loc.column}`;
+}
+function compareLoc(a, b) {
+  return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
+}
+
+// ../core/src/logger.ts
+var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
+function createLogger(options = {}) {
+  const level = options.level ?? "info";
+  const sink = options.sink ?? { write() {
+  } };
+  const scope = options.scope ?? "flowpact";
+  const log = (lvl, message, data) => {
+    if (ORDER[lvl] > ORDER[level]) return;
+    sink.write({ level: lvl, scope, message, ...data ? { data } : {}, time: Date.now() });
+  };
+  const logger = {
+    level,
+    enabled: (lvl) => ORDER[lvl] <= ORDER[level],
+    error: (m, d) => log("error", m, d),
+    warn: (m, d) => log("warn", m, d),
+    info: (m, d) => log("info", m, d),
+    debug: (m, d) => log("debug", m, d),
+    trace: (m, d) => log("trace", m, d),
+    child: (child) => createLogger({ level, sink, scope: `${scope}:${child}` }),
+    time(label, fn) {
+      const start = performance.now();
+      log("trace", `${label} started`);
+      try {
+        return fn();
+      } finally {
+        log("debug", `${label} finished`, { ms: Math.round((performance.now() - start) * 100) / 100 });
+      }
+    },
+    group(title, fn) {
+      sink.group?.(title);
+      try {
+        return fn();
+      } finally {
+        sink.groupEnd?.();
+      }
+    }
+  };
+  return logger;
+}
+var silentLogger = createLogger({ level: "silent" });
+function resolveLogLevel(opts, env = process.env) {
+  if (opts.quiet) return "error";
+  if ((opts.verbose ?? 0) >= 2) return "trace";
+  const envDebug = truthy3(env.FLOWPACT_DEBUG) || truthy3(env.RUNNER_DEBUG) || truthy3(env.ACTIONS_STEP_DEBUG);
+  if (opts.debug || (opts.verbose ?? 0) >= 1 || envDebug)
+    return env.FLOWPACT_DEBUG === "trace" ? "trace" : "debug";
+  return "info";
+}
+function truthy3(v) {
+  return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
+}
+
+// ../core/src/parse.ts
+var import_yaml2 = __toESM(require_dist(), 1);
+import { posix as posix2 } from "path";
+function createParseContext(repository) {
+  let id = 0;
+  return { ...repository ? { repository } : {}, nextSiteId: () => ++id };
+}
+var pathKey = (p) => JSON.stringify(p);
+function nodeLoc(source, node2) {
+  const r = node2?.range;
+  if (!r) return source.loc(0, 0);
+  return source.loc(r[0], r[1]);
+}
+function pairs(node2) {
+  if (!(0, import_yaml2.isMap)(node2)) return [];
+  return node2.items.filter((p) => (0, import_yaml2.isPair)(p) && (0, import_yaml2.isScalar)(p.key));
+}
+function get(node2, key) {
+  for (const p of pairs(node2))
+    if (String(p.key.value) === key) return p.value ?? void 0;
+  return void 0;
+}
+function getPair(node2, key) {
+  return pairs(node2).find((p) => String(p.key.value) === key);
+}
+function str(node2) {
+  if ((0, import_yaml2.isScalar)(node2) && node2.value !== null && node2.value !== void 0) return String(node2.value);
+  return void 0;
+}
+function toJs(node2) {
+  if (node2 === null || node2 === void 0) return null;
+  if ((0, import_yaml2.isScalar)(node2) || (0, import_yaml2.isMap)(node2) || (0, import_yaml2.isSeq)(node2)) return node2.toJSON();
+  return null;
+}
+function classify(kind, p) {
+  if (kind === "workflow") {
+    if (p[0] === "jobs" && typeof p[1] === "string") {
+      const job = p[1];
+      if (p[2] === "steps" && typeof p[3] === "number") {
+        const step = p[3];
+        const f2 = p[4];
+        if (f2 === "if" && p.length === 5) return { field: "step.if", job, step, cond: true };
+        if (f2 === "with" && typeof p[5] === "string")
+          return { field: "step.with", job, step, key: p[5], cond: false };
+        if (f2 === "env" && typeof p[5] === "string")
+          return { field: "step.env", job, step, key: p[5], cond: false };
+        if (f2 === "run") return { field: "step.run", job, step, cond: false };
+        return { field: "step.other", job, step, cond: false };
+      }
+      const f = p[2];
+      if (f === "if" && p.length === 3) return { field: "job.if", job, cond: true };
+      if (f === "name" && p.length === 3) return { field: "job.name", job, cond: false };
+      if (f === "with" && typeof p[3] === "string") return { field: "job.with", job, key: p[3], cond: false };
+      if (f === "secrets" && typeof p[3] === "string")
+        return { field: "job.secrets", job, key: p[3], cond: false };
+      if (f === "env" && typeof p[3] === "string") return { field: "job.env", job, key: p[3], cond: false };
+      if (f === "outputs" && typeof p[3] === "string")
+        return { field: "job.output", job, key: p[3], cond: false };
+      if (f === "strategy") return { field: "job.strategy", job, cond: false };
+      return { field: "job.other", job, cond: false };
+    }
+    if (p[0] === "env" && typeof p[1] === "string") return { field: "workflow.env", key: p[1], cond: false };
+    if (p[0] === "on" && p[1] === "workflow_call" && p[2] === "outputs" && typeof p[3] === "string" && p[4] === "value") {
+      return { field: "workflow.output", key: p[3], cond: false };
+    }
+    if (p[0] === "on" && p[2] === "inputs" && p[4] === "default" && typeof p[3] === "string") {
+      return { field: "input.default", key: p[3], cond: false };
+    }
+    return { field: "workflow.other", cond: false };
+  }
+  if (p[0] === "runs" && p[1] === "steps" && typeof p[2] === "number") {
+    const step = p[2];
+    const f = p[3];
+    if (f === "if" && p.length === 4) return { field: "step.if", step, cond: true };
+    if (f === "with" && typeof p[4] === "string") return { field: "step.with", step, key: p[4], cond: false };
+    if (f === "env" && typeof p[4] === "string") return { field: "step.env", step, key: p[4], cond: false };
+    if (f === "run") return { field: "step.run", step, cond: false };
+    return { field: "step.other", step, cond: false };
+  }
+  if (p[0] === "runs" && (p[1] === "pre-if" || p[1] === "post-if") && p.length === 2) {
+    return { field: "action.runs-if", cond: true };
+  }
+  if (p[0] === "outputs" && typeof p[1] === "string" && p[2] === "value") {
+    return { field: "action.output", key: p[1], cond: false };
+  }
+  if (p[0] === "inputs" && typeof p[1] === "string" && p[2] === "default") {
+    return { field: "input.default", key: p[1], cond: false };
+  }
+  return { field: "other", cond: false };
+}
+function collectSites(unit, kind, ownerPath, ctx, root) {
+  const visit3 = (node2, p) => {
+    if ((0, import_yaml2.isMap)(node2)) {
+      for (const pair of pairs(node2)) visit3(pair.value, [...p, String(pair.key.value)]);
+      return;
+    }
+    if ((0, import_yaml2.isSeq)(node2)) {
+      for (const [i, item] of node2.items.entries()) visit3(item, [...p, i]);
+      return;
+    }
+    if (!(0, import_yaml2.isScalar)(node2)) return;
+    const c = classify(kind, p);
+    const isString2 = typeof node2.value === "string";
+    if (!isString2 && !c.cond) return;
+    const text3 = isString2 ? node2.value : String(node2.value);
+    if (!c.cond && !text3.includes("${{")) return;
+    if (c.cond && !isString2) return;
+    const site = buildSite(unit, node2, text3, c, p, ownerPath, ctx);
+    unit.sites.push(site);
+    unit.siteByPath.set(pathKey(p), site);
+  };
+  visit3(root, []);
+}
+function buildSite(unit, node2, text3, c, p, ownerPath, ctx) {
+  const { source } = unit;
+  const [start, end] = node2.range ?? [0, 0];
+  const raw = source.text.slice(start, end);
+  const segments = [];
+  let cursor = 0;
+  const locateSegment = (absInner, expr) => {
+    cursor = Math.max(cursor, absInner - start);
+    const refs = expr.refs.map((r) => {
+      const refText = expr.source.slice(r.start, r.end);
+      const found = refText ? raw.indexOf(refText, cursor) : -1;
+      if (found >= 0) {
+        cursor = found + refText.length;
+        return { ...r, loc: source.loc(start + found, start + found + refText.length) };
+      }
+      return { ...r, loc: source.loc(absInner + r.start, absInner + r.end) };
+    });
+    return { expr, loc: source.loc(absInner, absInner + expr.source.length), refs };
+  };
+  const templated = findTemplateSegments(text3);
+  const wholeIsTemplate = templated.length === 1 && text3.trim() === text3.slice(templated[0].start, templated[0].end);
+  if (c.cond && !wholeIsTemplate && templated.length === 0) {
+    const inner = text3.trim();
+    const expr = parseExpression(inner);
+    const idx = raw.indexOf(inner.slice(0, Math.min(inner.length, 40)));
+    segments.push(locateSegment(start + Math.max(0, idx), expr));
+  } else {
+    let searchFrom = 0;
+    for (const seg of templated) {
+      const idx = raw.indexOf("${{", searchFrom);
+      const absOpen = idx >= 0 ? start + idx : start;
+      if (idx >= 0) searchFrom = idx + 3;
+      const lead = seg.innerStart - seg.start;
+      const rawAfter = idx >= 0 ? raw.slice(idx + 3) : "";
+      const leadRaw = idx >= 0 ? 3 + (rawAfter.length - rawAfter.trimStart().length) : lead;
+      segments.push(locateSegment(absOpen + leadRaw, seg.expr));
+    }
+  }
+  return {
+    id: ctx.nextSiteId(),
+    file: source.path,
+    ownerPath,
+    field: c.field,
+    ...c.job !== void 0 ? { job: c.job } : {},
+    ...c.step !== void 0 ? { step: c.step } : {},
+    ...c.key !== void 0 ? { key: c.key } : {},
+    yamlPath: p,
+    text: text3,
+    loc: source.loc(start, end),
+    isCondition: c.cond,
+    segments
+  };
+}
+function bindings(unit, node2, base) {
+  const out = {};
+  for (const pair of pairs(node2)) {
+    const name = String(pair.key.value);
+    const site = unit.siteByPath.get(pathKey([...base, name]));
+    out[name] = {
+      name,
+      loc: nodeLoc(unit.source, pair.key),
+      valueLoc: nodeLoc(unit.source, pair.value ?? pair.key),
+      value: toJs(pair.value),
+      ...site ? { site } : {}
+    };
+  }
+  return out;
+}
+function inputDecls(unit, node2) {
+  const out = {};
+  for (const pair of pairs(node2)) {
+    const name = String(pair.key.value);
+    const def = pair.value;
+    const defaultPair = getPair(def, "default");
+    const type = str(get(def, "type"));
+    const description = str(get(def, "description"));
+    const opts = get(def, "options");
+    out[name] = {
+      name,
+      ...type ? { type } : {},
+      required: toJs(get(def, "required")) === true,
+      hasDefault: defaultPair !== void 0 && toJs(defaultPair.value) !== null,
+      ...defaultPair ? { default: toJs(defaultPair.value) } : {},
+      ...description ? { description } : {},
+      ...(0, import_yaml2.isSeq)(opts) ? { options: toJs(opts).map(String) } : {},
+      loc: nodeLoc(unit.source, pair.key)
+    };
+  }
+  return out;
+}
+function secretDecls(unit, node2) {
+  const out = {};
+  for (const pair of pairs(node2)) {
+    const name = String(pair.key.value);
+    const description = str(get(pair.value, "description"));
+    out[name] = {
+      name,
+      required: toJs(get(pair.value, "required")) === true,
+      ...description ? { description } : {},
+      loc: nodeLoc(unit.source, pair.key)
+    };
+  }
+  return out;
+}
+function outputDecls(unit, node2, base, valueKey) {
+  const out = {};
+  for (const pair of pairs(node2)) {
+    const name = String(pair.key.value);
+    const valueNode = valueKey ? get(pair.value, "value") : pair.value;
+    const site = unit.siteByPath.get(pathKey(valueKey ? [...base, name, "value"] : [...base, name]));
+    const description = valueKey ? str(get(pair.value, "description")) : void 0;
+    out[name] = {
+      name,
+      loc: nodeLoc(unit.source, pair.key),
+      ...description ? { description } : {},
+      ...valueNode !== void 0 ? { value: toJs(valueNode) } : {},
+      ...site ? { site } : {}
+    };
+  }
+  return out;
+}
+var WORKFLOW_FILE = /^\.github\/workflows\/[^/]+\.ya?ml$/;
+function normalizeRelative(path) {
+  return trimChar(posix2.normalize(trimChar(path, "/") || "."), "/") || ".";
+}
+function classifyUses(raw, at, loc, ctx) {
+  const value = raw.trim();
+  if (value.startsWith("docker://")) return { raw, loc, kind: "docker" };
+  const kind = at === "job" ? "local-workflow" : "local-action";
+  if (value.startsWith("$/")) {
+    const refAt = value.indexOf("@");
+    const target = normalizeRelative(refAt < 0 ? value.slice(2) : value.slice(2, refAt));
+    return { raw, loc, kind, target, self: true, ...refAt < 0 ? {} : { selfRef: value.slice(refAt + 1) } };
+  }
+  if (value.startsWith("./")) {
+    const target = normalizeRelative(value.slice(2));
+    if (at === "job") return { raw, loc, kind, target };
+    return { raw, loc, kind, target, workspacePath: target };
+  }
+  const [path = "", ref] = value.split("@");
+  const parts = path.split("/");
+  const repo = parts.slice(0, 2).join("/");
+  const rest = parts.slice(2).join("/");
+  if (ctx.repository && repo.toLowerCase() === ctx.repository.toLowerCase()) {
+    if (at === "job" && WORKFLOW_FILE.test(rest)) {
+      return { raw, loc, kind: "local-workflow", target: rest, ...ref ? { sameRepoRef: ref } : {} };
+    }
+    if (at === "step") {
+      return { raw, loc, kind: "local-action", target: rest || ".", ...ref ? { sameRepoRef: ref } : {} };
+    }
+  }
+  return { raw, loc, kind: at === "job" ? "remote-workflow" : "remote-action" };
+}
+function scanRunWrites(script, fileVar) {
+  const names = /* @__PURE__ */ new Set();
+  let dynamic = false;
+  let mentions = false;
+  const redirect = new RegExp(`(?:>>|\\|\\s*tee(?:\\s+-a)?)\\s*["']?\\$(?:env:)?\\{?${fileVar}\\}?["']?`);
+  const alias = new RegExp(
+    `(?:^|[\\s;&|(])(?:export\\s+|local\\s+|declare\\s+(?:-\\w+\\s+)*)?[A-Za-z_]\\w*=["']?\\$\\{?${fileVar}\\b`
+  );
+  for (const line of script.split(/\r?\n/)) {
+    if (!line.includes(fileVar)) continue;
+    mentions = true;
+    if (alias.test(line)) {
+      dynamic = true;
+      continue;
+    }
+    const chunks = line.split(redirect);
+    const written = chunks.length > 1 ? chunks.slice(0, -1) : [line];
+    for (const chunk of written) {
+      const found = [...chunk.matchAll(/(?:^|[\s"'`(;])([A-Za-z_][\w-]*)(?:=|<<)/g)].map((m) => m[1]);
+      if (found.length === 0 || /\$\{?\w+\}?(?:=|<<)/.test(chunk)) dynamic = true;
+      for (const n of found) if (n !== fileVar) names.add(n);
+    }
+  }
+  const api = fileVar === "GITHUB_OUTPUT" ? "setOutput" : "exportVariable";
+  for (const m of script.matchAll(new RegExp(`\\b${api}\\(`, "g"))) {
+    mentions = true;
+    const literal2 = /^\s*(?:(['"])([^'"\\\n]+)\1|`([^`$\\]+)`)\s*,/.exec(script.slice(m.index + m[0].length));
+    const name = literal2?.[2] ?? literal2?.[3];
+    if (name) names.add(name);
+    else dynamic = true;
+  }
+  return { names: [...names], dynamic, mentions };
+}
+function steps(unit, node2, base, at, ctx) {
+  if (!(0, import_yaml2.isSeq)(node2)) return [];
+  return node2.items.map((item, index) => {
+    const p = [...base, index];
+    const id = str(get(item, "id"));
+    const idPair = getPair(item, "id");
+    const usesNode = get(item, "uses");
+    const runNode = get(item, "run");
+    const run2 = str(runNode);
+    const name = str(get(item, "name"));
+    const usesRaw = str(usesNode);
+    const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
+    const ifNode = get(item, "if");
+    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
+    void at;
+    return {
+      index,
+      ...id ? { id, idLoc: nodeLoc(unit.source, idPair?.key) } : {},
+      ...name ? { name } : {},
+      loc: nodeLoc(unit.source, item),
+      ...usesRaw ? { uses: classifyUses(usesRaw, "step", nodeLoc(unit.source, usesNode), ctx) } : {},
+      ...run2 !== void 0 ? { run: run2, runLoc: nodeLoc(unit.source, runNode) } : {},
+      with: bindings(unit, get(item, "with"), [...p, "with"]),
+      env: bindings(unit, get(item, "env"), [...p, "env"]),
+      ...ifValue !== void 0 ? { ifValue } : {},
+      ...ifSite ? { ifSite } : {},
+      writesOutputs: run2 !== void 0 ? scanRunWrites(run2, "GITHUB_OUTPUT") : scriptWrites(item, "GITHUB_OUTPUT"),
+      writesEnv: (() => {
+        const s = run2 !== void 0 ? scanRunWrites(run2, "GITHUB_ENV") : scriptWrites(item, "GITHUB_ENV");
+        return { names: s.names, dynamic: s.dynamic };
+      })()
+    };
+  });
+}
+function scriptWrites(item, fileVar) {
+  const script = str(get(get(item, "with"), "script"));
+  if (!script) return { names: [], dynamic: false, mentions: false };
+  const scanned = scanRunWrites(script, fileVar);
+  const githubScript = /(^|\/)github-script@/.test(str(get(item, "uses")) ?? "");
+  const dynamic = scanned.dynamic || scriptDelegates(script) || fileVar === "GITHUB_OUTPUT" && !githubScript;
+  if (fileVar === "GITHUB_OUTPUT" && githubScript) {
+    return { names: [.../* @__PURE__ */ new Set([...scanned.names, "result"])], dynamic, mentions: true };
+  }
+  return { ...scanned, dynamic };
+}
+var INERT_BUILTIN = /(?<![\w$.])(?:require|import)\s*\(\s*(['"])(?:node:)?(?:assert|buffer|crypto|dns|events|fs|http|https|net|os|path|querystring|readline|stream|string_decoder|timers|tls|url|util|zlib)(?:\/[\w/]*)?\1\s*\)/g;
+function scriptDelegates(script) {
+  const code2 = codeOf(script.replace(INERT_BUILTIN, "null"));
+  if (code2.includes("${{")) return true;
+  if (/(?<![\w$.])(?:require|__original_require__|import|eval)\s*\(|^\s*import\s|\bnew\s+Function\b|(?<![\w$.])arguments\b(?!\s*:)|(?<![\w$.])exec\s*\.\s*(?:exec|getExecOutput)\s*\(/m.test(
+    code2
+  ))
+    return true;
+  return /(?<![\w$.])core(?![\w$])(?!\s*\??\.\s*[A-Za-z_$])/.test(code2);
+}
+function codeOf(src) {
+  let i = 0;
+  const code2 = (substitution) => {
+    let out = "";
+    let depth = 0;
+    while (i < src.length) {
+      const ch = src[i];
+      if (ch === "/" && src[i + 1] === "/") {
+        const nl = src.indexOf("\n", i);
+        i = nl < 0 ? src.length : nl;
+      } else if (ch === "/" && src[i + 1] === "*") {
+        const end = src.indexOf("*/", i + 2);
+        i = end < 0 ? src.length : end + 2;
+        out += " ";
+      } else if (ch === "'" || ch === '"') {
+        let j = i + 1;
+        while (j < src.length && src[j] !== ch && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
+        out += '""';
+        i = j + 1;
+      } else if (ch === "`") {
+        i++;
+        out += `""${template()}""`;
+      } else {
+        if (ch === "{") depth++;
+        else if (ch === "}" && depth-- === 0 && substitution) {
+          i++;
+          return out;
+        }
+        out += ch;
+        i++;
+      }
+    }
+    return out;
+  };
+  const template = () => {
+    let out = "";
+    while (i < src.length) {
+      const ch = src[i];
+      if (ch === "\\") {
+        i += 2;
+      } else if (ch === "`") {
+        i++;
+        return out;
+      } else if (ch === "$" && src[i + 1] === "{" && src[i + 2] === "{") {
+        const end = src.indexOf("}}", i + 3);
+        i = end < 0 ? src.length : end + 2;
+      } else if (ch === "$" && src[i + 1] === "{") {
+        i += 2;
+        out += ` ${code2(true)} `;
+      } else {
+        i++;
+      }
+    }
+    return out;
+  };
+  return code2(false);
+}
+function matrixEntries(unit, node2, base) {
+  if (!(0, import_yaml2.isSeq)(node2)) return [];
+  return node2.items.map((item, i) => {
+    const values = {};
+    const keyLocs = {};
+    const dynamicKeys = [];
+    for (const pair of pairs(item)) {
+      const k = String(pair.key.value);
+      values[k] = toJs(pair.value);
+      keyLocs[k] = nodeLoc(unit.source, pair.key);
+      if (unit.siteByPath.has(pathKey([...base, i, k]))) dynamicKeys.push(k);
+    }
+    return { loc: nodeLoc(unit.source, item), values, keyLocs, dynamicKeys };
+  });
+}
+function matrix(unit, strategy, base) {
+  const pair = getPair(strategy, "matrix");
+  if (!pair) return void 0;
+  const node2 = pair.value;
+  const loc = nodeLoc(unit.source, pair.key);
+  const mp = [...base, "matrix"];
+  if ((0, import_yaml2.isScalar)(node2)) {
+    const site = unit.siteByPath.get(pathKey(mp));
+    return {
+      loc,
+      dynamic: true,
+      ...site ? { dynamicSite: site } : {},
+      dims: [],
+      include: [],
+      exclude: [],
+      includeDynamic: true,
+      excludeDynamic: true
+    };
+  }
+  const dims = [];
+  let include = [];
+  let exclude = [];
+  let includeDynamic = false;
+  let excludeDynamic = false;
+  for (const p of pairs(node2)) {
+    const k = String(p.key.value);
+    if (k === "include") {
+      if ((0, import_yaml2.isScalar)(p.value)) includeDynamic = true;
+      else include = matrixEntries(unit, p.value, [...mp, "include"]);
+      continue;
+    }
+    if (k === "exclude") {
+      if ((0, import_yaml2.isScalar)(p.value)) excludeDynamic = true;
+      else exclude = matrixEntries(unit, p.value, [...mp, "exclude"]);
+      continue;
+    }
+    if ((0, import_yaml2.isSeq)(p.value)) {
+      const unknownIndexes = [];
+      p.value.items.forEach((_, i) => {
+        if (unit.siteByPath.has(pathKey([...mp, k, i]))) unknownIndexes.push(i);
+      });
+      dims.push({
+        name: k,
+        loc: nodeLoc(unit.source, p.key),
+        values: toJs(p.value),
+        unknownIndexes
+      });
+    } else {
+      dims.push({ name: k, loc: nodeLoc(unit.source, p.key), values: null, unknownIndexes: [] });
+    }
+  }
+  return { loc, dynamic: false, dims, include, exclude, includeDynamic, excludeDynamic };
+}
+function jobs(unit, node2, ctx) {
+  const out = {};
+  for (const pair of pairs(node2)) {
+    const id = String(pair.key.value);
+    const j = pair.value;
+    const p = ["jobs", id];
+    const needsNode = get(j, "needs");
+    const needs = [];
+    if ((0, import_yaml2.isScalar)(needsNode) && needsNode.value != null) {
+      needs.push({ id: String(needsNode.value), loc: nodeLoc(unit.source, needsNode) });
+    } else if ((0, import_yaml2.isSeq)(needsNode)) {
+      for (const n of needsNode.items) {
+        if ((0, import_yaml2.isScalar)(n)) needs.push({ id: String(n.value), loc: nodeLoc(unit.source, n) });
+      }
+    }
+    const usesNode = get(j, "uses");
+    const usesRaw = str(usesNode);
+    const secretsPair = getPair(j, "secrets");
+    const secretsInherit2 = (0, import_yaml2.isScalar)(secretsPair?.value) && String(secretsPair.value.value) === "inherit";
+    const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
+    const name = str(get(j, "name"));
+    const nameSite = unit.siteByPath.get(pathKey([...p, "name"]));
+    const namePair = getPair(j, "name");
+    const perms = permissions(get(j, "permissions"));
+    const ifNode = get(j, "if");
+    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
+    const strategy = get(j, "strategy");
+    const m = matrix(unit, strategy, [...p, "strategy"]);
+    out[id] = {
+      id,
+      loc: nodeLoc(unit.source, pair.key),
+      ...name !== void 0 ? { name } : {},
+      ...nameSite ? { nameSite } : {},
+      ...namePair?.value ? { nameLoc: nodeLoc(unit.source, namePair.value) } : {},
+      ...perms ? { permissions: perms } : {},
+      ...ifValue !== void 0 ? { ifValue } : {},
+      needs,
+      ...ifSite ? { ifSite } : {},
+      ...usesRaw ? { uses: classifyUses(usesRaw, "job", nodeLoc(unit.source, usesNode), ctx) } : {},
+      with: bindings(unit, get(j, "with"), [...p, "with"]),
+      secrets: secretsInherit2 ? {} : bindings(unit, secretsPair?.value, [...p, "secrets"]),
+      secretsInherit: secretsInherit2,
+      ...secretsPair ? { secretsLoc: nodeLoc(unit.source, secretsPair.key) } : {},
+      env: bindings(unit, get(j, "env"), [...p, "env"]),
+      outputs: outputDecls(unit, get(j, "outputs"), [...p, "outputs"], false),
+      ...m ? { matrix: m } : {},
+      steps: steps(unit, get(j, "steps"), [...p, "steps"], "workflow", ctx)
+    };
+  }
+  return out;
+}
+function permissions(node2) {
+  if ((0, import_yaml2.isScalar)(node2)) {
+    const v = String(node2.value);
+    return v === "read-all" || v === "write-all" ? v : void 0;
+  }
+  if (!(0, import_yaml2.isMap)(node2)) return void 0;
+  const out = {};
+  for (const pair of node2.items) {
+    const key = (0, import_yaml2.isScalar)(pair.key) ? String(pair.key.value) : void 0;
+    const value = (0, import_yaml2.isScalar)(pair.value) ? String(pair.value.value) : void 0;
+    if (key && (value === "read" || value === "write" || value === "none")) out[key] = value;
+  }
+  return out;
+}
+var MAX_ALIAS_EXPANSION = 5e4;
+function aliasExpansionTooLarge(doc) {
+  const memo2 = /* @__PURE__ */ new Map();
+  let culprit;
+  const size = (node2) => {
+    if (node2 === null || node2 === void 0) return 1;
+    const cached2 = memo2.get(node2);
+    if (cached2 !== void 0) return cached2;
+    memo2.set(node2, 1);
+    let n = 1;
+    if ((0, import_yaml2.isAlias)(node2)) {
+      n = size(node2.resolve(doc));
+      if (n > MAX_ALIAS_EXPANSION && !culprit) culprit = node2;
+    } else if ((0, import_yaml2.isMap)(node2)) {
+      for (const p of node2.items) n += size(p.key) + size(p.value);
+    } else if ((0, import_yaml2.isSeq)(node2)) {
+      for (const item of node2.items) n += size(item);
+    }
+    n = Math.min(n, MAX_ALIAS_EXPANSION + 1);
+    memo2.set(node2, n);
+    return n;
+  };
+  return size(doc.contents) > MAX_ALIAS_EXPANSION ? culprit ?? doc.contents : void 0;
+}
+function load(path, text3) {
+  const source = new SourceFile(path, text3);
+  const doc = (0, import_yaml2.parseDocument)(text3, { lineCounter: source.lineCounter, prettyErrors: false, strict: false });
+  const aliasBomb = doc.errors.length === 0 ? aliasExpansionTooLarge(doc) : void 0;
+  if (doc.errors.length === 0 && !aliasBomb) {
+    (0, import_yaml2.visit)(doc, {
+      Alias(_, alias) {
+        const target = alias.resolve(doc);
+        return target ? target : void 0;
+      }
+    });
+  }
+  const parseErrors = doc.errors.map((e) => ({
+    message: e.message.split("\n")[0],
+    loc: source.loc(e.pos[0], e.pos[1])
+  }));
+  if (aliasBomb) {
+    parseErrors.push({
+      message: `YAML aliases expand to more than ${MAX_ALIAS_EXPANSION} nodes; the file is not analyzed (possible alias bomb)`,
+      loc: source.loc(aliasBomb.range?.[0] ?? 0, aliasBomb.range?.[1] ?? 0)
+    });
+  }
+  return {
+    unit: { source, sites: [], siteByPath: /* @__PURE__ */ new Map(), parseErrors },
+    root: doc.contents ?? void 0
+  };
+}
+var AUTO = "(?:auto(?:matically)?[- ]?)?";
+var GENERATED_HEADER = [
+  // Capitals, as generators write it (`DO NOT EDIT.`, `DO NOT EDIT MANUALLY`), unless a lowercase sentence follows.
+  /\bDO NOT (?:EDIT|MODIFY)\b(?!\s+[a-z])/,
+  /\bdo not (?:edit|modify) (?:this (?:file|workflow)|manually|by hand|directly)\b/i,
+  /@generated\b/,
+  new RegExp(`\\b(?:this|the) (?:file|workflow) (?:is|was|has been|will be) ${AUTO}generated\\b`, "i"),
+  new RegExp(`\\bthis is an? ${AUTO}generated (?:file|workflow)\\b`, "i"),
+  // Only at the start of the comment: `Generated by praktika`, `Code generated from x.j2`, `AUTOGENERATED FILE`.
+  new RegExp(`^(?:(?:code|file|workflow) )?${AUTO}generated (?:(?:by|from|with|using) \\S+|file\\b)`, "i")
+];
+var GENERATED_HEADER_LINES = 10;
+function generatedMarker(path, text3) {
+  for (const line of text3.split("\n", GENERATED_HEADER_LINES)) {
+    const t = line.trim();
+    if (t === "" || t === "---" || t.startsWith("%")) continue;
+    if (!t.startsWith("#")) break;
+    const comment = t.replace(/^#+\s*/, "");
+    let first;
+    for (const re of GENERATED_HEADER) {
+      const m = re.exec(comment);
+      if (m && (!first || m.index < first.index)) first = m;
+    }
+    if (first) return first[0];
+  }
+  return /\.lock\.ya?ml$/i.test(path) ? ".lock.yml" : void 0;
+}
+function parseWorkflowFile(path, text3, ctx) {
+  const { unit, root } = load(path, text3);
+  const generated = generatedMarker(path, text3);
+  if (root) collectSites(unit, "workflow", path, ctx, root);
+  const on = get(root, "on");
+  const triggers = [];
+  if ((0, import_yaml2.isScalar)(on) && on.value != null) {
+    triggers.push(String(on.value));
+  } else if ((0, import_yaml2.isSeq)(on)) {
+    for (const t of on.items) if ((0, import_yaml2.isScalar)(t)) triggers.push(String(t.value));
+  } else {
+    for (const p of pairs(on)) triggers.push(String(p.key.value));
+  }
+  const callPair = getPair(on, "workflow_call");
+  const dispatchPair = getPair(on, "workflow_dispatch");
+  const call = triggers.includes("workflow_call") ? {
+    loc: nodeLoc(unit.source, callPair?.key ?? on),
+    inputs: inputDecls(unit, get(callPair?.value, "inputs")),
+    secrets: secretDecls(unit, get(callPair?.value, "secrets")),
+    outputs: outputDecls(unit, get(callPair?.value, "outputs"), ["on", "workflow_call", "outputs"], true)
+  } : void 0;
+  const dispatch = triggers.includes("workflow_dispatch") ? {
+    loc: nodeLoc(unit.source, dispatchPair?.key ?? on),
+    inputs: inputDecls(unit, get(dispatchPair?.value, "inputs"))
+  } : void 0;
+  const name = str(get(root, "name"));
+  const workflowPermissions = permissions(get(root, "permissions"));
+  return {
+    kind: "workflow",
+    path,
+    file: path,
+    ...name ? { name } : {},
+    source: unit.source,
+    sites: unit.sites,
+    parseErrors: unit.parseErrors,
+    schemaErrors: [],
+    ...generated ? { generated } : {},
+    triggers,
+    ...call ? { call } : {},
+    ...dispatch ? { dispatch } : {},
+    env: bindings(unit, get(root, "env"), ["env"]),
+    ...workflowPermissions ? { permissions: workflowPermissions } : {},
+    jobs: jobs(unit, get(root, "jobs"), ctx)
+  };
+}
+function parseActionFile(dir, file2, text3, ctx) {
+  const { unit, root } = load(file2, text3);
+  if (root) collectSites(unit, "action", dir, ctx, root);
+  const runs = get(root, "runs");
+  const using = str(get(runs, "using"));
+  const name = str(get(root, "name"));
+  const generated = generatedMarker(file2, text3);
+  return {
+    kind: "action",
+    path: dir,
+    file: file2,
+    ...name ? { name } : {},
+    source: unit.source,
+    sites: unit.sites,
+    parseErrors: unit.parseErrors,
+    schemaErrors: [],
+    ...generated ? { generated } : {},
+    ...using ? { using } : {},
+    inputs: inputDecls(unit, get(root, "inputs")),
+    outputs: outputDecls(unit, get(root, "outputs"), ["outputs"], true),
+    steps: steps(unit, get(runs, "steps"), ["runs", "steps"], "action", ctx)
+  };
+}
+
+// ../core/src/project.ts
+import { existsSync as existsSync2, readdirSync, readFileSync, realpathSync, statSync } from "fs";
+import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/types.js
+var TokenType2;
+(function(TokenType3) {
+  TokenType3[TokenType3["String"] = 0] = "String";
+  TokenType3[TokenType3["Sequence"] = 1] = "Sequence";
+  TokenType3[TokenType3["Mapping"] = 2] = "Mapping";
+  TokenType3[TokenType3["BasicExpression"] = 3] = "BasicExpression";
+  TokenType3[TokenType3["InsertExpression"] = 4] = "InsertExpression";
+  TokenType3[TokenType3["Boolean"] = 5] = "Boolean";
+  TokenType3[TokenType3["Number"] = 6] = "Number";
+  TokenType3[TokenType3["Null"] = 7] = "Null";
+})(TokenType2 || (TokenType2 = {}));
+function tokenTypeName(type) {
+  switch (type) {
+    case TokenType2.String:
+      return "StringToken";
+    case TokenType2.Sequence:
+      return "SequenceToken";
+    case TokenType2.Mapping:
+      return "MappingToken";
+    case TokenType2.BasicExpression:
+      return "BasicExpressionToken";
+    case TokenType2.InsertExpression:
+      return "InsertExpressionToken";
+    case TokenType2.Boolean:
+      return "BooleanToken";
+    case TokenType2.Number:
+      return "NumberToken";
+    case TokenType2.Null:
+      return "NullToken";
+    default: {
+      const exhaustiveCheck = type;
+      throw new Error(`Unhandled token type: ${type} ${exhaustiveCheck}}`);
+    }
+  }
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/traversal-state.js
+var TraversalState = class {
+  constructor(parent, token) {
+    this.index = -1;
+    this.isKey = false;
+    this.parent = parent;
+    this._token = token;
+    this.current = token;
+  }
+  moveNext(omitKeys) {
+    switch (this._token.templateTokenType) {
+      case TokenType2.Sequence: {
+        const sequence = this._token;
+        if (++this.index < sequence.count) {
+          this.current = sequence.get(this.index);
+          return true;
+        }
+        this.current = void 0;
+        return false;
+      }
+      case TokenType2.Mapping: {
+        const mapping = this._token;
+        if (this.isKey) {
+          this.isKey = false;
+          this.currentKey = this.current;
+          this.current = mapping.get(this.index).value;
+          return true;
+        }
+        if (++this.index < mapping.count) {
+          if (omitKeys) {
+            this.isKey = false;
+            this.currentKey = mapping.get(this.index).key;
+            this.current = mapping.get(this.index).value;
+            return true;
+          }
+          this.isKey = true;
+          this.currentKey = void 0;
+          this.current = mapping.get(this.index).key;
+          return true;
+        }
+        this.currentKey = void 0;
+        this.current = void 0;
+        return false;
+      }
+      default:
+        throw new Error(`Unexpected token type '${this._token.templateTokenType}' when traversing state`);
+    }
+  }
+  /**
+   * Returns the ancestor tokens from root to the current token's parent container.
+   */
+  getAncestors() {
+    const ancestors = [];
+    let state = this.parent;
+    while (state) {
+      if (state.current) {
+        ancestors.unshift(state.current);
+      }
+      state = state.parent;
+    }
+    return ancestors;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/template-token.js
+var TemplateTokenError = class extends Error {
+  constructor(message, token) {
+    super(message);
+    this.token = token;
+  }
+};
+var TemplateToken = class {
+  /**
+   * Base class for all template tokens
+   */
+  constructor(type, file2, range, definitionInfo) {
+    this.type = type;
+    this.file = file2;
+    this.range = range;
+    this.definitionInfo = definitionInfo;
+  }
+  get templateTokenType() {
+    return this.type;
+  }
+  get line() {
+    return this.range?.start.line;
+  }
+  get col() {
+    return this.range?.start.column;
+  }
+  get definition() {
+    return this.definitionInfo?.definition;
+  }
+  get description() {
+    return this._description || this.propertyDefinition?.description || this.definition?.description;
+  }
+  set description(description) {
+    this._description = description;
+  }
+  typeName() {
+    return tokenTypeName(this.type);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertNull(objectDescription) {
+    if (this.type === TokenType2.Null) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Null)}' was expected.`, this);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertBoolean(objectDescription) {
+    if (this.type === TokenType2.Boolean) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Boolean)}' was expected.`, this);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertNumber(objectDescription) {
+    if (this.type === TokenType2.Number) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Number)}' was expected.`, this);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertString(objectDescription) {
+    if (this.type === TokenType2.String) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.String)}' was expected.`, this);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertScalar(objectDescription) {
+    if (this?.isScalar === true) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type 'ScalarToken' was expected.`, this);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertSequence(objectDescription) {
+    if (this.type === TokenType2.Sequence) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Sequence)}' was expected.`, this);
+  }
+  /**
+   * Asserts expected type and throws a good debug message if unexpected
+   */
+  assertMapping(objectDescription) {
+    if (this.type === TokenType2.Mapping) {
+      return this;
+    }
+    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Mapping)}' was expected.`, this);
+  }
+  /**
+   * Returns all tokens (depth first)
+   * @param value The object to traverse
+   * @param omitKeys Whether to omit mapping keys
+   * @yields A tuple of [parent, token, keyToken, ancestors] for each token in the tree
+   */
+  static *traverse(value, omitKeys) {
+    yield [void 0, value, void 0, []];
+    switch (value.templateTokenType) {
+      case TokenType2.Sequence:
+      case TokenType2.Mapping: {
+        let state = new TraversalState(void 0, value);
+        state = new TraversalState(state, value);
+        while (state.parent) {
+          if (state.moveNext(omitKeys ?? false)) {
+            value = state.current;
+            yield [state.parent?.current, value, state.currentKey, state.getAncestors()];
+            switch (value.type) {
+              case TokenType2.Sequence:
+              case TokenType2.Mapping:
+                state = new TraversalState(state, value);
+                break;
+            }
+          } else {
+            state = state.parent;
+          }
+        }
+        break;
+      }
+    }
+  }
+  toJSON() {
+    return void 0;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-validation-error.js
+var TemplateValidationError = class {
+  constructor(rawMessage, prefix, code2, range) {
+    this.rawMessage = rawMessage;
+    this.prefix = prefix;
+    this.code = code2;
+    this.range = range;
+  }
+  get message() {
+    if (this.prefix) {
+      return `${this.prefix}: ${this.rawMessage}`;
+    }
+    return this.rawMessage;
+  }
+  toString() {
+    return this.message;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-context.js
+var TemplateContext = class {
+  constructor(errors, schema3, trace) {
+    this._fileIds = {};
+    this._fileNames = [];
+    this.expressionFunctions = [];
+    this.expressionNamedContexts = [];
+    this.state = {};
+    this.errors = errors;
+    this.schema = schema3;
+    this.trace = trace;
+  }
+  error(tokenOrFileId, err, tokenRange) {
+    const token = tokenOrFileId;
+    const range = tokenRange || token?.range;
+    const prefix = this.getErrorPrefix(token?.file ?? tokenOrFileId, token?.line, token?.col);
+    const message = err?.message ?? String(err);
+    const e = new TemplateValidationError(message, prefix, void 0, range);
+    this.errors.add(e);
+    this.trace.error(e.message);
+  }
+  /**
+   * Gets or adds the file ID
+   */
+  getFileId(file2) {
+    const key = file2.toUpperCase();
+    let id = this._fileIds[key];
+    if (id === void 0) {
+      id = this._fileNames.length + 1;
+      this._fileIds[key] = id;
+      this._fileNames.push(file2);
+    }
+    return id;
+  }
+  /**
+   * Looks up a file name by ID. Returns undefined if not found.
+   */
+  getFileName(fileId) {
+    return this._fileNames.length >= fileId ? this._fileNames[fileId - 1] : void 0;
+  }
+  /**
+   * Gets a copy of the file table
+   */
+  getFileTable() {
+    return this._fileNames.slice();
+  }
+  getErrorPrefix(fileId, line, column) {
+    const fileName = fileId !== void 0 ? this.getFileName(fileId) : void 0;
+    if (fileName) {
+      if (line !== void 0 && column !== void 0) {
+        return `${fileName} (Line: ${line}, Col: ${column})`;
+      } else {
+        return fileName;
+      }
+    } else if (line !== void 0 && column !== void 0) {
+      return `(Line: ${line}, Col: ${column})`;
+    } else {
+      return "";
+    }
+  }
+};
+var TemplateValidationErrors = class {
+  constructor(maxErrors, maxMessageLength) {
+    this._errors = [];
+    this._maxErrors = maxErrors ?? 0;
+    this._maxMessageLength = maxMessageLength ?? 0;
+  }
+  get count() {
+    return this._errors.length;
+  }
+  add(err) {
+    for (let e of Array.isArray(err) ? err : [err]) {
+      if (this._maxErrors <= 0 || this._errors.length < this._maxErrors) {
+        if (this._maxMessageLength > 0 && e.message.length > this._maxMessageLength) {
+          e = new TemplateValidationError(e.message.substring(0, this._maxMessageLength) + "[...]", e.prefix, e.code, e.range);
+        }
+        this._errors.push(e);
+      }
+    }
+  }
+  /**
+   * Throws if any errors
+   * @param prefix The error message prefix
+   */
+  check(prefix) {
+    if (this._errors.length <= 0) {
+      return;
+    }
+    if (!prefix) {
+      prefix = "The template is not valid.";
+    }
+    throw new Error(`${prefix} ${this._errors.map((x) => x.message).join(",")}`);
+  }
+  clear() {
+    this._errors = [];
+  }
+  getErrors() {
+    return this._errors.slice();
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/definition-info.js
+var DefinitionInfo = class {
+  constructor(schemaOrParent, nameOrDefinition) {
+    this.isDefinitionInfo = true;
+    const parent = schemaOrParent?.isDefinitionInfo === true ? schemaOrParent : void 0;
+    this._schema = parent === void 0 ? schemaOrParent : parent._schema;
+    this.definition = typeof nameOrDefinition === "string" ? this._schema.getDefinition(nameOrDefinition) : nameOrDefinition;
+    if (this.definition.readerContext.length > 0) {
+      this.allowedContext = [];
+      const upperSeen = {};
+      for (const context of parent?.allowedContext ?? []) {
+        this.allowedContext.push(context);
+        upperSeen[context.toUpperCase()] = true;
+      }
+      for (const context of this.definition.readerContext) {
+        const upper = context.toUpperCase();
+        if (!upperSeen[upper]) {
+          this.allowedContext.push(context);
+          upperSeen[upper] = true;
+        }
+      }
+    } else {
+      this.allowedContext = parent?.allowedContext ?? [];
+    }
+  }
+  getScalarDefinitions() {
+    return this._schema.getScalarDefinitions(this.definition);
+  }
+  getDefinitionsOfType(type) {
+    return this._schema.getDefinitionsOfType(this.definition, type);
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/definition-type.js
+var DefinitionType;
+(function(DefinitionType2) {
+  DefinitionType2[DefinitionType2["Null"] = 0] = "Null";
+  DefinitionType2[DefinitionType2["Boolean"] = 1] = "Boolean";
+  DefinitionType2[DefinitionType2["Number"] = 2] = "Number";
+  DefinitionType2[DefinitionType2["String"] = 3] = "String";
+  DefinitionType2[DefinitionType2["Sequence"] = 4] = "Sequence";
+  DefinitionType2[DefinitionType2["Mapping"] = 5] = "Mapping";
+  DefinitionType2[DefinitionType2["OneOf"] = 6] = "OneOf";
+  DefinitionType2[DefinitionType2["AllowedValues"] = 7] = "AllowedValues";
+})(DefinitionType || (DefinitionType = {}));
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-constants.js
+var ALLOWED_VALUES = "allowed-values";
+var ANY = "any";
+var BOOLEAN = "boolean";
+var BOOLEAN_DEFINITION = "boolean-definition";
+var BOOLEAN_DEFINITION_PROPERTIES = "boolean-definition-properties";
+var CLOSE_EXPRESSION = "}}";
+var CONSTANT = "constant";
+var CONTEXT = "context";
+var DEFINITION = "definition";
+var DEFINITIONS = "definitions";
+var DESCRIPTION = "description";
+var IGNORE_CASE = "ignore-case";
+var INSERT_DIRECTIVE = "insert";
+var IS_EXPRESSION = "is-expression";
+var ITEM_TYPE = "item-type";
+var LOOSE_KEY_TYPE = "loose-key-type";
+var LOOSE_VALUE_TYPE = "loose-value-type";
+var MAX_CONSTANT = "MAX";
+var MAPPING = "mapping";
+var MAPPING_DEFINITION = "mapping-definition";
+var MAPPING_DEFINITION_PROPERTIES = "mapping-definition-properties";
+var MAPPING_PROPERTY_VALUE = "mapping-property-value";
+var NON_EMPTY_STRING = "non-empty-string";
+var NULL = "null";
+var NULL_DEFINITION = "null-definition";
+var NULL_DEFINITION_PROPERTIES = "null-definition-properties";
+var NUMBER = "number";
+var NUMBER_DEFINITION = "number-definition";
+var NUMBER_DEFINITION_PROPERTIES = "number-definition-properties";
+var ONE_OF = "one-of";
+var ONE_OF_DEFINITION = "one-of-definition";
+var OPEN_EXPRESSION = "${{";
+var PROPERTY_VALUE = "property-value";
+var PROPERTIES = "properties";
+var REQUIRED = "required";
+var REQUIRE_NON_EMPTY = "require-non-empty";
+var SCALAR = "scalar";
+var SEQUENCE = "sequence";
+var SEQUENCE_DEFINITION = "sequence-definition";
+var SEQUENCE_DEFINITION_PROPERTIES = "sequence-definition-properties";
+var TYPE = "type";
+var SEQUENCE_OF_NON_EMPTY_STRING = "sequence-of-non-empty-string";
+var STRING = "string";
+var STRING_DEFINITION = "string-definition";
+var STRING_DEFINITION_PROPERTIES = "string-definition-properties";
+var TEMPLATE_SCHEMA = "template-schema";
+var VERSION = "version";
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/scalar-token.js
+var ScalarToken = class extends TemplateToken {
+  constructor(type, file2, range, definitionInfo) {
+    super(type, file2, range, definitionInfo);
+  }
+  get isScalar() {
+    return true;
+  }
+  static trimDisplayString(displayString) {
+    let firstLine = displayString.trimStart();
+    const firstNewLine = firstLine.indexOf("\n");
+    const firstCarriageReturn = firstLine.indexOf("\r");
+    if (firstNewLine >= 0 || firstCarriageReturn >= 0) {
+      firstLine = firstLine.substr(0, Math.min(firstNewLine >= 0 ? firstNewLine : Number.MAX_VALUE, firstCarriageReturn >= 0 ? firstCarriageReturn : Number.MAX_VALUE));
+    }
+    return firstLine;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/literal-token.js
+var LiteralToken = class extends ScalarToken {
+  constructor(type, file2, range, definitionInfo) {
+    super(type, file2, range, definitionInfo);
+  }
+  get isLiteral() {
+    return true;
+  }
+  get isExpression() {
+    return false;
+  }
+  toDisplayString() {
+    return ScalarToken.trimDisplayString(this.toString());
+  }
+  /**
+   * Throws a good debug message when an unexpected literal value is encountered
+   */
+  assertUnexpectedValue(objectDescription) {
+    throw new Error(`Error while reading '${objectDescription}'. Unexpected value '${this.toString()}'`);
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/string-token.js
+var StringToken = class _StringToken extends LiteralToken {
+  constructor(file2, range, value, definitionInfo, source, blockScalarHeader) {
+    super(TokenType2.String, file2, range, definitionInfo);
+    this.value = value;
+    this.source = source;
+    this.blockScalarHeader = blockScalarHeader;
+  }
+  clone(omitSource) {
+    return omitSource ? new _StringToken(void 0, void 0, this.value, this.definitionInfo, this.source, this.blockScalarHeader) : new _StringToken(this.file, this.range, this.value, this.definitionInfo, this.source, this.blockScalarHeader);
+  }
+  toString() {
+    return this.value;
+  }
+  toJSON() {
+    return this.value;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/number-token.js
+var NumberToken = class _NumberToken extends LiteralToken {
+  constructor(file2, range, value, definitionInfo) {
+    super(TokenType2.Number, file2, range, definitionInfo);
+    this.num = value;
+  }
+  get value() {
+    return this.num;
+  }
+  clone(omitSource) {
+    return omitSource ? new _NumberToken(void 0, void 0, this.num, this.definitionInfo) : new _NumberToken(this.file, this.range, this.num, this.definitionInfo);
+  }
+  toString() {
+    return `${this.num}`;
+  }
+  toJSON() {
+    return this.num;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/boolean-token.js
+var BooleanToken = class _BooleanToken extends LiteralToken {
+  constructor(file2, range, value, definitionInfo) {
+    super(TokenType2.Boolean, file2, range, definitionInfo);
+    this.bool = value;
+  }
+  get value() {
+    return this.bool;
+  }
+  clone(omitSource) {
+    return omitSource ? new _BooleanToken(void 0, void 0, this.bool, this.definitionInfo) : new _BooleanToken(this.file, this.range, this.bool, this.definitionInfo);
+  }
+  toString() {
+    return this.bool ? "true" : "false";
+  }
+  toJSON() {
+    return this.bool;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/null-token.js
+var NullToken = class _NullToken extends LiteralToken {
+  constructor(file2, range, definitionInfo) {
+    super(TokenType2.Null, file2, range, definitionInfo);
+  }
+  clone(omitSource) {
+    return omitSource ? new _NullToken(void 0, void 0, this.definitionInfo) : new _NullToken(this.file, this.range, this.definitionInfo);
+  }
+  toString() {
+    return "";
+  }
+  toJSON() {
+    return null;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/key-value-pair.js
+var KeyValuePair = class {
+  constructor(key, value) {
+    this.key = key;
+    this.value = value;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/sequence-token.js
+var SequenceToken = class _SequenceToken extends TemplateToken {
+  constructor(file2, range, definitionInfo) {
+    super(TokenType2.Sequence, file2, range, definitionInfo);
+    this.seq = [];
+  }
+  get count() {
+    return this.seq.length;
+  }
+  get isScalar() {
+    return false;
+  }
+  get isLiteral() {
+    return false;
+  }
+  get isExpression() {
+    return false;
+  }
+  add(value) {
+    this.seq.push(value);
+  }
+  get(index) {
+    return this.seq[index];
+  }
+  clone(omitSource) {
+    const result = omitSource ? new _SequenceToken(void 0, void 0, this.definitionInfo) : new _SequenceToken(this.file, this.range, this.definitionInfo);
+    for (const item of this.seq) {
+      result.add(item.clone(omitSource));
+    }
+    return result;
+  }
+  toJSON() {
+    return {
+      type: TokenType2.Sequence,
+      seq: this.seq
+    };
+  }
+  *[Symbol.iterator]() {
+    for (const item of this.seq) {
+      yield item;
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/mapping-token.js
+var MappingToken = class _MappingToken extends TemplateToken {
+  constructor(file2, range, definitionInfo) {
+    super(TokenType2.Mapping, file2, range, definitionInfo);
+    this.map = [];
+  }
+  get count() {
+    return this.map.length;
+  }
+  get isScalar() {
+    return false;
+  }
+  get isLiteral() {
+    return false;
+  }
+  get isExpression() {
+    return false;
+  }
+  add(key, value) {
+    this.map.push(new KeyValuePair(key, value));
+  }
+  get(index) {
+    return this.map[index];
+  }
+  find(key) {
+    const pair = this.map.find((pair2) => pair2.key.toString() === key);
+    return pair?.value;
+  }
+  remove(index) {
+    this.map.splice(index, 1);
+  }
+  clone(omitSource) {
+    const result = omitSource ? new _MappingToken(void 0, void 0, this.definitionInfo) : new _MappingToken(this.file, this.range, this.definitionInfo);
+    for (const item of this.map) {
+      result.add(item.key.clone(omitSource), item.value.clone(omitSource));
+    }
+    return result;
+  }
+  toJSON() {
+    const items = [];
+    for (const item of this.map) {
+      items.push({ Key: item.key, Value: item.value });
+    }
+    return {
+      type: TokenType2.Mapping,
+      map: items
+    };
+  }
+  *[Symbol.iterator]() {
+    for (const item of this.map) {
+      yield item;
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/allowed-context.js
+function splitAllowedContext(allowedContext) {
+  const FUNCTION_REGEXP = /^([a-zA-Z0-9_]+)\(([0-9]+),([0-9]+|MAX)\)$/;
+  const namedContexts = [];
+  const functions = [];
+  if (allowedContext.length > 0) {
+    for (const contextItem of allowedContext) {
+      const match = contextItem.match(FUNCTION_REGEXP);
+      if (match) {
+        const functionName = match[1];
+        const minParameters = Number.parseInt(match[2]);
+        const maxParametersRaw = match[3];
+        const maxParameters = maxParametersRaw === MAX_CONSTANT ? Number.MAX_SAFE_INTEGER : Number.parseInt(maxParametersRaw);
+        functions.push({
+          name: functionName,
+          minArgs: minParameters,
+          maxArgs: maxParameters
+        });
+      } else {
+        namedContexts.push(contextItem);
+      }
+    }
+  }
+  return {
+    namedContexts,
+    functions
+  };
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/expression-token.js
+var ExpressionToken = class extends ScalarToken {
+  constructor(type, file2, range, directive, definitionInfo) {
+    super(type, file2, range, definitionInfo);
+    this.directive = directive;
+  }
+  get isLiteral() {
+    return false;
+  }
+  get isExpression() {
+    return true;
+  }
+  static validateExpression(expression, allowedContext) {
+    const { namedContexts, functions } = splitAllowedContext(allowedContext);
+    const lexer = new Lexer(expression);
+    const result = lexer.lex();
+    const p = new Parser(result.tokens, namedContexts, functions);
+    p.parse();
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/basic-expression-token.js
+var BasicExpressionToken = class _BasicExpressionToken extends ExpressionToken {
+  /**
+   * @param file The file ID where this token originated
+   * @param range The range of the entire expression including `${{` and `}}`
+   * @param expression The expression string without `${{` and `}}` markers
+   * @param definitionInfo Schema definition info for this token
+   * @param originalExpressions If transformed from individual expressions (e.g., format()), these are the originals
+   * @param source The original source string from the YAML
+   * @param expressionRange The range of just the expression, excluding `${{` and `}}`
+   * @param blockScalarHeader The block scalar header (e.g., "|", "|-") if parsed from a YAML block scalar
+   */
+  constructor(file2, range, expression, definitionInfo, originalExpressions, source, expressionRange, blockScalarHeader) {
+    super(TokenType2.BasicExpression, file2, range, void 0, definitionInfo);
+    this.expr = expression;
+    this.source = source;
+    this.originalExpressions = originalExpressions;
+    this.expressionRange = expressionRange;
+    this.blockScalarHeader = blockScalarHeader;
+  }
+  get expression() {
+    return this.expr;
+  }
+  clone(omitSource) {
+    return omitSource ? new _BasicExpressionToken(void 0, void 0, this.expr, this.definitionInfo, this.originalExpressions, this.source, this.expressionRange, this.blockScalarHeader) : new _BasicExpressionToken(this.file, this.range, this.expr, this.definitionInfo, this.originalExpressions, this.source, this.expressionRange, this.blockScalarHeader);
+  }
+  toString() {
+    return `${OPEN_EXPRESSION} ${this.expr} ${CLOSE_EXPRESSION}`;
+  }
+  toDisplayString() {
+    return ScalarToken.trimDisplayString(this.toString());
+  }
+  toJSON() {
+    return {
+      type: TokenType2.BasicExpression,
+      expr: this.expr
+    };
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/insert-expression-token.js
+var InsertExpressionToken = class _InsertExpressionToken extends ExpressionToken {
+  constructor(file2, range, definitionInfo) {
+    super(TokenType2.InsertExpression, file2, range, INSERT_DIRECTIVE, definitionInfo);
+  }
+  clone(omitSource) {
+    return omitSource ? new _InsertExpressionToken(void 0, void 0, this.definitionInfo) : new _InsertExpressionToken(this.file, this.range, this.definitionInfo);
+  }
+  toString() {
+    return `${OPEN_EXPRESSION} ${INSERT_DIRECTIVE} ${CLOSE_EXPRESSION}`;
+  }
+  toDisplayString() {
+    return ScalarToken.trimDisplayString(this.toString());
+  }
+  toJSON() {
+    return {
+      type: TokenType2.InsertExpression,
+      expr: "insert"
+    };
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/type-guards.js
+function isLiteral(t) {
+  return t.isLiteral;
+}
+function isString(t) {
+  return isLiteral(t) && t.templateTokenType === TokenType2.String;
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-reader.js
+var WHITESPACE_PATTERN = /\s/;
+var backgroundStepProperties = /* @__PURE__ */ new Set(["background", "wait", "wait-all", "cancel"]);
+var backgroundStepOnlyProperties = /* @__PURE__ */ new Set(["wait", "wait-all", "cancel"]);
+function readTemplate(context, type, objectReader, fileId) {
+  const reader = new TemplateReader(context, objectReader, fileId);
+  let value;
+  try {
+    objectReader.validateStart();
+    const definition = new DefinitionInfo(context.schema, type);
+    value = reader.readValue(definition);
+    objectReader.validateEnd();
+  } catch (err) {
+    context.error(fileId, err);
+  }
+  return value;
+}
+var TemplateReader = class {
+  constructor(context, objectReader, fileId) {
+    this._context = context;
+    this._schema = context.schema;
+    this._objectReader = objectReader;
+    this._fileId = fileId;
+  }
+  readValue(definition) {
+    const literal2 = this._objectReader.allowLiteral();
+    if (literal2) {
+      let scalar = this.parseScalar(literal2, definition);
+      scalar = this.validate(scalar, definition);
+      return scalar;
+    }
+    const sequence = this._objectReader.allowSequenceStart();
+    if (sequence) {
+      const sequenceDefinition = definition.getDefinitionsOfType(DefinitionType.Sequence)[0];
+      if (sequenceDefinition) {
+        const itemDefinition = new DefinitionInfo(definition, sequenceDefinition.itemType);
+        while (!this._objectReader.allowSequenceEnd()) {
+          const item = this.readValue(itemDefinition);
+          sequence.add(item);
+        }
+      } else {
+        this._context.error(sequence, "A sequence was not expected");
+        while (!this._objectReader.allowSequenceEnd()) {
+          this.skipValue();
+        }
+      }
+      sequence.definitionInfo = definition;
+      return sequence;
+    }
+    const mapping = this._objectReader.allowMappingStart();
+    if (mapping) {
+      const mappingDefinitions = definition.getDefinitionsOfType(DefinitionType.Mapping);
+      if (mappingDefinitions.length > 0) {
+        if (mappingDefinitions.length > 1 || Object.keys(mappingDefinitions[0].properties).length > 0 || !mappingDefinitions[0].looseKeyType) {
+          this.handleMappingWithWellKnownProperties(definition, mappingDefinitions, mapping);
+        } else {
+          const keyDefinition = new DefinitionInfo(definition, mappingDefinitions[0].looseKeyType);
+          const valueDefinition = new DefinitionInfo(definition, mappingDefinitions[0].looseValueType);
+          this.handleMappingWithAllLooseProperties(definition, keyDefinition, valueDefinition, mappingDefinitions[0], mapping);
+        }
+      } else {
+        this._context.error(mapping, "A mapping was not expected");
+        while (!this._objectReader.allowMappingEnd()) {
+          this.skipValue();
+          this.skipValue();
+        }
+      }
+      if (!mapping.definitionInfo) {
+        mapping.definitionInfo = definition;
+      }
+      return mapping;
+    }
+    throw new Error("Expected a scalar value, a sequence, or a mapping");
+  }
+  handleMappingWithWellKnownProperties(definition, mappingDefinitions, mapping) {
+    let looseKeyType;
+    let looseValueType;
+    let looseKeyDefinition;
+    let looseValueDefinition;
+    if (mappingDefinitions[0].looseKeyType) {
+      looseKeyType = mappingDefinitions[0].looseKeyType;
+      looseValueType = mappingDefinitions[0].looseValueType;
+    }
+    const upperKeys = {};
+    let hasExpressionKey = false;
+    let rawLiteral;
+    while (rawLiteral = this._objectReader.allowLiteral()) {
+      const nextKeyScalar = this.parseScalar(rawLiteral, definition);
+      if (nextKeyScalar.isExpression) {
+        hasExpressionKey = true;
+        if (definition.allowedContext.length > 0) {
+          const anyDefinition = new DefinitionInfo(definition, ANY);
+          mapping.add(nextKeyScalar, this.readValue(anyDefinition));
+        } else {
+          this._context.error(nextKeyScalar, "A template expression is not allowed in this context");
+          this.skipValue();
+        }
+        continue;
+      }
+      const nextKey = nextKeyScalar.templateTokenType === TokenType2.String ? nextKeyScalar : new StringToken(nextKeyScalar.file, nextKeyScalar.range, nextKeyScalar.toString(), nextKeyScalar.definitionInfo);
+      if (nextKey.value) {
+        const upperKey = nextKey.value.toUpperCase();
+        if (upperKeys[upperKey]) {
+          this._context.error(nextKey, `'${nextKey.value}' is already defined`);
+          this.skipValue();
+          continue;
+        }
+        upperKeys[upperKey] = true;
+      }
+      const nextPropertyDef = this._schema.matchPropertyAndFilter(mappingDefinitions, nextKey.value);
+      if (nextPropertyDef) {
+        if (!this.backgroundStepsEnabled() && backgroundStepProperties.has(nextKey.value)) {
+          this._context.error(nextKey, `Unexpected value '${nextKey.value}'`);
+          this.skipValue();
+          continue;
+        }
+        const nextDefinition = new DefinitionInfo(definition, nextPropertyDef.type);
+        nextKey.definitionInfo = nextDefinition;
+        if (nextPropertyDef.description) {
+          nextKey.description = nextPropertyDef.description;
+        }
+        const nextValue = this.readValue(nextDefinition);
+        mapping.add(nextKey, nextValue);
+        continue;
+      }
+      if (looseKeyType) {
+        if (!looseKeyDefinition) {
+          looseKeyDefinition = new DefinitionInfo(definition, looseKeyType);
+          looseValueDefinition = new DefinitionInfo(definition, looseValueType);
+        }
+        this.validate(nextKey, looseKeyDefinition);
+        const nextDefinition = new DefinitionInfo(definition, mappingDefinitions[0].looseValueType);
+        nextKey.definitionInfo = nextDefinition;
+        const nextValue = this.readValue(looseValueDefinition);
+        mapping.add(nextKey, nextValue);
+        continue;
+      }
+      this._context.error(nextKey, `Unexpected value '${nextKey.value}'`);
+      this.skipValue();
+    }
+    if (mappingDefinitions.length === 1) {
+      mapping.definitionInfo = new DefinitionInfo(definition, mappingDefinitions[0]);
+    }
+    if (mappingDefinitions.length > 1) {
+      const hitCount = {};
+      for (const mappingDefinition of mappingDefinitions) {
+        for (const key of Object.keys(mappingDefinition.properties)) {
+          hitCount[key] = (hitCount[key] ?? 0) + 1;
+        }
+      }
+      const nonDuplicates = [];
+      for (const key of Object.keys(hitCount)) {
+        if (hitCount[key] === 1) {
+          nonDuplicates.push(key);
+        }
+      }
+      const properties = this.backgroundStepsEnabled() ? nonDuplicates : nonDuplicates.filter((property) => !backgroundStepOnlyProperties.has(property));
+      this._context.error(mapping, `There's not enough info to determine what you meant. Add one of these properties: ${properties.sort().join(", ")}`);
+    } else if (mappingDefinitions.length === 1 && !hasExpressionKey) {
+      for (const propertyName of Object.keys(mappingDefinitions[0].properties)) {
+        const propertyDef = mappingDefinitions[0].properties[propertyName];
+        if (propertyDef.required && !upperKeys[propertyName.toUpperCase()]) {
+          this._context.error(mapping, `Required property is missing: ${propertyName}`);
+        }
+      }
+    }
+    this.expectMappingEnd();
+  }
+  handleMappingWithAllLooseProperties(definition, keyDefinition, valueDefinition, mappingDefinition, mapping) {
+    let nextValue;
+    const upperKeys = {};
+    let rawLiteral;
+    while (rawLiteral = this._objectReader.allowLiteral()) {
+      const nextKeyScalar = this.parseScalar(rawLiteral, definition);
+      nextKeyScalar.definitionInfo = keyDefinition;
+      if (nextKeyScalar.isExpression) {
+        if (definition.allowedContext.length > 0) {
+          nextValue = this.readValue(valueDefinition);
+          mapping.add(nextKeyScalar, nextValue);
+        } else {
+          this._context.error(nextKeyScalar, "A template expression is not allowed in this context");
+          this.skipValue();
+        }
+        continue;
+      }
+      const nextKey = nextKeyScalar.templateTokenType === TokenType2.String ? nextKeyScalar : new StringToken(nextKeyScalar.file, nextKeyScalar.range, nextKeyScalar.toString(), nextKeyScalar.definitionInfo);
+      if (nextKey.value) {
+        const upperKey = nextKey.value.toUpperCase();
+        if (upperKeys[upperKey]) {
+          this._context.error(nextKey, `'${nextKey.value}' is already defined`);
+          this.skipValue();
+          continue;
+        }
+        upperKeys[upperKey] = true;
+      }
+      this.validate(nextKey, keyDefinition);
+      const nextDefinition = new DefinitionInfo(definition, mappingDefinition.looseValueType);
+      nextKey.definitionInfo = nextDefinition;
+      nextValue = this.readValue(valueDefinition);
+      mapping.add(nextKey, nextValue);
+    }
+    this.expectMappingEnd();
+  }
+  expectMappingEnd() {
+    if (!this._objectReader.allowMappingEnd()) {
+      throw new Error("Expected mapping end");
+    }
+  }
+  skipValue() {
+    if (this._objectReader.allowLiteral()) {
+    } else if (this._objectReader.allowSequenceStart()) {
+      while (!this._objectReader.allowSequenceEnd()) {
+        this.skipValue();
+      }
+    } else if (this._objectReader.allowMappingStart()) {
+      while (!this._objectReader.allowMappingEnd()) {
+        this.skipValue();
+        this.skipValue();
+      }
+    } else {
+      throw new Error("Expected a scalar value, a sequence, or a mapping");
+    }
+  }
+  validate(scalar, definition) {
+    switch (scalar.templateTokenType) {
+      case TokenType2.Null:
+      case TokenType2.Boolean:
+      case TokenType2.Number:
+      case TokenType2.String: {
+        const literal2 = scalar;
+        const scalarDefinitions = definition.getScalarDefinitions();
+        let relevantDefinition;
+        if (relevantDefinition = scalarDefinitions.find((x) => x.isMatch(literal2))) {
+          scalar.definitionInfo = new DefinitionInfo(definition, relevantDefinition);
+          return scalar;
+        }
+        if (literal2.templateTokenType !== TokenType2.String) {
+          const stringLiteral = new StringToken(literal2.file, literal2.range, literal2.toString(), literal2.definitionInfo);
+          if (relevantDefinition = scalarDefinitions.find((x) => x.isMatch(stringLiteral))) {
+            stringLiteral.definitionInfo = new DefinitionInfo(definition, relevantDefinition);
+            return stringLiteral;
+          }
+        }
+        this._context.error(literal2, `Unexpected value '${literal2.toString()}'`);
+        return scalar;
+      }
+      case TokenType2.BasicExpression:
+        if (definition.allowedContext.length === 0) {
+          this._context.error(scalar, "A template expression is not allowed in this context");
+        }
+        return scalar;
+      default:
+        this._context.error(scalar, `Unexpected value '${scalar.toString()}'`);
+        return scalar;
+    }
+  }
+  parseScalar(token, definitionInfo) {
+    if (!isString(token) || !token.value) {
+      return token;
+    }
+    const allowedContext = definitionInfo.allowedContext;
+    const isSingleLine = token.range === void 0 || token.range.start.line === token.range.end.line;
+    const raw = isSingleLine ? token.value : token.source ?? token.value;
+    let startExpression = raw.indexOf(OPEN_EXPRESSION);
+    if (startExpression < 0) {
+      return token;
+    }
+    let encounteredError = false;
+    const segments = [];
+    let i = 0;
+    while (i < raw.length) {
+      if (i === startExpression) {
+        startExpression = i;
+        let endExpression = -1;
+        let inString = false;
+        for (i += OPEN_EXPRESSION.length; i < raw.length; i++) {
+          if (raw[i] === "'") {
+            inString = !inString;
+          } else if (!inString && raw[i] === "}" && raw[i - 1] === "}") {
+            endExpression = i;
+            i++;
+            break;
+          }
+        }
+        if (endExpression < startExpression) {
+          this._context.error(token, "The expression is not closed. An unescaped ${{ sequence was found, but the closing }} sequence was not found.");
+          return token;
+        }
+        const rawExpression = raw.substr(startExpression + OPEN_EXPRESSION.length, endExpression - startExpression + 1 - OPEN_EXPRESSION.length - CLOSE_EXPRESSION.length);
+        let tr = token.range;
+        if (isSingleLine) {
+          const offset = (token.source ?? raw).indexOf(OPEN_EXPRESSION) - raw.indexOf(OPEN_EXPRESSION);
+          tr = {
+            start: { line: tr.start.line, column: tr.start.column + startExpression + offset },
+            end: { line: tr.end.line, column: tr.start.column + endExpression + 1 + offset }
+          };
+        } else {
+          const startRaw = raw.substring(0, startExpression);
+          const adjustedStartLine = startRaw.split("\n").length;
+          const beginningOfLine = startRaw.lastIndexOf("\n");
+          const adjustedStart = startExpression - beginningOfLine;
+          const adjustedEnd = endExpression - beginningOfLine + 1;
+          tr = {
+            start: { line: tr.start.line + adjustedStartLine, column: adjustedStart },
+            end: { line: tr.start.line + adjustedStartLine, column: adjustedEnd }
+          };
+        }
+        const expression = this.parseIntoExpressionToken(tr, rawExpression, allowedContext, token, definitionInfo);
+        if (!expression) {
+          encounteredError = true;
+        } else {
+          if (expression.directive && (startExpression !== 0 || i < raw.length)) {
+            this._context.error(token, `The directive '${expression.directive}' is not allowed in this context. Directives are not supported for expressions that are embedded within a string. Directives are only supported when the entire value is an expression.`);
+            return token;
+          }
+          segments.push(expression);
+        }
+        startExpression = raw.indexOf(OPEN_EXPRESSION, i);
+      } else if (i < startExpression) {
+        this.addString(segments, token.range, raw.substr(i, startExpression - i), token.definitionInfo);
+        i = startExpression;
+      } else {
+        this.addString(segments, token.range, raw.substr(i), token.definitionInfo);
+        break;
+      }
+    }
+    if (encounteredError) {
+      return token;
+    }
+    if (segments.length === 1 && segments[0].templateTokenType === TokenType2.BasicExpression) {
+      const basicExpression = segments[0];
+      const str2 = this.getExpressionString(basicExpression.expression);
+      if (str2 !== void 0) {
+        return new StringToken(this._fileId, token.range, str2, token.definitionInfo);
+      }
+    }
+    if (segments.length === 1) {
+      return segments[0];
+    }
+    const format2 = [];
+    const args = [];
+    const expressionTokens = [];
+    let argIndex = 0;
+    for (const segment of segments) {
+      if (isString(segment)) {
+        const text3 = segment.value.replace(/'/g, "''").replace(/\{/g, "{{").replace(/\}/g, "}}");
+        format2.push(text3);
+      } else {
+        format2.push(`{${argIndex}}`);
+        argIndex++;
+        const expression = segment;
+        args.push(", ");
+        args.push(expression.expression);
+        expressionTokens.push(expression);
+      }
+    }
+    return new BasicExpressionToken(this._fileId, token.range, `format('${format2.join("")}'${args.join("")})`, definitionInfo, expressionTokens, raw, void 0, token.blockScalarHeader);
+  }
+  parseIntoExpressionToken(tr, rawExpression, allowedContext, token, definitionInfo) {
+    const parseExpressionResult = this.parseExpression(tr, token, rawExpression, allowedContext, definitionInfo);
+    if (parseExpressionResult.error) {
+      this._context.error(token, parseExpressionResult.error, tr);
+      return void 0;
+    }
+    return parseExpressionResult.expression;
+  }
+  parseExpression(range, token, value, allowedContext, definitionInfo) {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return {
+        error: new Error("An expression was expected")
+      };
+    }
+    const matchDirectiveResult = this.matchDirective(trimmed, INSERT_DIRECTIVE, 0);
+    if (matchDirectiveResult.isMatch) {
+      return {
+        expression: new InsertExpressionToken(this._fileId, range, definitionInfo)
+      };
+    } else if (matchDirectiveResult.error) {
+      return {
+        error: matchDirectiveResult.error
+      };
+    }
+    try {
+      ExpressionToken.validateExpression(trimmed, allowedContext);
+    } catch (err) {
+      return {
+        error: err
+      };
+    }
+    const startTrim = value.length - value.trimStart().length;
+    const endTrim = value.length - value.trimEnd().length;
+    const expressionRange = {
+      start: {
+        ...range.start,
+        column: range.start.column + OPEN_EXPRESSION.length + startTrim
+      },
+      end: {
+        ...range.end,
+        column: range.end.column - CLOSE_EXPRESSION.length - endTrim
+      }
+    };
+    return {
+      expression: new BasicExpressionToken(this._fileId, range, trimmed, definitionInfo, void 0, token.source, expressionRange, token.blockScalarHeader),
+      error: void 0
+    };
+  }
+  addString(segments, range, value, definition) {
+    if (segments.length > 0 && segments[segments.length - 1].templateTokenType === TokenType2.String) {
+      const lastSegment = segments[segments.length - 1];
+      segments[segments.length - 1] = new StringToken(this._fileId, range, `${lastSegment.value}${value}`, definition);
+    } else {
+      segments.push(new StringToken(this._fileId, range, value, definition));
+    }
+  }
+  matchDirective(trimmed, directive, expectedParameters) {
+    const parameters = [];
+    if (trimmed.startsWith(directive) && (trimmed.length === directive.length || WHITESPACE_PATTERN.test(trimmed[directive.length]))) {
+      let startIndex = directive.length;
+      let inString = false;
+      let parens = 0;
+      for (let i = startIndex; i < trimmed.length; i++) {
+        const c = trimmed[i];
+        if (WHITESPACE_PATTERN.test(c) && !inString && parens == 0) {
+          if (startIndex < 1) {
+            parameters.push(trimmed.substr(startIndex, i - startIndex));
+          }
+          startIndex = i + 1;
+        } else if (c === "'") {
+          inString = !inString;
+        } else if (c === "(" && !inString) {
+          parens++;
+        } else if (c === ")" && !inString) {
+          parens--;
+        }
+      }
+      if (startIndex < trimmed.length) {
+        parameters.push(trimmed.substr(startIndex));
+      }
+      if (expectedParameters != parameters.length) {
+        return {
+          isMatch: false,
+          parameters: [],
+          error: new Error(`Exactly ${expectedParameters} parameter(s) were expected following the directive '${directive}'. Actual parameter count: ${parameters.length}`)
+        };
+      }
+      return {
+        isMatch: true,
+        parameters
+      };
+    }
+    return {
+      isMatch: false,
+      parameters
+    };
+  }
+  getExpressionString(trimmed) {
+    const result = [];
+    let inString = false;
+    for (let i = 0; i < trimmed.length; i++) {
+      const c = trimmed[i];
+      if (c === "'") {
+        inString = !inString;
+        if (inString && i !== 0) {
+          result.push(c);
+        }
+      } else if (!inString) {
+        return void 0;
+      } else {
+        result.push(c);
+      }
+    }
+    return result.join("");
+  }
+  backgroundStepsEnabled() {
+    return this._context.state.featureFlags?.isEnabled("allowBackgroundSteps") ?? false;
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/workflow-constants.js
+var WORKFLOW_ROOT = "workflow-root-strict";
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/parse-event.js
+var ParseEvent = class {
+  constructor(type, token) {
+    this.type = type;
+    this.token = token;
+  }
+};
+var EventType;
+(function(EventType2) {
+  EventType2[EventType2["Literal"] = 0] = "Literal";
+  EventType2[EventType2["SequenceStart"] = 1] = "SequenceStart";
+  EventType2[EventType2["SequenceEnd"] = 2] = "SequenceEnd";
+  EventType2[EventType2["MappingStart"] = 3] = "MappingStart";
+  EventType2[EventType2["MappingEnd"] = 4] = "MappingEnd";
+  EventType2[EventType2["DocumentStart"] = 5] = "DocumentStart";
+  EventType2[EventType2["DocumentEnd"] = 6] = "DocumentEnd";
+})(EventType || (EventType = {}));
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/json-object-reader.js
+var JSONObjectReader = class {
+  constructor(fileId, input3) {
+    this._fileId = fileId;
+    const value = JSON.parse(input3);
+    this._generator = this.getParseEvents(value, true);
+    this._current = this._generator.next();
+  }
+  allowLiteral() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.Literal) {
+        this._current = this._generator.next();
+        return parseEvent.token;
+      }
+    }
+    return void 0;
+  }
+  allowSequenceStart() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.SequenceStart) {
+        this._current = this._generator.next();
+        return parseEvent.token;
+      }
+    }
+    return void 0;
+  }
+  allowSequenceEnd() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.SequenceEnd) {
+        this._current = this._generator.next();
+        return true;
+      }
+    }
+    return false;
+  }
+  allowMappingStart() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.MappingStart) {
+        this._current = this._generator.next();
+        return parseEvent.token;
+      }
+    }
+    return void 0;
+  }
+  allowMappingEnd() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.MappingEnd) {
+        this._current = this._generator.next();
+        return true;
+      }
+    }
+    return false;
+  }
+  validateEnd() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.DocumentEnd) {
+        this._current = this._generator.next();
+        return;
+      }
+    }
+    throw new Error("Expected end of reader");
+  }
+  validateStart() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.DocumentStart) {
+        this._current = this._generator.next();
+        return;
+      }
+    }
+    throw new Error("Expected start of reader");
+  }
+  /**
+   * Returns all tokens (depth first)
+   */
+  *getParseEvents(value, root) {
+    if (root) {
+      yield new ParseEvent(EventType.DocumentStart, void 0);
+    }
+    switch (typeof value) {
+      case "undefined":
+        yield new ParseEvent(EventType.Literal, new NullToken(this._fileId, void 0, void 0));
+        break;
+      case "boolean":
+        yield new ParseEvent(EventType.Literal, new BooleanToken(this._fileId, void 0, value, void 0));
+        break;
+      case "number":
+        yield new ParseEvent(EventType.Literal, new NumberToken(this._fileId, void 0, value, void 0));
+        break;
+      case "string":
+        yield new ParseEvent(EventType.Literal, new StringToken(this._fileId, void 0, value, void 0));
+        break;
+      case "object":
+        if (value === null) {
+          yield new ParseEvent(EventType.Literal, new NullToken(this._fileId, void 0, void 0));
+        } else if (Array.isArray(value)) {
+          yield new ParseEvent(EventType.SequenceStart, new SequenceToken(this._fileId, void 0, void 0));
+          for (const item of value) {
+            for (const e of this.getParseEvents(item)) {
+              yield e;
+            }
+          }
+          yield new ParseEvent(EventType.SequenceEnd, void 0);
+        } else {
+          yield new ParseEvent(EventType.MappingStart, new MappingToken(this._fileId, void 0, void 0));
+          for (const key of Object.keys(value)) {
+            yield new ParseEvent(EventType.Literal, new StringToken(this._fileId, void 0, key, void 0));
+            for (const e of this.getParseEvents(value[key])) {
+              yield e;
+            }
+          }
+          yield new ParseEvent(EventType.MappingEnd, void 0);
+        }
+        break;
+      default:
+        throw new Error(`Unexpected value type '${typeof value}' when reading object`);
+    }
+    if (root) {
+      yield new ParseEvent(EventType.DocumentEnd, void 0);
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/trace-writer.js
+var NoOperationTraceWriter = class {
+  error() {
+  }
+  info() {
+  }
+  verbose() {
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/definition.js
+var Definition = class {
+  constructor(key, definition) {
+    this.readerContext = [];
+    this.evaluatorContext = [];
+    this.key = key;
+    if (definition) {
+      for (let i = 0; i < definition.count; ) {
+        const definitionKey = definition.get(i).key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case CONTEXT: {
+            const context = definition.get(i).value.assertSequence(`${DEFINITION} ${CONTEXT}`);
+            definition.remove(i);
+            const seenReaderContext = {};
+            const seenEvaluatorContext = {};
+            for (const item of context) {
+              const itemStr = item.assertString(`${CONTEXT} item`).value;
+              const upperItemStr = itemStr.toUpperCase();
+              if (seenReaderContext[upperItemStr]) {
+                throw new Error(`Duplicate context item '${itemStr}'`);
+              }
+              seenReaderContext[upperItemStr] = true;
+              this.readerContext.push(itemStr);
+              const paramIndex = itemStr.indexOf("(");
+              const modifiedItemStr = paramIndex > 0 ? itemStr.substr(0, paramIndex + 1) + ")" : itemStr;
+              const upperModifiedItemStr = modifiedItemStr.toUpperCase();
+              if (seenEvaluatorContext[upperModifiedItemStr]) {
+                throw new Error(`Duplicate context item '${modifiedItemStr}'`);
+              }
+              seenEvaluatorContext[upperModifiedItemStr] = true;
+              this.evaluatorContext.push(modifiedItemStr);
+            }
+            break;
+          }
+          case DESCRIPTION: {
+            const value = definition.get(i).value;
+            this.description = value.assertString(DESCRIPTION).value;
+            definition.remove(i);
+            break;
+          }
+          default: {
+            i++;
+            break;
+          }
+        }
+      }
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/scalar-definition.js
+var ScalarDefinition = class extends Definition {
+  constructor(key, definition) {
+    super(key, definition);
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/boolean-definition.js
+var BooleanDefinition = class extends ScalarDefinition {
+  constructor(key, definition) {
+    super(key, definition);
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case BOOLEAN: {
+            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${BOOLEAN}`);
+            for (const mappingPair of mapping) {
+              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${BOOLEAN} key`);
+              switch (mappingKey.value) {
+                default:
+                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${BOOLEAN} key`);
+                  break;
+              }
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.Boolean;
+  }
+  isMatch(literal2) {
+    return literal2.templateTokenType === TokenType2.Boolean;
+  }
+  validate() {
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/property-definition.js
+var PropertyDefinition = class {
+  constructor(token) {
+    this.type = "";
+    this.required = false;
+    if (token.templateTokenType === TokenType2.String) {
+      this.type = token.value;
+    } else {
+      const mapping = token.assertMapping(MAPPING_PROPERTY_VALUE);
+      for (const mappingPair of mapping) {
+        const mappingKey = mappingPair.key.assertString(`${MAPPING_PROPERTY_VALUE} key`);
+        switch (mappingKey.value) {
+          case TYPE:
+            this.type = mappingPair.value.assertString(`${MAPPING_PROPERTY_VALUE} ${TYPE}`).value;
+            break;
+          case REQUIRED:
+            this.required = mappingPair.value.assertBoolean(`${MAPPING_PROPERTY_VALUE} ${REQUIRED}`).value;
+            break;
+          case DESCRIPTION:
+            this.description = mappingPair.value.assertString(`${MAPPING_PROPERTY_VALUE} ${DESCRIPTION}`).value;
+            break;
+          default:
+            mappingKey.assertUnexpectedValue(`${MAPPING_PROPERTY_VALUE} key`);
+        }
+      }
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/mapping-definition.js
+var MappingDefinition = class extends Definition {
+  constructor(key, definition) {
+    super(key, definition);
+    this.properties = {};
+    this.looseKeyType = "";
+    this.looseValueType = "";
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case MAPPING: {
+            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${MAPPING}`);
+            for (const mappingPair of mapping) {
+              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${MAPPING} key`);
+              switch (mappingKey.value) {
+                case PROPERTIES: {
+                  const properties = mappingPair.value.assertMapping(`${DEFINITION} ${MAPPING} ${PROPERTIES}`);
+                  for (const propertiesPair of properties) {
+                    const propertyName = propertiesPair.key.assertString(`${DEFINITION} ${MAPPING} ${PROPERTIES} key`);
+                    this.properties[propertyName.value] = new PropertyDefinition(propertiesPair.value);
+                  }
+                  break;
+                }
+                case LOOSE_KEY_TYPE: {
+                  const looseKeyType = mappingPair.value.assertString(`${DEFINITION} ${MAPPING} ${LOOSE_KEY_TYPE}`);
+                  this.looseKeyType = looseKeyType.value;
+                  break;
+                }
+                case LOOSE_VALUE_TYPE: {
+                  const looseValueType = mappingPair.value.assertString(`${DEFINITION} ${MAPPING} ${LOOSE_VALUE_TYPE}`);
+                  this.looseValueType = looseValueType.value;
+                  break;
+                }
+                default:
+                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${MAPPING} key`);
+                  break;
+              }
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.Mapping;
+  }
+  validate(schema3, name) {
+    if (this.looseKeyType) {
+      schema3.getDefinition(this.looseKeyType);
+      if (this.looseValueType) {
+        schema3.getDefinition(this.looseValueType);
+      } else {
+        throw new Error(`Property '${LOOSE_KEY_TYPE}' is defined but '${LOOSE_VALUE_TYPE}' is not defined on '${name}'`);
+      }
+    } else if (this.looseValueType) {
+      throw new Error(`Property '${LOOSE_VALUE_TYPE}' is defined but '${LOOSE_KEY_TYPE}' is not defined on '${name}'`);
+    }
+    for (const propertyName of Object.keys(this.properties)) {
+      const propertyDef = this.properties[propertyName];
+      if (!propertyDef.type) {
+        throw new Error(`Type not specified for the property '${propertyName}' on '${name}'`);
+      }
+      schema3.getDefinition(propertyDef.type);
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/null-definition.js
+var NullDefinition = class extends ScalarDefinition {
+  constructor(key, definition) {
+    super(key, definition);
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case NULL: {
+            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${NULL}`);
+            for (const mappingPair of mapping) {
+              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${NULL} key`);
+              switch (mappingKey.value) {
+                default:
+                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${NULL} key`);
+                  break;
+              }
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.Null;
+  }
+  isMatch(literal2) {
+    return literal2.templateTokenType === TokenType2.Null;
+  }
+  validate() {
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/number-definition.js
+var NumberDefinition = class extends ScalarDefinition {
+  constructor(key, definition) {
+    super(key, definition);
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case NUMBER: {
+            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${NUMBER}`);
+            for (const mappingPair of mapping) {
+              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${NUMBER} key`);
+              switch (mappingKey.value) {
+                default:
+                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${NUMBER} key`);
+                  break;
+              }
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.Number;
+  }
+  isMatch(literal2) {
+    return literal2.templateTokenType === TokenType2.Number;
+  }
+  validate() {
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/one-of-definition.js
+var OneOfDefinition = class extends Definition {
+  constructor(key, definition) {
+    super(key, definition);
+    this.oneOf = [];
+    this.oneOfPrefix = [];
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case ONE_OF: {
+            const oneOf2 = definitionPair.value.assertSequence(`${DEFINITION} ${ONE_OF}`);
+            for (const item of oneOf2) {
+              const oneOfItem = item.assertString(`${DEFINITION} ${ONE_OF} item`);
+              this.oneOf.push(oneOfItem.value);
+            }
+            break;
+          }
+          case ALLOWED_VALUES: {
+            const oneOf2 = definitionPair.value.assertSequence(`${DEFINITION} ${ALLOWED_VALUES}`);
+            for (const item of oneOf2) {
+              const oneOfItem = item.assertString(`${DEFINITION} ${ONE_OF} item`);
+              this.oneOf.push(this.key + "-" + oneOfItem.value);
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+            break;
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.OneOf;
+  }
+  validate(schema3, name) {
+    if (this.oneOf.length === 0) {
+      throw new Error(`'${name}' does not contain any references`);
+    }
+    let foundLooseKeyType = false;
+    const mappingDefinitions = [];
+    let allowedValuesDefinition;
+    let sequenceDefinition;
+    let nullDefinition;
+    let booleanDefinition;
+    let numberDefinition;
+    const stringDefinitions = [];
+    const seenNestedTypes = {};
+    for (const nestedType of this.oneOf) {
+      if (seenNestedTypes[nestedType]) {
+        throw new Error(`'${name}' contains duplicate nested type '${nestedType}'`);
+      }
+      seenNestedTypes[nestedType] = true;
+      const nestedDefinition = schema3.getDefinition(nestedType);
+      if (nestedDefinition.readerContext.length > 0) {
+        throw new Error(`'${name}' is a one-of definition and references another definition that defines context. This is currently not supported.`);
+      }
+      switch (nestedDefinition.definitionType) {
+        case DefinitionType.Mapping: {
+          const mappingDefinition = nestedDefinition;
+          mappingDefinitions.push(mappingDefinition);
+          if (mappingDefinition.looseKeyType) {
+            foundLooseKeyType = true;
+          }
+          break;
+        }
+        case DefinitionType.Sequence: {
+          if (sequenceDefinition) {
+            throw new Error(`'${name}' refers to more than one definition of type '${SEQUENCE}'`);
+          }
+          sequenceDefinition = nestedDefinition;
+          break;
+        }
+        case DefinitionType.Null: {
+          if (nullDefinition) {
+            throw new Error(`'${name}' refers to more than one definition of type '${NULL}'`);
+          }
+          nullDefinition = nestedDefinition;
+          break;
+        }
+        case DefinitionType.Boolean: {
+          if (booleanDefinition) {
+            throw new Error(`'${name}' refers to more than one definition of type '${BOOLEAN}'`);
+          }
+          booleanDefinition = nestedDefinition;
+          break;
+        }
+        case DefinitionType.Number: {
+          if (numberDefinition) {
+            throw new Error(`'${name}' refers to more than one definition of type '${NUMBER}'`);
+          }
+          numberDefinition = nestedDefinition;
+          break;
+        }
+        case DefinitionType.String: {
+          const stringDefinition = nestedDefinition;
+          if (stringDefinitions.length > 0 && (!stringDefinitions[0].constant || !stringDefinition.constant)) {
+            throw new Error(`'${name}' refers to more than one '${SCALAR}', but some do not set '${CONSTANT}'`);
+          }
+          stringDefinitions.push(stringDefinition);
+          break;
+        }
+        case DefinitionType.OneOf: {
+          if (allowedValuesDefinition) {
+            throw new Error(`'${name}' contains multiple allowed-values definitions`);
+          }
+          allowedValuesDefinition = nestedDefinition;
+          break;
+        }
+        default:
+          throw new Error(`'${name}' refers to a definition with type '${nestedDefinition.definitionType}'`);
+      }
+    }
+    if (mappingDefinitions.length > 1) {
+      if (foundLooseKeyType) {
+        throw new Error(`'${name}' refers to two mappings and at least one sets '${LOOSE_KEY_TYPE}'. This is not currently supported.`);
+      }
+      const seenProperties = {};
+      for (const mappingDefinition of mappingDefinitions) {
+        for (const propertyName of Object.keys(mappingDefinition.properties)) {
+          const newPropertyDef = mappingDefinition.properties[propertyName];
+          const existingPropertyDef = seenProperties[propertyName];
+          if (existingPropertyDef) {
+            if (existingPropertyDef.type === newPropertyDef.type) {
+              continue;
+            }
+            throw new Error(`'${name}' contains two mappings with the same property, but each refers to a different type. All matching properties must refer to the same type.`);
+          } else {
+            seenProperties[propertyName] = newPropertyDef;
+          }
+        }
+      }
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/sequence-definition.js
+var SequenceDefinition = class extends Definition {
+  constructor(key, definition) {
+    super(key, definition);
+    this.itemType = "";
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case SEQUENCE: {
+            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${SEQUENCE}`);
+            for (const mappingPair of mapping) {
+              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${SEQUENCE} key`);
+              switch (mappingKey.value) {
+                case ITEM_TYPE: {
+                  const itemType = mappingPair.value.assertString(`${DEFINITION} ${SEQUENCE} ${ITEM_TYPE}`);
+                  this.itemType = itemType.value;
+                  break;
+                }
+                default:
+                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${SEQUENCE} key`);
+                  break;
+              }
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.Sequence;
+  }
+  validate(schema3, name) {
+    if (!this.itemType) {
+      throw new Error(`'${name}' does not defined '${ITEM_TYPE}'`);
+    }
+    schema3.getDefinition(this.itemType);
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/string-definition.js
+var StringDefinition = class extends ScalarDefinition {
+  constructor(key, definition) {
+    super(key, definition);
+    this.constant = "";
+    this.ignoreCase = false;
+    this.requireNonEmpty = false;
+    this.isExpression = false;
+    if (definition) {
+      for (const definitionPair of definition) {
+        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+        switch (definitionKey.value) {
+          case STRING: {
+            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${STRING}`);
+            for (const mappingPair of mapping) {
+              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${STRING} key`);
+              switch (mappingKey.value) {
+                case CONSTANT: {
+                  const constantStringToken = mappingPair.value.assertString(`${DEFINITION} ${STRING} ${CONSTANT}`);
+                  this.constant = constantStringToken.value;
+                  break;
+                }
+                case IGNORE_CASE: {
+                  const ignoreCaseBooleanToken = mappingPair.value.assertBoolean(`${DEFINITION} ${STRING} ${IGNORE_CASE}`);
+                  this.ignoreCase = ignoreCaseBooleanToken.value;
+                  break;
+                }
+                case REQUIRE_NON_EMPTY: {
+                  const requireNonEmptyBooleanToken = mappingPair.value.assertBoolean(`${DEFINITION} ${STRING} ${REQUIRE_NON_EMPTY}`);
+                  this.requireNonEmpty = requireNonEmptyBooleanToken.value;
+                  break;
+                }
+                case IS_EXPRESSION: {
+                  const isExpressionToken = mappingPair.value.assertBoolean(`${DEFINITION} ${STRING} ${IS_EXPRESSION}`);
+                  this.isExpression = isExpressionToken.value;
+                  break;
+                }
+                default:
+                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${STRING} key`);
+                  break;
+              }
+            }
+            break;
+          }
+          default:
+            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
+        }
+      }
+    }
+  }
+  get definitionType() {
+    return DefinitionType.String;
+  }
+  isMatch(literal2) {
+    if (literal2.templateTokenType === TokenType2.String) {
+      const value = literal2.value;
+      if (this.constant) {
+        return this.ignoreCase ? this.constant.toUpperCase() === value.toUpperCase() : this.constant === value;
+      } else if (this.requireNonEmpty) {
+        return !!value;
+      } else {
+        return true;
+      }
+    }
+    return false;
+  }
+  validate() {
+    if (this.constant && this.requireNonEmpty) {
+      throw new Error(`Properties '${CONSTANT}' and '${REQUIRE_NON_EMPTY}' cannot both be set`);
+    }
+  }
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/template-schema.js
+var TemplateSchema = class _TemplateSchema {
+  constructor(mapping) {
+    this.definitions = {};
+    this.version = "";
+    this.definitions[NULL] = new NullDefinition(NULL);
+    this.definitions[BOOLEAN] = new BooleanDefinition(BOOLEAN);
+    this.definitions[NUMBER] = new NumberDefinition(NUMBER);
+    this.definitions[STRING] = new StringDefinition(STRING);
+    const sequenceDefinition = new SequenceDefinition(SEQUENCE);
+    sequenceDefinition.itemType = ANY;
+    this.definitions[sequenceDefinition.key] = sequenceDefinition;
+    const mappingDefinition = new MappingDefinition(MAPPING);
+    mappingDefinition.looseKeyType = STRING;
+    mappingDefinition.looseValueType = ANY;
+    this.definitions[mappingDefinition.key] = mappingDefinition;
+    const anyDefinition = new OneOfDefinition(ANY);
+    anyDefinition.oneOf.push(NULL);
+    anyDefinition.oneOf.push(BOOLEAN);
+    anyDefinition.oneOf.push(NUMBER);
+    anyDefinition.oneOf.push(STRING);
+    anyDefinition.oneOf.push(SEQUENCE);
+    anyDefinition.oneOf.push(MAPPING);
+    this.definitions[anyDefinition.key] = anyDefinition;
+    if (mapping) {
+      for (const pair of mapping) {
+        const key = pair.key.assertString(`${TEMPLATE_SCHEMA} key`);
+        switch (key.value) {
+          case VERSION: {
+            this.version = pair.value.assertString(`${TEMPLATE_SCHEMA} ${VERSION}`).value;
+            break;
+          }
+          case DEFINITIONS: {
+            const definitions = pair.value.assertMapping(`${TEMPLATE_SCHEMA} ${DEFINITIONS}`);
+            for (const definitionsPair of definitions) {
+              const definitionsKey = definitionsPair.key.assertString(`${TEMPLATE_SCHEMA} ${DEFINITIONS} key`);
+              const definitionsValue = definitionsPair.value.assertMapping(`${TEMPLATE_SCHEMA} ${DEFINITIONS} value`);
+              let definition;
+              for (const definitionPair of definitionsValue) {
+                const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
+                const mappingToken = definitionsPair.value;
+                switch (definitionKey.value) {
+                  case NULL:
+                    definition = new NullDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case BOOLEAN:
+                    definition = new BooleanDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case NUMBER:
+                    definition = new NumberDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case STRING:
+                    definition = new StringDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case SEQUENCE:
+                    definition = new SequenceDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case MAPPING:
+                    definition = new MappingDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case ONE_OF:
+                    definition = new OneOfDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case ALLOWED_VALUES:
+                    for (const item of mappingToken) {
+                      if (item.value.templateTokenType === TokenType2.Sequence) {
+                        const sequenceToken = item.value;
+                        for (const activity of sequenceToken) {
+                          if (activity.templateTokenType === TokenType2.String) {
+                            const stringToken = activity;
+                            const allowedValuesKey = definitionsKey.value + "-" + stringToken.value;
+                            const allowedValuesDef = new StringDefinition(allowedValuesKey);
+                            allowedValuesDef.constant = stringToken.toDisplayString();
+                            this.definitions[allowedValuesKey] = allowedValuesDef;
+                          }
+                        }
+                      }
+                    }
+                    definition = new OneOfDefinition(definitionsKey.value, definitionsValue);
+                    break;
+                  case CONTEXT:
+                  case DESCRIPTION:
+                    continue;
+                  default:
+                    definitionKey.assertUnexpectedValue(`${DEFINITION} mapping key`);
+                    break;
+                }
+                break;
+              }
+              if (!definition) {
+                throw new Error(`Not enough information to construct definition '${definitionsKey.value}'`);
+              }
+              this.definitions[definitionsKey.value] = definition;
+            }
+            break;
+          }
+          default:
+            key.assertUnexpectedValue(`${TEMPLATE_SCHEMA} key`);
+            break;
+        }
+      }
+    }
+  }
+  /**
+   * Looks up a definition by name
+   */
+  getDefinition(name) {
+    const result = this.definitions[name];
+    if (result) {
+      return result;
+    }
+    throw new Error(`Schema definition '${name}' not found`);
+  }
+  /**
+   * Expands one-of definitions and returns all scalar definitions
+   */
+  getScalarDefinitions(definition) {
+    const result = [];
+    switch (definition.definitionType) {
+      case DefinitionType.Null:
+      case DefinitionType.Boolean:
+      case DefinitionType.Number:
+      case DefinitionType.String:
+        result.push(definition);
+        break;
+      case DefinitionType.OneOf: {
+        const oneOf2 = definition;
+        for (const nestedName of oneOf2.oneOf) {
+          const nestedDefinition = this.getDefinition(nestedName);
+          result.push(...this.getScalarDefinitions(nestedDefinition));
+        }
+        break;
+      }
+    }
+    return result;
+  }
+  /**
+   * Expands one-of definitions and returns all matching definitions by type
+   */
+  getDefinitionsOfType(definition, type) {
+    const result = [];
+    if (definition.definitionType === type) {
+      result.push(definition);
+    } else if (definition.definitionType === DefinitionType.OneOf) {
+      const oneOf2 = definition;
+      for (const nestedName of oneOf2.oneOf) {
+        const nestedDefinition = this.getDefinition(nestedName);
+        if (nestedDefinition.definitionType === type) {
+          result.push(nestedDefinition);
+        }
+      }
+    }
+    return result;
+  }
+  /**
+   * Attempts match the property name to a property defined by any of the specified definitions.
+   * If matched, any unmatching definitions are filtered from the definitions array.
+   * Returns the type information for the matched property.
+   */
+  matchPropertyAndFilter(definitions, propertyName) {
+    let result;
+    let notFoundInSome = false;
+    for (const definition of definitions) {
+      const propertyDef = definition.properties[propertyName];
+      if (propertyDef) {
+        result = propertyDef;
+      } else {
+        notFoundInSome = true;
+      }
+    }
+    if (result && notFoundInSome) {
+      for (let i = 0; i < definitions.length; ) {
+        if (definitions[i].properties[propertyName]) {
+          i++;
+        } else {
+          definitions.splice(i, 1);
+        }
+      }
+    }
+    return result;
+  }
+  validate() {
+    const oneOfDefinitions = {};
+    for (const name of Object.keys(this.definitions)) {
+      if (!name.match(_TemplateSchema._definitionNamePattern)) {
+        throw new Error(`Invalid definition name '${name}'`);
+      }
+      const definition = this.definitions[name];
+      if (definition.definitionType === DefinitionType.OneOf) {
+        oneOfDefinitions[name] = definition;
+      } else {
+        definition.validate(this, name);
+      }
+    }
+    for (const name of Object.keys(oneOfDefinitions)) {
+      const oneOf2 = oneOfDefinitions[name];
+      oneOf2.validate(this, name);
+    }
+  }
+  /**
+   * Loads a user-defined schema file
+   */
+  static load(objectReader) {
+    const context = new TemplateContext(new TemplateValidationErrors(10, 500), _TemplateSchema.getInternalSchema(), new NoOperationTraceWriter());
+    const template = readTemplate(context, TEMPLATE_SCHEMA, objectReader, void 0);
+    context.errors.check();
+    const mapping = template.assertMapping(TEMPLATE_SCHEMA);
+    const schema3 = new _TemplateSchema(mapping);
+    schema3.validate();
+    return schema3;
+  }
+  /**
+   * Gets the internal schema used for reading user-defined schema files
+   */
+  static getInternalSchema() {
+    if (_TemplateSchema._internalSchema === void 0) {
+      const schema3 = new _TemplateSchema();
+      let mappingDefinition = new MappingDefinition(TEMPLATE_SCHEMA);
+      mappingDefinition.properties[VERSION] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[DEFINITIONS] = new PropertyDefinition(new StringToken(void 0, void 0, DEFINITIONS, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(DEFINITIONS);
+      mappingDefinition.looseKeyType = NON_EMPTY_STRING;
+      mappingDefinition.looseValueType = DEFINITION;
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      let oneOfDefinition = new OneOfDefinition(DEFINITION);
+      oneOfDefinition.oneOf.push(NULL_DEFINITION);
+      oneOfDefinition.oneOf.push(BOOLEAN_DEFINITION);
+      oneOfDefinition.oneOf.push(NUMBER_DEFINITION);
+      oneOfDefinition.oneOf.push(STRING_DEFINITION);
+      oneOfDefinition.oneOf.push(SEQUENCE_DEFINITION);
+      oneOfDefinition.oneOf.push(MAPPING_DEFINITION);
+      oneOfDefinition.oneOf.push(ONE_OF_DEFINITION);
+      schema3.definitions[oneOfDefinition.key] = oneOfDefinition;
+      mappingDefinition = new MappingDefinition(NULL_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[NULL] = new PropertyDefinition(new StringToken(void 0, void 0, NULL_DEFINITION_PROPERTIES, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(NULL_DEFINITION_PROPERTIES);
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(BOOLEAN_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[BOOLEAN] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN_DEFINITION_PROPERTIES, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(BOOLEAN_DEFINITION_PROPERTIES);
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(NUMBER_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[NUMBER] = new PropertyDefinition(new StringToken(void 0, void 0, NUMBER_DEFINITION_PROPERTIES, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(NUMBER_DEFINITION_PROPERTIES);
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(STRING_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[STRING] = new PropertyDefinition(new StringToken(void 0, void 0, STRING_DEFINITION_PROPERTIES, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(STRING_DEFINITION_PROPERTIES);
+      mappingDefinition.properties[CONSTANT] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[IGNORE_CASE] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
+      mappingDefinition.properties[REQUIRE_NON_EMPTY] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
+      mappingDefinition.properties[IS_EXPRESSION] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(SEQUENCE_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[SEQUENCE] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_DEFINITION_PROPERTIES, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(SEQUENCE_DEFINITION_PROPERTIES);
+      mappingDefinition.properties[ITEM_TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(MAPPING_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[MAPPING] = new PropertyDefinition(new StringToken(void 0, void 0, MAPPING_DEFINITION_PROPERTIES, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(MAPPING_DEFINITION_PROPERTIES);
+      mappingDefinition.properties[PROPERTIES] = new PropertyDefinition(new StringToken(void 0, void 0, PROPERTIES, void 0));
+      mappingDefinition.properties[LOOSE_KEY_TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[LOOSE_VALUE_TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(PROPERTIES);
+      mappingDefinition.looseKeyType = NON_EMPTY_STRING;
+      mappingDefinition.looseValueType = PROPERTY_VALUE;
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      oneOfDefinition = new OneOfDefinition(PROPERTY_VALUE);
+      oneOfDefinition.oneOf.push(NON_EMPTY_STRING);
+      oneOfDefinition.oneOf.push(MAPPING_PROPERTY_VALUE);
+      schema3.definitions[oneOfDefinition.key] = oneOfDefinition;
+      mappingDefinition = new MappingDefinition(MAPPING_PROPERTY_VALUE);
+      mappingDefinition.properties[TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[REQUIRED] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      mappingDefinition = new MappingDefinition(ONE_OF_DEFINITION);
+      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
+      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[ONE_OF] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      mappingDefinition.properties[ALLOWED_VALUES] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
+      schema3.definitions[mappingDefinition.key] = mappingDefinition;
+      const stringDefinition = new StringDefinition(NON_EMPTY_STRING);
+      stringDefinition.requireNonEmpty = true;
+      schema3.definitions[stringDefinition.key] = stringDefinition;
+      const sequenceDefinition = new SequenceDefinition(SEQUENCE_OF_NON_EMPTY_STRING);
+      sequenceDefinition.itemType = NON_EMPTY_STRING;
+      schema3.definitions[sequenceDefinition.key] = sequenceDefinition;
+      schema3.validate();
+      _TemplateSchema._internalSchema = schema3;
+    }
+    return _TemplateSchema._internalSchema;
+  }
+};
+TemplateSchema._definitionNamePattern = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflow-v1.0.min.json
+var workflow_v1_0_min_default = { version: "workflow-v1.0", definitions: { "workflow-root": { description: "A workflow file.", mapping: { properties: { on: "on", name: "workflow-name", description: "workflow-description", "run-name": "run-name", defaults: "workflow-defaults", env: "workflow-env", permissions: "permissions", concurrency: "workflow-concurrency", jobs: { type: "jobs", required: true } } } }, "workflow-root-strict": { description: "Workflow file with strict validation", mapping: { properties: { on: { type: "on-strict", required: true }, name: "workflow-name", description: "workflow-description", "run-name": "run-name", defaults: "workflow-defaults", env: "workflow-env", permissions: "permissions", concurrency: "workflow-concurrency", jobs: { type: "jobs", required: true } } } }, "workflow-name": { description: "The name of the workflow that GitHub displays on your repository's 'Actions' tab.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#name)", string: {} }, "workflow-description": { description: "A description for your workflow or reusable workflow", string: {} }, "run-name": { context: ["github", "inputs", "vars"], string: {}, description: "The name for workflow runs generated from the workflow. GitHub displays the workflow run name in the list of workflow runs on your repository's 'Actions' tab.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#run-name)" }, on: { description: "The GitHub event that triggers the workflow. Events can be a single string, array of events, array of event types, or an event configuration map that schedules a workflow or restricts the execution of a workflow to specific files, tags, or branch changes. View a full list of [events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#on)", "one-of": ["string", "sequence", "on-mapping"] }, "on-mapping": { mapping: { properties: { workflow_call: "workflow-call" }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "on-strict": { description: "The GitHub event that triggers the workflow.  Events can be a single string, array of events, array of event types, or an event configuration map that schedules a workflow or restricts the execution of a workflow to specific files, tags, or branch changes. View a full list of [events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#on)", "one-of": ["on-string-strict", "on-sequence-strict", "on-mapping-strict"] }, "on-mapping-strict": { description: "The GitHub event that triggers the workflow.  Events can be a single string, array of events, array of event types, or an event configuration map that schedules a workflow or restricts the execution of a workflow to specific files, tags, or branch changes. View a full list of [events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#on)", mapping: { properties: { branch_protection_rule: "branch-protection-rule", check_run: "check-run", check_suite: "check-suite", create: "create", delete: "delete", deployment: "deployment", deployment_status: "deployment-status", discussion: "discussion", discussion_comment: "discussion-comment", fork: "fork", gollum: "gollum", image_version: "image-version", issue_comment: "issue-comment", issues: "issues", label: "label", merge_group: "merge-group", milestone: "milestone", page_build: "page-build", project: "project", project_card: "project-card", project_column: "project-column", public: "public", pull_request: "pull-request", pull_request_comment: "pull-request-comment", pull_request_review: "pull-request-review", pull_request_review_comment: "pull-request-review-comment", pull_request_target: "pull-request-target", push: "push", registry_package: "registry-package", release: "release", repository_dispatch: "repository-dispatch", schedule: "schedule", status: "status", watch: "watch", workflow_call: "workflow-call", workflow_dispatch: "workflow-dispatch", workflow_run: "workflow-run" } } }, "on-string-strict": { "one-of": ["branch-protection-rule-string", "check-run-string", "check-suite-string", "create-string", "delete-string", "deployment-string", "deployment-status-string", "discussion-string", "discussion-comment-string", "fork-string", "gollum-string", "image-version-string", "issue-comment-string", "issues-string", "label-string", "merge-group-string", "milestone-string", "page-build-string", "project-string", "project-card-string", "project-column-string", "public-string", "pull-request-string", "pull-request-comment-string", "pull-request-review-string", "pull-request-review-comment-string", "pull-request-target-string", "push-string", "registry-package-string", "release-string", "repository-dispatch-string", "schedule-string", "status-string", "watch-string", "workflow-call-string", "workflow-dispatch-string", "workflow-run-string"] }, "on-sequence-strict": { sequence: { "item-type": "on-string-strict" } }, "branch-protection-rule-string": { description: "Runs your workflow when branch protection rules in the workflow repository are changed.", string: { constant: "branch_protection_rule" } }, "branch-protection-rule": { description: "Runs your workflow when branch protection rules in the workflow repository are changed.", "one-of": ["null", "branch-protection-rule-mapping"] }, "branch-protection-rule-mapping": { mapping: { properties: { types: "branch-protection-rule-activity" } } }, "branch-protection-rule-activity": { description: "The types of branch protection rule activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["branch-protection-rule-activity-type", "branch-protection-rule-activity-types"] }, "branch-protection-rule-activity-types": { sequence: { "item-type": "branch-protection-rule-activity-type" } }, "branch-protection-rule-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "check-run-string": { description: "Runs your workflow when activity related to a check run occurs. A check run is an individual test that is part of a check suite.", string: { constant: "check_run" } }, "check-run": { description: "Runs your workflow when activity related to a check run occurs. A check run is an individual test that is part of a check suite.", "one-of": ["null", "check-run-mapping"] }, "check-run-mapping": { mapping: { properties: { types: "check-run-activity" } } }, "check-run-activity": { description: "The types of check run activity that trigger the workflow. Supported activity types: `created`, `rerequested`, `completed`, `requested_action`.", "one-of": ["check-run-activity-type", "check-run-activity-types"] }, "check-run-activity-types": { sequence: { "item-type": "check-run-activity-type" } }, "check-run-activity-type": { "allowed-values": ["completed", "created", "rerequested", "requested_action"] }, "check-suite-string": { description: "Runs your workflow when check suite activity occurs. A check suite is a collection of the check runs created for a specific commit. Check suites summarize the status and conclusion of the check runs that are in the suite.", string: { constant: "check_suite" } }, "check-suite": { description: "Runs your workflow when check suite activity occurs. A check suite is a collection of the check runs created for a specific commit. Check suites summarize the status and conclusion of the check runs that are in the suite.", "one-of": ["null", "check-suite-mapping"] }, "check-suite-mapping": { mapping: { properties: { types: "check-suite-activity" } } }, "check-suite-activity": { description: "The types of check suite activity that trigger the workflow. Supported activity types: `completed`.", "one-of": ["check-suite-activity-type", "check-suite-activity-types"] }, "check-suite-activity-types": { sequence: { "item-type": "check-suite-activity-type" } }, "check-suite-activity-type": { "allowed-values": ["completed"] }, "create-string": { description: "Runs your workflow when someone creates a Git reference (Git branch or tag) in the workflow's repository.", string: { constant: "create" } }, create: { description: "Runs your workflow when someone creates a Git reference (Git branch or tag) in the workflow's repository.", null: {} }, "delete-string": { description: "Runs your workflow when someone deletes a Git reference (Git branch or tag) in the workflow's repository.", string: { constant: "delete" } }, delete: { description: "Runs your workflow when someone deletes a Git reference (Git branch or tag) in the workflow's repository.", null: {} }, "deployment-string": { description: "Runs your workflow when someone creates a deployment in the workflow's repository. Deployments created with a commit SHA may not have a Git ref.", string: { constant: "deployment" } }, deployment: { description: "Runs your workflow when someone creates a deployment in the workflow's repository. Deployments created with a commit SHA may not have a Git ref.", null: {} }, "deployment-status-string": { description: "Runs your workflow when a third party provides a deployment status. Deployments created with a commit SHA may not have a Git ref.", string: { constant: "deployment_status" } }, "deployment-status": { description: "Runs your workflow when a third party provides a deployment status. Deployments created with a commit SHA may not have a Git ref.", null: {} }, "discussion-string": { description: "Runs your workflow when a discussion in the workflow's repository is created or modified. For activity related to comments on a discussion, use the `discussion_comment` event.", string: { constant: "discussion" } }, discussion: { description: "Runs your workflow when a discussion in the workflow's repository is created or modified. For activity related to comments on a discussion, use the `discussion_comment` event.", "one-of": ["null", "discussion-mapping"] }, "discussion-mapping": { mapping: { properties: { types: "discussion-activity" } } }, "discussion-activity": { description: "The types of discussion activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`, `transferred`, `pinned`, `unpinned`, `labeled`, `unlabeled`, `locked`, `unlocked`, `category_changed`, `answered`, `unanswered`.", "one-of": ["discussion-activity-type", "discussion-activity-types"] }, "discussion-activity-types": { sequence: { "item-type": "discussion-activity-type" } }, "discussion-activity-type": { "allowed-values": ["created", "edited", "deleted", "transferred", "pinned", "unpinned", "labeled", "unlabeled", "locked", "unlocked", "category_changed", "answered", "unanswered"] }, "discussion-comment-string": { description: "Runs your workflow when a comment on a discussion in the workflow's repository is created or modified. For activity related to a discussion as opposed to comments on the discussion, use the `discussion` event.", string: { constant: "discussion_comment" } }, "discussion-comment": { description: "Runs your workflow when a comment on a discussion in the workflow's repository is created or modified. For activity related to a discussion as opposed to comments on the discussion, use the `discussion` event.", "one-of": ["null", "discussion-comment-mapping"] }, "discussion-comment-mapping": { mapping: { properties: { types: "discussion-comment-activity" } } }, "discussion-comment-activity": { description: "The types of discussion comment activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["discussion-comment-activity-type", "discussion-comment-activity-types"] }, "discussion-comment-activity-types": { sequence: { "item-type": "discussion-comment-activity-type" } }, "discussion-comment-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "fork-string": { description: "Runs your workflow when someone forks a repository.", string: { constant: "fork" } }, fork: { description: "Runs your workflow when someone forks a repository.", null: {} }, "gollum-string": { description: "Runs your workflow when someone creates or updates a Wiki page.", string: { constant: "gollum" } }, gollum: { description: "Runs your workflow when someone creates or updates a Wiki page.", null: {} }, "image-version-string": { description: "Runs your workflow when an image version is created or changes state.", string: { constant: "image_version" } }, "image-version": { description: "Runs your workflow when an image version is created or changes state.", "one-of": ["null", "image-version-mapping"] }, "image-version-mapping": { mapping: { properties: { types: "image-version-activity", names: "event-names", versions: "event-versions" } } }, "image-version-activity": { description: "The types of image version activity that trigger the workflow. Supported activity types: `created`, `ready`, `deleted`.", "one-of": ["image-version-activity-type", "image-version-activity-types"] }, "image-version-activity-types": { sequence: { "item-type": "image-version-activity-type" } }, "image-version-activity-type": { "allowed-values": ["created", "ready", "deleted"] }, "issue-comment-string": { description: "Runs your workflow when an issue or pull request comment is created, edited, or deleted.", string: { constant: "issue_comment" } }, "issue-comment": { description: "Runs your workflow when an issue or pull request comment is created, edited, or deleted.", "one-of": ["null", "issue-comment-mapping"] }, "issue-comment-mapping": { mapping: { properties: { types: "issue-comment-activity" } } }, "issue-comment-activity": { description: "The types of issue comment activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["issue-comment-activity-type", "issue-comment-activity-types"] }, "issue-comment-activity-types": { sequence: { "item-type": "issue-comment-activity-type" } }, "issue-comment-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "issues-string": { description: "Runs your workflow when an issue in the workflow's repository is created or modified. For activity related to comments in an issue, use the `issue_comment` event.", string: { constant: "issues" } }, issues: { description: "Runs your workflow when an issue in the workflow's repository is created or modified. For activity related to comments in an issue, use the `issue_comment` event.", "one-of": ["null", "issues-mapping"] }, "issues-mapping": { mapping: { properties: { types: "issues-activity" } } }, "issues-activity": { description: "The types of issue activity that trigger the workflow. Supported activity types: `opened`, `edited`, `deleted`, `transferred`, `pinned`, `unpinned`, `closed`, `reopened`, `assigned`, `unassigned`, `labeled`, `unlabeled`, `locked`, `unlocked`, `milestoned`, `demilestoned`, `field_added`, `field_removed`, `typed`, `untyped`.", "one-of": ["issues-activity-type", "issues-activity-types"] }, "issues-activity-types": { sequence: { "item-type": "issues-activity-type" } }, "issues-activity-type": { "allowed-values": ["opened", "edited", "deleted", "transferred", "pinned", "unpinned", "closed", "reopened", "assigned", "unassigned", "labeled", "unlabeled", "locked", "unlocked", "milestoned", "demilestoned", "field_added", "field_removed", "typed", "untyped"] }, "label-string": { description: "Runs your workflow when a label in your workflow's repository is created or modified.", string: { constant: "label" } }, label: { description: "Runs your workflow when a label in your workflow's repository is created or modified.", "one-of": ["null", "label-mapping"] }, "label-mapping": { mapping: { properties: { types: "label-activity" } } }, "label-activity": { description: "The types of label activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["label-activity-type", "label-activity-types"] }, "label-activity-types": { sequence: { "item-type": "label-activity-type" } }, "label-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "merge-group-string": { description: "Runs your workflow when a pull request is added to a merge queue, which adds the pull request to a merge group.", string: { constant: "merge_group" } }, "merge-group": { description: "Runs your workflow when a pull request is added to a merge queue, which adds the pull request to a merge group.", "one-of": ["null", "merge-group-mapping"] }, "merge-group-mapping": { mapping: { properties: { types: "merge-group-activity", branches: "event-branches", "branches-ignore": "event-branches-ignore" } } }, "merge-group-activity": { description: "The types of merge group activity that trigger the workflow. Supported activity types: `checks_requested`.", "one-of": ["merge-group-activity-type", "merge-group-activity-types"] }, "merge-group-activity-types": { sequence: { "item-type": "merge-group-activity-type" } }, "merge-group-activity-type": { "allowed-values": ["checks_requested"] }, "milestone-string": { description: "Runs your workflow when a milestone in the workflow's repository is created or modified.", string: { constant: "milestone" } }, milestone: { description: "Runs your workflow when a milestone in the workflow's repository is created or modified.", "one-of": ["null", "milestone-mapping"] }, "milestone-mapping": { mapping: { properties: { types: "milestone-activity" } } }, "milestone-activity": { description: "The types of milestone activity that trigger the workflow. Supported activity types: `created`, `closed`, `opened`, `edited`, `deleted`.", "one-of": ["milestone-activity-type", "milestone-activity-types"] }, "milestone-activity-types": { sequence: { "item-type": "milestone-activity-type" } }, "milestone-activity-type": { "allowed-values": ["created", "closed", "opened", "edited", "deleted"] }, "page-build-string": { description: "Runs your workflow when someone pushes to a branch that is the publishing source for GitHub Pages, if GitHub Pages is enabled for the repository.", string: { constant: "page_build" } }, "page-build": { description: "Runs your workflow when someone pushes to a branch that is the publishing source for GitHub Pages, if GitHub Pages is enabled for the repository.", null: {} }, "project-string": { description: "Runs your workflow when a project board is created or modified. For activity related to cards or columns in a project board, use the `project_card` or `project_column` events instead.", string: { constant: "project" } }, project: { description: "Runs your workflow when a project board is created or modified. For activity related to cards or columns in a project board, use the `project_card` or `project_column` events instead.", "one-of": ["null", "project-mapping"] }, "project-mapping": { mapping: { properties: { types: "project-activity" } } }, "project-activity": { description: "The types of project activity that trigger the workflow. Supported activity types: `created`, `closed`, `reopened`, `edited`, `deleted`.", "one-of": ["project-activity-type", "project-activity-types"] }, "project-activity-types": { sequence: { "item-type": "project-activity-type" } }, "project-activity-type": { "allowed-values": ["created", "closed", "reopened", "edited", "deleted"] }, "project-card-string": { description: "Runs your workflow when a card on a project board is created or modified. For activity related to project boards or columns in a project board, use the `project` or `project_column` event instead.", string: { constant: "project_card" } }, "project-card": { description: "Runs your workflow when a card on a project board is created or modified. For activity related to project boards or columns in a project board, use the `project` or `project_column` event instead.", "one-of": ["null", "project-card-mapping"] }, "project-card-mapping": { mapping: { properties: { types: "project-card-activity" } } }, "project-card-activity": { description: "The types of project card activity that trigger the workflow. Supported activity types: `created`, `moved`, `converted`, `edited`, `deleted`.", "one-of": ["project-card-activity-type", "project-card-activity-types"] }, "project-card-activity-types": { sequence: { "item-type": "project-card-activity-type" } }, "project-card-activity-type": { "allowed-values": ["created", "moved", "converted", "edited", "deleted"] }, "project-column-string": { description: "Runs your workflow when a column on a project board is created or modified. For activity related to project boards or cards in a project board, use the `project` or `project_card` event instead.", string: { constant: "project_column" } }, "project-column": { description: "Runs your workflow when a column on a project board is created or modified. For activity related to project boards or cards in a project board, use the `project` or `project_card` event instead.", "one-of": ["null", "project-column-mapping"] }, "project-column-mapping": { mapping: { properties: { types: "project-column-activity" } } }, "project-column-activity": { description: "The types of project column activity that trigger the workflow. Supported activity types: `created`, `updated`, `moved`, `deleted`.", "one-of": ["project-column-activity-type", "project-column-activity-types"] }, "project-column-activity-types": { sequence: { "item-type": "project-column-activity-type" } }, "project-column-activity-type": { "allowed-values": ["created", "updated", "moved", "deleted"] }, "public-string": { description: "Runs your workflow when your workflow's repository changes from private to public.", string: { constant: "public" } }, public: { description: "Runs your workflow when your workflow's repository changes from private to public.", null: {} }, "pull-request-string": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.", string: { constant: "pull_request" } }, "pull-request": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.", "one-of": ["null", "pull-request-mapping"] }, "pull-request-mapping": { mapping: { properties: { types: "pull-request-activity", branches: "event-branches", "branches-ignore": "event-branches-ignore", paths: "event-paths", "paths-ignore": "event-paths-ignore" } } }, "pull-request-activity": { description: "The types of pull request activity that trigger the workflow. Supported activity types: `assigned`, `unassigned`, `labeled`, `unlabeled`, `opened`, `edited`, `closed`, `reopened`, `synchronize`, `converted_to_draft`, `locked`, `unlocked`, `enqueued`, `dequeued`, `milestoned`, `demilestoned`, `ready_for_review`, `review_requested`, `review_request_removed`, `auto_merge_enabled`, `auto_merge_disabled`, `stacked`.", "one-of": ["pull-request-activity-type", "pull-request-activity-types"] }, "pull-request-activity-types": { sequence: { "item-type": "pull-request-activity-type" } }, "pull-request-activity-type": { "allowed-values": ["assigned", "unassigned", "labeled", "unlabeled", "opened", "edited", "closed", "reopened", "synchronize", "converted_to_draft", "locked", "unlocked", "enqueued", "dequeued", "milestoned", "demilestoned", "ready_for_review", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled", "stacked"] }, "pull-request-comment-string": { description: "Please use the `issue_comment` event instead.", string: { constant: "pull_request_comment" } }, "pull-request-comment": { description: "Please use the `issue_comment` event instead.", "one-of": ["null", "issue-comment-mapping"] }, "pull-request-review-string": { description: "Runs your workflow when a pull request review is submitted, edited, or dismissed. A pull request review is a group of pull request review comments in addition to a body comment and a state. For activity related to pull request review comments or pull request comments, use the `pull_request_review_comment` or `issue_comment` events instead.", string: { constant: "pull_request_review" } }, "pull-request-review": { description: "Runs your workflow when a pull request review is submitted, edited, or dismissed. A pull request review is a group of pull request review comments in addition to a body comment and a state. For activity related to pull request review comments or pull request comments, use the `pull_request_review_comment` or `issue_comment` events instead.", "one-of": ["null", "pull-request-review-mapping"] }, "pull-request-review-mapping": { mapping: { properties: { types: "pull-request-review-activity" } } }, "pull-request-review-activity": { description: "The types of pull request review activity that trigger the workflow. Supported activity types: `submitted`, `edited`, `dismissed`.", "one-of": ["pull-request-review-activity-type", "pull-request-review-activity-types"] }, "pull-request-review-activity-types": { sequence: { "item-type": "pull-request-review-activity-type" } }, "pull-request-review-activity-type": { "allowed-values": ["submitted", "edited", "dismissed"] }, "pull-request-review-comment-string": { description: "", string: { constant: "pull_request_review_comment" } }, "pull-request-review-comment": { description: "", "one-of": ["null", "pull-request-review-comment-mapping"] }, "pull-request-review-comment-mapping": { mapping: { properties: { types: "pull-request-review-comment-activity" } } }, "pull-request-review-comment-activity": { description: "The types of pull request review comment activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["pull-request-review-comment-activity-type", "pull-request-review-comment-activity-types"] }, "pull-request-review-comment-activity-types": { sequence: { "item-type": "pull-request-review-comment-activity-type" } }, "pull-request-review-comment-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "pull-request-target-string": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.\n\nThis event runs in the context of the base of the pull request, rather than in the context of the merge commit, as the `pull_request` event does. This prevents execution of unsafe code from the head of the pull request that could alter your repository or steal any secrets you use in your workflow. This event allows your workflow to do things like label or comment on pull requests from forks. Avoid using this event if you need to build or run code from the pull request.", string: { constant: "pull_request_target" } }, "pull-request-target": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.\n\nThis event runs in the context of the base of the pull request, rather than in the context of the merge commit, as the `pull_request` event does. This prevents execution of unsafe code from the head of the pull request that could alter your repository or steal any secrets you use in your workflow. This event allows your workflow to do things like label or comment on pull requests from forks. Avoid using this event if you need to build or run code from the pull request.", "one-of": ["null", "pull-request-target-mapping"] }, "pull-request-target-mapping": { mapping: { properties: { types: "pull-request-target-activity", branches: "event-branches", "branches-ignore": "event-branches-ignore", paths: "event-paths", "paths-ignore": "event-paths-ignore" } } }, "pull-request-target-activity": { description: "The types of pull request activity that trigger the workflow. Supported activity types: `assigned`, `unassigned`, `labeled`, `unlabeled`, `opened`, `edited`, `closed`, `reopened`, `synchronize`, `converted_to_draft`, `locked`, `unlocked`, `enqueued`, `dequeued`, `milestoned`, `demilestoned`, `ready_for_review`, `review_requested`, `review_request_removed`, `auto_merge_enabled`, `auto_merge_disabled`, `stacked`.", "one-of": ["pull-request-target-activity-type", "pull-request-target-activity-types"] }, "pull-request-target-activity-types": { sequence: { "item-type": "pull-request-target-activity-type" } }, "pull-request-target-activity-type": { "allowed-values": ["assigned", "unassigned", "labeled", "unlabeled", "opened", "edited", "closed", "reopened", "synchronize", "converted_to_draft", "locked", "unlocked", "enqueued", "dequeued", "milestoned", "demilestoned", "ready_for_review", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled", "stacked"] }, "push-string": { description: "Runs your workflow when you push a commit or tag.", string: { constant: "push" } }, push: { description: "Runs your workflow when you push a commit or tag.", "one-of": ["null", "push-mapping"] }, "push-mapping": { mapping: { properties: { branches: "event-branches", "branches-ignore": "event-branches-ignore", tags: "event-tags", "tags-ignore": "event-tags-ignore", paths: "event-paths", "paths-ignore": "event-paths-ignore" } } }, "registry-package-string": { description: "Runs your workflow when activity related to GitHub Packages occurs in your repository.", string: { constant: "registry_package" } }, "registry-package": { description: "Runs your workflow when activity related to GitHub Packages occurs in your repository.", "one-of": ["null", "registry-package-mapping"] }, "registry-package-mapping": { mapping: { properties: { types: "registry-package-activity" } } }, "registry-package-activity": { description: "The types of registry package activity that trigger the workflow. Supported activity types: `published`, `updated`.", "one-of": ["registry-package-activity-type", "registry-package-activity-types"] }, "registry-package-activity-types": { sequence: { "item-type": "registry-package-activity-type" } }, "registry-package-activity-type": { "allowed-values": ["published", "updated"] }, "release-string": { description: "Runs your workflow when release activity in your repository occurs.", string: { constant: "release" } }, release: { description: "Runs your workflow when release activity in your repository occurs.", "one-of": ["null", "release-mapping"] }, "release-mapping": { mapping: { properties: { types: "release-activity" } } }, "release-activity": { description: "The types of release activity that trigger the workflow. Supported activity types: `published`, `unpublished`, `created`, `edited`, `deleted`, `prereleased`, `released`.", "one-of": ["release-activity-type", "release-activity-types"] }, "release-activity-types": { sequence: { "item-type": "release-activity-type" } }, "release-activity-type": { "allowed-values": ["published", "unpublished", "created", "edited", "deleted", "prereleased", "released"] }, "schedule-string": { description: "The `schedule` event allows you to trigger a workflow at a scheduled time.\n\nYou can schedule a workflow to run at specific UTC times using POSIX cron syntax. Scheduled workflows run on the latest commit on the default or base branch. The shortest interval you can run scheduled workflows is once every 5 minutes. GitHub Actions does not support the non-standard syntax `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, and `@reboot`.", string: { constant: "schedule" } }, schedule: { description: "The `schedule` event allows you to trigger a workflow at a scheduled time.\n\nYou can schedule a workflow to run at specific UTC times using POSIX cron syntax. Scheduled workflows run on the latest commit on the default or base branch. The shortest interval you can run scheduled workflows is once every 5 minutes. GitHub Actions does not support the non-standard syntax `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, and `@reboot`.", sequence: { "item-type": "cron-mapping" } }, "status-string": { description: "Runs your workflow when the status of a Git commit changes. For example, commits can be marked as `error`, `failure`, `pending`, or `success`. If you want to provide more details about the status change, you may want to use the `check_run` event.", string: { constant: "status" } }, status: { description: "Runs your workflow when the status of a Git commit changes. For example, commits can be marked as `error`, `failure`, `pending`, or `success`. If you want to provide more details about the status change, you may want to use the `check_run` event.", null: {} }, "watch-string": { description: "Runs your workflow when the workflow's repository is starred.", string: { constant: "watch" } }, watch: { description: "Runs your workflow when the workflow's repository is starred.", "one-of": ["null", "watch-mapping"] }, "watch-mapping": { mapping: { properties: { types: "watch-activity" } } }, "watch-activity": { description: "The types of watch activity that trigger the workflow. Supported activity types: `started`.", "one-of": ["watch-activity-type", "watch-activity-types"] }, "watch-activity-types": { sequence: { "item-type": "watch-activity-type" } }, "watch-activity-type": { "allowed-values": ["started"] }, "workflow-run-string": { description: "This event occurs when a workflow run is requested or completed. It allows you to execute a workflow based on execution or completion of another workflow. The workflow started by the `workflow_run` event is able to access secrets and write tokens, even if the previous workflow was not. This is useful in cases where the previous workflow is intentionally not privileged, but you need to take a privileged action in a later workflow.", string: { constant: "workflow_run" } }, "workflow-run": { description: "This event occurs when a workflow run is requested or completed. It allows you to execute a workflow based on execution or completion of another workflow. The workflow started by the `workflow_run` event is able to access secrets and write tokens, even if the previous workflow was not. This is useful in cases where the previous workflow is intentionally not privileged, but you need to take a privileged action in a later workflow.", "one-of": ["null", "workflow-run-mapping"] }, "workflow-run-mapping": { mapping: { properties: { types: "workflow-run-activity", workflows: "workflow-run-workflows", branches: "event-branches", "branches-ignore": "event-branches-ignore" } } }, "workflow-run-workflows": { description: "The name of the workflow that triggers the `workflow_run` event. The workflow must be in the same repository as the workflow that uses the `workflow_run` event.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "workflow-run-activity": { description: "The types of workflow run activity that trigger the workflow. Supported activity types: `completed`, `requested`, `in_progress`.", "one-of": ["workflow-run-activity-type", "workflow-run-activity-types"] }, "workflow-run-activity-types": { sequence: { "item-type": "workflow-run-activity-type" } }, "workflow-run-activity-type": { "allowed-values": ["requested", "completed", "in_progress"] }, "event-branches": { description: "Use the `branches` filter when you want to include branch name patterns or when you want to both include and exclude branch name patterns. You cannot use both the `branches` and `branches-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-branches-ignore": { description: "Use the `branches-ignore` filter when you only want to exclude branch name patterns. You cannot use both the `branches` and `branches-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-names": { description: "Use the `names` filter when you want to include names via patterns or when you want to both include and exclude names using patterns. ", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-tags": { description: "Use the `tags` filter when you want to include tag name patterns or when you want to both include and exclude tag names patterns. You cannot use both the `tags` and `tags-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-tags-ignore": { description: "Use the `tags-ignore` filter when you only want to exclude tag name patterns. You cannot use both the `tags` and `tags-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-paths": { description: "Use the `paths` filter when you want to include file path patterns or when you want to both include and exclude file path patterns. You cannot use both the `paths` and `paths-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-paths-ignore": { description: "Use the `paths-ignore` filter when you only want to exclude file path patterns. You cannot use both the `paths` and `paths-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-versions": { description: "Use the `versions` filter when you want to include versions via patterns or when you want to both include and exclude versions using patterns. ", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "repository-dispatch-string": { description: "You can use the GitHub API to trigger a webhook event called `repository_dispatch` when you want to trigger a workflow for activity that happens outside of GitHub.", string: { constant: "branch_protection_rule" } }, "repository-dispatch": { description: "You can use the GitHub API to trigger a webhook event called `repository_dispatch` when you want to trigger a workflow for activity that happens outside of GitHub.", "one-of": ["null", "repository-dispatch-mapping"] }, "repository-dispatch-mapping": { mapping: { properties: { types: "sequence-of-non-empty-string" } } }, "workflow-call-string": { description: "The `workflow_call` event is used to indicate that a workflow can be called by another workflow. When a workflow is triggered with the `workflow_call` event, the event payload in the called workflow is the same event payload from the calling workflow.", string: { constant: "workflow_call" } }, "workflow-call": { description: "The `workflow_call` event is used to indicate that a workflow can be called by another workflow. When a workflow is triggered with the `workflow_call` event, the event payload in the called workflow is the same event payload from the calling workflow.", "one-of": ["null", "workflow-call-mapping"] }, "workflow-call-mapping": { mapping: { properties: { inputs: "workflow-call-inputs", secrets: "workflow-call-secrets", outputs: "workflow-call-outputs" } } }, "workflow-call-inputs": { description: "Inputs that are passed to the called workflow from the caller workflow.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "workflow-call-input-definition" } }, "workflow-call-input-definition": { mapping: { properties: { description: { type: "string", description: "A string description of the input parameter." }, type: { type: "workflow-call-input-type", required: true }, required: { type: "boolean", description: "A boolean to indicate whether the action requires the input parameter. Set to `true` when the parameter is required." }, default: "workflow-call-input-default" } } }, "workflow-call-input-type": { description: "Required if input is defined for the `on.workflow_call` keyword. The value of this parameter is a string specifying the data type of the input. This must be one of: `boolean`, `number`, or `string`.", "one-of": ["input-type-string", "input-type-boolean", "input-type-number"] }, "input-type-string": { string: { constant: "string" } }, "input-type-boolean": { string: { constant: "boolean" } }, "input-type-number": { string: { constant: "number" } }, "input-type-choice": { string: { constant: "choice" } }, "input-type-environment": { string: { constant: "environment" } }, "workflow-call-input-default": { description: 'If a `default` parameter is not set, the default value of the input is `false` for boolean, `0` for a number, and `""` for a string.', context: ["github", "inputs", "vars"], "one-of": ["string", "boolean", "number"] }, "workflow-call-secrets": { description: "A map of the secrets that can be used in the called workflow. Within the called workflow, you can use the `secrets` context to refer to a secret.", mapping: { "loose-key-type": "workflow-call-secret-name", "loose-value-type": "workflow-call-secret-definition" } }, "workflow-call-secret-name": { string: { "require-non-empty": true }, description: "A string identifier to associate with the secret." }, "workflow-call-secret-definition": { "one-of": ["null", "workflow-call-secret-mapping-definition"] }, "workflow-call-secret-mapping-definition": { mapping: { properties: { description: { type: "string", description: "A string description of the secret parameter." }, required: { type: "boolean", description: "A boolean specifying whether the secret must be supplied." } } } }, "workflow-call-outputs": { description: "A reusable workflow may generate data that you want to use in the caller workflow. To use these outputs, you must specify them as the outputs of the reusable workflow.", mapping: { "loose-key-type": "workflow-call-output-name", "loose-value-type": "workflow-call-output-definition" } }, "workflow-call-output-name": { string: { "require-non-empty": true }, description: "A string identifier to associate with the output. The value of `<output_id>` is a map of the input's metadata. The `<output_id>` must be a unique identifier within the outputs object and must start with a letter or _ and contain only alphanumeric characters, -, or _." }, "workflow-call-output-definition": { mapping: { properties: { description: { type: "string", description: "A string description of the output parameter." }, value: { type: "workflow-output-context", required: true } } } }, "workflow-output-context": { description: "The value to assign to the output parameter.", context: ["github", "inputs", "vars", "jobs"], string: {} }, "workflow-dispatch-string": { description: "The `workflow_dispatch` event allows you to manually trigger a workflow run. A workflow can be manually triggered using the GitHub API, GitHub CLI, or GitHub browser interface.", string: { constant: "workflow_dispatch" } }, "workflow-dispatch": { description: "The `workflow_dispatch` event allows you to manually trigger a workflow run. A workflow can be manually triggered using the GitHub API, GitHub CLI, or GitHub browser interface.", "one-of": ["null", "workflow-dispatch-mapping"] }, "workflow-dispatch-mapping": { mapping: { properties: { inputs: "workflow-dispatch-inputs" } } }, "workflow-dispatch-inputs": { description: "You can configure custom-defined input properties, default input values, and required inputs for the event directly in your workflow. When you trigger the event, you can provide the `ref` and any `inputs`. When the workflow runs, you can access the input values in the `inputs` context.", mapping: { "loose-key-type": "workflow-dispatch-input-name", "loose-value-type": "workflow-dispatch-input" } }, "workflow-dispatch-input-name": { string: { "require-non-empty": true }, description: "A string identifier to associate with the input. The value of <input_id> is a map of the input's metadata. The <input_id> must be a unique identifier within the inputs object. The <input_id> must start with a letter or _ and contain only alphanumeric characters, -, or _." }, "workflow-dispatch-input": { mapping: { properties: { description: { type: "string", description: "A string description of the input parameter." }, type: { type: "workflow-dispatch-input-type" }, required: { type: "boolean", description: "A boolean to indicate whether the workflow requires the input parameter. Set to true when the parameter is required." }, default: "workflow-dispatch-input-default", options: { type: "sequence-of-string", description: "The options of the dropdown list, if the type is a choice." } } } }, "workflow-dispatch-input-type": { description: "A string representing the type of the input. This must be one of: `boolean`, `number`, `string`, `choice`, or `environment`.", "one-of": ["input-type-string", "input-type-boolean", "input-type-number", "input-type-environment", "input-type-choice"] }, "workflow-dispatch-input-default": { description: "The default value is used when an input parameter isn't specified in a workflow file.", "one-of": ["string", "boolean", "number"] }, permissions: { description: "You can use `permissions` to modify the default permissions granted to the `GITHUB_TOKEN`, adding or removing access as required, so that you only allow the minimum required access.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#permissions)", "one-of": ["permissions-mapping", "permission-level-shorthand-read-all", "permission-level-shorthand-write-all"] }, "permissions-mapping": { mapping: { properties: { actions: { type: "permission-level-any", description: "Actions workflows, workflow runs, and artifacts." }, "artifact-metadata": { type: "permission-level-any", description: "Storage and deployment records for build artifacts." }, attestations: { type: "permission-level-any", description: "Artifact attestations." }, checks: { type: "permission-level-any", description: "Check runs and check suites." }, "code-quality": { type: "permission-level-any", description: "Code quality data." }, contents: { type: "permission-level-any", description: "Repository contents, commits, branches, downloads, releases, and merges." }, "copilot-requests": { type: "permission-level-write-or-no-access", description: "GitHub Copilot requests." }, deployments: { type: "permission-level-any", description: "Deployments and deployment statuses." }, discussions: { type: "permission-level-any", description: "Discussions and related comments and labels." }, drives: { type: "permission-level-any", description: "GitHub Drives persistent workspace storage. Use `read` for checkout and `write` to commit changes." }, "id-token": { type: "permission-level-write-or-no-access", description: "Token to request an OpenID Connect token." }, issues: { type: "permission-level-any", description: "Issues and related comments, assignees, labels, and milestones." }, models: { type: "permission-level-read-or-no-access", description: "Call AI models with GitHub Models." }, packages: { type: "permission-level-any", description: "Packages published to the GitHub Package Platform." }, pages: { type: "permission-level-any", description: "Retrieve Pages statuses, configuration, and builds, as well as create new builds." }, "pull-requests": { type: "permission-level-any", description: "Pull requests and related comments, assignees, labels, milestones, and merges." }, "repository-projects": { type: "permission-level-any", description: "Classic projects within a repository." }, "security-events": { type: "permission-level-any", description: "Code scanning alerts." }, statuses: { type: "permission-level-any", description: "Commit statuses." }, "vulnerability-alerts": { type: "permission-level-read-or-no-access", description: "Dependabot alerts." } } } }, "permission-level-any": { description: "The permission level for the `GITHUB_TOKEN`.", "one-of": ["permission-level-read", "permission-level-write", "permission-level-no-access"] }, "permission-level-read-or-no-access": { "one-of": ["permission-level-read", "permission-level-no-access"] }, "permission-level-write-or-no-access": { "one-of": ["permission-level-write", "permission-level-no-access"] }, "permission-level-read": { description: "The permission level for the `GITHUB_TOKEN`. Grants `read` permission for the specified scope.", string: { constant: "read" } }, "permission-level-write": { description: "The permission level for the `GITHUB_TOKEN`. Grants `write` permission for the specified scope.", string: { constant: "write" } }, "permission-level-no-access": { description: "The permission level for the `GITHUB_TOKEN`. Restricts all access for the specified scope.", string: { constant: "none" } }, "permission-level-shorthand-read-all": { description: "The permission level for the `GITHUB_TOKEN`. Grants `read` access for all scopes.", string: { constant: "read-all" } }, "permission-level-shorthand-write-all": { description: "The permission level for the `GITHUB_TOKEN`. Grants `write` access for all scopes.", string: { constant: "write-all" } }, "workflow-defaults": { description: "Use `defaults` to create a map of default settings that will apply to all jobs in the workflow. You can also set default settings that are only available to a job.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#defaults)", mapping: { properties: { run: "workflow-defaults-run" } } }, "workflow-defaults-run": { mapping: { properties: { shell: "shell", "working-directory": "working-directory" } } }, "workflow-env": { description: "A map of environment variables that are available to the steps of all jobs in the workflow. You can also set environment variables that are only available to the steps of a single job or to a single step.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#env)", context: ["github", "inputs", "vars", "secrets"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, jobs: { description: "A workflow run is made up of one or more `jobs`, which run in parallel by default. To run jobs sequentially, you can define dependencies on other jobs using the `jobs.<job_id>.needs` keyword. Each job runs in a runner environment specified by `runs-on`.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobs)", mapping: { "loose-key-type": "job-id", "loose-value-type": "job" } }, "job-id": { string: { "require-non-empty": true }, description: "A unique identifier for the job. The identifier must start with a letter or _ and contain only alphanumeric characters, -, or _." }, job: { description: "Each job must have an id to associate with the job. The key `job_id` is a string and its value is a map of the job's configuration data. You must replace `<job_id>` with a string that is unique to the jobs object. The `<job_id>` must start with a letter or _ and contain only alphanumeric characters, -, or _.", "one-of": ["job-factory", "workflow-job"] }, "job-factory": { mapping: { properties: { needs: "needs", if: "job-if", strategy: "strategy", name: { type: "string-strategy-context", description: "The name of the job displayed on GitHub." }, "runs-on": { type: "runs-on", required: true }, "timeout-minutes": { type: "number-strategy-context", description: "The maximum number of minutes to let a workflow run before GitHub automatically cancels it. Default: 360" }, "cancel-timeout-minutes": "number-strategy-context", "continue-on-error": { type: "boolean-strategy-context", description: "Prevents a workflow run from failing when a job fails. Set to true to allow a workflow run to pass when this job fails." }, container: "container", services: "services", env: "job-env", environment: "job-environment", permissions: "permissions", concurrency: "job-concurrency", outputs: "job-outputs", defaults: "job-defaults", steps: "steps", snapshot: "snapshot" } } }, "workflow-job": { mapping: { properties: { name: { type: "string-strategy-context", description: "The name of the job displayed on GitHub." }, uses: { description: "The location and version of a reusable workflow file to run as a job. Use one of the following formats:\n\n* `{owner}/{repo}/.github/workflows/{filename}@{ref}` for reusable workflows in public and private repositories.\n* `./.github/workflows/{filename}` for reusable workflows in the same repository.\n\n{ref} can be a SHA, a release tag, or a branch name. Using the commit SHA is the safest for stability and security.", type: "non-empty-string", required: true }, with: "workflow-job-with", secrets: "workflow-job-secrets", needs: "needs", if: "job-if", permissions: "permissions", concurrency: "job-concurrency", strategy: "strategy" } } }, "workflow-job-with": { description: "When a job is used to call a reusable workflow, you can use `with` to provide a map of inputs that are passed to the called workflow.\n\nAny inputs that you pass must match the input specifications defined in the called workflow.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "scalar-needs-context" } }, "workflow-job-secrets": { description: "When a job is used to call a reusable workflow, you can use `secrets` to provide a map of secrets that are passed to the called workflow.\n\nAny secrets that you pass must match the names defined in the called workflow.", "one-of": ["workflow-job-secrets-mapping", "workflow-job-secrets-inherit"] }, "workflow-job-secrets-mapping": { mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "scalar-needs-context-with-secrets" } }, "workflow-job-secrets-inherit": { string: { constant: "inherit" } }, needs: { description: "Use `needs` to identify any jobs that must complete successfully before this job will run. It can be a string or array of strings. If a job fails, all jobs that need it are skipped unless the jobs use a conditional expression that causes the job to continue. If a run contains a series of jobs that need each other, a failure applies to all jobs in the dependency chain from the point of failure onwards.", "one-of": ["sequence-of-non-empty-string", "non-empty-string"] }, "job-if": { description: "You can use the `if` conditional to prevent a job from running unless a condition is met. You can use any supported context and expression to create a conditional.", context: ["github", "inputs", "vars", "needs", "always(0,0)", "failure(0,MAX)", "cancelled(0,0)", "success(0,MAX)"], string: {} }, "job-if-result": { context: ["github", "inputs", "vars", "needs", "always(0,0)", "failure(0,MAX)", "cancelled(0,0)", "success(0,MAX)"], "one-of": ["null", "boolean", "number", "string", "sequence", "mapping"] }, strategy: { description: "Use `strategy` to use a matrix strategy for your jobs. A matrix strategy lets you use variables in a single job definition to automatically create multiple job runs that are based on the combinations of the variables. ", context: ["github", "inputs", "vars", "needs"], mapping: { properties: { "fail-fast": { type: "boolean", description: "Setting `fail-fast` to `false` prevents GitHub from canceling all in-progress jobs if any matrix job fails. Default: `true`" }, "max-parallel": { type: "number", description: "The maximum number of jobs that can run simultaneously when using a matrix job strategy. By default, GitHub will maximize the number of jobs run in parallel depending on runner availability." }, matrix: "matrix" } } }, matrix: { description: "Use `matrix` to define a matrix of different job configurations. Within your matrix, define one or more variables followed by an array of values.", mapping: { properties: { include: { type: "matrix-filter", description: "Use `include` to expand existing matrix configurations or to add new configurations. The value of `include` is a list of objects.\n\nFor each object in the `include` list, the key:value pairs in the object will be added to each of the matrix combinations if none of the key:value pairs overwrite any of the original matrix values. If the object cannot be added to any of the matrix combinations, a new matrix combination will be created instead. Note that the original matrix values will not be overwritten, but added matrix values can be overwritten." }, exclude: { type: "matrix-filter", description: "To remove specific configurations defined in the matrix, use `exclude`. An excluded configuration only has to be a partial match for it to be excluded." } }, "loose-key-type": "non-empty-string", "loose-value-type": "sequence" } }, "matrix-filter": { sequence: { "item-type": "matrix-filter-item" } }, "matrix-filter-item": { mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, snapshot: { description: "Use `snapshot` to define a custom image you want to create or update after your job succeeds by taking a snapshot of your runner.", "one-of": ["non-empty-string", "snapshot-mapping"] }, "snapshot-mapping": { mapping: { properties: { "image-name": { description: "The desired name of the custom image you want to create or update.", type: "non-empty-string", required: true }, if: "snapshot-if", version: { description: "The desired major version updates upon a new custom image version creation.", type: "non-empty-string" } } } }, "snapshot-if": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], description: "Use the if conditional to prevent a snapshot from being taken unless a condition is met. Any supported context and expression can be used to create a conditional. Expressions in an `if` conditional do not require the bracketed expression syntax. When you use expressions in an `if` conditional, you may omit the expression syntax because GitHub automatically evaluates the `if` conditional as an expression.", string: {} }, "runs-on": { description: "Use `runs-on` to define the type of machine to run the job on.\n* The destination machine can be either a GitHub-hosted runner, larger runner, or a self-hosted runner.\n* You can target runners based on the labels assigned to them, or their group membership, or a combination of these.\n* You can provide `runs-on` as a single string or as an array of strings.\n* If you specify an array of strings, your workflow will execute on any runner that matches all of the specified `runs-on` values.\n* If you would like to run your workflow on multiple machines, use `jobs.<job_id>.strategy`.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["non-empty-string", "sequence-of-non-empty-string", "runs-on-mapping"] }, "runs-on-mapping": { mapping: { properties: { group: { description: "The group from which to select a runner.", type: "non-empty-string" }, labels: "runs-on-labels" } } }, "runs-on-labels": { description: "The label by which to filter for available runners.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "job-env": { description: "A map of variables that are available to all steps in the job.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "workflow-concurrency": { description: "Concurrency ensures that only a single job or workflow using the same concurrency group will run at a time. A concurrency group can be any string or expression.\n\nYou can also specify `concurrency` at the job level.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#concurrency)", context: ["github", "inputs", "vars"], "one-of": ["string", "concurrency-mapping"] }, "job-concurrency": { description: "Concurrency ensures that only a single job using the same concurrency group will run at a time. A concurrency group can be any string or expression. The expression can use any context except for the `secrets` context.\n\nYou can also specify `concurrency` at the workflow level.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["non-empty-string", "concurrency-mapping"] }, "concurrency-mapping": { description: "Concurrency ensures that only a single job or workflow using the same concurrency group will run at a time. A concurrency group can be any string or expression.\n\nYou can also specify `concurrency` at the job level.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#concurrency)", mapping: { properties: { group: { type: "non-empty-string", required: true, description: "When a concurrent job or workflow is queued, if another job or workflow using the same concurrency group in the repository is in progress, the queued job or workflow will be `pending`. Any previously pending job or workflow in the concurrency group will be canceled. To also cancel any currently running job or workflow in the same concurrency group, specify `cancel-in-progress: true`." }, "cancel-in-progress": { type: "boolean", description: "To cancel any currently running job or workflow in the same concurrency group, specify cancel-in-progress: true." }, queue: { type: "concurrency-queue", description: "The queuing mode for the concurrency group. When set to `max`, workflows or jobs will wait in a queue for the concurrency group up to the maximum queue length. Default: `single` meaning at most one item can be pending." } } } }, "concurrency-queue": { "allowed-values": ["single", "max"] }, "job-environment": { description: "The environment that the job references. All environment protection rules must pass before a job referencing the environment is sent to a runner.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["string", "job-environment-mapping"] }, "job-environment-mapping": { mapping: { properties: { name: { type: "job-environment-name", required: true }, url: { type: "string-runner-context-no-secrets", description: "The environment URL, which maps to `environment_url` in the deployments API." }, deployment: { type: "boolean", description: "Whether to create a deployment record for this environment. Defaults to true." } } } }, "job-environment-name": { description: "The name of the environment used by the job.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], string: {} }, "job-defaults": { description: "A map of default settings that will apply to all steps in the job. You can also set default settings for the entire workflow.", mapping: { properties: { run: "job-defaults-run" } } }, "job-defaults-run": { context: ["github", "inputs", "vars", "strategy", "matrix", "needs", "env"], mapping: { properties: { shell: "shell", "working-directory": "working-directory" } } }, "job-outputs": { description: "A map of outputs for a called workflow. Called workflow outputs are available to all downstream jobs in the caller workflow. Each output has an identifier, an optional `description,` and a `value`. The `value` must be set to the value of an output from a job within the called workflow.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string-runner-context" } }, steps: { description: "A job contains a sequence of tasks called `steps`. Steps can run commands, run setup tasks, run an action in your repository, a public repository, or an action published in a Docker registry, wait for background steps to complete, or cancel a background step. Not all steps run actions, but all actions run as a step. Each step runs in its own process in the runner environment and has access to the workspace and filesystem. Because steps run in their own process, changes to environment variables are not preserved between steps. GitHub provides built-in steps to set up and complete a job.", sequence: { "item-type": "steps-item" } }, "steps-item": { "one-of": ["run-step", "regular-step", "wait-step", "wait-all-step", "cancel-step", "parallel-step"] }, "run-step": { mapping: { properties: { name: "step-name", id: "step-id", if: "step-if", "timeout-minutes": "step-timeout-minutes", run: { type: "string-steps-context", description: "Runs command-line programs using the operating system's shell. If you do not provide a `name`, the step name will default to the text specified in the `run` command. Commands run using non-login shells by default. You can choose a different shell and customize the shell used to run commands. Each `run` keyword represents a new process and shell in the virtual environment. When you provide multi-line commands, each line runs in the same shell.", required: true }, "continue-on-error": "step-continue-on-error", env: "step-env", "working-directory": "string-steps-context", shell: "shell", background: "step-background" } } }, "regular-step": { mapping: { properties: { name: "step-name", id: "step-id", if: "step-if", "continue-on-error": "step-continue-on-error", "timeout-minutes": "step-timeout-minutes", uses: { type: "step-uses", required: true }, with: "step-with", env: "step-env", background: "step-background" } } }, "wait-step": { mapping: { properties: { name: "step-name", id: "step-id", "continue-on-error": "step-continue-on-error", wait: { type: "step-wait-target", required: true } } } }, "wait-all-step": { mapping: { properties: { name: "step-name", id: "step-id", "continue-on-error": "step-continue-on-error", "wait-all": { type: "step-wait-all-value", required: true } } } }, "cancel-step": { mapping: { properties: { name: "step-name", id: "step-id", "continue-on-error": "step-continue-on-error", cancel: { type: "step-cancel-target", required: true } } } }, "parallel-step": { mapping: { properties: { parallel: { type: "parallel-steps", required: true, description: "Run a group of steps concurrently. All steps in the parallel block run as background steps and the workflow waits for all of them to complete before continuing." } } } }, "parallel-steps": { sequence: { "item-type": "steps-item" } }, "step-uses": { description: "Selects an action to run as part of a step in your job. An action is a reusable unit of code. You can use an action defined in the same repository as the workflow, a public repository, a [private repository with access enabled](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#allowing-access-to-components-in-a-private-repository), or in a published Docker container image.", string: { "require-non-empty": true } }, "step-background": { boolean: {}, description: "When set to true, runs this step in the background. The workflow continues to the next step immediately without waiting for the background step to finish." }, "step-wait-target": { description: "The step ID or IDs of background steps to wait for.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "step-wait-all-value": { description: "Wait for all prior background steps to complete. Use as a bare key (`wait-all:`) or with a boolean value.", "one-of": ["null", "boolean"] }, "step-cancel-target": { description: "The step ID of a background step to cancel.", string: { "require-non-empty": true } }, "step-continue-on-error": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], boolean: {}, description: "Prevents a job from failing when a step fails. Set to `true` to allow a job to pass when this step fails." }, "step-id": { string: { "require-non-empty": true }, description: "A unique identifier for the step. You can use the `id` to reference the step in contexts." }, "step-if": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "steps", "job", "runner", "env", "always(0,0)", "failure(0,0)", "cancelled(0,0)", "success(0,0)", "hashFiles(1,255)"], description: "Use the `if` conditional to prevent a step from running unless a condition is met. Any supported context and expression can be used to create a conditional. Expressions in an `if` conditional do not require the bracketed expression syntax. When you use expressions in an `if` conditional, you may omit the expression syntax because GitHub automatically evaluates the `if` conditional as an expression.", string: {} }, "step-if-result": { context: ["github", "inputs", "vars", "strategy", "matrix", "steps", "job", "runner", "env", "always(0,0)", "failure(0,0)", "cancelled(0,0)", "success(0,0)", "hashFiles(1,255)"], "one-of": ["null", "boolean", "number", "string", "sequence", "mapping"] }, "step-env": { description: "Sets variables for steps to use in the runner environment. You can also set variables for the entire workflow or a job.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "step-name": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], string: {}, description: "A name for your step to display on GitHub." }, "step-timeout-minutes": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], number: {}, description: "The maximum number of minutes to run the step before killing the process." }, "step-with": { description: "A map of the input parameters defined by the action. Each input parameter is a key/value pair. Input parameters are set as variables. When you specify an input in a workflow file or use a default input value, GitHub creates a variable for the input with the name `INPUT_<VARIABLE_NAME>`. The variable created converts input names to uppercase letters and replaces spaces with `_`.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, container: { description: "A container to run any steps in a job that don't already specify a container. If you have steps that use both script and container actions, the container actions will run as sibling containers on the same network with the same volume mounts.\n\nIf you do not set a container, all steps will run directly on the host specified by runs-on unless a step refers to an action configured to run in a container.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["string", "container-mapping"] }, "container-mapping": { mapping: { properties: { image: { type: "non-empty-string", description: "Use `jobs.<job_id>.container.image` to define the Docker image to use as the container to run the action. The value can be the Docker Hub image or a registry name." }, options: { type: "string", description: "Use `jobs.<job_id>.container.options` to configure additional Docker container resource options." }, env: "container-env", ports: { type: "sequence-of-non-empty-string", description: "Use `jobs.<job_id>.container.ports` to set an array of ports to expose on the container." }, volumes: { type: "sequence-of-non-empty-string", description: "Use `jobs.<job_id>.container.volumes` to set an array of volumes for the container to use. You can use volumes to share data between services or other steps in a job. You can specify named Docker volumes, anonymous Docker volumes, or bind mounts on the host." }, credentials: "container-registry-credentials" } } }, services: { description: "Additional containers to host services for a job in a workflow. These are useful for creating databases or cache services like redis. The runner on the virtual machine will automatically create a network and manage the life cycle of the service containers. When you use a service container for a job or your step uses container actions, you don't need to set port information to access the service. Docker automatically exposes all ports between containers on the same network. When both the job and the action run in a container, you can directly reference the container by its hostname. The hostname is automatically mapped to the service name. When a step does not use a container action, you must access the service using localhost and bind the ports.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "services-container" } }, "services-container": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["non-empty-string", "service-container-mapping"] }, "container-registry-credentials": { description: "If the image's container registry requires authentication to pull the image, you can use `jobs.<job_id>.container.credentials` to set a map of the username and password. The credentials are the same values that you would provide to the `docker login` command.", context: ["github", "inputs", "vars", "secrets", "env"], mapping: { properties: { username: "non-empty-string", password: "non-empty-string" } } }, "container-env": { description: "Use `jobs.<job_id>.container.env` to set a map of variables in the container.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string-runner-context" } }, "non-empty-string": { string: { "require-non-empty": true } }, "sequence-of-non-empty-string": { sequence: { "item-type": "non-empty-string" } }, "sequence-of-string": { sequence: { "item-type": "string" } }, "boolean-needs-context": { context: ["github", "inputs", "vars", "needs"], boolean: {} }, "number-needs-context": { context: ["github", "inputs", "vars", "needs"], number: {} }, "string-needs-context": { context: ["github", "inputs", "vars", "needs"], string: {} }, "scalar-needs-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["string", "boolean", "number"] }, "scalar-needs-context-with-secrets": { context: ["github", "inputs", "vars", "needs", "secrets", "strategy", "matrix"], "one-of": ["string", "boolean", "number"] }, "boolean-strategy-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], boolean: {} }, "number-strategy-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], number: {} }, "string-strategy-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], string: {} }, "boolean-steps-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], boolean: {} }, "number-steps-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], number: {} }, "string-runner-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env"], string: {} }, "string-runner-context-no-secrets": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "steps", "job", "runner", "env"], string: {} }, "string-steps-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], string: {} }, shell: { string: { "require-non-empty": true }, description: "Use `shell` to override the default shell settings in the runner's operating system. You can use built-in shell keywords, or you can define a custom set of shell options. The shell command that is run internally executes a temporary file that contains the commands specified in `run`." }, "working-directory": { string: { "require-non-empty": true }, description: "The `working-directory` keyword specifies the working directory where the command is run." }, "cron-mapping": { mapping: { properties: { cron: { type: "cron-pattern", required: true }, timezone: "timezone-string" } } }, "cron-pattern": { description: "A cron expression that represents a schedule. A scheduled workflow will run at most once every 5 minutes.", string: { "require-non-empty": true } }, "timezone-string": { description: "A string that represents the time zone a scheduled workflow will run relative to in IANA format (e.g. 'America/New_York' or 'Europe/London'). If omitted, the workflow will run relative to midnight UTC.", string: { "require-non-empty": true } }, "service-container-mapping": { mapping: { properties: { image: { type: "non-empty-string", description: "The Docker image to use as the container. The value can be the Docker Hub image or a registry name." }, options: { type: "string", description: "Additional Docker container resource options." }, env: "container-env", ports: { type: "sequence-of-non-empty-string", description: "An array of ports to expose on the container." }, volumes: { type: "sequence-of-non-empty-string", description: "An array of volumes for the container to use. You can use volumes to share data between services or other steps in a job. You can specify named Docker volumes, anonymous Docker volumes, or bind mounts on the host." }, credentials: "container-registry-credentials", entrypoint: { type: "string", description: "Override the default ENTRYPOINT in the service container image." }, command: { type: "string", description: "Override the default CMD in the service container image." } } } } } };
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/workflow-schema.js
+var schema;
+function getWorkflowSchema() {
+  if (schema === void 0) {
+    const json2 = JSON.stringify(workflow_v1_0_min_default);
+    schema = TemplateSchema.load(new JSONObjectReader(void 0, json2));
+  }
+  return schema;
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/yaml-object-reader.js
+var import_yaml3 = __toESM(require_dist(), 1);
+var YamlObjectReader = class _YamlObjectReader {
+  constructor(fileId, content) {
+    this.lineCounter = new import_yaml3.LineCounter();
+    this.errors = [];
+    this.doc = (0, import_yaml3.parseDocument)(content, {
+      lineCounter: this.lineCounter,
+      keepSourceTokens: true,
+      uniqueKeys: false
+      // Uniqueness is validated by the template reader
+    });
+    for (const err of this.doc.errors) {
+      this.errors.push({ message: err.message, range: rangeFromLinePos(err.linePos) });
+    }
+    this._generator = this.getNodes(this.doc, /* @__PURE__ */ new Set());
+    this.fileId = fileId;
+  }
+  *getNodes(node2, aliasResolutionStack) {
+    let range = this.getRange(node2);
+    if ((0, import_yaml3.isDocument)(node2)) {
+      yield new ParseEvent(EventType.DocumentStart);
+      for (const item of this.getNodes(node2.contents, /* @__PURE__ */ new Set())) {
+        yield item;
+      }
+      yield new ParseEvent(EventType.DocumentEnd);
+    }
+    if ((0, import_yaml3.isCollection)(node2)) {
+      if ((0, import_yaml3.isSeq)(node2)) {
+        yield new ParseEvent(EventType.SequenceStart, new SequenceToken(this.fileId, range, void 0));
+      } else if ((0, import_yaml3.isMap)(node2)) {
+        yield new ParseEvent(EventType.MappingStart, new MappingToken(this.fileId, range, void 0));
+      }
+      for (const item of node2.items) {
+        for (const child of this.getNodes(item, aliasResolutionStack)) {
+          yield child;
+        }
+      }
+      if ((0, import_yaml3.isSeq)(node2)) {
+        yield new ParseEvent(EventType.SequenceEnd);
+      } else if ((0, import_yaml3.isMap)(node2)) {
+        yield new ParseEvent(EventType.MappingEnd);
+      }
+    }
+    if ((0, import_yaml3.isScalar)(node2)) {
+      yield new ParseEvent(EventType.Literal, _YamlObjectReader.getLiteralToken(this.fileId, range, node2));
+    }
+    if ((0, import_yaml3.isAlias)(node2)) {
+      const resolved = node2.resolve(this.doc);
+      if (resolved) {
+        if (aliasResolutionStack.has(resolved)) {
+          return;
+        }
+        const newStack = new Set(aliasResolutionStack);
+        newStack.add(resolved);
+        yield* this.getNodes(resolved, newStack);
+      }
+      return;
+    }
+    if ((0, import_yaml3.isPair)(node2)) {
+      const scalarKey = node2.key;
+      range = this.getRange(scalarKey);
+      const key = scalarKey.value;
+      yield new ParseEvent(EventType.Literal, new StringToken(this.fileId, range, key, void 0));
+      for (const child of this.getNodes(node2.value, aliasResolutionStack)) {
+        yield child;
+      }
+    }
+  }
+  getRange(node2) {
+    const range = node2?.range ?? [];
+    const startPos = range[0];
+    const endPos = range[1];
+    if (startPos !== void 0 && endPos !== void 0) {
+      const slp = this.lineCounter.linePos(startPos);
+      const elp = this.lineCounter.linePos(endPos);
+      return {
+        start: { line: slp.line, column: slp.col },
+        end: { line: elp.line, column: elp.col }
+      };
+    }
+    return void 0;
+  }
+  static getLiteralToken(fileId, range, token) {
+    const value = token.value;
+    if (value === null || value === void 0) {
+      return new NullToken(fileId, range, void 0);
+    }
+    switch (typeof value) {
+      case "number":
+        return new NumberToken(fileId, range, value, void 0);
+      case "boolean":
+        return new BooleanToken(fileId, range, value, void 0);
+      case "string": {
+        let source;
+        let blockScalarHeader;
+        if (token.srcToken && "source" in token.srcToken) {
+          source = token.srcToken.source;
+          if (token.srcToken.type === "block-scalar" && "props" in token.srcToken) {
+            const props = token.srcToken.props;
+            const headerProp = props.find((p) => p.type === "block-scalar-header");
+            if (headerProp?.source) {
+              blockScalarHeader = headerProp.source;
+            }
+          }
+        }
+        return new StringToken(fileId, range, value, void 0, source, blockScalarHeader);
+      }
+      default:
+        throw new Error(`Unexpected value type '${typeof value}' when reading object`);
+    }
+  }
+  allowLiteral() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.Literal) {
+        this._current = this._generator.next();
+        return parseEvent.token;
+      }
+    }
+    return void 0;
+  }
+  allowSequenceStart() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.SequenceStart) {
+        this._current = this._generator.next();
+        return parseEvent.token;
+      }
+    }
+    return void 0;
+  }
+  allowSequenceEnd() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.SequenceEnd) {
+        this._current = this._generator.next();
+        return true;
+      }
+    }
+    return false;
+  }
+  allowMappingStart() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.MappingStart) {
+        this._current = this._generator.next();
+        return parseEvent.token;
+      }
+    }
+    return void 0;
+  }
+  allowMappingEnd() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.MappingEnd) {
+        this._current = this._generator.next();
+        return true;
+      }
+    }
+    return false;
+  }
+  validateEnd() {
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.DocumentEnd) {
+        this._current = this._generator.next();
+        return;
+      }
+    }
+    throw new Error("Expected end of reader");
+  }
+  validateStart() {
+    if (!this._current) {
+      this._current = this._generator.next();
+    }
+    if (!this._current.done) {
+      const parseEvent = this._current.value;
+      if (parseEvent.type === EventType.DocumentStart) {
+        this._current = this._generator.next();
+        return;
+      }
+    }
+    throw new Error("Expected start of reader");
+  }
+};
+function rangeFromLinePos(linePos) {
+  if (linePos === void 0) {
+    return;
+  }
+  const start = { line: linePos[0].line, column: linePos[0].col };
+  const end = linePos.length == 2 ? { line: linePos[1].line, column: linePos[1].col } : start;
+  return { start, end };
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/workflow-parser.js
+function parseWorkflow(entryFile, contextOrTrace) {
+  const context = contextOrTrace instanceof TemplateContext ? contextOrTrace : new TemplateContext(new TemplateValidationErrors(), getWorkflowSchema(), contextOrTrace);
+  const fileId = context.getFileId(entryFile.name);
+  const reader = new YamlObjectReader(fileId, entryFile.content);
+  if (reader.errors.length > 0) {
+    for (const err of reader.errors) {
+      context.error(fileId, err.message, err.range);
+    }
+    return {
+      context,
+      value: void 0
+    };
+  }
+  const result = readTemplate(context, WORKFLOW_ROOT, reader, fileId);
+  return {
+    context,
+    value: result
+  };
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/converter/cron.js
+var import_cronstrue = __toESM(require_cronstrue(), 1);
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/workflow-template.js
+var InputType;
+(function(InputType2) {
+  InputType2["string"] = "string";
+  InputType2["choice"] = "choice";
+  InputType2["boolean"] = "boolean";
+  InputType2["environment"] = "environment";
+})(InputType || (InputType = {}));
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/convert.js
+var ErrorPolicy;
+(function(ErrorPolicy2) {
+  ErrorPolicy2[ErrorPolicy2["ReturnErrorsOnly"] = 0] = "ReturnErrorsOnly";
+  ErrorPolicy2[ErrorPolicy2["TryConversion"] = 1] = "TryConversion";
+})(ErrorPolicy || (ErrorPolicy = {}));
+var defaultOptions = {
+  maxReusableWorkflowDepth: 4,
+  fetchReusableWorkflowDepth: 0,
+  errorPolicy: ErrorPolicy.ReturnErrorsOnly,
+  featureFlags: new FeatureFlags()
+};
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/actions/action-constants.js
+var ACTION_ROOT = "action-root-strict";
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/action-v1.0.min.json
+var action_v1_0_min_default = { definitions: { "action-root": { description: "Action file", mapping: { properties: { name: "string", description: "string", inputs: "inputs", outputs: "outputs", runs: "runs" }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "action-root-strict": { description: "GitHub Action manifest file (action.yml/action.yaml) that defines an action's metadata, inputs, outputs, and execution configuration.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions)", mapping: { properties: { name: { type: "non-empty-string", required: true, description: "The name of your action. GitHub displays the name in the Actions tab to help visually identify actions in each job.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#name)" }, description: { type: "string", required: true, description: "A short description of the action. GitHub displays this description in the Actions Marketplace.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#description)" }, author: { type: "string", description: "The name of the action's author.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#author)" }, inputs: "inputs-strict", outputs: "outputs", runs: { type: "runs-strict", required: true }, branding: "branding" } } }, inputs: { mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "input" } }, "inputs-strict": { description: "Input parameters allow you to specify data that the action expects to use during runtime. GitHub stores input parameters as environment variables. Inputs ids with uppercase letters are converted to lowercase during runtime.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputs)", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "input-strict" } }, input: { mapping: { properties: { default: "input-default-context" }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "input-strict": { description: "An input parameter for this action.", mapping: { properties: { description: { type: "string", description: "A string description of the input parameter.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddescription)" }, required: { type: "boolean", description: "A boolean to indicate whether the action requires the input parameter. Set to true when the parameter is required.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_idrequired)" }, default: { type: "input-default-context", description: "A string representing the default value. The default value is used when an input parameter isn't specified in a workflow file.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddefault)" }, deprecationMessage: { type: "string", description: "A string shown to users using the deprecated input, warning them that the input is deprecated and mentioning any alternatives.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddeprecationmessage)" } }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "input-default-context": { description: "A string representing the default value. The default value is used when an input parameter isn't specified in a workflow file.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddefault)", context: ["github", "strategy", "matrix", "job", "runner", "hashFiles(1,255)"], string: {} }, outputs: { description: "Output parameters allow you to declare data that an action sets. Actions that run later in a workflow can use the output data set in previously run actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputs-for-composite-actions)", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "output-definition" } }, "output-definition": { description: "An output parameter for this action.", mapping: { properties: { description: { type: "string", description: "A string description of the output parameter.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputsoutput_iddescription)" }, value: { type: "output-value", description: "The value that the output parameter will be mapped to. You can set this to a string or an expression with context.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputsoutput_idvalue)" } } } }, "output-value": { description: "The value that the output parameter will be mapped to. You can set this to a string or an expression with context.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputsoutput_idvalue)", context: ["github", "strategy", "matrix", "steps", "inputs", "job", "runner", "env"], string: {} }, "runs-if": { description: "Condition to control when this action's pre or post script runs.", context: ["runner", "github", "job", "strategy", "matrix", "env", "inputs", "always(0,0)", "success(0,0)", "failure(0,0)", "cancelled(0,0)", "hashFiles(1,255)"], string: {} }, runs: { "one-of": ["container-runs", "node-runs", "composite-runs", "plugin-runs"] }, "runs-strict": { description: "Specifies whether this is a JavaScript action, a composite action, or a Docker container action and how the action is executed.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", "one-of": ["container-runs-strict", "node-runs-strict", "composite-runs-strict"] }, "plugin-runs": { mapping: { properties: { plugin: "non-empty-string" } } }, "container-runs": { mapping: { properties: { using: "non-empty-string", image: "non-empty-string", entrypoint: "non-empty-string", args: "container-runs-args", env: "container-runs-env", "pre-entrypoint": "non-empty-string", "pre-if": "non-empty-string", "post-entrypoint": "non-empty-string", "post-if": "non-empty-string" } } }, "container-runs-args": { description: "An array of strings that define the inputs for a Docker container. Inputs can include hardcoded strings. GitHub passes the args to the container's ENTRYPOINT when the container starts up.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsargs)", sequence: { "item-type": "container-runs-context" } }, "container-runs-env": { description: "Specifies a key/value map of environment variables to set in the container environment.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsenv)", context: ["inputs"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "container-runs-context": { context: ["inputs"], string: {} }, "node-runs": { mapping: { properties: { using: "non-empty-string", main: "non-empty-string", pre: "non-empty-string", "pre-if": "non-empty-string", post: "non-empty-string", "post-if": "non-empty-string" } } }, "composite-runs": { mapping: { properties: { using: "non-empty-string", steps: "composite-steps" } } }, "container-runs-strict": { description: "Configuration for Docker container actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", mapping: { properties: { using: { type: "using", required: true, description: "The runtime used to execute the action. Must be docker for Docker container actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsusing)" }, image: { type: "non-empty-string", required: true, description: "The Docker image to use as the container to run the action. The value can be the Docker base image name, a local Dockerfile in your repository, or a public image in Docker Hub or another registry.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsimage)" }, entrypoint: { type: "non-empty-string", description: "Overrides the Docker ENTRYPOINT in the Dockerfile, or sets it if one wasn't already specified.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsentrypoint)" }, args: "container-runs-args", env: "container-runs-env", "pre-entrypoint": { type: "non-empty-string", description: "Allows you to run a script before the entrypoint action begins.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre-entrypoint)" }, "pre-if": { type: "runs-if", description: "Allows you to define conditions for the pre: action execution. The pre: action will only run if the conditions in pre-if are met. If not set, then pre-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre-if)" }, "post-entrypoint": { type: "non-empty-string", description: "Allows you to run a cleanup script once the runs.entrypoint action has completed.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost-entrypoint)" }, "post-if": { type: "runs-if", description: "Allows you to define conditions for the post: action execution. The post: action will only run if the conditions in post-if are met. If not set, then post-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost-if)" } } } }, "node-runs-strict": { description: "Configuration for JavaScript actions executed with Node.js.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", mapping: { properties: { using: { type: "using", required: true, description: "The runtime used to execute the action. Use node20 or node24 for JavaScript actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsusing)" }, main: { type: "non-empty-string", required: true, description: "The file that contains your action code. The runtime specified in using executes this file.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsmain)" }, pre: { type: "non-empty-string", description: "Allows you to run a script at the start of a job, before the main: action begins. You can use pre: to run prerequisite setup scripts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre)" }, "pre-if": { type: "runs-if", description: "Allows you to define conditions for the pre: action execution. The pre: action will only run if the conditions in pre-if are met. If not set, then pre-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre-if)" }, post: { type: "non-empty-string", description: "Allows you to run a script at the end of a job, once the main: action has completed. You can use post: to run cleanup scripts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost)" }, "post-if": { type: "runs-if", description: "Allows you to define conditions for the post: action execution. The post: action will only run if the conditions in post-if are met. If not set, then post-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost-if)" } } } }, "composite-runs-strict": { description: "Configuration for composite actions that run multiple steps.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", mapping: { properties: { using: { type: "using", required: true, description: "The runtime used to execute the action. Must be composite for composite actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsusing)" }, steps: { type: "composite-steps", required: true } } } }, "composite-steps": { description: "The steps that you plan to run in this action. These can be either run steps or uses steps.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runssteps)", sequence: { "item-type": "composite-step" } }, "composite-step": { description: "A step within a composite action.", "one-of": ["run-step", "uses-step"] }, "run-step": { description: "Runs a command-line program using the operating system's shell.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsrun)", mapping: { properties: { name: { type: "string-steps-context", description: "A name for your step to display on GitHub.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsname)" }, id: { type: "non-empty-string", description: "A unique identifier for the step. You can use the id to reference the step in contexts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsid)" }, if: { type: "step-if", description: "You can use the if conditional to prevent a step from running unless a condition is met. You can use any supported context and expression to create a conditional.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsif)" }, run: { type: "string-steps-context", required: true, description: "The command you want to run. This can be inline or a script in your action repository.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsrun)" }, shell: { type: "string-steps-context", required: true, description: "The shell where you want to run the command. Any shell supported by the runner can be used. Required if run is set.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsshell)" }, env: "step-env", "continue-on-error": { type: "boolean-steps-context", description: "Prevents the action from failing when a step fails. Set to true to allow the action to pass when this step fails.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepscontinue-on-error)" }, "working-directory": { type: "string-steps-context", description: "Specifies the working directory where the command is run.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsworking-directory)" } } } }, "uses-step": { description: "Runs another action as part of a step in your action.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsuses)", mapping: { properties: { name: { type: "string-steps-context", description: "A name for your step to display on GitHub.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsname)" }, id: { type: "non-empty-string", description: "A unique identifier for the step. You can use the id to reference the step in contexts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsid)" }, if: { type: "step-if", description: "You can use the if conditional to prevent a step from running unless a condition is met. You can use any supported context and expression to create a conditional.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsif)" }, uses: { type: "non-empty-string", required: true, description: "Selects an action to run as part of a step in your action. An action is a reusable unit of code.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsuses)" }, with: "step-with", env: "step-env", "continue-on-error": { type: "boolean-steps-context", description: "Prevents the action from failing when a step fails. Set to true to allow the action to pass when this step fails.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepscontinue-on-error)" } } } }, "string-steps-context": { context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], string: {} }, "boolean-steps-context": { context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], boolean: {} }, "step-env": { description: "Sets variables for steps to use in the runner environment. You can also set variables for the entire action.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsenv)", context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "step-if": { description: "You can use the if conditional to prevent a step from running unless a condition is met. You can use any supported context and expression to create a conditional.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsif)", context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "always(0,0)", "failure(0,0)", "cancelled(0,0)", "success(0,0)", "hashFiles(1,255)"], string: {} }, "step-with": { description: "A map of the input parameters defined by the action. Each input parameter is a key/value pair.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepswith)", context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, branding: { description: "You can use a color and Feather icon to create a badge to personalize and distinguish your action in GitHub Marketplace.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#branding)", mapping: { properties: { icon: { type: "branding-icon", description: "The name of the v4.28.0 Feather icon to use.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingicon)" }, color: { type: "branding-color", description: "The background color of the badge.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingcolor)" } } } }, "branding-icon": { description: "The name of the v4.28.0 Feather icon to use. Brand icons are omitted as well as: coffee, columns, divide-circle, divide-square, divide, frown, hexagon, key, meh, mouse-pointer, smile, tool, x-octagon.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingicon)", "allowed-values": ["activity", "airplay", "alert-circle", "alert-octagon", "alert-triangle", "align-center", "align-justify", "align-left", "align-right", "anchor", "aperture", "archive", "arrow-down-circle", "arrow-down-left", "arrow-down-right", "arrow-down", "arrow-left-circle", "arrow-left", "arrow-right-circle", "arrow-right", "arrow-up-circle", "arrow-up-left", "arrow-up-right", "arrow-up", "at-sign", "award", "bar-chart-2", "bar-chart", "battery-charging", "battery", "bell-off", "bell", "bluetooth", "bold", "book-open", "book", "bookmark", "box", "briefcase", "calendar", "camera-off", "camera", "cast", "check-circle", "check-square", "check", "chevron-down", "chevron-left", "chevron-right", "chevron-up", "chevrons-down", "chevrons-left", "chevrons-right", "chevrons-up", "circle", "clipboard", "clock", "cloud-drizzle", "cloud-lightning", "cloud-off", "cloud-rain", "cloud-snow", "cloud", "code", "command", "compass", "copy", "corner-down-left", "corner-down-right", "corner-left-down", "corner-left-up", "corner-right-down", "corner-right-up", "corner-up-left", "corner-up-right", "cpu", "credit-card", "crop", "crosshair", "database", "delete", "disc", "dollar-sign", "download-cloud", "download", "droplet", "edit-2", "edit-3", "edit", "external-link", "eye-off", "eye", "fast-forward", "feather", "file-minus", "file-plus", "file-text", "file", "film", "filter", "flag", "folder-minus", "folder-plus", "folder", "gift", "git-branch", "git-commit", "git-merge", "git-pull-request", "globe", "grid", "hard-drive", "hash", "headphones", "heart", "help-circle", "home", "image", "inbox", "info", "italic", "layers", "layout", "life-buoy", "link-2", "link", "list", "loader", "lock", "log-in", "log-out", "mail", "map-pin", "map", "maximize-2", "maximize", "menu", "message-circle", "message-square", "mic-off", "mic", "minimize-2", "minimize", "minus-circle", "minus-square", "minus", "monitor", "moon", "more-horizontal", "more-vertical", "move", "music", "navigation-2", "navigation", "octagon", "package", "paperclip", "pause-circle", "pause", "percent", "phone-call", "phone-forwarded", "phone-incoming", "phone-missed", "phone-off", "phone-outgoing", "phone", "pie-chart", "play-circle", "play", "plus-circle", "plus-square", "plus", "pocket", "power", "printer", "radio", "refresh-ccw", "refresh-cw", "repeat", "rewind", "rotate-ccw", "rotate-cw", "rss", "save", "scissors", "search", "send", "server", "settings", "share-2", "share", "shield-off", "shield", "shopping-bag", "shopping-cart", "shuffle", "sidebar", "skip-back", "skip-forward", "slash", "sliders", "smartphone", "speaker", "square", "star", "stop-circle", "sun", "sunrise", "sunset", "tablet", "tag", "target", "terminal", "thermometer", "thumbs-down", "thumbs-up", "toggle-left", "toggle-right", "trash-2", "trash", "trending-down", "trending-up", "triangle", "truck", "tv", "type", "umbrella", "underline", "unlock", "upload-cloud", "upload", "user-check", "user-minus", "user-plus", "user-x", "user", "users", "video-off", "video", "voicemail", "volume-1", "volume-2", "volume-x", "volume", "watch", "wifi-off", "wifi", "wind", "x-circle", "x-square", "x", "zap-off", "zap", "zoom-in", "zoom-out"] }, "branding-color": { description: "The background color of the badge.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingcolor)", "allowed-values": ["white", "yellow", "blue", "green", "orange", "red", "purple", "gray-dark"] }, using: { description: "The runtime used to execute the action.", "allowed-values": ["docker", "node12", "node16", "node20", "node24", "composite"] }, "non-empty-string": { string: { "require-non-empty": true } } } };
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/actions/action-schema.js
+var schema2;
+function getActionSchema() {
+  if (schema2 === void 0) {
+    const json2 = JSON.stringify(action_v1_0_min_default);
+    schema2 = TemplateSchema.load(new JSONObjectReader(void 0, json2));
+  }
+  return schema2;
+}
+
+// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/actions/action-parser.js
+function parseAction(entryFile, contextOrTrace) {
+  const context = contextOrTrace instanceof TemplateContext ? contextOrTrace : new TemplateContext(new TemplateValidationErrors(), getActionSchema(), contextOrTrace);
+  const fileId = context.getFileId(entryFile.name);
+  const reader = new YamlObjectReader(fileId, entryFile.content);
+  if (reader.errors.length > 0) {
+    for (const err of reader.errors) {
+      context.error(fileId, err.message, err.range);
+    }
+    return {
+      context,
+      value: void 0
+    };
+  }
+  const result = readTemplate(context, ACTION_ROOT, reader, fileId);
+  return {
+    context,
+    value: result
+  };
+}
+
+// ../core/src/validate.ts
+var import_yaml4 = __toESM(require_dist(), 1);
+
+// ../core/src/schema.ts
+var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
+var CACHE_MODE = {
+  values: ["read", "write", "write-only", "none"],
+  in: ["workflow-root", "workflow-root-strict", "job-factory", "workflow-job"]
+};
+var workflow;
+function workflowSchema() {
+  if (workflow) return workflow;
+  const base = getWorkflowSchema();
+  if (base.definitions["cache-mode"]) {
+    workflow = base;
+    return workflow;
+  }
+  const definitions = { ...base.definitions };
+  const cacheMode = new OneOfDefinition("cache-mode");
+  for (const value of CACHE_MODE.values) {
+    const constant = new StringDefinition(`cache-mode-${value}`);
+    constant.constant = value;
+    definitions[constant.key] = constant;
+    cacheMode.oneOf.push(constant.key);
+  }
+  definitions[cacheMode.key] = cacheMode;
+  const property = new PropertyDefinition(new StringToken(void 0, void 0, cacheMode.key, void 0));
+  for (const name of CACHE_MODE.in) {
+    const mapping = definitions[name];
+    if (mapping?.definitionType !== DefinitionType.Mapping) continue;
+    const { properties } = mapping;
+    if (properties["cache-mode"]) continue;
+    definitions[name] = clone(mapping, {
+      properties: { ...properties, "cache-mode": property }
+    });
+  }
+  workflow = clone(base, { definitions });
+  return workflow;
+}
+function schemaFor(kind) {
+  return kind === "workflow" ? workflowSchema() : getActionSchema();
+}
+function clone(value, overrides) {
+  return Object.assign(Object.create(Object.getPrototypeOf(value)), value, overrides);
+}
+function expand(schema3, name, seen = /* @__PURE__ */ new Set()) {
+  if (seen.has(name)) return [];
+  seen.add(name);
+  const def = schema3.definitions[name];
+  if (!def) return [];
+  if (def.definitionType !== DefinitionType.OneOf) return [def];
+  return def.oneOf.flatMap((n) => expand(schema3, n, seen));
+}
+function mappingsAt(schema3, root, path) {
+  let types = [root];
+  for (const seg of path) {
+    const next = /* @__PURE__ */ new Set();
+    for (const def of types.flatMap((t) => expand(schema3, t))) {
+      if (typeof seg === "number" && def.definitionType === DefinitionType.Sequence) {
+        next.add(def.itemType);
+      } else if (typeof seg === "string" && def.definitionType === DefinitionType.Mapping) {
+        const mapping = def;
+        const property = mapping.properties[seg];
+        if (property) next.add(property.type);
+        else if (mapping.looseValueType) next.add(mapping.looseValueType);
+      }
+    }
+    types = [...next];
+  }
+  const out = /* @__PURE__ */ new Set();
+  for (const t of types)
+    for (const def of expand(schema3, t))
+      if (def.definitionType === DefinitionType.Mapping) out.add(def);
+  return [...out];
+}
+
+// ../core/src/validate.ts
+var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
+var UNCLOSED = /^The expression is not closed\b/;
+var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
+var LOCAL_ACTION_NOISE = /Required property is missing: (name|description)\b/i;
+var CONTEXT_NAMES = new Set(KNOWN_CONTEXTS);
+var FUNCTION_NAMES = new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLowerCase()));
+var WORKFLOW_FEATURES = new FeatureFlags({ allowBackgroundSteps: true });
+var EVENT_FILTERS = [
+  "branches",
+  "branches-ignore",
+  "tags",
+  "tags-ignore",
+  "paths",
+  "paths-ignore",
+  "types",
+  "workflows"
+];
+function isContextError(message) {
+  const named = /Unrecognized named-value: '([^']+)'/i.exec(message);
+  if (named) return CONTEXT_NAMES.has(named[1].toLowerCase());
+  const fn = /Unrecognized function: '([^']+)'/i.exec(message);
+  return fn ? FUNCTION_NAMES.has(fn[1].toLowerCase()) : false;
+}
+function againstFP502(unit, d) {
+  const site = d.at && siteAt(unit.sites, d.at);
+  if (!site) return "own";
+  if (site.loc.endLine > site.loc.line) {
+    return site.segments.some((seg) => seg.expr.error) ? "fp502" : "misread";
+  }
+  const message = UNCLOSED.test(d.message) ? UNTERMINATED_EXPRESSION : d.message;
+  return site.segments.some((seg) => seg.expr.error?.message === message) ? "fp502" : "own";
+}
+var isExpressionError = (d) => d.kind !== "context" && !!d.at && EXPRESSION_ERROR.test(d.message);
+var atKey = (d) => d.at ? `${d.at.line}:${d.at.column}` : "";
+function classifyExpressions(unit, diagnostics) {
+  const failed = new Set(diagnostics.filter(isExpressionError).map(atKey));
+  const out = [];
+  for (const d of diagnostics) {
+    if (!d.kind && d.at && failed.has(atKey(d)) && UNPARSED_VALUE.test(d.message)) continue;
+    if (!isExpressionError(d)) {
+      out.push(d);
+      continue;
+    }
+    const relation = againstFP502(unit, d);
+    if (relation === "misread") continue;
+    out.push(relation === "fp502" ? { ...d, kind: "expression" } : d);
+  }
+  return out;
+}
+function workflowContext() {
+  const context = new TemplateContext(
+    new TemplateValidationErrors(),
+    workflowSchema(),
+    new NoOperationTraceWriter()
+  );
+  context.state.featureFlags = WORKFLOW_FEATURES;
+  return context;
+}
+function validateSchema(unit, logger) {
+  try {
+    const file2 = { name: unit.file, content: unit.source.text };
+    const result = unit.kind === "workflow" ? parseWorkflow(file2, workflowContext()) : parseAction(file2, new NoOperationTraceWriter());
+    const errors = result.context.errors.getErrors();
+    const diagnostics = errors.filter((e) => !(unit.kind === "action" && LOCAL_ACTION_NOISE.test(e.message))).map((e) => {
+      const r = e.range;
+      const at = /\(Line: (\d+), Col: (\d+)\)/.exec(e.message);
+      const message = (e.message.startsWith(unit.file) ? e.message.slice(unit.file.length) : e.message).replace(/^(?: \(Line: \d+, Col: \d+\))?:\s*/, "").replace(/\.\s*Located at position \d+ within expression:.*$/s, "");
+      return {
+        message,
+        ...isContextError(message) ? { kind: "context" } : {},
+        ...at ? { at: { line: Number(at[1]), column: Number(at[2]) } } : {},
+        loc: r ? {
+          file: unit.file,
+          line: r.start.line,
+          column: r.start.column,
+          endLine: r.end.line,
+          endColumn: r.end.column
+        } : { file: unit.file, line: 1, column: 1, endLine: 1, endColumn: 1 }
+      };
+    });
+    return explain(unit, classifyExpressions(unit, diagnostics));
+  } catch (err) {
+    logger.debug(`schema validation skipped for ${unit.file}`, { reason: err.message });
+    return [];
+  }
+}
+var posKey = (line, column) => `${line}:${column}`;
+function shapeOf(unit) {
+  const lineCounter = new import_yaml4.LineCounter();
+  const doc = (0, import_yaml4.parseDocument)(unit.source.text, { lineCounter, prettyErrors: false, strict: false });
+  if (doc.errors.length > 0) return void 0;
+  const shape = { maps: /* @__PURE__ */ new Map(), keys: /* @__PURE__ */ new Map() };
+  const locOf = (range) => {
+    const a = lineCounter.linePos(range[0]);
+    const b = lineCounter.linePos(range[1]);
+    return { file: unit.file, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
+  };
+  const mergeOf = (value) => {
+    const sources = (0, import_yaml4.isSeq)(value) ? value.items : [value];
+    const maps = sources.map((s) => (0, import_yaml4.isAlias)(s) ? s.resolve(doc) : s).filter(import_yaml4.isMap);
+    const keys = maps.flatMap((m) => m.items.flatMap((p) => (0, import_yaml4.isScalar)(p.key) ? [String(p.key.value)] : []));
+    const aliases = sources.filter(import_yaml4.isAlias).map((a) => `*${a.source}`);
+    return { aliases: [...new Set(aliases)], keys };
+  };
+  const walk = (node2, path) => {
+    if ((0, import_yaml4.isSeq)(node2)) {
+      for (const [i, item] of node2.items.entries()) walk(item, [...path, i]);
+      return;
+    }
+    if (!(0, import_yaml4.isMap)(node2) || !node2.range) return;
+    const map2 = { path, keys: [], loc: locOf(node2.range) };
+    shape.maps.set(posKey(map2.loc.line, map2.loc.column), map2);
+    for (const pair of node2.items) {
+      if (!(0, import_yaml4.isScalar)(pair.key) || !pair.key.range) continue;
+      const name = String(pair.key.value);
+      const key = { name, map: map2, loc: locOf(pair.key.range) };
+      if (name === "<<") key.merge = mergeOf(pair.value);
+      map2.keys.push(key);
+      shape.keys.set(posKey(key.loc.line, key.loc.column), key);
+      walk(pair.value, [...path, name]);
+    }
+  };
+  walk(doc.contents, []);
+  return shape;
+}
+var unexpectedValue = (name) => `Unexpected value '${name}'`;
+var propertyOf = (def, name) => Object.hasOwn(def.properties, name) ? def.properties[name] : void 0;
+function explain(unit, diagnostics) {
+  if (!diagnostics.some((d) => !d.kind)) return diagnostics;
+  const shape = shapeOf(unit);
+  if (!shape) return diagnostics;
+  const schema3 = schemaFor(unit.kind);
+  const root = SCHEMA_ROOT[unit.kind];
+  const keyOf = /* @__PURE__ */ new Map();
+  const groups = /* @__PURE__ */ new Map();
+  for (const d of diagnostics) {
+    if (d.kind) continue;
+    const pos = posKey(d.loc.line, d.loc.column);
+    const unexpected = /^Unexpected value '(.*)'$/s.exec(d.message);
+    const key = unexpected ? shape.keys.get(pos) : void 0;
+    let map2;
+    if (key && key.name === unexpected[1]) {
+      keyOf.set(d, key);
+      map2 = key.map;
+    } else if (d.message.startsWith("Required property is missing: ")) {
+      map2 = shape.maps.get(pos);
+    }
+    if (map2) groups.set(map2, [...groups.get(map2) ?? [], d]);
+  }
+  const replaced = /* @__PURE__ */ new Map();
+  for (const [map2, group2] of groups) {
+    const resolved = resolveAlternatives(map2, group2, keyOf, schema3, root);
+    if (!resolved) continue;
+    for (const [i, d] of group2.entries()) replaced.set(d, i === 0 ? resolved : []);
+  }
+  const out = [];
+  for (const d of diagnostics.flatMap((d2) => replaced.get(d2) ?? [d2])) {
+    const key = keyOf.get(d);
+    if (!key || d.message !== unexpectedValue(key.name)) {
+      out.push(d);
+      continue;
+    }
+    const ignored = ignoredKey(unit.kind, key, schema3, root);
+    if (ignored) out.push({ ...d, kind: "ignored", ...ignored });
+    else if (key.merge) out.push({ ...d, fix: mergeFix(key, "here", "the whole mapping") });
+    else out.push(d);
+  }
+  return out;
+}
+function resolveAlternatives(map2, group2, keyOf, schema3, root) {
+  const shapes = mappingsAt(schema3, root, map2.path);
+  if (shapes.length < 2) return void 0;
+  const names = new Set(map2.keys.map((k) => k.name));
+  const scored = shapes.map((def) => {
+    const unexpected = def.looseKeyType ? [] : map2.keys.filter((k) => !propertyOf(def, k.name));
+    const missing = Object.entries(def.properties).filter(([name, p]) => p.required && !names.has(name)).map(([name]) => name);
+    return { def, unexpected, missing, score: unexpected.length + missing.length };
+  }).sort((a, b) => a.score - b.score);
+  const [best, runnerUp] = scored;
+  if (!best || !runnerUp || best.score === 0) return void 0;
+  const agrees = (def) => group2.every((d) => {
+    const key = keyOf.get(d);
+    if (key) return !def.looseKeyType && !propertyOf(def, key.name);
+    return propertyOf(def, d.message.slice("Required property is missing: ".length))?.required === true;
+  });
+  const explained = (def) => {
+    const others = shapes.filter((s) => s !== def);
+    const own2 = map2.keys.filter((k) => propertyOf(def, k.name) && !others.some((o) => propertyOf(o, k.name)));
+    const anchor2 = own2.find((k) => propertyOf(def, k.name).required) ?? own2[0];
+    return (key, d) => {
+      if (!anchor2 || !others.some((o) => propertyOf(o, key.name))) return d;
+      const e = { ...d, message: `${d.message} (not allowed together with \`${anchor2.name}\`)` };
+      keyOf.set(e, key);
+      return e;
+    };
+  };
+  if (best.score < runnerUp.score && !agrees(best.def)) {
+    const explain3 = explained(best.def);
+    return [
+      ...best.unexpected.map((key) => {
+        const parsed = group2.find((d2) => keyOf.get(d2) === key);
+        const d = parsed ?? { message: unexpectedValue(key.name), loc: key.loc };
+        keyOf.set(d, key);
+        return explain3(key, d);
+      }),
+      ...best.missing.map((name) => {
+        const message = `Required property is missing: ${name}`;
+        return group2.find((d) => d.message === message) ?? { message, loc: map2.loc };
+      })
+    ];
+  }
+  const guesses = scored.filter((s) => s.score === best.score && agrees(s.def));
+  if (guesses.length !== 1) return void 0;
+  const explain2 = explained(guesses[0].def);
+  return group2.map((d) => keyOf.has(d) ? explain2(keyOf.get(d), d) : d);
+}
+function ignoredKey(kind, key, schema3, root) {
+  const { path } = key.map;
+  const shapes = mappingsAt(schema3, root, path);
+  const known2 = [...new Set(shapes.flatMap((s) => Object.keys(s.properties)))];
+  if (known2.includes(key.name)) return void 0;
+  const guess = didYouMean(key.name, known2);
+  const hint = guess ? ` (did you mean \`${guess}\`?)` : "";
+  const rename2 = guess ? `Rename it to \`${guess}\`.` : void 0;
+  if (kind === "action" && path.length === 0) {
+    if (key.merge) {
+      return {
+        message: `GitHub ignores this key: YAML merge keys (\`<<\`) are not supported, so ${merged(key)} are not applied`,
+        fix: mergeFix(key, "at the top level")
+      };
+    }
+    if (key.name === "env") {
+      return {
+        message: "GitHub ignores this key: actions have no top-level `env`, so the action's steps never see these values",
+        fix: "Set the variables in `env:` on the steps that read them, or declare them as inputs."
+      };
+    }
+    return {
+      message: `GitHub ignores this key: action metadata has no \`${key.name}\`${hint}, so it has no effect`,
+      fix: rename2 ?? "Remove it."
+    };
+  }
+  const event = path[1];
+  if (kind === "workflow" && path.length === 2 && path[0] === "on" && typeof event === "string" && event !== "workflow_call" && shapes.length > 0) {
+    if (key.merge) {
+      const filters = key.merge.keys.some((k) => EVENT_FILTERS.includes(k));
+      return {
+        message: `GitHub ignores this key: YAML merge keys (\`<<\`) are not supported, so ${merged(key, filters ? "filters" : "keys")} are not applied to \`${event}\`${filters ? " and the workflow runs regardless of them" : ""}`,
+        fix: mergeFix(key, `under \`${event}\``, `the whole event (\`${event}: ${key.merge.aliases[0]}\`)`)
+      };
+    }
+    const filter = didYouMean(key.name, EVENT_FILTERS) !== void 0;
+    return {
+      message: `GitHub ignores this key: the \`${event}\` event does not support \`${key.name}\`${hint}, ${filter ? "so the workflow runs regardless of it" : "so it has no effect"}`,
+      fix: rename2 ?? (filter ? "Remove it, or check the condition in a job's `if:` instead." : "Remove it.")
+    };
+  }
+  return void 0;
+}
+function merged(key, what = "keys") {
+  const aliases = key.merge?.aliases ?? [];
+  return aliases.length > 0 ? `the ${what} in ${aliases.map((a) => `\`${a}\``).join(", ")}` : `the ${what} merged here`;
+}
+function mergeFix(key, where, whole) {
+  const repeat = `GitHub does not support YAML merge keys (\`<<\`): repeat the keys ${where}`;
+  const single = key.merge?.aliases.length === 1 && key.map.keys.length === 1;
+  return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
+}
+
+// ../core/src/script-writes.ts
+import { posix as posix3 } from "path";
+var escapes = (path) => path === ".." || path.startsWith("../");
+var PREFIXES = /* @__PURE__ */ new Set([
+  "sudo",
+  "command",
+  "builtin",
+  "exec",
+  "nohup",
+  "time",
+  "env",
+  "if",
+  "while",
+  "until",
+  "then",
+  "do",
+  "else",
+  "!",
+  "{"
+]);
+var COPIES = /* @__PURE__ */ new Set([
+  "cp",
+  "mv",
+  "ln",
+  "rsync",
+  "install",
+  "scp",
+  "copy-item",
+  "move-item",
+  "copy",
+  "xcopy",
+  "move"
+]);
+var CREATES = /* @__PURE__ */ new Set(["mkdir", "md", "touch", "tee", "new-item"]);
+var OUTPUT_OPTIONS = /* @__PURE__ */ new Set([
+  "-o",
+  "--output",
+  "--output-dir",
+  "--output-directory",
+  "--out-dir",
+  "--outdir",
+  "--out",
+  "--dest",
+  "--destination",
+  "-destination"
+]);
+var COMMAND_OUTPUT_OPTIONS = {
+  tar: ["-C", "--directory"],
+  unzip: ["-d"],
+  wget: ["-O", "-P", "--output-document", "--directory-prefix"],
+  gh: ["-D", "--dir", "-O"],
+  cp: ["-t", "--target-directory"],
+  mv: ["-t", "--target-directory"],
+  ln: ["-t", "--target-directory"],
+  install: ["-t", "--target-directory"]
+};
+var CLONE_VALUE_OPTIONS = /* @__PURE__ */ new Set([
+  "-b",
+  "--branch",
+  "--depth",
+  "-o",
+  "--origin",
+  "--reference",
+  "--reference-if-able",
+  "--filter",
+  "-c",
+  "--config",
+  "-j",
+  "--jobs",
+  "--shallow-since",
+  "--shallow-exclude",
+  "--separate-git-dir",
+  "-u",
+  "--upload-pack",
+  "--template",
+  "--server-option",
+  "--bundle-uri",
+  "--name"
+]);
+var escaped = (line, i) => line[i] === "\\" && !/[\w.-]/.test(line[i + 1] ?? "");
+function tokenize(line) {
+  const tokens = [];
+  const heredocs = [];
+  let word;
+  const end = () => {
+    if (word !== void 0) tokens.push({ word });
+    word = void 0;
+  };
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === " " || c === "	" || c === "\r") {
+      end();
+    } else if (c === "#" && word === void 0) {
+      break;
+    } else if (c === "'") {
+      const close = line.indexOf("'", i + 1);
+      word = (word ?? "") + line.slice(i + 1, close < 0 ? line.length : close);
+      i = close < 0 ? line.length : close;
+    } else if (c === '"') {
+      let j = i + 1;
+      let text3 = "";
+      for (; j < line.length && line[j] !== '"'; j++) text3 += escaped(line, j) ? line[++j] ?? "" : line[j];
+      word = (word ?? "") + text3;
+      i = j;
+    } else if (escaped(line, i)) {
+      word = (word ?? "") + (line[++i] ?? "");
+    } else if (c === "<") {
+      const here = /^<<(?!<)-?\s*(['"]?)([\w.-]+)\1/.exec(line.slice(i));
+      if (here) heredocs.push(here[2]);
+      end();
+      tokens.push({ op: "<" });
+      i += here ? here[0].length - 1 : line[i + 1] === "<" ? line[i + 2] === "<" ? 2 : 1 : 0;
+    } else if (c === ">") {
+      if (word !== void 0 && /^\d+$/.test(word)) word = void 0;
+      end();
+      let j = i + 1;
+      if (line[j] === ">" || line[j] === "|") j++;
+      if (line[j] === "&") {
+        tokens.push({ op: ">&" });
+        j++;
+      } else tokens.push({ op: ">" });
+      i = j - 1;
+    } else if (c === "&" && line[i + 1] === ">") {
+      end();
+    } else if (";&|()".includes(c)) {
+      end();
+      tokens.push({ op: c });
+      if ((c === "&" || c === "|") && line[i + 1] === c) i++;
+    } else {
+      word = (word ?? "") + c;
+    }
+  }
+  end();
+  return { tokens, heredocs };
+}
+function resolveWord(word, cwd) {
+  let base = cwd;
+  let w = word.replaceAll("\\", "/");
+  const ws = /^\$(?:GITHUB_WORKSPACE|\{GITHUB_WORKSPACE\})(?=\/|$)/.exec(w);
+  if (ws) {
+    base = ".";
+    w = w.slice(ws[0].length).replace(/^\//, "") || ".";
+  }
+  if (base === void 0 || w === "" || /[$`*?[\]{}~]/.test(w) || w.startsWith("/")) return void 0;
+  if (/^[A-Za-z][\w+.-]*:/.test(w)) return void 0;
+  const path = normalizeRelative(posix3.join(base, w));
+  return escapes(path) ? void 0 : path;
+}
+var basename = (word) => posix3.basename(word.replaceAll("\\", "/").replace(/\/+$/, ""));
+function scriptWrites2(script) {
+  const writes = [];
+  const text3 = script.replace(/\$\{\{\s*github\.workspace\s*\}\}/g, "$GITHUB_WORKSPACE").replace(/\$\{\{[\s\S]*?\}\}/g, "$EXPR").replace(/\\\r?\n/g, " ");
+  let cwd = ".";
+  const dirs = [];
+  const write = (word, command2, at = cwd) => {
+    const path = word === void 0 ? void 0 : resolveWord(word, at);
+    if (path !== void 0) writes.push({ path, command: command2 });
+  };
+  const command = (words) => {
+    let i = 0;
+    for (; i < words.length; i++) {
+      const w = words[i];
+      if (/^[A-Za-z_]\w*=/.test(w)) continue;
+      if (!PREFIXES.has(w)) break;
+      while (words[i + 1]?.startsWith("-")) i++;
+    }
+    let name = words[i]?.replaceAll("\\", "/").split("/").pop()?.toLowerCase();
+    if (name === void 0) return;
+    let args = words.slice(i + 1);
+    if (name === "xargs") {
+      let j = 0;
+      while (args[j]?.startsWith("-")) j += /^-[IinPLdEs]$/.test(args[j]) ? 2 : 1;
+      name = args[j]?.split("/").pop()?.toLowerCase();
+      if (name === void 0) return;
+      args = args.slice(j + 1);
+    }
+    if (name === "git") {
+      gitWrites(args);
+      return;
+    }
+    const options = /* @__PURE__ */ new Set([...OUTPUT_OPTIONS, ...COMMAND_OUTPUT_OPTIONS[name] ?? []]);
+    const operands = [];
+    let target;
+    for (let j = 0; j < args.length; j++) {
+      const a = args[j];
+      const eq = /^(--?[\w-]+)=(.*)$/.exec(a);
+      const opt = eq ? eq[1] : a;
+      const value = eq ? eq[2] : args[j + 1];
+      if (options.has(opt) || opt.length > 2 && options.has(opt.toLowerCase())) {
+        if (/^(?:-t|--target-directory)$/.test(opt)) target = value;
+        else write(value, name);
+        if (!eq) j++;
+      } else if (name === "7z" || name === "7za") {
+        if (a.startsWith("-o")) write(a.slice(2), name);
+      } else if (a.startsWith("-") && a !== "-") {
+        if (/^-(?:path|literalpath|itemtype|name|value)$/i.test(a)) {
+          if (/^-(?:path|literalpath)$/i.test(a) && args[j + 1] !== void 0) operands.push(args[j + 1]);
+          j++;
+        }
+      } else operands.push(a);
+    }
+    if (name === "cd" || name === "pushd") {
+      if (name === "pushd") dirs.push(cwd);
+      cwd = operands[0] === void 0 ? "." : operands[0] === "-" ? void 0 : resolveWord(operands[0], cwd);
+    } else if (name === "popd") {
+      cwd = dirs.pop();
+    } else if (COPIES.has(name) || name === "robocopy") {
+      const dest = target ?? (name === "robocopy" ? operands[1] : operands.length > 1 ? operands.at(-1) : void 0);
+      const sources = target !== void 0 ? operands : name === "robocopy" ? [] : operands.slice(0, -1);
+      if (dest === void 0) return;
+      write(dest, name);
+      for (const s of sources) if (!/[$`*?[\]{}]/.test(basename(s))) write(`${dest}/${basename(s)}`, name);
+    } else if (CREATES.has(name)) {
+      for (const o of operands) write(o, name);
+    }
+  };
+  const gitWrites = (args) => {
+    let at = cwd;
+    let j = 0;
+    for (; j < args.length && args[j].startsWith("-"); j++)
+      if (args[j] === "-C") at = resolveWord(args[++j] ?? "", at);
+      else if (args[j] === "-c") j++;
+    const sub = args[j];
+    const rest = args.slice(j + 1);
+    const positional = [];
+    for (let k = 0; k < rest.length; k++) {
+      if (CLONE_VALUE_OPTIONS.has(rest[k]) || /^-[bB]$|^--reason$/.test(rest[k])) k++;
+      else if (!rest[k].startsWith("-")) positional.push(rest[k]);
+    }
+    const repoDir = (url2) => basename(url2).replace(/\.git$/, "");
+    if (sub === "clone" && positional[0] !== void 0)
+      write(positional[1] ?? repoDir(positional[0]), "git clone", at);
+    else if (sub === "worktree" && positional[0] === "add") write(positional[1], "git worktree add", at);
+    else if (sub === "submodule" && positional[0] === "add" && positional[1] !== void 0)
+      write(positional[2] ?? repoDir(positional[1]), "git submodule add", at);
+  };
+  const lines = text3.split(/\r?\n/);
+  const pending = [];
+  for (const line of lines) {
+    if (pending.length) {
+      if (line.trim() === pending[0]) pending.shift();
+      continue;
+    }
+    const { tokens, heredocs } = tokenize(line);
+    pending.push(...heredocs);
+    let words = [];
+    for (let k = 0; k < tokens.length; k++) {
+      const t = tokens[k];
+      if ("word" in t) {
+        words.push(t.word);
+      } else if (t.op === ">" || t.op === "<" || t.op === ">&") {
+        const next = tokens[k + 1];
+        if (next && "word" in next) {
+          if (t.op === ">") write(next.word, ">");
+          k++;
+        }
+      } else {
+        command(words);
+        words = [];
+      }
+    }
+    command(words);
+  }
+  return writes;
+}
+function writesTo(write, path, isRepoDir) {
+  if (path === ".") return false;
+  if (write.path === path || write.path.startsWith(`${path}/`)) return true;
+  return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
+}
+
+// ../core/src/workspace.ts
+var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
+var CHECKOUT = /^actions\/checkout(?:@|$)/i;
+var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
+var RUNNING_REF = /^github\.(?:sha|ref|ref_name|head_ref|event\.(?:after|head_commit\.id|release\.tag_name|pull_request\.(?:head\.(?:sha|ref)|merge_commit_sha)|workflow_run\.head_(?:sha|branch)|merge_group\.head_(?:sha|ref)|check_(?:suite|run)\.head_sha))$/;
+var PULL_REQUEST_REF = /^refs\/pull\/\$\{\{\s*github\.event\.(?:pull_request\.)?number\s*\}\}\/(?:merge|head)$/;
+function alternatives(value) {
+  const m = /^\$\{\{(.*)\}\}$/s.exec(value);
+  if (!m) return void 0;
+  return m[1].split("||").map(
+    (alt) => alt.split("&&").at(-1).trim().replace(/^\((.*)\)$/s, "$1").trim()
+  );
+}
+var ownRepositoryExpression = (value) => !!alternatives(value)?.every((a) => OWN_REPOSITORY.test(a));
+var runningCommit = (value) => value === "" || PULL_REQUEST_REF.test(value) || !!alternatives(value)?.every((a) => RUNNING_REF.test(a));
+var isCheckout = (uses) => CHECKOUT.test(uses.raw.trim());
+var escapes2 = (path) => path === ".." || path.startsWith("../") || path.startsWith("/");
+var text = (b) => b === void 0 || b.value === null || typeof b.value === "object" ? "" : String(b.value).trim();
+function checkoutRepository(b, repository) {
+  const value = text(b);
+  if (value === "" || ownRepositoryExpression(value)) return void 0;
+  if (repository && value.toLowerCase() === repository.toLowerCase()) return void 0;
+  return value;
+}
+function checkoutPath(b) {
+  const value = text(b).replace(/^\$\{\{\s*github\.workspace\s*\}\}(?:\/|$)/, "").replaceAll("\\", "/");
+  if (value.includes("${{")) return "dynamic";
+  if (value.startsWith("/") || /^[A-Za-z]:\//.test(value)) return "outside";
+  const path = normalizeRelative(value);
+  return escapes2(path) ? "outside" : { path };
+}
+var within = (path, dir) => dir === "." || path === dir || path.startsWith(`${dir}/`);
+function applyCheckout(ws, step, repository) {
+  const loc = step.uses?.loc ?? step.loc;
+  const other = checkoutRepository(step.with.repository, repository);
+  const placement = checkoutPath(step.with.path);
+  if (placement === "outside") return ws;
+  const repo = other !== void 0 ? { repository: other } : {};
+  if (placement === "dynamic")
+    return { ...ws, managed: true, dynamic: { path: text(step.with.path), ...repo, loc } };
+  const { path } = placement;
+  const ref = text(step.with.ref);
+  const mounts = ws.mounts.filter((m) => !within(m.path, path));
+  mounts.push({ path, ...repo, ...other === void 0 && !runningCommit(ref) ? { ref } : {}, loc });
+  return {
+    mounts,
+    managed: true,
+    // A checkout at the root empties the whole workspace first, including a checkout to a path computed at runtime.
+    ...ws.dynamic && path !== "." ? { dynamic: ws.dynamic } : {},
+    writes: ws.writes.filter((w) => !within(w.path, path))
+  };
+}
+function locate(ws, path) {
+  let best = ws.mounts.find((m) => m.path === ".") ?? { path: "." };
+  for (const m of ws.mounts)
+    if (m.path !== "." && within(path, m.path) && (best.path === "." || m.path.length > best.path.length))
+      best = m;
+  const rel = best.path === "." ? path : path === best.path ? "." : path.slice(best.path.length + 1);
+  return { mount: best, rel };
+}
+function workspaceKey(ws) {
+  return JSON.stringify([
+    ws.mounts.map((m) => [m.path, m.repository ?? null, m.ref ?? null, m.loc ? formatLoc(m.loc) : null]),
+    ws.managed,
+    ws.dynamic ? formatLoc(ws.dynamic.loc) : null,
+    ws.writes.map((w) => [w.path, formatLoc(w.loc)])
+  ]);
+}
+function workspaceResolver(opts) {
+  const records = /* @__PURE__ */ new Map();
+  const walkedIn = /* @__PURE__ */ new Map();
+  const active = /* @__PURE__ */ new Set();
+  const stepWrites = /* @__PURE__ */ new Map();
+  const inRepositoryDir = (rel) => rel === "." || opts.isDir(rel.split("/")[0]);
+  const writerOf = (ws, path) => {
+    let best;
+    let rank = 3;
+    for (const w of ws.writes) {
+      if (!writesTo(w, path, opts.isDir)) continue;
+      const r = w.path === path ? 0 : w.path.startsWith(`${path}/`) ? 1 : 2;
+      if (r <= rank) [best, rank] = [w, r];
+    }
+    return best;
+  };
+  const resolve7 = (uses, ws) => {
+    const target = uses.target;
+    if (uses.selfRef !== void 0) return { kind: "invalid" };
+    if (uses.workspacePath === void 0) {
+      const found = opts.loadAction(target) !== void 0;
+      if (!found && uses.sameRepoRef !== void 0 && !escapes2(target)) return { kind: "skip" };
+      return { kind: "local", target, found };
+    }
+    const path = uses.workspacePath;
+    if (escapes2(path)) return { kind: "unverified", info: { reason: "outside-workspace" } };
+    const { mount, rel } = locate(ws, path);
+    if (mount.repository !== void 0 && mount.loc) {
+      const checkout2 = { repository: mount.repository, path: mount.path, loc: mount.loc };
+      return { kind: "unverified", info: { reason: "other-repository", checkout: checkout2 } };
+    }
+    const checkout = mount.loc && mount.path !== "." ? { checkout: { path: mount.path, loc: mount.loc } } : {};
+    const rootless = mount.path === "." && !mount.loc && ws.managed && !ws.dynamic;
+    const elsewhere = () => ws.mounts.flatMap((m) => m.loc && m.repository === void 0 ? [{ path: m.path, loc: m.loc }] : []);
+    if (opts.loadAction(rel)) {
+      if (rootless && !writerOf(ws, path))
+        return { kind: "local", target: rel, found: true, elsewhere: elsewhere() };
+      return { kind: "local", target: rel, found: true, ...checkout };
+    }
+    const write = writerOf(ws, path);
+    if (write) {
+      const writer = { loc: write.loc, path: write.path, command: write.command };
+      return { kind: "unverified", info: { reason: "created-at-runtime", writer } };
+    }
+    if (mount.loc && mount.ref !== void 0) {
+      const at = { path: mount.path, ref: mount.ref, loc: mount.loc };
+      return { kind: "unverified", info: { reason: "other-ref", checkout: at } };
+    }
+    if (mount.path === "." && (ws.managed && !mount.loc || ws.dynamic) && !inRepositoryDir(rel)) {
+      const dynamic = ws.dynamic ? { checkout: ws.dynamic } : {};
+      return { kind: "unverified", info: { reason: "not-checked-out", ...dynamic } };
+    }
+    if (rootless) return { kind: "local", target: rel, found: false, elsewhere: elsewhere() };
+    return { kind: "local", target: rel, found: false, ...checkout };
+  };
+  const record2 = (unit, job, step, outcome, rooted, via) => {
+    let r = records.get(step);
+    if (!r) {
+      r = { unit, ...job !== void 0 ? { job } : {}, step, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
+      records.set(step, r);
+    }
+    const outcomes = rooted ? r.rooted : r.assumed;
+    const key = JSON.stringify(outcome);
+    if (!outcomes.has(key)) outcomes.set(key, { outcome, via });
+  };
+  const walk = (unit, job, steps2, start, rooted, via) => {
+    let ws = start;
+    for (const step of steps2) {
+      if (step.run !== void 0) {
+        let writes = stepWrites.get(step);
+        if (!writes) {
+          const loc = step.runLoc ?? step.loc;
+          writes = scriptWrites2(step.run).map((w) => ({ ...w, loc }));
+          stepWrites.set(step, writes);
+        }
+        if (writes.length) ws = { ...ws, writes: [...ws.writes, ...writes] };
+      }
+      const uses = step.uses;
+      if (!uses) continue;
+      if (isCheckout(uses)) {
+        ws = applyCheckout(ws, step, opts.repository);
+        continue;
+      }
+      if (uses.kind !== "local-action" || uses.target === void 0) continue;
+      const outcome = resolve7(uses, ws);
+      record2(unit, job, step, outcome, rooted, via);
+      const action = outcome.kind === "local" && outcome.found ? opts.loadAction(outcome.target) : void 0;
+      if (action) {
+        const caller = {
+          from: unit.path,
+          ...job !== void 0 ? { job } : {},
+          loc: uses.loc,
+          action: action.path
+        };
+        ws = enter(action, ws, rooted, [...via, caller]);
+      }
+    }
+    return ws;
+  };
+  const enter = (action, ws, rooted, via) => {
+    if (active.has(action)) return ws;
+    const key = `${rooted}|${workspaceKey(ws)}`;
+    const seen = walkedIn.get(action) ?? /* @__PURE__ */ new Map();
+    walkedIn.set(action, seen);
+    const known2 = seen.get(key);
+    if (known2) return known2;
+    active.add(action);
+    const after = walk(action, void 0, action.steps, ws, rooted, via);
+    active.delete(action);
+    seen.set(key, after);
+    return after;
+  };
+  return {
+    walkJob(wf, job) {
+      walk(wf, job.id, job.steps, initialWorkspace(), true, []);
+    },
+    /**
+     * Actions no workflow here reaches (published ones, or ones used from other repositories) run in an unknown
+     * workspace: assume this repository at the root. Those that others among them use go last, so they are walked in
+     * their callers' workspaces instead.
+     */
+    walkRemainingActions(actions) {
+      for (; ; ) {
+        const rest = [...actions.values()].filter((a) => !walkedIn.has(a));
+        if (!rest.length) return;
+        const used = new Set(rest.flatMap((a) => a.steps.map((s) => s.uses?.target)));
+        enter(rest.find((a) => !used.has(a.path)) ?? rest[0], initialWorkspace(), false, []);
+      }
+    },
+    /** Settles every step's `uses:` and lists what is missing, invalid or not verifiable. */
+    finish(out) {
+      for (const r of records.values()) {
+        const rooted = r.rooted.size > 0;
+        const entries2 = [...(rooted ? r.rooted : r.assumed).values()];
+        const local = entries2.flatMap(
+          (e) => e.outcome.kind === "local" ? [{ ...e, outcome: e.outcome }] : []
+        );
+        const { outcome } = local.find((e) => e.outcome.found && !e.outcome.elsewhere) ?? local.find((e) => e.outcome.found) ?? local[0] ?? entries2[0];
+        const uses = r.step.uses;
+        const where = {
+          uses,
+          from: r.unit.path,
+          ...r.job !== void 0 ? { job: r.job } : {},
+          step: r.step.index
+        };
+        if (outcome.kind === "local") {
+          uses.target = outcome.target;
+          const fails = (o) => o.kind === "local" && (!o.found || o.elsewhere !== void 0);
+          const reported = /* @__PURE__ */ new Set();
+          for (const { outcome: o, via } of local) {
+            if (!fails(o) || reported.has(o.target)) continue;
+            reported.add(o.target);
+            const varies = entries2.some(
+              (e) => !fails(e.outcome) || e.outcome.kind === "local" && e.outcome.target !== o.target
+            );
+            const missing = {
+              ...where,
+              ...o.target !== uses.target ? { target: o.target } : {},
+              ...o.found ? { inRepository: true } : {},
+              ...o.checkout ? { checkout: o.checkout } : {},
+              ...o.elsewhere ? { elsewhere: o.elsewhere } : {},
+              ...varies && rooted && via.length ? { via } : {}
+            };
+            out.missing.push(missing);
+            const what = o.found ? "local reference outside the workspace" : "unresolved local reference";
+            opts.logger.warn(`${what} ${uses.raw}`, { from: r.unit.path });
+          }
+        } else if (outcome.kind === "unverified") {
+          uses.kind = "workspace-action";
+          delete uses.target;
+          out.unverified.push({ ...where, ...outcome.info });
+          opts.logger.debug(`workspace path not verified (${outcome.info.reason}): ${uses.raw}`, {
+            from: r.unit.path
+          });
+        } else if (outcome.kind === "invalid") {
+          out.invalid.push({ ...where, reason: "self-ref" });
+        } else {
+          opts.logger.debug(`same-repository reference not in the working tree: ${uses.raw}`);
+        }
+      }
+    }
+  };
+}
+
+// ../core/src/project.ts
+var WORKFLOWS_DIR = ".github/workflows";
+var ACTIONS_DIR = ".github/actions";
+var toPosix = (p) => p.split("\\").join("/");
+function insideRepository(root, abs) {
+  let realRoot;
+  try {
+    realRoot = realpathSync(root);
+  } catch {
+    realRoot = resolve(root);
+  }
+  let target = resolve(abs);
+  let rest = "";
+  for (; ; ) {
+    try {
+      target = join2(realpathSync(target), rest);
+      break;
+    } catch {
+      const parent = dirname(target);
+      if (parent === target) return false;
+      rest = join2(basename2(target), rest);
+      target = parent;
+    }
+  }
+  const rel = toPosix(relative(realRoot, target));
+  if (rel === "") return true;
+  if (rel.startsWith("..") || isAbsolute(rel)) return false;
+  return rel !== ".git" && !rel.startsWith(".git/");
+}
+function nodeFileSystem(root) {
+  const abs = (p) => join2(root, p);
+  const listings = /* @__PURE__ */ new Map();
+  const exactCase = (p) => {
+    let dir = root;
+    for (const part of toPosix(p).split("/").filter((x) => x && x !== ".")) {
+      if (part === "..") return false;
+      let names = listings.get(dir);
+      if (!names) {
+        try {
+          names = new Set(readdirSync(dir));
+        } catch {
+          return false;
+        }
+        listings.set(dir, names);
+      }
+      if (!names.has(part)) return false;
+      dir = join2(dir, part);
+    }
+    return true;
+  };
+  const inside = (p) => existsSync2(abs(p)) && exactCase(p) && insideRepository(root, abs(p));
+  const isFile = (p) => inside(p) && statSync(abs(p)).isFile();
+  return {
+    read: (p) => isFile(p) ? readFileSync(abs(p), "utf8") : void 0,
+    list: (dir) => {
+      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
+      return readdirSync(abs(dir)).map((name) => toPosix(join2(dir, name))).filter((f) => isFile(f));
+    },
+    walk: (dir) => {
+      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
+      return readdirSync(abs(dir), { recursive: true, withFileTypes: true }).map((e) => toPosix(relative(root, join2(e.parentPath, e.name)))).filter((f) => !/(^|\/)(node_modules|\.git)\//.test(f) && isFile(f));
+    },
+    isDir: (p) => inside(p) && statSync(abs(p)).isDirectory()
+  };
+}
+var isYaml = (p) => /\.ya?ml$/i.test(p);
+var isActionFile = (p) => /(^|\/)action\.ya?ml$/i.test(p);
+var isWorkflowFile = (p) => /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(p);
+var isCallableWorkflowPath = (p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p.replace(/\.ya?ml$/i, (e) => e.toLowerCase()));
+var escapesRoot = (p) => p === ".." || p.startsWith("../") || isAbsolute(p);
+function detectRepository(root, env = process.env) {
+  if (env.GITHUB_REPOSITORY) return env.GITHUB_REPOSITORY;
+  const gitConfig = join2(root, ".git", "config");
+  if (!existsSync2(gitConfig)) return void 0;
+  const text3 = readFileSync(gitConfig, "utf8");
+  const origin = /\[remote "origin"\][^[]*?url\s*=\s*(\S+)/.exec(text3)?.[1];
+  const m = origin && /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(origin);
+  return m ? m[1] : void 0;
+}
+function loadProject(opts) {
+  const logger = (opts.logger ?? silentLogger).child("load");
+  const fs3 = opts.fs ?? nodeFileSystem(opts.root);
+  const ctx = createParseContext(opts.repository);
+  const workflows = /* @__PURE__ */ new Map();
+  const actions = /* @__PURE__ */ new Map();
+  const missing = [];
+  const invalid = [];
+  const loadWorkflow = (path) => {
+    if (workflows.has(path)) return workflows.get(path);
+    if (escapesRoot(path)) return void 0;
+    const text3 = fs3.read(path);
+    if (text3 === void 0) return void 0;
+    const wf = logger.time(`parse ${path}`, () => parseWorkflowFile(path, text3, ctx));
+    workflows.set(path, wf);
+    logger.debug(`parsed workflow ${path}`, {
+      jobs: Object.keys(wf.jobs).length,
+      expressions: wf.sites.length
+    });
+    return wf;
+  };
+  const loadAction = (dir) => {
+    if (actions.has(dir)) return actions.get(dir);
+    if (escapesRoot(dir)) return void 0;
+    const base = dir === "." ? "" : `${dir}/`;
+    const file2 = [`${base}action.yml`, `${base}action.yaml`].find((f) => fs3.read(f) !== void 0);
+    if (!file2) return void 0;
+    const action = logger.time(`parse ${file2}`, () => parseActionFile(dir, file2, fs3.read(file2), ctx));
+    actions.set(dir, action);
+    logger.debug(`parsed action ${dir}`, { using: action.using, steps: action.steps.length });
+    return action;
+  };
+  const discovered = fs3.list(WORKFLOWS_DIR).filter(isYaml).sort();
+  const actionFiles = fs3.walk(ACTIONS_DIR).filter(isActionFile).sort();
+  if (["action.yml", "action.yaml"].some((f) => fs3.read(f) !== void 0)) actionFiles.push("action.yml");
+  for (const pattern of opts.publish ?? []) {
+    if (!/[*?[]/.test(pattern)) {
+      const file2 = isActionFile(pattern) ? pattern : `${pattern.replace(/\/$/, "")}/action.yml`;
+      if (isActionFile(file2) && !file2.startsWith(".github/actions/") && fs3.read(file2) !== void 0)
+        actionFiles.push(file2);
+      continue;
+    }
+    const literal2 = pattern.split(/[*?[]/)[0];
+    const dir = literal2.includes("/") ? literal2.slice(0, literal2.lastIndexOf("/")) : "";
+    for (const f of dir ? fs3.walk(dir) : fs3.walk(".")) {
+      if (!isActionFile(f) || f.startsWith(".github/actions/")) continue;
+      const unitDir = f.replace(/\/?action\.ya?ml$/i, "") || ".";
+      if (matchesPattern(f, pattern) || matchesPattern(unitDir, pattern)) actionFiles.push(f);
+    }
+  }
+  logger.info(`discovered ${discovered.length} workflow(s) and ${actionFiles.length} local action(s)`);
+  logger.debug("files", { workflows: discovered, actions: actionFiles });
+  const targets = /* @__PURE__ */ new Set();
+  const missingTargets = [];
+  let wholeRepository = false;
+  const ignoredTargets = [];
+  for (const p of opts.paths ?? []) {
+    const rel = toPosix(relative(opts.root, resolve(opts.root, p))) || ".";
+    if (rel === "." || rel === "") {
+      wholeRepository = true;
+      continue;
+    }
+    if (escapesRoot(rel)) {
+      missingTargets.push(p);
+    } else if (fs3.isDir(rel)) {
+      const found = fs3.walk(rel).filter((f) => isWorkflowFile(f) || isActionFile(f));
+      if (found.length === 0) ignoredTargets.push(p);
+      for (const f of found) targets.add(f);
+    } else if (fs3.read(rel) === void 0) {
+      missingTargets.push(p);
+    } else if (isWorkflowFile(rel) || isActionFile(rel)) {
+      targets.add(rel);
+    } else {
+      ignoredTargets.push(p);
+    }
+  }
+  if (wholeRepository) targets.clear();
+  if (missingTargets.length) logger.warn(`paths not found: ${missingTargets.join(", ")}`);
+  if (ignoredTargets.length)
+    logger.warn(`paths that are not workflows or actions: ${ignoredTargets.join(", ")}`);
+  for (const t of targets) {
+    if (isActionFile(t)) loadAction(t.replace(/\/?action\.ya?ml$/i, "") || ".");
+    else if (isYaml(t)) loadWorkflow(t);
+  }
+  for (const f of discovered) loadWorkflow(f);
+  for (const f of actionFiles) loadAction(f.replace(/\/?action\.ya?ml$/i, "") || ".");
+  const unverified = [];
+  const resolver = workspaceResolver({
+    ...opts.repository ? { repository: opts.repository } : {},
+    loadAction,
+    isDir: (dir) => fs3.isDir(dir),
+    logger
+  });
+  const noteCall = (wf, job, pending2) => {
+    const uses = job.uses;
+    if (!uses?.target) return;
+    const where = { uses, from: wf.path, job: job.id };
+    if (uses.selfRef !== void 0) {
+      invalid.push({ ...where, reason: "self-ref" });
+      return;
+    }
+    if (!isCallableWorkflowPath(uses.target)) {
+      invalid.push({ ...where, reason: "not-callable" });
+      logger.warn(`reusable workflow outside .github/workflows: ${uses.raw}`, { from: wf.path });
+      return;
+    }
+    const found = loadWorkflow(uses.target);
+    if (!found && uses.sameRepoRef && !escapesRoot(uses.target)) {
+      logger.debug(`same-repository reference not in the working tree: ${uses.raw}`);
+    } else if (!found) {
+      missing.push(where);
+      logger.warn(`unresolved local reference ${uses.raw}`, { from: wf.path });
+    } else {
+      pending2.push(found);
+    }
+  };
+  const pending = [...workflows.values()];
+  const walked = /* @__PURE__ */ new Set();
+  while (pending.length) {
+    const wf = pending.shift();
+    if (walked.has(wf)) continue;
+    walked.add(wf);
+    for (const job of Object.values(wf.jobs)) {
+      if (job.uses?.kind === "local-workflow") noteCall(wf, job, pending);
+      resolver.walkJob(wf, job);
+    }
+  }
+  resolver.walkRemainingActions(actions);
+  resolver.finish({ missing, invalid, unverified });
+  if (opts.validateSchema !== false) {
+    logger.time("schema validation", () => {
+      for (const u of [...workflows.values(), ...actions.values()]) {
+        if (u.parseErrors.length === 0) u.schemaErrors = validateSchema(u, logger);
+      }
+    });
+  }
+  return {
+    root: opts.root,
+    ...opts.repository ? { repository: opts.repository } : {},
+    workflows,
+    actions,
+    targets,
+    ...wholeRepository ? { wholeRepository } : {},
+    missingTargets,
+    ignoredTargets,
+    missing,
+    invalidTargets: invalid,
+    unverified
+  };
+}
+
+// ../lint/src/analyze.ts
 import { createHash } from "crypto";
 
-// ../core/src/config.ts
-var import_yaml5 = __toESM(require_dist(), 1);
+// ../lint/src/config.ts
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
 import { isAbsolute as isAbsolute2, join as join3, relative as relative2, resolve as resolve2 } from "path";
+var import_yaml5 = __toESM(require_dist(), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/external.js
 var external_exports = {};
@@ -10068,7 +17333,7 @@ __export(external_exports, {
   check: () => check,
   cidrv4: () => cidrv42,
   cidrv6: () => cidrv62,
-  clone: () => clone,
+  clone: () => clone2,
   codec: () => codec,
   coerce: () => coerce_exports,
   compile: () => compile,
@@ -10481,7 +17746,7 @@ __export(core_exports2, {
   base64Charset: () => base64Charset,
   base64urlCharset: () => base64urlCharset,
   canParseURL: () => canParseURL,
-  clone: () => clone,
+  clone: () => clone2,
   compile: () => compile,
   compileFn: () => compileFn,
   config: () => config,
@@ -10566,7 +17831,7 @@ __export(util_exports, {
   captureStackTrace: () => captureStackTrace,
   cleanEnum: () => cleanEnum,
   cleanRegex: () => cleanRegex,
-  clone: () => clone,
+  clone: () => clone2,
   cloneDef: () => cloneDef,
   codePointLength: () => codePointLength,
   constantCatch: () => constantCatch,
@@ -10922,7 +18187,7 @@ var primitiveTypes = /* @__PURE__ */ new Set([
 function escapeRegex(str2) {
   return str2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
-function clone(inst, def, params) {
+function clone2(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
   if (!def || params?.parent)
     cl._zod.parent = inst;
@@ -11009,7 +18274,7 @@ function pick(schema3, mask) {
   }
   const newShape = {};
   mirrorShape(newShape, schema3, maskedKeys(schema3, mask));
-  return clone(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
+  return clone2(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
 }
 function maskedKeys(schema3, mask) {
   const raw = sourceShape(schema3);
@@ -11033,7 +18298,7 @@ function omit(schema3, mask) {
   const omitted = new Set(maskedKeys(schema3, mask));
   const newShape = {};
   mirrorShape(newShape, schema3, Reflect.ownKeys(sourceShape(schema3)).filter((key) => !omitted.has(key)));
-  return clone(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
+  return clone2(schema3, mergeDefs(currDef, { shape: newShape, checks: [] }));
 }
 function extend(schema3, shape) {
   if (!isPlainObject(shape)) {
@@ -11049,7 +18314,7 @@ function extend(schema3, shape) {
       }
     }
   }
-  return clone(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
+  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
 }
 function extended(schema3, shape) {
   const newShape = {};
@@ -11061,7 +18326,7 @@ function safeExtend(schema3, shape) {
   if (!isPlainObject(shape)) {
     throw new Error("Invalid input to safeExtend: expected a plain object");
   }
-  return clone(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
+  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: extended(schema3, shape) }));
 }
 function merge(a, b) {
   if (!b?._zod?.def) {
@@ -11080,7 +18345,7 @@ function merge(a, b) {
     },
     checks: b._zod.def.checks ?? []
   });
-  return clone(a, def);
+  return clone2(a, def);
 }
 function partial(Class2, schema3, mask, name = "partial") {
   const currDef = schema3._zod.def;
@@ -11092,7 +18357,7 @@ function partial(Class2, schema3, mask, name = "partial") {
   const selected = mask ? new Set(maskedKeys(schema3, mask)) : void 0;
   const newShape = {};
   mirrorShape(newShape, schema3, Reflect.ownKeys(sourceShape(schema3)), Class2 && ((value, key) => selected && !selected.has(key) ? value : new Class2({ type: "optional", innerType: value })));
-  return clone(schema3, mergeDefs(schema3._zod.def, { shape: newShape, checks: [] }));
+  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: newShape, checks: [] }));
 }
 function required(Class2, schema3, mask) {
   const selected = mask ? new Set(maskedKeys(schema3, mask)) : void 0;
@@ -11101,7 +18366,7 @@ function required(Class2, schema3, mask) {
     // overwrite with non-optional
     selected && !selected.has(key) ? value : new Class2({ type: "nonoptional", innerType: value })
   ));
-  return clone(schema3, mergeDefs(schema3._zod.def, { shape: newShape }));
+  return clone2(schema3, mergeDefs(schema3._zod.def, { shape: newShape }));
 }
 function aborted(x, startIndex = 0) {
   if (x.aborted === true)
@@ -22904,7 +30169,7 @@ function withParser(schema3, parser) {
   if (isRecursiveSchema(schema3)) {
     throw new ZodCompileUnsupportedError("a schema whose subtree contains a reference cycle");
   }
-  const clone3 = clone(schema3);
+  const clone3 = clone2(schema3);
   const liveRun = schema3._zod.run;
   const originalRun = liveRun.__originalRun ?? liveRun;
   const wrapped = (payload, ctx) => {
@@ -27190,7 +34455,7 @@ var ZodType = /* @__PURE__ */ $constructor("ZodType", (inst, def) => {
     return this.check(...chks);
   },
   clone(def, params) {
-    return clone(this, def, params);
+    return clone2(this, def, params);
   },
   brand() {
     return this;
@@ -29412,7 +36677,7 @@ function fromJSONSchema(schema3, params) {
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/core/visit.js
 var RESOLVING = /* @__PURE__ */ Symbol("z.visit/resolving");
-function visit(schema3, fnOrHandlers) {
+function visit2(schema3, fnOrHandlers) {
   const fn = typeof fnOrHandlers === "function" ? fnOrHandlers : (node2, rewritten) => {
     const h = fnOrHandlers[node2._zod.def.type];
     return h ? h(node2, rewritten) : node2;
@@ -29455,11 +36720,11 @@ function visit(schema3, fnOrHandlers) {
           if (newCatchall !== def.catchall)
             changed = true;
         }
-        return changed ? clone(s, { ...def, shape: newShape, catchall: newCatchall }) : s;
+        return changed ? clone2(s, { ...def, shape: newShape, catchall: newCatchall }) : s;
       }
       case "array": {
         const mapped = run2(def.element);
-        return mapped === def.element ? s : clone(s, { ...def, element: mapped });
+        return mapped === def.element ? s : clone2(s, { ...def, element: mapped });
       }
       case "tuple": {
         const oldItems = def.items;
@@ -29477,17 +36742,17 @@ function visit(schema3, fnOrHandlers) {
           if (newRest !== def.rest)
             changed = true;
         }
-        return changed ? clone(s, { ...def, items: newItems, rest: newRest }) : s;
+        return changed ? clone2(s, { ...def, items: newItems, rest: newRest }) : s;
       }
       case "record":
       case "map": {
         const newKey = run2(def.keyType);
         const newVal = run2(def.valueType);
-        return newKey === def.keyType && newVal === def.valueType ? s : clone(s, { ...def, keyType: newKey, valueType: newVal });
+        return newKey === def.keyType && newVal === def.valueType ? s : clone2(s, { ...def, keyType: newKey, valueType: newVal });
       }
       case "set": {
         const newVal = run2(def.valueType);
-        return newVal === def.valueType ? s : clone(s, { ...def, valueType: newVal });
+        return newVal === def.valueType ? s : clone2(s, { ...def, valueType: newVal });
       }
       case "union": {
         const oldOptions = def.options;
@@ -29499,12 +36764,12 @@ function visit(schema3, fnOrHandlers) {
             changed = true;
           newOptions.push(mapped);
         }
-        return changed ? clone(s, { ...def, options: newOptions }) : s;
+        return changed ? clone2(s, { ...def, options: newOptions }) : s;
       }
       case "intersection": {
         const newLeft = run2(def.left);
         const newRight = run2(def.right);
-        return newLeft === def.left && newRight === def.right ? s : clone(s, { ...def, left: newLeft, right: newRight });
+        return newLeft === def.left && newRight === def.right ? s : clone2(s, { ...def, left: newLeft, right: newRight });
       }
       case "optional":
       case "nullable":
@@ -29516,22 +36781,22 @@ function visit(schema3, fnOrHandlers) {
       case "promise":
       case "success": {
         const newInner = run2(def.innerType);
-        return newInner === def.innerType ? s : clone(s, { ...def, innerType: newInner });
+        return newInner === def.innerType ? s : clone2(s, { ...def, innerType: newInner });
       }
       case "pipe": {
         const newIn = run2(def.in);
         const newOut = run2(def.out);
-        return newIn === def.in && newOut === def.out ? s : clone(s, { ...def, in: newIn, out: newOut });
+        return newIn === def.in && newOut === def.out ? s : clone2(s, { ...def, in: newIn, out: newOut });
       }
       case "function": {
         const newInput = run2(def.input);
         const newOutput = run2(def.output);
-        return newInput === def.input && newOutput === def.output ? s : clone(s, { ...def, input: newInput, output: newOutput });
+        return newInput === def.input && newOutput === def.output ? s : clone2(s, { ...def, input: newInput, output: newOutput });
       }
       case "lazy": {
         const original = def.getter;
         const { _cachedInner, ...rest } = def;
-        return clone(s, { ...rest, getter: () => run2(original()) });
+        return clone2(s, { ...rest, getter: () => run2(original()) });
       }
       // A leaf by choice: `parts` are regex fragments, not data positions.
       case "template_literal":
@@ -29567,7 +36832,7 @@ function visit(schema3, fnOrHandlers) {
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/classic/deep-partial.js
 function deepPartial(schema3) {
-  return visit(schema3, {
+  return visit2(schema3, {
     object: (s) => s.partial(),
     // Every partialed option now admits `undefined`, which the constructor rejects as a duplicate.
     union: (s) => {
@@ -29582,7 +36847,7 @@ function withChecks(side, checks) {
   if (!checks?.length)
     return side;
   const def = side._zod.def;
-  return clone(side, mergeDefs(def, { checks: [...def.checks ?? [], ...checks] }), { parent: true });
+  return clone2(side, mergeDefs(def, { checks: [...def.checks ?? [], ...checks] }), { parent: true });
 }
 function outSide(def) {
   return withChecks(def.out, def.checks);
@@ -29591,7 +36856,7 @@ function inSide(def) {
   return def.in._zod.traits.has("$ZodTransform") ? outSide(def) : def.in;
 }
 function input(schema3) {
-  return visit(schema3, {
+  return visit2(schema3, {
     pipe: (s) => inSide(s._zod.def),
     // A default value belongs to the output side, so a rewritten inner type leaves it stranded. `.default()` widens the declared input type with `undefined`, and `optional` is what carries that across.
     default: (s, rewritten) => rewritten ? optional(s._zod.def.innerType) : s,
@@ -29600,7 +36865,7 @@ function input(schema3) {
   });
 }
 function output(schema3) {
-  return visit(schema3, {
+  return visit2(schema3, {
     pipe: (s) => outSide(s._zod.def),
     // A prefault value is fed through the schema, which makes it input-side, so a rewritten inner type leaves it stranded.
     prefault: (s, rewritten) => rewritten ? s._zod.def.innerType : s
@@ -29632,6472 +36897,7 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// ../core/src/glob.ts
-function matchesPattern(path, pattern) {
-  if (!pattern.includes("*"))
-    return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
-  const re = new RegExp(
-    `^${pattern.split("**/").map(
-      (chunk) => chunk.split("**").map((part) => part.split("*").map(escapeRe).join("[^/]*")).join(".*")
-    ).join("(?:[^/]*/)*")}$`
-  );
-  return re.test(path);
-}
-var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
-
-// ../core/src/project.ts
-import { existsSync as existsSync2, readdirSync, readFileSync, realpathSync, statSync } from "fs";
-import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
-
-// ../core/src/logger.ts
-var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
-function createLogger(options = {}) {
-  const level = options.level ?? "info";
-  const sink = options.sink ?? { write() {
-  } };
-  const scope = options.scope ?? "flowpact";
-  const log = (lvl, message, data) => {
-    if (ORDER[lvl] > ORDER[level]) return;
-    sink.write({ level: lvl, scope, message, ...data ? { data } : {}, time: Date.now() });
-  };
-  const logger = {
-    level,
-    enabled: (lvl) => ORDER[lvl] <= ORDER[level],
-    error: (m, d) => log("error", m, d),
-    warn: (m, d) => log("warn", m, d),
-    info: (m, d) => log("info", m, d),
-    debug: (m, d) => log("debug", m, d),
-    trace: (m, d) => log("trace", m, d),
-    child: (child) => createLogger({ level, sink, scope: `${scope}:${child}` }),
-    time(label, fn) {
-      const start = performance.now();
-      log("trace", `${label} started`);
-      try {
-        return fn();
-      } finally {
-        log("debug", `${label} finished`, { ms: Math.round((performance.now() - start) * 100) / 100 });
-      }
-    },
-    group(title, fn) {
-      sink.group?.(title);
-      try {
-        return fn();
-      } finally {
-        sink.groupEnd?.();
-      }
-    }
-  };
-  return logger;
-}
-var silentLogger = createLogger({ level: "silent" });
-function resolveLogLevel(opts, env = process.env) {
-  if (opts.quiet) return "error";
-  if ((opts.verbose ?? 0) >= 2) return "trace";
-  const envDebug = truthy(env.FLOWPACT_DEBUG) || truthy(env.RUNNER_DEBUG) || truthy(env.ACTIONS_STEP_DEBUG);
-  if (opts.debug || (opts.verbose ?? 0) >= 1 || envDebug)
-    return env.FLOWPACT_DEBUG === "trace" ? "trace" : "debug";
-  return "info";
-}
-function truthy(v) {
-  return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
-}
-
-// ../core/src/parse.ts
-var import_yaml2 = __toESM(require_dist(), 1);
-import { posix } from "path";
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
-var Expr = class {
-};
-var Literal = class extends Expr {
-  constructor(literal2, token) {
-    super();
-    this.literal = literal2;
-    this.token = token;
-  }
-  accept(v) {
-    return v.visitLiteral(this);
-  }
-};
-var Unary = class extends Expr {
-  constructor(operator, expr) {
-    super();
-    this.operator = operator;
-    this.expr = expr;
-  }
-  accept(v) {
-    return v.visitUnary(this);
-  }
-};
-var FunctionCall = class extends Expr {
-  constructor(functionName, args) {
-    super();
-    this.functionName = functionName;
-    this.args = args;
-  }
-  accept(v) {
-    return v.visitFunctionCall(this);
-  }
-};
-var Binary = class extends Expr {
-  constructor(left, operator, right) {
-    super();
-    this.left = left;
-    this.operator = operator;
-    this.right = right;
-  }
-  accept(v) {
-    return v.visitBinary(this);
-  }
-};
-var Logical = class extends Expr {
-  constructor(operator, args) {
-    super();
-    this.operator = operator;
-    this.args = args;
-  }
-  accept(v) {
-    return v.visitLogical(this);
-  }
-};
-var Grouping = class extends Expr {
-  constructor(group2) {
-    super();
-    this.group = group2;
-  }
-  accept(v) {
-    return v.visitGrouping(this);
-  }
-};
-var ContextAccess = class extends Expr {
-  constructor(name) {
-    super();
-    this.name = name;
-  }
-  accept(v) {
-    return v.visitContextAccess(this);
-  }
-};
-var IndexAccess = class extends Expr {
-  constructor(expr, index) {
-    super();
-    this.expr = expr;
-    this.index = index;
-  }
-  accept(v) {
-    return v.visitIndexAccess(this);
-  }
-};
-var Star = class extends Expr {
-  accept() {
-    throw new Error("Method not implemented.");
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/expressiondata.js
-var Kind;
-(function(Kind2) {
-  Kind2[Kind2["String"] = 0] = "String";
-  Kind2[Kind2["Array"] = 1] = "Array";
-  Kind2[Kind2["Dictionary"] = 2] = "Dictionary";
-  Kind2[Kind2["Boolean"] = 3] = "Boolean";
-  Kind2[Kind2["Number"] = 4] = "Number";
-  Kind2[Kind2["CaseSensitiveDictionary"] = 5] = "CaseSensitiveDictionary";
-  Kind2[Kind2["Null"] = 6] = "Null";
-})(Kind || (Kind = {}));
-function kindStr(k) {
-  switch (k) {
-    case Kind.Array:
-      return "Array";
-    case Kind.Boolean:
-      return "Boolean";
-    case Kind.Null:
-      return "Null";
-    case Kind.Number:
-      return "Number";
-    case Kind.Dictionary:
-      return "Object";
-    case Kind.String:
-      return "String";
-  }
-  return "unknown";
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/dictionary.js
-var Dictionary = class {
-  constructor(...pairs2) {
-    this.keys = [];
-    this.v = [];
-    this.indexMap = {};
-    this.kind = Kind.Dictionary;
-    this.primitive = false;
-    for (const p of pairs2) {
-      this.add(p.key, p.value);
-    }
-  }
-  coerceString() {
-    return kindStr(this.kind);
-  }
-  number() {
-    return NaN;
-  }
-  add(key, value) {
-    if (key.toLowerCase() in this.indexMap) {
-      return;
-    }
-    this.keys.push(key);
-    this.v.push(value);
-    this.indexMap[key.toLowerCase()] = this.v.length - 1;
-  }
-  get(key) {
-    const index = this.indexMap[key.toLowerCase()];
-    if (index === void 0) {
-      return void 0;
-    }
-    return this.v[index];
-  }
-  values() {
-    return this.v;
-  }
-  pairs() {
-    const result = [];
-    for (const key of this.keys) {
-      result.push({ key, value: this.v[this.indexMap[key.toLowerCase()]] });
-    }
-    return result;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/array.js
-var Array2 = class {
-  constructor(...data) {
-    this.v = [];
-    this.kind = Kind.Array;
-    this.primitive = false;
-    for (const d of data) {
-      this.add(d);
-    }
-  }
-  coerceString() {
-    return kindStr(this.kind);
-  }
-  number() {
-    return NaN;
-  }
-  add(value) {
-    this.v.push(value);
-  }
-  get(index) {
-    return this.v[index];
-  }
-  values() {
-    return this.v;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/boolean.js
-var BooleanData = class {
-  constructor(value) {
-    this.value = value;
-    this.kind = Kind.Boolean;
-    this.primitive = true;
-  }
-  coerceString() {
-    if (this.value) {
-      return "true";
-    }
-    return "false";
-  }
-  number() {
-    if (this.value) {
-      return 1;
-    }
-    return 0;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/null.js
-var Null = class {
-  constructor() {
-    this.kind = Kind.Null;
-    this.primitive = true;
-  }
-  coerceString() {
-    return "";
-  }
-  number() {
-    return 0;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/number.js
-var NumberData = class {
-  constructor(value) {
-    this.value = value;
-    this.kind = Kind.Number;
-    this.primitive = true;
-  }
-  coerceString() {
-    if (this.value === 0) {
-      return "0";
-    }
-    return (+this.value.toFixed(15)).toString();
-  }
-  number() {
-    return this.value;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/string.js
-var StringData = class {
-  constructor(value) {
-    this.value = value;
-    this.kind = Kind.String;
-    this.primitive = true;
-  }
-  coerceString() {
-    return this.value;
-  }
-  number() {
-    return Number(this.value);
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/replacer.js
-function replacer(_key, value) {
-  if (value instanceof Null) {
-    return null;
-  }
-  if (value instanceof BooleanData) {
-    return value.value;
-  }
-  if (value instanceof NumberData) {
-    return value.number();
-  }
-  if (value instanceof StringData) {
-    return value.coerceString();
-  }
-  if (value instanceof Array2) {
-    return value.values();
-  }
-  if (value instanceof Dictionary) {
-    const pairs2 = value.pairs();
-    const r = {};
-    for (const p of pairs2) {
-      r[p.key] = p.value;
-    }
-    return r;
-  }
-  return value;
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/data/reviver.js
-function reviver(_key, val) {
-  if (val === null) {
-    return new Null();
-  }
-  if (typeof val === "string") {
-    return new StringData(val);
-  }
-  if (typeof val === "number") {
-    return new NumberData(val);
-  }
-  if (typeof val === "boolean") {
-    return new BooleanData(val);
-  }
-  if (Array.isArray(val)) {
-    return new Array2(...val);
-  }
-  if (typeof val === "object") {
-    return new Dictionary(...Object.keys(val).map((k) => ({
-      key: k,
-      value: val[k]
-    })));
-  }
-  return val;
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/lexer.js
-var TokenType;
-(function(TokenType3) {
-  TokenType3[TokenType3["UNKNOWN"] = 0] = "UNKNOWN";
-  TokenType3[TokenType3["LEFT_PAREN"] = 1] = "LEFT_PAREN";
-  TokenType3[TokenType3["RIGHT_PAREN"] = 2] = "RIGHT_PAREN";
-  TokenType3[TokenType3["LEFT_BRACKET"] = 3] = "LEFT_BRACKET";
-  TokenType3[TokenType3["RIGHT_BRACKET"] = 4] = "RIGHT_BRACKET";
-  TokenType3[TokenType3["COMMA"] = 5] = "COMMA";
-  TokenType3[TokenType3["DOT"] = 6] = "DOT";
-  TokenType3[TokenType3["BANG"] = 7] = "BANG";
-  TokenType3[TokenType3["BANG_EQUAL"] = 8] = "BANG_EQUAL";
-  TokenType3[TokenType3["EQUAL_EQUAL"] = 9] = "EQUAL_EQUAL";
-  TokenType3[TokenType3["GREATER"] = 10] = "GREATER";
-  TokenType3[TokenType3["GREATER_EQUAL"] = 11] = "GREATER_EQUAL";
-  TokenType3[TokenType3["LESS"] = 12] = "LESS";
-  TokenType3[TokenType3["LESS_EQUAL"] = 13] = "LESS_EQUAL";
-  TokenType3[TokenType3["AND"] = 14] = "AND";
-  TokenType3[TokenType3["OR"] = 15] = "OR";
-  TokenType3[TokenType3["STAR"] = 16] = "STAR";
-  TokenType3[TokenType3["NUMBER"] = 17] = "NUMBER";
-  TokenType3[TokenType3["STRING"] = 18] = "STRING";
-  TokenType3[TokenType3["IDENTIFIER"] = 19] = "IDENTIFIER";
-  TokenType3[TokenType3["TRUE"] = 20] = "TRUE";
-  TokenType3[TokenType3["FALSE"] = 21] = "FALSE";
-  TokenType3[TokenType3["NULL"] = 22] = "NULL";
-  TokenType3[TokenType3["EOF"] = 23] = "EOF";
-})(TokenType || (TokenType = {}));
-function tokenString(tok) {
-  switch (tok.type) {
-    case TokenType.EOF:
-      return "EOF";
-    case TokenType.NUMBER:
-      return tok.lexeme;
-    case TokenType.STRING:
-      return tok.value.toString();
-    default:
-      return tok.lexeme;
-  }
-}
-var Lexer = class {
-  constructor(input3) {
-    this.input = input3;
-    this.start = 0;
-    this.offset = 0;
-    this.line = 0;
-    this.lastLineOffset = 0;
-    this.tokens = [];
-  }
-  lex() {
-    if (this.input.length > MAX_EXPRESSION_LENGTH) {
-      throw new Error("ErrorExceededMaxLength");
-    }
-    while (!this.atEnd()) {
-      this.start = this.offset;
-      const c = this.next();
-      switch (c) {
-        case "(":
-          this.addToken(TokenType.LEFT_PAREN);
-          break;
-        case ")":
-          this.addToken(TokenType.RIGHT_PAREN);
-          break;
-        case "[":
-          this.addToken(TokenType.LEFT_BRACKET);
-          break;
-        case "]":
-          this.addToken(TokenType.RIGHT_BRACKET);
-          break;
-        case ",":
-          this.addToken(TokenType.COMMA);
-          break;
-        case ".":
-          if (this.previous() != TokenType.IDENTIFIER && this.previous() != TokenType.RIGHT_BRACKET && this.previous() != TokenType.RIGHT_PAREN && this.previous() != TokenType.STAR) {
-            this.consumeNumber();
-          } else {
-            this.addToken(TokenType.DOT);
-          }
-          break;
-        case "-":
-        case "+":
-          this.consumeNumber();
-          break;
-        case "!":
-          this.addToken(this.match("=") ? TokenType.BANG_EQUAL : TokenType.BANG);
-          break;
-        case "=":
-          if (!this.match("=")) {
-            this.consumeIdentifier();
-            break;
-          }
-          this.addToken(TokenType.EQUAL_EQUAL);
-          break;
-        case "<":
-          this.addToken(this.match("=") ? TokenType.LESS_EQUAL : TokenType.LESS);
-          break;
-        case ">":
-          this.addToken(this.match("=") ? TokenType.GREATER_EQUAL : TokenType.GREATER);
-          break;
-        case "&":
-          if (!this.match("&")) {
-            this.consumeIdentifier();
-            break;
-          }
-          this.addToken(TokenType.AND);
-          break;
-        case "|":
-          if (!this.match("|")) {
-            this.consumeIdentifier();
-            break;
-          }
-          this.addToken(TokenType.OR);
-          break;
-        case "*":
-          this.addToken(TokenType.STAR);
-          break;
-        // Ignore whitespace.
-        case " ":
-        case "\r":
-        case "	":
-          break;
-        case "\n":
-          ++this.line;
-          this.lastLineOffset = this.offset;
-          break;
-        case "'":
-          this.consumeString();
-          break;
-        default:
-          switch (true) {
-            case isDigit(c):
-              this.consumeNumber();
-              break;
-            default:
-              this.consumeIdentifier();
-              break;
-          }
-      }
-    }
-    this.tokens.push({
-      type: TokenType.EOF,
-      lexeme: "",
-      range: this.range()
-    });
-    return {
-      tokens: this.tokens
-    };
-  }
-  pos() {
-    return {
-      line: this.line,
-      column: this.start - this.lastLineOffset
-    };
-  }
-  endPos() {
-    return {
-      line: this.line,
-      column: this.offset - this.lastLineOffset
-    };
-  }
-  range() {
-    return {
-      start: this.pos(),
-      end: this.endPos()
-    };
-  }
-  atEnd() {
-    return this.offset >= this.input.length;
-  }
-  peek() {
-    if (this.atEnd()) {
-      return "\0";
-    }
-    return this.input[this.offset];
-  }
-  peekNext() {
-    if (this.offset + 1 >= this.input.length) {
-      return "\0";
-    }
-    return this.input[this.offset + 1];
-  }
-  previous() {
-    const l = this.tokens.length;
-    if (l == 0) {
-      return TokenType.EOF;
-    }
-    return this.tokens[l - 1].type;
-  }
-  next() {
-    return this.input[this.offset++];
-  }
-  match(expected) {
-    if (this.atEnd()) {
-      return false;
-    }
-    if (this.input[this.offset] !== expected) {
-      return false;
-    }
-    this.offset++;
-    return true;
-  }
-  addToken(type, value) {
-    this.tokens.push({
-      type,
-      lexeme: this.input.substring(this.start, this.offset),
-      range: this.range(),
-      value
-    });
-  }
-  consumeNumber() {
-    while (!this.atEnd() && (!isBoundary(this.peek()) || this.peek() == ".")) {
-      this.next();
-    }
-    const lexeme = this.input.substring(this.start, this.offset);
-    const value = new StringData(lexeme).number();
-    if (isNaN(value)) {
-      throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
-    }
-    this.addToken(TokenType.NUMBER, value);
-  }
-  consumeString() {
-    while ((this.peek() !== "'" || this.peekNext() === "'") && !this.atEnd()) {
-      if (this.peek() === "\n")
-        this.line++;
-      if (this.peek() === "'" && this.peekNext() === "'") {
-        this.next();
-      }
-      this.next();
-    }
-    if (this.atEnd()) {
-      throw new Error(`Unexpected symbol: '${this.input.substring(this.start)}'. Located at position ${this.start + 1} within expression: ${this.input}`);
-    }
-    this.next();
-    let value = this.input.substring(this.start + 1, this.offset - 1);
-    value = value.replace("''", "'");
-    this.addToken(TokenType.STRING, value);
-  }
-  consumeIdentifier() {
-    while (!this.atEnd() && !isBoundary(this.peek())) {
-      this.next();
-    }
-    let tokenType = TokenType.IDENTIFIER;
-    let tokenValue = void 0;
-    const lexeme = this.input.substring(this.start, this.offset);
-    if (this.previous() != TokenType.DOT) {
-      switch (lexeme) {
-        case "true":
-          tokenType = TokenType.TRUE;
-          break;
-        case "false":
-          tokenType = TokenType.FALSE;
-          break;
-        case "null":
-          tokenType = TokenType.NULL;
-          break;
-        case "NaN":
-          tokenType = TokenType.NUMBER;
-          tokenValue = NaN;
-          break;
-        case "Infinity":
-          tokenType = TokenType.NUMBER;
-          tokenValue = Infinity;
-          break;
-      }
-    }
-    if (!isLegalIdentifier(lexeme)) {
-      throw new Error(`Unexpected symbol: '${lexeme}'. Located at position ${this.start + 1} within expression: ${this.input}`);
-    }
-    this.addToken(tokenType, tokenValue);
-  }
-};
-function isDigit(c) {
-  return c >= "0" && c <= "9";
-}
-function isBoundary(c) {
-  switch (c) {
-    case "(":
-    case "[":
-    case ")":
-    case "]":
-    case ",":
-    case ".":
-    case "!":
-    case ">":
-    case "<":
-    case "=":
-    case "&":
-    case "|":
-      return true;
-  }
-  return /\s/.test(c);
-}
-function isLegalIdentifier(str2) {
-  if (str2 == "") {
-    return false;
-  }
-  const first = str2[0];
-  if (first >= "a" && first <= "z" || first >= "A" && first <= "Z" || first == "_") {
-    for (const c of str2.substring(1).split("")) {
-      if (c >= "a" && c <= "z" || c >= "A" && c <= "Z" || c >= "0" && c <= "9" || c == "_" || c == "-") {
-      } else {
-        return false;
-      }
-    }
-    return true;
-  }
-  return false;
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/errors.js
-var MAX_PARSER_DEPTH = 50;
-var MAX_EXPRESSION_LENGTH = 21e3;
-var ErrorType;
-(function(ErrorType2) {
-  ErrorType2[ErrorType2["ErrorUnexpectedSymbol"] = 0] = "ErrorUnexpectedSymbol";
-  ErrorType2[ErrorType2["ErrorUnrecognizedNamedValue"] = 1] = "ErrorUnrecognizedNamedValue";
-  ErrorType2[ErrorType2["ErrorUnexpectedEndOfExpression"] = 2] = "ErrorUnexpectedEndOfExpression";
-  ErrorType2[ErrorType2["ErrorExceededMaxDepth"] = 3] = "ErrorExceededMaxDepth";
-  ErrorType2[ErrorType2["ErrorExceededMaxLength"] = 4] = "ErrorExceededMaxLength";
-  ErrorType2[ErrorType2["ErrorTooFewParameters"] = 5] = "ErrorTooFewParameters";
-  ErrorType2[ErrorType2["ErrorTooManyParameters"] = 6] = "ErrorTooManyParameters";
-  ErrorType2[ErrorType2["ErrorEvenParameters"] = 7] = "ErrorEvenParameters";
-  ErrorType2[ErrorType2["ErrorUnrecognizedContext"] = 8] = "ErrorUnrecognizedContext";
-  ErrorType2[ErrorType2["ErrorUnrecognizedFunction"] = 9] = "ErrorUnrecognizedFunction";
-})(ErrorType || (ErrorType = {}));
-var ExpressionError = class extends Error {
-  constructor(typ, tok) {
-    super(`${errorDescription(typ)}: '${tokenString(tok)}'`);
-    this.typ = typ;
-    this.tok = tok;
-    this.pos = this.tok.range.start;
-  }
-};
-function errorDescription(typ) {
-  switch (typ) {
-    case ErrorType.ErrorUnexpectedEndOfExpression:
-      return "Unexpected end of expression";
-    case ErrorType.ErrorUnexpectedSymbol:
-      return "Unexpected symbol";
-    case ErrorType.ErrorUnrecognizedNamedValue:
-      return "Unrecognized named-value";
-    case ErrorType.ErrorExceededMaxDepth:
-      return `Exceeded max expression depth ${MAX_PARSER_DEPTH}`;
-    case ErrorType.ErrorExceededMaxLength:
-      return `Exceeded max expression length ${MAX_EXPRESSION_LENGTH}`;
-    case ErrorType.ErrorTooFewParameters:
-      return "Too few parameters supplied";
-    case ErrorType.ErrorTooManyParameters:
-      return "Too many parameters supplied";
-    case ErrorType.ErrorEvenParameters:
-      return "Even number of parameters supplied, requires an odd number of parameters";
-    case ErrorType.ErrorUnrecognizedContext:
-      return "Unrecognized named-value";
-    case ErrorType.ErrorUnrecognizedFunction:
-      return "Unrecognized function";
-    default:
-      return "Unknown error";
-  }
-}
-var ExpressionEvaluationError = class extends Error {
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/case.js
-var caseFunc = {
-  name: "case",
-  description: "`case( pred1, val1, pred2, val2, ..., default )`\n\nEvaluates predicates in order and returns the value corresponding to the first predicate that evaluates to `true`. If no predicate matches, it returns the last argument as the default value.",
-  minArgs: 3,
-  maxArgs: Number.MAX_SAFE_INTEGER,
-  call: (...args) => {
-    for (let i = 0; i < args.length - 1; i += 2) {
-      const predicate = args[i];
-      if (predicate.kind !== Kind.Boolean) {
-        throw new Error("case predicate must evaluate to a boolean value");
-      }
-      if (predicate.value) {
-        return args[i + 1];
-      }
-    }
-    return args[args.length - 1];
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/result.js
-function coerceTypes(li, ri) {
-  let lv = li;
-  let rv = ri;
-  if (li.kind === ri.kind) {
-    return [lv, rv];
-  }
-  switch (li.kind) {
-    // Number, String
-    case Kind.Number:
-      if (ri.kind === Kind.String) {
-        rv = new NumberData(ri.number());
-        return [lv, rv];
-      }
-      break;
-    // String, Number
-    case Kind.String:
-      if (ri.kind === Kind.Number) {
-        lv = new NumberData(li.number());
-        return [lv, rv];
-      }
-      break;
-    // Boolean|Null, Any
-    case Kind.Null:
-    case Kind.Boolean:
-      lv = new NumberData(li.number());
-      return coerceTypes(lv, rv);
-  }
-  switch (ri.kind) {
-    case Kind.Null:
-    case Kind.Boolean:
-      rv = new NumberData(ri.number());
-      return coerceTypes(lv, rv);
-  }
-  return [lv, rv];
-}
-function equals(lhs, rhs) {
-  const [lv, rv] = coerceTypes(lhs, rhs);
-  if (lv.kind != rv.kind) {
-    return false;
-  }
-  switch (lv.kind) {
-    // Null, Null
-    case Kind.Null:
-      return true;
-    // Number, Number
-    case Kind.Number: {
-      const ld = lv.value;
-      const rd = rv.value;
-      if (isNaN(ld) || isNaN(rd)) {
-        return false;
-      }
-      return ld == rd;
-    }
-    // String, String
-    case Kind.String: {
-      const ls = lv.value;
-      const rs = rv.value;
-      return toUpperSpecial(ls) === toUpperSpecial(rs);
-    }
-    // Boolean, Boolean
-    case Kind.Boolean: {
-      const lb = lv.value;
-      const rb = rv.value;
-      return lb == rb;
-    }
-    // Object, Object
-    case Kind.Dictionary:
-    case Kind.Array:
-      return lv === rv;
-  }
-  return false;
-}
-function toUpperSpecial(s) {
-  const sb = [];
-  let i = 0;
-  const len = s.length;
-  let found = s.indexOf("\u0131");
-  while (i < len) {
-    if (i < found) {
-      sb.push(s.substring(i, found).toUpperCase());
-      i = found;
-    } else if (i == found) {
-      sb.push(s.substring(i, i + 1));
-      i += 1;
-      found = s.indexOf("\u0131", i);
-    } else {
-      sb.push(s.substring(i).toUpperCase());
-      break;
-    }
-  }
-  return sb.join("");
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/contains.js
-var contains = {
-  name: "contains",
-  description: "`contains( search, item )`\n\nReturns `true` if `search` contains `item`. If `search` is an array, this function returns `true` if the `item` is an element in the array. If `search` is a string, this function returns `true` if the `item` is a substring of `search`. This function is not case sensitive. Casts values to a string.",
-  minArgs: 2,
-  maxArgs: 2,
-  call: (...args) => {
-    const left = args[0];
-    const right = args[1];
-    if (left.primitive) {
-      const ls = left.coerceString();
-      if (right.primitive) {
-        const rs = right.coerceString();
-        return new BooleanData(ls.toLowerCase().includes(rs.toLowerCase()));
-      }
-    } else if (left.kind === Kind.Array) {
-      const la = left;
-      if (la.values().length === 0) {
-        return new BooleanData(false);
-      }
-      for (const v of la.values()) {
-        if (equals(right, v)) {
-          return new BooleanData(true);
-        }
-      }
-    }
-    return new BooleanData(false);
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/endswith.js
-var endswith = {
-  name: "endsWith",
-  description: "`endsWith( searchString, searchValue )`\n\nReturns `true` if `searchString` ends with `searchValue`. This function is not case sensitive. Casts values to a string.",
-  minArgs: 2,
-  maxArgs: 2,
-  call: (...args) => {
-    const left = args[0];
-    if (!left.primitive) {
-      return new BooleanData(false);
-    }
-    const right = args[1];
-    if (!right.primitive) {
-      return new BooleanData(false);
-    }
-    const ls = toUpperSpecial(left.coerceString());
-    const rs = toUpperSpecial(right.coerceString());
-    return new BooleanData(ls.endsWith(rs));
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/format.js
-var format = {
-  name: "format",
-  description: "`format( string, replaceValue0, replaceValue1, ..., replaceValueN)`\n\nReplaces values in the `string`, with the variable `replaceValueN`. Variables in the `string` are specified using the `{N}` syntax, where `N` is an integer. You must specify at least one `replaceValue` and `string`. There is no maximum for the number of variables (`replaceValueN`) you can use. Escape curly braces using double braces.",
-  minArgs: 1,
-  maxArgs: 255,
-  call: (...args) => {
-    const fs3 = args[0].coerceString();
-    const result = [];
-    let index = 0;
-    while (index < fs3.length) {
-      const lbrace = fs3.indexOf("{", index);
-      const rbrace = fs3.indexOf("}", index);
-      if (lbrace >= 0 && (rbrace < 0 || rbrace > lbrace)) {
-        if (safeCharAt(fs3, lbrace + 1) === "{") {
-          result.push(fs3.substr(index, lbrace - index + 1));
-          index = lbrace + 2;
-          continue;
-        }
-        if (rbrace > lbrace + 1) {
-          const argIndex = readArgIndex(fs3, lbrace + 1);
-          if (argIndex.success) {
-            if (1 + argIndex.result > args.length - 1) {
-              throw new Error(`The following format string references more arguments than were supplied: ${fs3}`);
-            }
-            if (lbrace > index) {
-              result.push(fs3.substr(index, lbrace - index));
-            }
-            result.push(`${args[1 + argIndex.result].coerceString()}`);
-            index = rbrace + 1;
-            continue;
-          }
-        }
-        throw new Error(`The following format string is invalid: ${fs3}`);
-      } else if (rbrace >= 0) {
-        if (safeCharAt(fs3, rbrace + 1) === "}") {
-          result.push(fs3.substr(index, rbrace - index + 1));
-          index = rbrace + 2;
-        } else {
-          throw new Error(`The following format string is invalid: ${fs3}`);
-        }
-      } else {
-        result.push(fs3.substr(index));
-        break;
-      }
-    }
-    return new StringData(result.join(""));
-  }
-};
-function safeCharAt(string4, index) {
-  if (string4.length > index) {
-    return string4[index];
-  }
-  return "\0";
-}
-function readArgIndex(string4, startIndex) {
-  let length = 0;
-  for (; ; ) {
-    const nextChar = safeCharAt(string4, startIndex + length);
-    if (nextChar >= "0" && nextChar <= "9") {
-      length++;
-    } else {
-      break;
-    }
-  }
-  if (length < 1) {
-    return {
-      success: false
-    };
-  }
-  const endIndex = startIndex + length - 1;
-  const result = parseInt(string4.substr(startIndex, length));
-  return {
-    success: !isNaN(result),
-    result,
-    endIndex
-  };
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/fromjson.js
-var fromjson = {
-  name: "fromJson",
-  description: "`fromJSON(value)`\n\nReturns a JSON object or JSON data type for `value`. You can use this function to provide a JSON object as an evaluated expression or to convert environment variables from a string.",
-  minArgs: 1,
-  maxArgs: 1,
-  call: (...args) => {
-    const input3 = args[0];
-    const is = input3.coerceString();
-    if (is.trim() === "") {
-      throw new Error("empty input");
-    }
-    try {
-      return JSON.parse(is, reviver);
-    } catch (e) {
-      throw new ExpressionEvaluationError("Error parsing JSON when evaluating fromJson", { cause: e });
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/join.js
-var join = {
-  name: "join",
-  description: "`join( array, optionalSeparator )`\n\nThe value for `array` can be an array or a string. All values in `array` are concatenated into a string. If you provide `optionalSeparator`, it is inserted between the concatenated values. Otherwise, the default separator `,` is used. Casts values to a string.",
-  minArgs: 1,
-  maxArgs: 2,
-  call: (...args) => {
-    if (args[0].primitive) {
-      return new StringData(args[0].coerceString());
-    }
-    if (args[0].kind === Kind.Array) {
-      let separator = ",";
-      if (args.length > 1 && args[1].primitive) {
-        separator = args[1].coerceString();
-      }
-      return new StringData(args[0].values().map((item) => item.coerceString()).join(separator));
-    }
-    return new StringData("");
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/startswith.js
-var startswith = {
-  name: "startsWith",
-  description: "`startsWith( searchString, searchValue )`\n\nReturns `true` when `searchString` starts with `searchValue`. This function is not case sensitive. Casts values to a string.",
-  minArgs: 2,
-  maxArgs: 2,
-  call: (...args) => {
-    const left = args[0];
-    if (!left.primitive) {
-      return new BooleanData(false);
-    }
-    const right = args[1];
-    if (!right.primitive) {
-      return new BooleanData(false);
-    }
-    const ls = toUpperSpecial(left.coerceString());
-    const rs = toUpperSpecial(right.coerceString());
-    return new BooleanData(ls.startsWith(rs));
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs/tojson.js
-var tojson = {
-  name: "toJson",
-  description: "`toJSON(value)`\n\nReturns a pretty-print JSON representation of `value`. You can use this function to debug the information provided in contexts.",
-  minArgs: 1,
-  maxArgs: 1,
-  call: (...args) => {
-    return new StringData(JSON.stringify(args[0], replacer, "  "));
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/funcs.js
-var wellKnownFunctions = {
-  case: caseFunc,
-  contains,
-  endswith,
-  format,
-  fromjson,
-  join,
-  startswith,
-  tojson
-};
-function validateFunction(context, identifier, argCount) {
-  const name = identifier.lexeme.toLowerCase();
-  let f;
-  f = wellKnownFunctions[name];
-  if (!f) {
-    f = context.extensionFunctions.get(name);
-    if (!f) {
-      if (!context.allowUnknownKeywords) {
-        throw new ExpressionError(ErrorType.ErrorUnrecognizedFunction, identifier);
-      }
-      return;
-    }
-  }
-  if (argCount < f.minArgs) {
-    throw new ExpressionError(ErrorType.ErrorTooFewParameters, identifier);
-  }
-  if (argCount > f.maxArgs) {
-    throw new ExpressionError(ErrorType.ErrorTooManyParameters, identifier);
-  }
-  if (name === "case" && argCount % 2 === 0) {
-    throw new ExpressionError(ErrorType.ErrorEvenParameters, identifier);
-  }
-}
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/features.js
-var allFeatureKeys = [
-  "missingInputsQuickfix",
-  "blockScalarChompingWarning",
-  "allowCaseFunction",
-  "allowCopilotRequestsPermission",
-  "allowDrivesPermissionAutocomplete",
-  "allowBackgroundSteps"
-];
-var FeatureFlags = class {
-  constructor(features) {
-    this.features = features ?? {};
-  }
-  /**
-   * Check if an experimental feature is enabled.
-   *
-   * Resolution order:
-   * 1. Explicit feature flag (if set)
-   * 2. `all` flag (if set)
-   * 3. false (default)
-   */
-  isEnabled(feature) {
-    const explicit = this.features[feature];
-    if (explicit !== void 0) {
-      return explicit;
-    }
-    return this.features.all ?? false;
-  }
-  /**
-   * Returns list of all enabled experimental features.
-   */
-  getEnabledFeatures() {
-    return allFeatureKeys.filter((key) => this.isEnabled(key));
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/parser.js
-var Parser = class {
-  /**
-   * Constructs a new parser for the given tokens
-   *
-   * @param tokens Tokens to build a parse tree from
-   * @param extensionContexts Available context names
-   * @param extensionFunctions Available functions (beyond the built-in ones)
-   */
-  constructor(tokens, extensionContexts, extensionFunctions) {
-    this.tokens = tokens;
-    this.offset = 0;
-    this.depth = 0;
-    this.extContexts = /* @__PURE__ */ new Map();
-    this.extFuncs = /* @__PURE__ */ new Map();
-    for (const contextName of extensionContexts) {
-      this.extContexts.set(contextName.toLowerCase(), true);
-    }
-    for (const { name, func } of extensionFunctions.map((x) => ({
-      name: x.name,
-      func: x
-    }))) {
-      this.extFuncs.set(name.toLowerCase(), func);
-    }
-    this.context = {
-      allowUnknownKeywords: false,
-      extensionContexts: this.extContexts,
-      extensionFunctions: this.extFuncs
-    };
-  }
-  parse() {
-    let result;
-    if (this.atEnd()) {
-      return result;
-    }
-    result = this.expression();
-    if (!this.atEnd()) {
-      throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
-    }
-    return result;
-  }
-  expression() {
-    this.incrDepth();
-    try {
-      return this.logicalOr();
-    } finally {
-      this.decrDepth();
-    }
-  }
-  logicalOr() {
-    let expr = this.logicalAnd();
-    if (this.check(TokenType.OR)) {
-      this.incrDepth();
-      try {
-        const logical = new Logical(this.peek(), [expr]);
-        expr = logical;
-        while (this.match(TokenType.OR)) {
-          const right = this.logicalAnd();
-          logical.args.push(right);
-        }
-      } finally {
-        this.decrDepth();
-      }
-    }
-    return expr;
-  }
-  logicalAnd() {
-    let expr = this.equality();
-    if (this.check(TokenType.AND)) {
-      this.incrDepth();
-      try {
-        const logical = new Logical(this.peek(), [expr]);
-        expr = logical;
-        while (this.match(TokenType.AND)) {
-          const right = this.equality();
-          logical.args.push(right);
-        }
-      } finally {
-        this.decrDepth();
-      }
-    }
-    return expr;
-  }
-  equality() {
-    let expr = this.comparison();
-    while (this.match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL)) {
-      const operator = this.previous();
-      const right = this.comparison();
-      expr = new Binary(expr, operator, right);
-    }
-    return expr;
-  }
-  comparison() {
-    let expr = this.unary();
-    while (this.match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL)) {
-      const operator = this.previous();
-      const right = this.unary();
-      expr = new Binary(expr, operator, right);
-    }
-    return expr;
-  }
-  unary() {
-    if (this.match(TokenType.BANG)) {
-      this.incrDepth();
-      const operator = this.previous();
-      const unary = this.unary();
-      try {
-        return new Unary(operator, unary);
-      } finally {
-        this.decrDepth();
-      }
-    }
-    return this.index();
-  }
-  index() {
-    let expr = this.call();
-    let depthIncreased = 0;
-    if (expr instanceof Grouping || expr instanceof FunctionCall || expr instanceof ContextAccess) {
-      let cont = true;
-      while (cont) {
-        switch (true) {
-          case this.match(TokenType.LEFT_BRACKET): {
-            let indexExpr;
-            if (this.match(TokenType.STAR)) {
-              indexExpr = new Star();
-            } else {
-              indexExpr = this.expression();
-            }
-            this.consume(TokenType.RIGHT_BRACKET, ErrorType.ErrorUnexpectedSymbol);
-            this.incrDepth();
-            depthIncreased++;
-            expr = new IndexAccess(expr, indexExpr);
-            break;
-          }
-          case this.match(TokenType.DOT):
-            this.incrDepth();
-            depthIncreased++;
-            if (this.match(TokenType.IDENTIFIER)) {
-              const property = this.previous();
-              expr = new IndexAccess(expr, new Literal(new StringData(property.lexeme), property));
-            } else if (this.match(TokenType.STAR)) {
-              expr = new IndexAccess(expr, new Star());
-            } else {
-              throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
-            }
-            break;
-          default:
-            cont = false;
-        }
-      }
-    }
-    for (let i = 0; i < depthIncreased; i++) {
-      this.decrDepth();
-    }
-    return expr;
-  }
-  call() {
-    if (!this.check(TokenType.IDENTIFIER)) {
-      return this.primary();
-    }
-    const identifier = this.next();
-    if (!this.match(TokenType.LEFT_PAREN)) {
-      if (!this.extContexts.has(identifier.lexeme.toLowerCase())) {
-        throw this.buildError(ErrorType.ErrorUnrecognizedContext, identifier);
-      }
-      return new ContextAccess(identifier);
-    }
-    const args = [];
-    while (!this.match(TokenType.RIGHT_PAREN)) {
-      const aexp = this.expression();
-      args.push(aexp);
-      if (!this.check(TokenType.RIGHT_PAREN)) {
-        this.consume(TokenType.COMMA, ErrorType.ErrorUnexpectedSymbol);
-      }
-    }
-    validateFunction(this.context, identifier, args.length);
-    return new FunctionCall(identifier, args);
-  }
-  primary() {
-    switch (true) {
-      case this.match(TokenType.FALSE):
-        return new Literal(new BooleanData(false), this.previous());
-      case this.match(TokenType.TRUE):
-        return new Literal(new BooleanData(true), this.previous());
-      case this.match(TokenType.NULL):
-        return new Literal(new Null(), this.previous());
-      case this.match(TokenType.NUMBER):
-        return new Literal(new NumberData(this.previous().value), this.previous());
-      case this.match(TokenType.STRING):
-        return new Literal(new StringData(this.previous().value), this.previous());
-      case this.match(TokenType.LEFT_PAREN): {
-        const expr = this.expression();
-        if (this.atEnd()) {
-          throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
-        }
-        this.consume(TokenType.RIGHT_PAREN, ErrorType.ErrorUnexpectedSymbol);
-        return new Grouping(expr);
-      }
-      case this.atEnd():
-        throw this.buildError(ErrorType.ErrorUnexpectedEndOfExpression, this.previous());
-    }
-    throw this.buildError(ErrorType.ErrorUnexpectedSymbol, this.peek());
-  }
-  // match consumes the next token if it matches any of the given types
-  match(...tokenTypes) {
-    for (const tokenType of tokenTypes) {
-      if (this.check(tokenType)) {
-        this.next();
-        return true;
-      }
-    }
-    return false;
-  }
-  // check peeks whether the next token is of the given type
-  check(tokenType) {
-    if (this.atEnd()) {
-      return false;
-    }
-    return this.peek().type == tokenType;
-  }
-  // atEnd peeks whether the next token is EOF
-  atEnd() {
-    return this.peek().type == TokenType.EOF;
-  }
-  next() {
-    if (!this.atEnd()) {
-      this.offset++;
-    }
-    return this.previous();
-  }
-  peek() {
-    return this.tokens[this.offset];
-  }
-  // previous returns the previous token
-  previous() {
-    return this.tokens[this.offset - 1];
-  }
-  // consume attempts to consume the next token if it matches the given type. It returns an error of
-  // the given ParseErrorKind otherwise.
-  consume(tokenType, errorType) {
-    if (this.check(tokenType)) {
-      this.next();
-      return;
-    }
-    throw this.buildError(errorType, this.peek());
-  }
-  incrDepth() {
-    this.depth++;
-    if (this.depth > MAX_PARSER_DEPTH) {
-      throw this.buildError(ErrorType.ErrorExceededMaxDepth, this.peek());
-    }
-  }
-  decrDepth() {
-    this.depth--;
-  }
-  buildError(errType, token) {
-    return new ExpressionError(errType, token);
-  }
-};
-
-// ../core/src/expressions.ts
-var KNOWN_CONTEXTS = [
-  "github",
-  "env",
-  "vars",
-  "job",
-  "jobs",
-  "steps",
-  "runner",
-  "secrets",
-  "strategy",
-  "matrix",
-  "needs",
-  "inputs"
-];
-var UNTERMINATED_EXPRESSION = "Unterminated expression: missing closing '}}'";
-function findTemplateSegments(text3) {
-  const segments = [];
-  let i = 0;
-  while (i < text3.length) {
-    const open3 = text3.indexOf("${{", i);
-    if (open3 < 0) break;
-    let j = open3 + 3;
-    let inString = false;
-    let close = -1;
-    while (j < text3.length) {
-      const ch = text3[j];
-      if (inString) {
-        if (ch === "'") {
-          if (text3[j + 1] === "'") j++;
-          else inString = false;
-        }
-      } else if (ch === "'") {
-        inString = true;
-      } else if (ch === "}" && text3[j + 1] === "}") {
-        close = j;
-        break;
-      }
-      j++;
-    }
-    if (close < 0) {
-      const inner = text3.slice(open3 + 3);
-      segments.push({
-        start: open3,
-        end: text3.length,
-        innerStart: open3 + 3,
-        expr: {
-          source: inner.trim(),
-          refs: [],
-          error: { message: UNTERMINATED_EXPRESSION, offset: 0 }
-        }
-      });
-      break;
-    }
-    const rawInner = text3.slice(open3 + 3, close);
-    const lead = rawInner.length - rawInner.trimStart().length;
-    segments.push({
-      start: open3,
-      end: close + 2,
-      innerStart: open3 + 3 + lead,
-      expr: parseExpression(rawInner.trim())
-    });
-    i = close + 2;
-  }
-  return segments;
-}
-function withoutPosition(message) {
-  const at = message.indexOf("Located at position");
-  if (at < 0) return message;
-  let end = at;
-  while (end > 0 && /\s/.test(message[end - 1])) end--;
-  if (message[end - 1] === ".") end--;
-  return message.slice(0, end);
-}
-var CONTEXT_FUNCTIONS = [
-  { name: "hashFiles", minArgs: 1, maxArgs: 255 },
-  { name: "success", minArgs: 0, maxArgs: 0 },
-  { name: "always", minArgs: 0, maxArgs: 0 },
-  { name: "failure", minArgs: 0, maxArgs: 0 },
-  { name: "cancelled", minArgs: 0, maxArgs: 0 }
-];
-var exprCache = /* @__PURE__ */ new Map();
-function parseExpression(source) {
-  const cached2 = exprCache.get(source);
-  if (cached2) return cached2;
-  let result;
-  try {
-    const tokens = new Lexer(source).lex().tokens;
-    const ast = new Parser(tokens, [...KNOWN_CONTEXTS], CONTEXT_FUNCTIONS).parse();
-    result = { source, ast, refs: collectRefs(ast, source) };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const tokRange = err.tok?.range;
-    const posMatch = /Located at position (\d+)/.exec(message);
-    const offset = tokRange ? offsetOf(source, tokRange.start.line, tokRange.start.column) : posMatch ? Math.max(0, Number(posMatch[1]) - 1) : 0;
-    result = {
-      source,
-      refs: [],
-      error: { message: withoutPosition(message), offset }
-    };
-  }
-  exprCache.set(source, result);
-  return result;
-}
-function offsetOf(source, line, column) {
-  let offset = 0;
-  for (let l = 0; l < line; l++) {
-    const nl = source.indexOf("\n", offset);
-    if (nl < 0) break;
-    offset = nl + 1;
-  }
-  return offset + column;
-}
-function collectRefs(root, source) {
-  const refs = [];
-  const startOf = (t) => offsetOf(source, t.range.start.line, t.range.start.column);
-  const endOf = (t) => offsetOf(source, t.range.end.line, t.range.end.column);
-  const chainOf = (e) => {
-    if (e instanceof ContextAccess) {
-      return { ctx: e, path: [], end: endOf(e.name) };
-    }
-    if (e instanceof IndexAccess) {
-      const base = chainOf(e.expr);
-      if (!base) return void 0;
-      const idx = e.index;
-      if (idx instanceof Star) return { ...base, path: [...base.path, "*"] };
-      if (idx instanceof Literal && idx.literal.kind === Kind.String) {
-        return {
-          ...base,
-          path: [...base.path, idx.literal.coerceString()],
-          end: Math.max(
-            base.end,
-            endOf(idx.token) + (source[endOf(idx.token)] === "]" ? 1 : 0)
-          )
-        };
-      }
-      if (idx instanceof Literal && idx.literal.kind === Kind.Number) {
-        return { ...base, path: [...base.path, String(idx.literal.number())], end: base.end };
-      }
-      return { ...base, path: [...base.path, "?"] };
-    }
-    return void 0;
-  };
-  const visit3 = (e) => {
-    if (e instanceof ContextAccess || e instanceof IndexAccess) {
-      const chain = chainOf(e);
-      if (chain) {
-        refs.push({
-          context: chain.ctx.name.lexeme.toLowerCase(),
-          path: chain.path,
-          dynamic: chain.path.length === 0 || chain.path.includes("?"),
-          start: startOf(chain.ctx.name),
-          end: chain.end
-        });
-        let cur = e;
-        while (cur instanceof IndexAccess) {
-          if (!(cur.index instanceof Literal) && !(cur.index instanceof Star)) visit3(cur.index);
-          cur = cur.expr;
-        }
-        return;
-      }
-      if (e instanceof IndexAccess) {
-        visit3(e.expr);
-        if (!(e.index instanceof Literal) && !(e.index instanceof Star)) visit3(e.index);
-      }
-      return;
-    }
-    if (e instanceof Unary) visit3(e.expr);
-    else if (e instanceof Binary) {
-      visit3(e.left);
-      visit3(e.right);
-    } else if (e instanceof Logical || e instanceof FunctionCall) {
-      for (const arg of e.args) visit3(arg);
-    } else if (e instanceof Grouping) visit3(e.group);
-  };
-  visit3(root);
-  for (const r of refs) r.end = Math.max(r.end, refEndFromSource(source, r));
-  return refs;
-}
-function refEndFromSource(source, ref) {
-  const re = /^[A-Za-z_][\w-]*(?:\s*(?:\.\s*(?:[A-Za-z_*][\w-]*)|\[\s*'(?:[^']|'')*'\s*\]|\[\s*\d+\s*\]|\[\s*\*\s*\]))*/;
-  const m = re.exec(source.slice(ref.start));
-  return m ? ref.start + m[0].length : ref.end;
-}
-var UNKNOWN = { known: false, taint: [] };
-var known = (value, taint = []) => ({ known: true, value, taint });
-var mergeTaint = (...vals) => {
-  const out = [];
-  for (const v of vals) for (const t of v.taint) if (!out.some((o) => o.key === t.key)) out.push(t);
-  return out;
-};
-function truthy3(v) {
-  if (v === null) return false;
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v !== 0 && !Number.isNaN(v);
-  if (typeof v === "string") return v.length > 0;
-  return true;
-}
-function toNumber(v) {
-  if (v === null) return 0;
-  if (typeof v === "boolean") return v ? 1 : 0;
-  if (typeof v === "number") return v;
-  if (typeof v === "string") {
-    const s = v.trim();
-    if (s === "") return 0;
-    if (/^0x[0-9a-f]+$/i.test(s)) return Number.parseInt(s, 16);
-    if (/^0o[0-7]+$/i.test(s)) return Number.parseInt(s.slice(2), 8);
-    const n = Number(s);
-    return Number.isNaN(n) ? Number.NaN : n;
-  }
-  return Number.NaN;
-}
-function toStr(v) {
-  if (v === null) return "";
-  if (typeof v === "boolean") return v ? "true" : "false";
-  if (typeof v === "number") return Number.isInteger(v) ? String(v) : String(v);
-  if (typeof v === "string") return v;
-  return Array.isArray(v) ? "Array" : "Object";
-}
-function looseEquals(a, b) {
-  const ta = jsonType(a);
-  const tb = jsonType(b);
-  if (ta !== tb) {
-    if (ta === "object" || tb === "object" || ta === "array" || tb === "array") return false;
-    return toNumber(a) === toNumber(b);
-  }
-  if (ta === "string") return a.toUpperCase() === b.toUpperCase();
-  if (ta === "number" || ta === "boolean" || ta === "null") return a === b;
-  return a === b;
-}
-function compare(a, b) {
-  if (typeof a === "string" && typeof b === "string") {
-    const x2 = a.toUpperCase();
-    const y2 = b.toUpperCase();
-    return x2 < y2 ? -1 : x2 > y2 ? 1 : 0;
-  }
-  const x = toNumber(a);
-  const y = toNumber(b);
-  if (Number.isNaN(x) || Number.isNaN(y)) return void 0;
-  return x - y;
-}
-function jsonType(v) {
-  if (v === null) return "null";
-  if (Array.isArray(v)) return "array";
-  return typeof v;
-}
-function literalToJson(lit) {
-  switch (lit.literal.kind) {
-    case Kind.String:
-      return lit.literal.coerceString();
-    case Kind.Number:
-      return lit.literal.number();
-    case Kind.Boolean:
-      return lit.token.type === TokenType.TRUE;
-    case Kind.Null:
-      return null;
-    default:
-      return null;
-  }
-}
-function evaluate(e, resolve7) {
-  if (e instanceof Literal) return known(literalToJson(e));
-  if (e instanceof Grouping) return evaluate(e.group, resolve7);
-  if (e instanceof ContextAccess || e instanceof IndexAccess) {
-    const chain = refChain(e, resolve7);
-    if (chain) {
-      const resolved = resolve7(chain);
-      return resolved ?? UNKNOWN;
-    }
-    if (e instanceof IndexAccess) {
-      const base = evaluate(e.expr, resolve7);
-      const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve7);
-      if (!base.known || !idx?.known) return { known: false, taint: mergeTaint(base, ...idx ? [idx] : []) };
-      return known(indexInto(base.value, idx.value), mergeTaint(base, idx));
-    }
-    return UNKNOWN;
-  }
-  if (e instanceof Unary) {
-    const v = evaluate(e.expr, resolve7);
-    return v.known ? known(!truthy3(v.value)) : UNKNOWN;
-  }
-  if (e instanceof Logical) {
-    const isAnd = e.operator.type === TokenType.AND;
-    let last = UNKNOWN;
-    for (const [i, arg] of e.args.entries()) {
-      const v = evaluate(arg, resolve7);
-      last = v;
-      if (!v.known) return v;
-      if (isAnd ? !truthy3(v.value) : truthy3(v.value)) {
-        return isAnd && i < e.args.length - 1 ? { ...v, taint: [] } : v;
-      }
-    }
-    return last;
-  }
-  if (e instanceof Binary) {
-    const l = evaluate(e.left, resolve7);
-    const r = evaluate(e.right, resolve7);
-    const taint = [];
-    if (!l.known || !r.known) return UNKNOWN;
-    switch (e.operator.type) {
-      case TokenType.EQUAL_EQUAL:
-        return known(looseEquals(l.value, r.value), taint);
-      case TokenType.BANG_EQUAL:
-        return known(!looseEquals(l.value, r.value), taint);
-      case TokenType.GREATER:
-      case TokenType.GREATER_EQUAL:
-      case TokenType.LESS:
-      case TokenType.LESS_EQUAL: {
-        const c = compare(l.value, r.value);
-        if (c === void 0) return known(false, taint);
-        const t = e.operator.type;
-        return known(
-          t === TokenType.GREATER ? c > 0 : t === TokenType.GREATER_EQUAL ? c >= 0 : t === TokenType.LESS ? c < 0 : c <= 0,
-          taint
-        );
-      }
-      default:
-        return { known: false, taint };
-    }
-  }
-  if (e instanceof FunctionCall) return evalCall(e, resolve7);
-  return UNKNOWN;
-}
-function refChain(e, resolve7) {
-  if (e instanceof ContextAccess) return { context: e.name.lexeme.toLowerCase(), path: [] };
-  if (e instanceof IndexAccess) {
-    const base = refChain(e.expr, resolve7);
-    if (!base) return void 0;
-    if (e.index instanceof Star) return void 0;
-    if (e.index instanceof Literal) return { ...base, path: [...base.path, toStr(literalToJson(e.index))] };
-    const idx = evaluate(e.index, resolve7);
-    if (idx.known && (typeof idx.value === "string" || typeof idx.value === "number")) {
-      return { ...base, path: [...base.path, String(idx.value)] };
-    }
-    return void 0;
-  }
-  return void 0;
-}
-function indexInto(base, idx) {
-  if (Array.isArray(base)) {
-    const n = toNumber(idx);
-    return Number.isInteger(n) && n >= 0 && n < base.length ? base[n] ?? null : null;
-  }
-  if (base && typeof base === "object") {
-    const key = toStr(idx).toLowerCase();
-    const hit = Object.keys(base).find((k) => k.toLowerCase() === key);
-    return hit === void 0 ? null : base[hit] ?? null;
-  }
-  return null;
-}
-function evalCall(e, resolve7) {
-  const name = e.functionName.lexeme.toLowerCase();
-  const args = e.args.map((a) => evaluate(a, resolve7));
-  const taint = mergeTaint(...args);
-  const allKnown = args.every((a) => a.known);
-  const vals = args.map((a) => a.known ? a.value : null);
-  if (["success", "failure", "cancelled", "always", "hashfiles"].includes(name))
-    return { known: false, taint };
-  if (!allKnown) return { known: false, taint };
-  switch (name) {
-    case "format": {
-      const fmt = toStr(vals[0] ?? null);
-      const out = fmt.replace(/\{\{|\}\}|\{(\d+)\}/g, (m, d) => {
-        if (m === "{{") return "{";
-        if (m === "}}") return "}";
-        return toStr(vals[Number(d) + 1] ?? null);
-      });
-      return known(out, taint);
-    }
-    case "contains": {
-      const [hay, needle] = [vals[0] ?? null, vals[1] ?? null];
-      if (Array.isArray(hay))
-        return known(
-          hay.some((h) => looseEquals(h, needle)),
-          []
-        );
-      return known(toStr(hay).toUpperCase().includes(toStr(needle).toUpperCase()), []);
-    }
-    case "startswith":
-      return known(
-        toStr(vals[0] ?? null).toUpperCase().startsWith(toStr(vals[1] ?? null).toUpperCase()),
-        []
-      );
-    case "endswith":
-      return known(
-        toStr(vals[0] ?? null).toUpperCase().endsWith(toStr(vals[1] ?? null).toUpperCase()),
-        []
-      );
-    case "join": {
-      const arr = vals[0] ?? null;
-      const sep4 = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
-      return known(Array.isArray(arr) ? arr.map(toStr).join(sep4) : toStr(arr), taint);
-    }
-    case "tojson":
-      return known(JSON.stringify(vals[0] ?? null, null, 2), taint);
-    case "fromjson":
-      try {
-        return known(JSON.parse(toStr(vals[0] ?? null)), taint);
-      } catch {
-        return { known: false, taint };
-      }
-    default:
-      return { known: false, taint };
-  }
-}
-function isConstant(e) {
-  if (e instanceof Literal) return true;
-  if (e instanceof Grouping) return isConstant(e.group);
-  if (e instanceof Unary) return isConstant(e.expr);
-  if (e instanceof Binary) return isConstant(e.left) && isConstant(e.right);
-  if (e instanceof Logical) return e.args.every(isConstant);
-  if (e instanceof FunctionCall) {
-    const name = e.functionName.lexeme.toLowerCase();
-    return !["success", "failure", "cancelled", "always", "hashfiles"].includes(name) && e.args.every(isConstant);
-  }
-  return false;
-}
-var TEST_FUNCTIONS = /* @__PURE__ */ new Set(["contains", "startswith", "endswith"]);
-var VALUE_FUNCTIONS = /* @__PURE__ */ new Set(["format", "join", "tojson"]);
-function conditionUses(expr, whole = true) {
-  const out = /* @__PURE__ */ new Map();
-  if (!expr.ast) return out;
-  const source = expr.source;
-  const visit3 = (e, use) => {
-    if (e instanceof Grouping) {
-      visit3(e.group, use);
-      return;
-    }
-    if (e instanceof ContextAccess || e instanceof IndexAccess) {
-      let cur = e;
-      while (cur instanceof IndexAccess) {
-        if (!(cur.index instanceof Literal) && !(cur.index instanceof Star)) visit3(cur.index, "value");
-        cur = cur.expr;
-      }
-      if (cur instanceof ContextAccess) {
-        const t = cur.name;
-        out.set(offsetOf(source, t.range.start.line, t.range.start.column), use);
-      } else visit3(cur, "value");
-      return;
-    }
-    if (e instanceof Unary) {
-      visit3(e.expr, "truthiness");
-      return;
-    }
-    if (e instanceof Logical) {
-      const isAnd = e.operator.type === TokenType.AND;
-      for (const [i, arg] of e.args.entries()) {
-        const fallback = !isAnd && i < e.args.length - 1 && use !== "truthiness";
-        visit3(arg, fallback ? "fallback" : use);
-      }
-      return;
-    }
-    if (e instanceof Binary) {
-      const [l, r] = [isConstant(e.left), isConstant(e.right)];
-      visit3(e.left, r ? "compared" : "value");
-      visit3(e.right, l ? "compared" : "value");
-      return;
-    }
-    if (e instanceof FunctionCall) {
-      const name = e.functionName.lexeme.toLowerCase();
-      if (TEST_FUNCTIONS.has(name)) {
-        for (const [i, arg] of e.args.entries()) {
-          const other = e.args.some((a, j) => j !== i && isConstant(a));
-          visit3(arg, other ? "compared" : "value");
-        }
-        return;
-      }
-      const passes = VALUE_FUNCTIONS.has(name) && use === "compared";
-      for (const arg of e.args) visit3(arg, passes ? "compared" : "value");
-    }
-  };
-  visit3(expr.ast, whole ? "truthiness" : "value");
-  return out;
-}
-function fallbacksOf(expr) {
-  const out = /* @__PURE__ */ new Map();
-  if (!expr.ast) return out;
-  const unwrap = (e) => e instanceof Grouping ? unwrap(e.group) : e;
-  const isOr = (e) => e instanceof Logical && e.operator.type === TokenType.OR;
-  const operands = (e) => {
-    const u = unwrap(e);
-    return isOr(u) ? u.args.flatMap(operands) : [u];
-  };
-  const refStart = (e) => {
-    let cur = e;
-    while (cur instanceof IndexAccess) cur = cur.expr;
-    if (!(cur instanceof ContextAccess)) return void 0;
-    const t = cur.name;
-    return offsetOf(expr.source, t.range.start.line, t.range.start.column);
-  };
-  const visit3 = (e) => {
-    const u = unwrap(e);
-    if (isOr(u)) {
-      const ops = operands(u);
-      for (const [i, op] of ops.entries()) {
-        const start = i < ops.length - 1 ? refStart(op) : void 0;
-        if (start !== void 0) out.set(start, u);
-        visit3(op);
-      }
-    } else if (u instanceof IndexAccess) {
-      visit3(u.expr);
-      if (!(u.index instanceof Literal) && !(u.index instanceof Star)) visit3(u.index);
-    } else if (u instanceof Unary) visit3(u.expr);
-    else if (u instanceof Binary) {
-      visit3(u.left);
-      visit3(u.right);
-    } else if (u instanceof Logical || u instanceof FunctionCall) for (const arg of u.args) visit3(arg);
-  };
-  visit3(expr.ast);
-  return out;
-}
-function definitelyFalsy(e, resolve7) {
-  if (e instanceof Grouping) return definitelyFalsy(e.group, resolve7);
-  if (e instanceof Logical) {
-    return e.operator.type === TokenType.AND ? e.args.some((a) => definitelyFalsy(a, resolve7)) : e.args.every((a) => definitelyFalsy(a, resolve7));
-  }
-  if (e instanceof Unary) return definitelyTruthy(e.expr, resolve7);
-  const v = evaluate(e, resolve7);
-  return v.known && !truthy3(v.value);
-}
-function definitelyTruthy(e, resolve7) {
-  if (e instanceof Grouping) return definitelyTruthy(e.group, resolve7);
-  if (e instanceof Logical) {
-    return e.operator.type === TokenType.AND ? e.args.every((a) => definitelyTruthy(a, resolve7)) : e.args.some((a) => definitelyTruthy(a, resolve7));
-  }
-  if (e instanceof Unary) return definitelyFalsy(e.expr, resolve7);
-  const v = evaluate(e, resolve7);
-  return v.known && truthy3(v.value);
-}
-function evaluateTemplate(text3, resolve7) {
-  const segments = findTemplateSegments(text3);
-  if (segments.length === 0) return known(text3);
-  const first = segments[0];
-  if (segments.length === 1 && first.start === 0 && first.end === text3.length) {
-    return first.expr.ast ? evaluate(first.expr.ast, resolve7) : UNKNOWN;
-  }
-  let out = "";
-  let cursor = 0;
-  const parts = [];
-  for (const seg of segments) {
-    out += text3.slice(cursor, seg.start);
-    const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve7) : UNKNOWN;
-    parts.push(v);
-    if (!v.known) return { known: false, taint: mergeTaint(...parts) };
-    out += toStr(v.value);
-    cursor = seg.end;
-  }
-  out += text3.slice(cursor);
-  return known(out, mergeTaint(...parts));
-}
-
-// ../core/src/source.ts
-var import_yaml = __toESM(require_dist(), 1);
-var SourceFile = class {
-  constructor(path, text3) {
-    this.path = path;
-    this.text = text3;
-    this.lines = text3.split(/\r?\n/);
-  }
-  path;
-  text;
-  lines;
-  lineCounter = new import_yaml.LineCounter();
-  /** Converts a [start, end) character offset range to a {@link Loc}. Requires the line counter to be populated by the YAML parser. */
-  loc(start, end = start) {
-    const a = this.lineCounter.linePos(Math.max(0, start));
-    const b = this.lineCounter.linePos(Math.max(start, end));
-    return { file: this.path, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
-  }
-};
-function formatLoc(loc) {
-  return `${loc.file}:${loc.line}:${loc.column}`;
-}
-function compareLoc(a, b) {
-  return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
-}
-
-// ../core/src/text.ts
-function escapeControl(s, keepNewlines = false) {
-  return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
-    if (keepNewlines && ch === "\n") return ch;
-    if (ch === "\n") return "\\n";
-    if (ch === "	") return "\\t";
-    return `\\x${ch.charCodeAt(0).toString(16).padStart(2, "0")}`;
-  });
-}
-function neutralizeWorkflowCommands(s) {
-  return s.replace(/^((?:\s|\u0085|\u001b\[[\d;]*m)*):(?=:)/gm, "$1:\u200B").replace(/##\[/g, "##\u200B[");
-}
-function jsonSafe(json2) {
-  return json2.replace(/##\[/g, "##\\u005b").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
-}
-function trimChar(s, ch, { start = false } = {}) {
-  let from = 0;
-  let to = s.length;
-  if (start) while (from < to && s[from] === ch) from++;
-  while (to > from && s[to - 1] === ch) to--;
-  return s.slice(from, to);
-}
-
-// ../core/src/parse.ts
-function createParseContext(repository) {
-  let id = 0;
-  return { ...repository ? { repository } : {}, nextSiteId: () => ++id };
-}
-var pathKey = (p) => JSON.stringify(p);
-function nodeLoc(source, node2) {
-  const r = node2?.range;
-  if (!r) return source.loc(0, 0);
-  return source.loc(r[0], r[1]);
-}
-function pairs(node2) {
-  if (!(0, import_yaml2.isMap)(node2)) return [];
-  return node2.items.filter((p) => (0, import_yaml2.isPair)(p) && (0, import_yaml2.isScalar)(p.key));
-}
-function get(node2, key) {
-  for (const p of pairs(node2))
-    if (String(p.key.value) === key) return p.value ?? void 0;
-  return void 0;
-}
-function getPair(node2, key) {
-  return pairs(node2).find((p) => String(p.key.value) === key);
-}
-function str(node2) {
-  if ((0, import_yaml2.isScalar)(node2) && node2.value !== null && node2.value !== void 0) return String(node2.value);
-  return void 0;
-}
-function toJs(node2) {
-  if (node2 === null || node2 === void 0) return null;
-  if ((0, import_yaml2.isScalar)(node2) || (0, import_yaml2.isMap)(node2) || (0, import_yaml2.isSeq)(node2)) return node2.toJSON();
-  return null;
-}
-function classify(kind, p) {
-  if (kind === "workflow") {
-    if (p[0] === "jobs" && typeof p[1] === "string") {
-      const job = p[1];
-      if (p[2] === "steps" && typeof p[3] === "number") {
-        const step = p[3];
-        const f2 = p[4];
-        if (f2 === "if" && p.length === 5) return { field: "step.if", job, step, cond: true };
-        if (f2 === "with" && typeof p[5] === "string")
-          return { field: "step.with", job, step, key: p[5], cond: false };
-        if (f2 === "env" && typeof p[5] === "string")
-          return { field: "step.env", job, step, key: p[5], cond: false };
-        if (f2 === "run") return { field: "step.run", job, step, cond: false };
-        return { field: "step.other", job, step, cond: false };
-      }
-      const f = p[2];
-      if (f === "if" && p.length === 3) return { field: "job.if", job, cond: true };
-      if (f === "name" && p.length === 3) return { field: "job.name", job, cond: false };
-      if (f === "with" && typeof p[3] === "string") return { field: "job.with", job, key: p[3], cond: false };
-      if (f === "secrets" && typeof p[3] === "string")
-        return { field: "job.secrets", job, key: p[3], cond: false };
-      if (f === "env" && typeof p[3] === "string") return { field: "job.env", job, key: p[3], cond: false };
-      if (f === "outputs" && typeof p[3] === "string")
-        return { field: "job.output", job, key: p[3], cond: false };
-      if (f === "strategy") return { field: "job.strategy", job, cond: false };
-      return { field: "job.other", job, cond: false };
-    }
-    if (p[0] === "env" && typeof p[1] === "string") return { field: "workflow.env", key: p[1], cond: false };
-    if (p[0] === "on" && p[1] === "workflow_call" && p[2] === "outputs" && typeof p[3] === "string" && p[4] === "value") {
-      return { field: "workflow.output", key: p[3], cond: false };
-    }
-    if (p[0] === "on" && p[2] === "inputs" && p[4] === "default" && typeof p[3] === "string") {
-      return { field: "input.default", key: p[3], cond: false };
-    }
-    return { field: "workflow.other", cond: false };
-  }
-  if (p[0] === "runs" && p[1] === "steps" && typeof p[2] === "number") {
-    const step = p[2];
-    const f = p[3];
-    if (f === "if" && p.length === 4) return { field: "step.if", step, cond: true };
-    if (f === "with" && typeof p[4] === "string") return { field: "step.with", step, key: p[4], cond: false };
-    if (f === "env" && typeof p[4] === "string") return { field: "step.env", step, key: p[4], cond: false };
-    if (f === "run") return { field: "step.run", step, cond: false };
-    return { field: "step.other", step, cond: false };
-  }
-  if (p[0] === "runs" && (p[1] === "pre-if" || p[1] === "post-if") && p.length === 2) {
-    return { field: "action.runs-if", cond: true };
-  }
-  if (p[0] === "outputs" && typeof p[1] === "string" && p[2] === "value") {
-    return { field: "action.output", key: p[1], cond: false };
-  }
-  if (p[0] === "inputs" && typeof p[1] === "string" && p[2] === "default") {
-    return { field: "input.default", key: p[1], cond: false };
-  }
-  return { field: "other", cond: false };
-}
-function collectSites(unit, kind, ownerPath, ctx, root) {
-  const visit3 = (node2, p) => {
-    if ((0, import_yaml2.isMap)(node2)) {
-      for (const pair of pairs(node2)) visit3(pair.value, [...p, String(pair.key.value)]);
-      return;
-    }
-    if ((0, import_yaml2.isSeq)(node2)) {
-      for (const [i, item] of node2.items.entries()) visit3(item, [...p, i]);
-      return;
-    }
-    if (!(0, import_yaml2.isScalar)(node2)) return;
-    const c = classify(kind, p);
-    const isString2 = typeof node2.value === "string";
-    if (!isString2 && !c.cond) return;
-    const text3 = isString2 ? node2.value : String(node2.value);
-    if (!c.cond && !text3.includes("${{")) return;
-    if (c.cond && !isString2) return;
-    const site = buildSite(unit, node2, text3, c, p, ownerPath, ctx);
-    unit.sites.push(site);
-    unit.siteByPath.set(pathKey(p), site);
-  };
-  visit3(root, []);
-}
-function buildSite(unit, node2, text3, c, p, ownerPath, ctx) {
-  const { source } = unit;
-  const [start, end] = node2.range ?? [0, 0];
-  const raw = source.text.slice(start, end);
-  const segments = [];
-  let cursor = 0;
-  const locateSegment = (absInner, expr) => {
-    cursor = Math.max(cursor, absInner - start);
-    const refs = expr.refs.map((r) => {
-      const refText = expr.source.slice(r.start, r.end);
-      const found = refText ? raw.indexOf(refText, cursor) : -1;
-      if (found >= 0) {
-        cursor = found + refText.length;
-        return { ...r, loc: source.loc(start + found, start + found + refText.length) };
-      }
-      return { ...r, loc: source.loc(absInner + r.start, absInner + r.end) };
-    });
-    return { expr, loc: source.loc(absInner, absInner + expr.source.length), refs };
-  };
-  const templated = findTemplateSegments(text3);
-  const wholeIsTemplate = templated.length === 1 && text3.trim() === text3.slice(templated[0].start, templated[0].end);
-  if (c.cond && !wholeIsTemplate && templated.length === 0) {
-    const inner = text3.trim();
-    const expr = parseExpression(inner);
-    const idx = raw.indexOf(inner.slice(0, Math.min(inner.length, 40)));
-    segments.push(locateSegment(start + Math.max(0, idx), expr));
-  } else {
-    let searchFrom = 0;
-    for (const seg of templated) {
-      const idx = raw.indexOf("${{", searchFrom);
-      const absOpen = idx >= 0 ? start + idx : start;
-      if (idx >= 0) searchFrom = idx + 3;
-      const lead = seg.innerStart - seg.start;
-      const rawAfter = idx >= 0 ? raw.slice(idx + 3) : "";
-      const leadRaw = idx >= 0 ? 3 + (rawAfter.length - rawAfter.trimStart().length) : lead;
-      segments.push(locateSegment(absOpen + leadRaw, seg.expr));
-    }
-  }
-  return {
-    id: ctx.nextSiteId(),
-    file: source.path,
-    ownerPath,
-    field: c.field,
-    ...c.job !== void 0 ? { job: c.job } : {},
-    ...c.step !== void 0 ? { step: c.step } : {},
-    ...c.key !== void 0 ? { key: c.key } : {},
-    yamlPath: p,
-    text: text3,
-    loc: source.loc(start, end),
-    isCondition: c.cond,
-    segments
-  };
-}
-function bindings(unit, node2, base) {
-  const out = {};
-  for (const pair of pairs(node2)) {
-    const name = String(pair.key.value);
-    const site = unit.siteByPath.get(pathKey([...base, name]));
-    out[name] = {
-      name,
-      loc: nodeLoc(unit.source, pair.key),
-      valueLoc: nodeLoc(unit.source, pair.value ?? pair.key),
-      value: toJs(pair.value),
-      ...site ? { site } : {}
-    };
-  }
-  return out;
-}
-function inputDecls(unit, node2) {
-  const out = {};
-  for (const pair of pairs(node2)) {
-    const name = String(pair.key.value);
-    const def = pair.value;
-    const defaultPair = getPair(def, "default");
-    const type = str(get(def, "type"));
-    const description = str(get(def, "description"));
-    const opts = get(def, "options");
-    out[name] = {
-      name,
-      ...type ? { type } : {},
-      required: toJs(get(def, "required")) === true,
-      hasDefault: defaultPair !== void 0 && toJs(defaultPair.value) !== null,
-      ...defaultPair ? { default: toJs(defaultPair.value) } : {},
-      ...description ? { description } : {},
-      ...(0, import_yaml2.isSeq)(opts) ? { options: toJs(opts).map(String) } : {},
-      loc: nodeLoc(unit.source, pair.key)
-    };
-  }
-  return out;
-}
-function secretDecls(unit, node2) {
-  const out = {};
-  for (const pair of pairs(node2)) {
-    const name = String(pair.key.value);
-    const description = str(get(pair.value, "description"));
-    out[name] = {
-      name,
-      required: toJs(get(pair.value, "required")) === true,
-      ...description ? { description } : {},
-      loc: nodeLoc(unit.source, pair.key)
-    };
-  }
-  return out;
-}
-function outputDecls(unit, node2, base, valueKey) {
-  const out = {};
-  for (const pair of pairs(node2)) {
-    const name = String(pair.key.value);
-    const valueNode = valueKey ? get(pair.value, "value") : pair.value;
-    const site = unit.siteByPath.get(pathKey(valueKey ? [...base, name, "value"] : [...base, name]));
-    const description = valueKey ? str(get(pair.value, "description")) : void 0;
-    out[name] = {
-      name,
-      loc: nodeLoc(unit.source, pair.key),
-      ...description ? { description } : {},
-      ...valueNode !== void 0 ? { value: toJs(valueNode) } : {},
-      ...site ? { site } : {}
-    };
-  }
-  return out;
-}
-var WORKFLOW_FILE = /^\.github\/workflows\/[^/]+\.ya?ml$/;
-function normalizeRelative(path) {
-  return trimChar(posix.normalize(trimChar(path, "/") || "."), "/") || ".";
-}
-function classifyUses(raw, at, loc, ctx) {
-  const value = raw.trim();
-  if (value.startsWith("docker://")) return { raw, loc, kind: "docker" };
-  const kind = at === "job" ? "local-workflow" : "local-action";
-  if (value.startsWith("$/")) {
-    const refAt = value.indexOf("@");
-    const target = normalizeRelative(refAt < 0 ? value.slice(2) : value.slice(2, refAt));
-    return { raw, loc, kind, target, self: true, ...refAt < 0 ? {} : { selfRef: value.slice(refAt + 1) } };
-  }
-  if (value.startsWith("./")) {
-    const target = normalizeRelative(value.slice(2));
-    if (at === "job") return { raw, loc, kind, target };
-    return { raw, loc, kind, target, workspacePath: target };
-  }
-  const [path = "", ref] = value.split("@");
-  const parts = path.split("/");
-  const repo = parts.slice(0, 2).join("/");
-  const rest = parts.slice(2).join("/");
-  if (ctx.repository && repo.toLowerCase() === ctx.repository.toLowerCase()) {
-    if (at === "job" && WORKFLOW_FILE.test(rest)) {
-      return { raw, loc, kind: "local-workflow", target: rest, ...ref ? { sameRepoRef: ref } : {} };
-    }
-    if (at === "step") {
-      return { raw, loc, kind: "local-action", target: rest || ".", ...ref ? { sameRepoRef: ref } : {} };
-    }
-  }
-  return { raw, loc, kind: at === "job" ? "remote-workflow" : "remote-action" };
-}
-function scanRunWrites(script, fileVar) {
-  const names = /* @__PURE__ */ new Set();
-  let dynamic = false;
-  let mentions = false;
-  const redirect = new RegExp(`(?:>>|\\|\\s*tee(?:\\s+-a)?)\\s*["']?\\$(?:env:)?\\{?${fileVar}\\}?["']?`);
-  const alias = new RegExp(
-    `(?:^|[\\s;&|(])(?:export\\s+|local\\s+|declare\\s+(?:-\\w+\\s+)*)?[A-Za-z_]\\w*=["']?\\$\\{?${fileVar}\\b`
-  );
-  for (const line of script.split(/\r?\n/)) {
-    if (!line.includes(fileVar)) continue;
-    mentions = true;
-    if (alias.test(line)) {
-      dynamic = true;
-      continue;
-    }
-    const chunks = line.split(redirect);
-    const written = chunks.length > 1 ? chunks.slice(0, -1) : [line];
-    for (const chunk of written) {
-      const found = [...chunk.matchAll(/(?:^|[\s"'`(;])([A-Za-z_][\w-]*)(?:=|<<)/g)].map((m) => m[1]);
-      if (found.length === 0 || /\$\{?\w+\}?(?:=|<<)/.test(chunk)) dynamic = true;
-      for (const n of found) if (n !== fileVar) names.add(n);
-    }
-  }
-  const api = fileVar === "GITHUB_OUTPUT" ? "setOutput" : "exportVariable";
-  for (const m of script.matchAll(new RegExp(`\\b${api}\\(`, "g"))) {
-    mentions = true;
-    const literal2 = /^\s*(?:(['"])([^'"\\\n]+)\1|`([^`$\\]+)`)\s*,/.exec(script.slice(m.index + m[0].length));
-    const name = literal2?.[2] ?? literal2?.[3];
-    if (name) names.add(name);
-    else dynamic = true;
-  }
-  return { names: [...names], dynamic, mentions };
-}
-function steps(unit, node2, base, at, ctx) {
-  if (!(0, import_yaml2.isSeq)(node2)) return [];
-  return node2.items.map((item, index) => {
-    const p = [...base, index];
-    const id = str(get(item, "id"));
-    const idPair = getPair(item, "id");
-    const usesNode = get(item, "uses");
-    const runNode = get(item, "run");
-    const run2 = str(runNode);
-    const name = str(get(item, "name"));
-    const usesRaw = str(usesNode);
-    const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
-    const ifNode = get(item, "if");
-    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
-    void at;
-    return {
-      index,
-      ...id ? { id, idLoc: nodeLoc(unit.source, idPair?.key) } : {},
-      ...name ? { name } : {},
-      loc: nodeLoc(unit.source, item),
-      ...usesRaw ? { uses: classifyUses(usesRaw, "step", nodeLoc(unit.source, usesNode), ctx) } : {},
-      ...run2 !== void 0 ? { run: run2, runLoc: nodeLoc(unit.source, runNode) } : {},
-      with: bindings(unit, get(item, "with"), [...p, "with"]),
-      env: bindings(unit, get(item, "env"), [...p, "env"]),
-      ...ifValue !== void 0 ? { ifValue } : {},
-      ...ifSite ? { ifSite } : {},
-      writesOutputs: run2 !== void 0 ? scanRunWrites(run2, "GITHUB_OUTPUT") : scriptWrites(item, "GITHUB_OUTPUT"),
-      writesEnv: (() => {
-        const s = run2 !== void 0 ? scanRunWrites(run2, "GITHUB_ENV") : scriptWrites(item, "GITHUB_ENV");
-        return { names: s.names, dynamic: s.dynamic };
-      })()
-    };
-  });
-}
-function scriptWrites(item, fileVar) {
-  const script = str(get(get(item, "with"), "script"));
-  if (!script) return { names: [], dynamic: false, mentions: false };
-  const scanned = scanRunWrites(script, fileVar);
-  const githubScript = /(^|\/)github-script@/.test(str(get(item, "uses")) ?? "");
-  const dynamic = scanned.dynamic || scriptDelegates(script) || fileVar === "GITHUB_OUTPUT" && !githubScript;
-  if (fileVar === "GITHUB_OUTPUT" && githubScript) {
-    return { names: [.../* @__PURE__ */ new Set([...scanned.names, "result"])], dynamic, mentions: true };
-  }
-  return { ...scanned, dynamic };
-}
-var INERT_BUILTIN = /(?<![\w$.])(?:require|import)\s*\(\s*(['"])(?:node:)?(?:assert|buffer|crypto|dns|events|fs|http|https|net|os|path|querystring|readline|stream|string_decoder|timers|tls|url|util|zlib)(?:\/[\w/]*)?\1\s*\)/g;
-function scriptDelegates(script) {
-  const code2 = codeOf(script.replace(INERT_BUILTIN, "null"));
-  if (code2.includes("${{")) return true;
-  if (/(?<![\w$.])(?:require|__original_require__|import|eval)\s*\(|^\s*import\s|\bnew\s+Function\b|(?<![\w$.])arguments\b(?!\s*:)|(?<![\w$.])exec\s*\.\s*(?:exec|getExecOutput)\s*\(/m.test(
-    code2
-  ))
-    return true;
-  return /(?<![\w$.])core(?![\w$])(?!\s*\??\.\s*[A-Za-z_$])/.test(code2);
-}
-function codeOf(src) {
-  let i = 0;
-  const code2 = (substitution) => {
-    let out = "";
-    let depth = 0;
-    while (i < src.length) {
-      const ch = src[i];
-      if (ch === "/" && src[i + 1] === "/") {
-        const nl = src.indexOf("\n", i);
-        i = nl < 0 ? src.length : nl;
-      } else if (ch === "/" && src[i + 1] === "*") {
-        const end = src.indexOf("*/", i + 2);
-        i = end < 0 ? src.length : end + 2;
-        out += " ";
-      } else if (ch === "'" || ch === '"') {
-        let j = i + 1;
-        while (j < src.length && src[j] !== ch && src[j] !== "\n") j += src[j] === "\\" ? 2 : 1;
-        out += '""';
-        i = j + 1;
-      } else if (ch === "`") {
-        i++;
-        out += `""${template()}""`;
-      } else {
-        if (ch === "{") depth++;
-        else if (ch === "}" && depth-- === 0 && substitution) {
-          i++;
-          return out;
-        }
-        out += ch;
-        i++;
-      }
-    }
-    return out;
-  };
-  const template = () => {
-    let out = "";
-    while (i < src.length) {
-      const ch = src[i];
-      if (ch === "\\") {
-        i += 2;
-      } else if (ch === "`") {
-        i++;
-        return out;
-      } else if (ch === "$" && src[i + 1] === "{" && src[i + 2] === "{") {
-        const end = src.indexOf("}}", i + 3);
-        i = end < 0 ? src.length : end + 2;
-      } else if (ch === "$" && src[i + 1] === "{") {
-        i += 2;
-        out += ` ${code2(true)} `;
-      } else {
-        i++;
-      }
-    }
-    return out;
-  };
-  return code2(false);
-}
-function matrixEntries(unit, node2, base) {
-  if (!(0, import_yaml2.isSeq)(node2)) return [];
-  return node2.items.map((item, i) => {
-    const values = {};
-    const keyLocs = {};
-    const dynamicKeys = [];
-    for (const pair of pairs(item)) {
-      const k = String(pair.key.value);
-      values[k] = toJs(pair.value);
-      keyLocs[k] = nodeLoc(unit.source, pair.key);
-      if (unit.siteByPath.has(pathKey([...base, i, k]))) dynamicKeys.push(k);
-    }
-    return { loc: nodeLoc(unit.source, item), values, keyLocs, dynamicKeys };
-  });
-}
-function matrix(unit, strategy, base) {
-  const pair = getPair(strategy, "matrix");
-  if (!pair) return void 0;
-  const node2 = pair.value;
-  const loc = nodeLoc(unit.source, pair.key);
-  const mp = [...base, "matrix"];
-  if ((0, import_yaml2.isScalar)(node2)) {
-    const site = unit.siteByPath.get(pathKey(mp));
-    return {
-      loc,
-      dynamic: true,
-      ...site ? { dynamicSite: site } : {},
-      dims: [],
-      include: [],
-      exclude: [],
-      includeDynamic: true,
-      excludeDynamic: true
-    };
-  }
-  const dims = [];
-  let include = [];
-  let exclude = [];
-  let includeDynamic = false;
-  let excludeDynamic = false;
-  for (const p of pairs(node2)) {
-    const k = String(p.key.value);
-    if (k === "include") {
-      if ((0, import_yaml2.isScalar)(p.value)) includeDynamic = true;
-      else include = matrixEntries(unit, p.value, [...mp, "include"]);
-      continue;
-    }
-    if (k === "exclude") {
-      if ((0, import_yaml2.isScalar)(p.value)) excludeDynamic = true;
-      else exclude = matrixEntries(unit, p.value, [...mp, "exclude"]);
-      continue;
-    }
-    if ((0, import_yaml2.isSeq)(p.value)) {
-      const unknownIndexes = [];
-      p.value.items.forEach((_, i) => {
-        if (unit.siteByPath.has(pathKey([...mp, k, i]))) unknownIndexes.push(i);
-      });
-      dims.push({
-        name: k,
-        loc: nodeLoc(unit.source, p.key),
-        values: toJs(p.value),
-        unknownIndexes
-      });
-    } else {
-      dims.push({ name: k, loc: nodeLoc(unit.source, p.key), values: null, unknownIndexes: [] });
-    }
-  }
-  return { loc, dynamic: false, dims, include, exclude, includeDynamic, excludeDynamic };
-}
-function jobs(unit, node2, ctx) {
-  const out = {};
-  for (const pair of pairs(node2)) {
-    const id = String(pair.key.value);
-    const j = pair.value;
-    const p = ["jobs", id];
-    const needsNode = get(j, "needs");
-    const needs = [];
-    if ((0, import_yaml2.isScalar)(needsNode) && needsNode.value != null) {
-      needs.push({ id: String(needsNode.value), loc: nodeLoc(unit.source, needsNode) });
-    } else if ((0, import_yaml2.isSeq)(needsNode)) {
-      for (const n of needsNode.items) {
-        if ((0, import_yaml2.isScalar)(n)) needs.push({ id: String(n.value), loc: nodeLoc(unit.source, n) });
-      }
-    }
-    const usesNode = get(j, "uses");
-    const usesRaw = str(usesNode);
-    const secretsPair = getPair(j, "secrets");
-    const secretsInherit2 = (0, import_yaml2.isScalar)(secretsPair?.value) && String(secretsPair.value.value) === "inherit";
-    const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
-    const name = str(get(j, "name"));
-    const nameSite = unit.siteByPath.get(pathKey([...p, "name"]));
-    const namePair = getPair(j, "name");
-    const perms = permissions(get(j, "permissions"));
-    const ifNode = get(j, "if");
-    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
-    const strategy = get(j, "strategy");
-    const m = matrix(unit, strategy, [...p, "strategy"]);
-    out[id] = {
-      id,
-      loc: nodeLoc(unit.source, pair.key),
-      ...name !== void 0 ? { name } : {},
-      ...nameSite ? { nameSite } : {},
-      ...namePair?.value ? { nameLoc: nodeLoc(unit.source, namePair.value) } : {},
-      ...perms ? { permissions: perms } : {},
-      ...ifValue !== void 0 ? { ifValue } : {},
-      needs,
-      ...ifSite ? { ifSite } : {},
-      ...usesRaw ? { uses: classifyUses(usesRaw, "job", nodeLoc(unit.source, usesNode), ctx) } : {},
-      with: bindings(unit, get(j, "with"), [...p, "with"]),
-      secrets: secretsInherit2 ? {} : bindings(unit, secretsPair?.value, [...p, "secrets"]),
-      secretsInherit: secretsInherit2,
-      ...secretsPair ? { secretsLoc: nodeLoc(unit.source, secretsPair.key) } : {},
-      env: bindings(unit, get(j, "env"), [...p, "env"]),
-      outputs: outputDecls(unit, get(j, "outputs"), [...p, "outputs"], false),
-      ...m ? { matrix: m } : {},
-      steps: steps(unit, get(j, "steps"), [...p, "steps"], "workflow", ctx)
-    };
-  }
-  return out;
-}
-function permissions(node2) {
-  if ((0, import_yaml2.isScalar)(node2)) {
-    const v = String(node2.value);
-    return v === "read-all" || v === "write-all" ? v : void 0;
-  }
-  if (!(0, import_yaml2.isMap)(node2)) return void 0;
-  const out = {};
-  for (const pair of node2.items) {
-    const key = (0, import_yaml2.isScalar)(pair.key) ? String(pair.key.value) : void 0;
-    const value = (0, import_yaml2.isScalar)(pair.value) ? String(pair.value.value) : void 0;
-    if (key && (value === "read" || value === "write" || value === "none")) out[key] = value;
-  }
-  return out;
-}
-var MAX_ALIAS_EXPANSION = 5e4;
-function aliasExpansionTooLarge(doc) {
-  const memo2 = /* @__PURE__ */ new Map();
-  let culprit;
-  const size = (node2) => {
-    if (node2 === null || node2 === void 0) return 1;
-    const cached2 = memo2.get(node2);
-    if (cached2 !== void 0) return cached2;
-    memo2.set(node2, 1);
-    let n = 1;
-    if ((0, import_yaml2.isAlias)(node2)) {
-      n = size(node2.resolve(doc));
-      if (n > MAX_ALIAS_EXPANSION && !culprit) culprit = node2;
-    } else if ((0, import_yaml2.isMap)(node2)) {
-      for (const p of node2.items) n += size(p.key) + size(p.value);
-    } else if ((0, import_yaml2.isSeq)(node2)) {
-      for (const item of node2.items) n += size(item);
-    }
-    n = Math.min(n, MAX_ALIAS_EXPANSION + 1);
-    memo2.set(node2, n);
-    return n;
-  };
-  return size(doc.contents) > MAX_ALIAS_EXPANSION ? culprit ?? doc.contents : void 0;
-}
-function load(path, text3) {
-  const source = new SourceFile(path, text3);
-  const doc = (0, import_yaml2.parseDocument)(text3, { lineCounter: source.lineCounter, prettyErrors: false, strict: false });
-  const aliasBomb = doc.errors.length === 0 ? aliasExpansionTooLarge(doc) : void 0;
-  if (doc.errors.length === 0 && !aliasBomb) {
-    (0, import_yaml2.visit)(doc, {
-      Alias(_, alias) {
-        const target = alias.resolve(doc);
-        return target ? target : void 0;
-      }
-    });
-  }
-  const parseErrors = doc.errors.map((e) => ({
-    message: e.message.split("\n")[0],
-    loc: source.loc(e.pos[0], e.pos[1])
-  }));
-  if (aliasBomb) {
-    parseErrors.push({
-      message: `YAML aliases expand to more than ${MAX_ALIAS_EXPANSION} nodes; the file is not analyzed (possible alias bomb)`,
-      loc: source.loc(aliasBomb.range?.[0] ?? 0, aliasBomb.range?.[1] ?? 0)
-    });
-  }
-  return {
-    unit: { source, sites: [], siteByPath: /* @__PURE__ */ new Map(), parseErrors },
-    root: doc.contents ?? void 0
-  };
-}
-var AUTO = "(?:auto(?:matically)?[- ]?)?";
-var GENERATED_HEADER = [
-  // Capitals, as generators write it (`DO NOT EDIT.`, `DO NOT EDIT MANUALLY`), unless a lowercase sentence follows.
-  /\bDO NOT (?:EDIT|MODIFY)\b(?!\s+[a-z])/,
-  /\bdo not (?:edit|modify) (?:this (?:file|workflow)|manually|by hand|directly)\b/i,
-  /@generated\b/,
-  new RegExp(`\\b(?:this|the) (?:file|workflow) (?:is|was|has been|will be) ${AUTO}generated\\b`, "i"),
-  new RegExp(`\\bthis is an? ${AUTO}generated (?:file|workflow)\\b`, "i"),
-  // Only at the start of the comment: `Generated by praktika`, `Code generated from x.j2`, `AUTOGENERATED FILE`.
-  new RegExp(`^(?:(?:code|file|workflow) )?${AUTO}generated (?:(?:by|from|with|using) \\S+|file\\b)`, "i")
-];
-var GENERATED_HEADER_LINES = 10;
-function generatedMarker(path, text3) {
-  for (const line of text3.split("\n", GENERATED_HEADER_LINES)) {
-    const t = line.trim();
-    if (t === "" || t === "---" || t.startsWith("%")) continue;
-    if (!t.startsWith("#")) break;
-    const comment = t.replace(/^#+\s*/, "");
-    let first;
-    for (const re of GENERATED_HEADER) {
-      const m = re.exec(comment);
-      if (m && (!first || m.index < first.index)) first = m;
-    }
-    if (first) return first[0];
-  }
-  return /\.lock\.ya?ml$/i.test(path) ? ".lock.yml" : void 0;
-}
-function parseWorkflowFile(path, text3, ctx) {
-  const { unit, root } = load(path, text3);
-  const generated = generatedMarker(path, text3);
-  if (root) collectSites(unit, "workflow", path, ctx, root);
-  const on = get(root, "on");
-  const triggers = [];
-  if ((0, import_yaml2.isScalar)(on) && on.value != null) {
-    triggers.push(String(on.value));
-  } else if ((0, import_yaml2.isSeq)(on)) {
-    for (const t of on.items) if ((0, import_yaml2.isScalar)(t)) triggers.push(String(t.value));
-  } else {
-    for (const p of pairs(on)) triggers.push(String(p.key.value));
-  }
-  const callPair = getPair(on, "workflow_call");
-  const dispatchPair = getPair(on, "workflow_dispatch");
-  const call = triggers.includes("workflow_call") ? {
-    loc: nodeLoc(unit.source, callPair?.key ?? on),
-    inputs: inputDecls(unit, get(callPair?.value, "inputs")),
-    secrets: secretDecls(unit, get(callPair?.value, "secrets")),
-    outputs: outputDecls(unit, get(callPair?.value, "outputs"), ["on", "workflow_call", "outputs"], true)
-  } : void 0;
-  const dispatch = triggers.includes("workflow_dispatch") ? {
-    loc: nodeLoc(unit.source, dispatchPair?.key ?? on),
-    inputs: inputDecls(unit, get(dispatchPair?.value, "inputs"))
-  } : void 0;
-  const name = str(get(root, "name"));
-  const workflowPermissions = permissions(get(root, "permissions"));
-  return {
-    kind: "workflow",
-    path,
-    file: path,
-    ...name ? { name } : {},
-    source: unit.source,
-    sites: unit.sites,
-    parseErrors: unit.parseErrors,
-    schemaErrors: [],
-    ...generated ? { generated } : {},
-    triggers,
-    ...call ? { call } : {},
-    ...dispatch ? { dispatch } : {},
-    env: bindings(unit, get(root, "env"), ["env"]),
-    ...workflowPermissions ? { permissions: workflowPermissions } : {},
-    jobs: jobs(unit, get(root, "jobs"), ctx)
-  };
-}
-function parseActionFile(dir, file2, text3, ctx) {
-  const { unit, root } = load(file2, text3);
-  if (root) collectSites(unit, "action", dir, ctx, root);
-  const runs = get(root, "runs");
-  const using = str(get(runs, "using"));
-  const name = str(get(root, "name"));
-  const generated = generatedMarker(file2, text3);
-  return {
-    kind: "action",
-    path: dir,
-    file: file2,
-    ...name ? { name } : {},
-    source: unit.source,
-    sites: unit.sites,
-    parseErrors: unit.parseErrors,
-    schemaErrors: [],
-    ...generated ? { generated } : {},
-    ...using ? { using } : {},
-    inputs: inputDecls(unit, get(root, "inputs")),
-    outputs: outputDecls(unit, get(root, "outputs"), ["outputs"], true),
-    steps: steps(unit, get(runs, "steps"), ["runs", "steps"], "action", ctx)
-  };
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/types.js
-var TokenType2;
-(function(TokenType3) {
-  TokenType3[TokenType3["String"] = 0] = "String";
-  TokenType3[TokenType3["Sequence"] = 1] = "Sequence";
-  TokenType3[TokenType3["Mapping"] = 2] = "Mapping";
-  TokenType3[TokenType3["BasicExpression"] = 3] = "BasicExpression";
-  TokenType3[TokenType3["InsertExpression"] = 4] = "InsertExpression";
-  TokenType3[TokenType3["Boolean"] = 5] = "Boolean";
-  TokenType3[TokenType3["Number"] = 6] = "Number";
-  TokenType3[TokenType3["Null"] = 7] = "Null";
-})(TokenType2 || (TokenType2 = {}));
-function tokenTypeName(type) {
-  switch (type) {
-    case TokenType2.String:
-      return "StringToken";
-    case TokenType2.Sequence:
-      return "SequenceToken";
-    case TokenType2.Mapping:
-      return "MappingToken";
-    case TokenType2.BasicExpression:
-      return "BasicExpressionToken";
-    case TokenType2.InsertExpression:
-      return "InsertExpressionToken";
-    case TokenType2.Boolean:
-      return "BooleanToken";
-    case TokenType2.Number:
-      return "NumberToken";
-    case TokenType2.Null:
-      return "NullToken";
-    default: {
-      const exhaustiveCheck = type;
-      throw new Error(`Unhandled token type: ${type} ${exhaustiveCheck}}`);
-    }
-  }
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/traversal-state.js
-var TraversalState = class {
-  constructor(parent, token) {
-    this.index = -1;
-    this.isKey = false;
-    this.parent = parent;
-    this._token = token;
-    this.current = token;
-  }
-  moveNext(omitKeys) {
-    switch (this._token.templateTokenType) {
-      case TokenType2.Sequence: {
-        const sequence = this._token;
-        if (++this.index < sequence.count) {
-          this.current = sequence.get(this.index);
-          return true;
-        }
-        this.current = void 0;
-        return false;
-      }
-      case TokenType2.Mapping: {
-        const mapping = this._token;
-        if (this.isKey) {
-          this.isKey = false;
-          this.currentKey = this.current;
-          this.current = mapping.get(this.index).value;
-          return true;
-        }
-        if (++this.index < mapping.count) {
-          if (omitKeys) {
-            this.isKey = false;
-            this.currentKey = mapping.get(this.index).key;
-            this.current = mapping.get(this.index).value;
-            return true;
-          }
-          this.isKey = true;
-          this.currentKey = void 0;
-          this.current = mapping.get(this.index).key;
-          return true;
-        }
-        this.currentKey = void 0;
-        this.current = void 0;
-        return false;
-      }
-      default:
-        throw new Error(`Unexpected token type '${this._token.templateTokenType}' when traversing state`);
-    }
-  }
-  /**
-   * Returns the ancestor tokens from root to the current token's parent container.
-   */
-  getAncestors() {
-    const ancestors = [];
-    let state = this.parent;
-    while (state) {
-      if (state.current) {
-        ancestors.unshift(state.current);
-      }
-      state = state.parent;
-    }
-    return ancestors;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/template-token.js
-var TemplateTokenError = class extends Error {
-  constructor(message, token) {
-    super(message);
-    this.token = token;
-  }
-};
-var TemplateToken = class {
-  /**
-   * Base class for all template tokens
-   */
-  constructor(type, file2, range, definitionInfo) {
-    this.type = type;
-    this.file = file2;
-    this.range = range;
-    this.definitionInfo = definitionInfo;
-  }
-  get templateTokenType() {
-    return this.type;
-  }
-  get line() {
-    return this.range?.start.line;
-  }
-  get col() {
-    return this.range?.start.column;
-  }
-  get definition() {
-    return this.definitionInfo?.definition;
-  }
-  get description() {
-    return this._description || this.propertyDefinition?.description || this.definition?.description;
-  }
-  set description(description) {
-    this._description = description;
-  }
-  typeName() {
-    return tokenTypeName(this.type);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertNull(objectDescription) {
-    if (this.type === TokenType2.Null) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Null)}' was expected.`, this);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertBoolean(objectDescription) {
-    if (this.type === TokenType2.Boolean) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Boolean)}' was expected.`, this);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertNumber(objectDescription) {
-    if (this.type === TokenType2.Number) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Number)}' was expected.`, this);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertString(objectDescription) {
-    if (this.type === TokenType2.String) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.String)}' was expected.`, this);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertScalar(objectDescription) {
-    if (this?.isScalar === true) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type 'ScalarToken' was expected.`, this);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertSequence(objectDescription) {
-    if (this.type === TokenType2.Sequence) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Sequence)}' was expected.`, this);
-  }
-  /**
-   * Asserts expected type and throws a good debug message if unexpected
-   */
-  assertMapping(objectDescription) {
-    if (this.type === TokenType2.Mapping) {
-      return this;
-    }
-    throw new TemplateTokenError(`Unexpected type '${this.typeName()}' encountered while reading '${objectDescription}'. The type '${tokenTypeName(TokenType2.Mapping)}' was expected.`, this);
-  }
-  /**
-   * Returns all tokens (depth first)
-   * @param value The object to traverse
-   * @param omitKeys Whether to omit mapping keys
-   * @yields A tuple of [parent, token, keyToken, ancestors] for each token in the tree
-   */
-  static *traverse(value, omitKeys) {
-    yield [void 0, value, void 0, []];
-    switch (value.templateTokenType) {
-      case TokenType2.Sequence:
-      case TokenType2.Mapping: {
-        let state = new TraversalState(void 0, value);
-        state = new TraversalState(state, value);
-        while (state.parent) {
-          if (state.moveNext(omitKeys ?? false)) {
-            value = state.current;
-            yield [state.parent?.current, value, state.currentKey, state.getAncestors()];
-            switch (value.type) {
-              case TokenType2.Sequence:
-              case TokenType2.Mapping:
-                state = new TraversalState(state, value);
-                break;
-            }
-          } else {
-            state = state.parent;
-          }
-        }
-        break;
-      }
-    }
-  }
-  toJSON() {
-    return void 0;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-validation-error.js
-var TemplateValidationError = class {
-  constructor(rawMessage, prefix, code2, range) {
-    this.rawMessage = rawMessage;
-    this.prefix = prefix;
-    this.code = code2;
-    this.range = range;
-  }
-  get message() {
-    if (this.prefix) {
-      return `${this.prefix}: ${this.rawMessage}`;
-    }
-    return this.rawMessage;
-  }
-  toString() {
-    return this.message;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-context.js
-var TemplateContext = class {
-  constructor(errors, schema3, trace) {
-    this._fileIds = {};
-    this._fileNames = [];
-    this.expressionFunctions = [];
-    this.expressionNamedContexts = [];
-    this.state = {};
-    this.errors = errors;
-    this.schema = schema3;
-    this.trace = trace;
-  }
-  error(tokenOrFileId, err, tokenRange) {
-    const token = tokenOrFileId;
-    const range = tokenRange || token?.range;
-    const prefix = this.getErrorPrefix(token?.file ?? tokenOrFileId, token?.line, token?.col);
-    const message = err?.message ?? String(err);
-    const e = new TemplateValidationError(message, prefix, void 0, range);
-    this.errors.add(e);
-    this.trace.error(e.message);
-  }
-  /**
-   * Gets or adds the file ID
-   */
-  getFileId(file2) {
-    const key = file2.toUpperCase();
-    let id = this._fileIds[key];
-    if (id === void 0) {
-      id = this._fileNames.length + 1;
-      this._fileIds[key] = id;
-      this._fileNames.push(file2);
-    }
-    return id;
-  }
-  /**
-   * Looks up a file name by ID. Returns undefined if not found.
-   */
-  getFileName(fileId) {
-    return this._fileNames.length >= fileId ? this._fileNames[fileId - 1] : void 0;
-  }
-  /**
-   * Gets a copy of the file table
-   */
-  getFileTable() {
-    return this._fileNames.slice();
-  }
-  getErrorPrefix(fileId, line, column) {
-    const fileName = fileId !== void 0 ? this.getFileName(fileId) : void 0;
-    if (fileName) {
-      if (line !== void 0 && column !== void 0) {
-        return `${fileName} (Line: ${line}, Col: ${column})`;
-      } else {
-        return fileName;
-      }
-    } else if (line !== void 0 && column !== void 0) {
-      return `(Line: ${line}, Col: ${column})`;
-    } else {
-      return "";
-    }
-  }
-};
-var TemplateValidationErrors = class {
-  constructor(maxErrors, maxMessageLength) {
-    this._errors = [];
-    this._maxErrors = maxErrors ?? 0;
-    this._maxMessageLength = maxMessageLength ?? 0;
-  }
-  get count() {
-    return this._errors.length;
-  }
-  add(err) {
-    for (let e of Array.isArray(err) ? err : [err]) {
-      if (this._maxErrors <= 0 || this._errors.length < this._maxErrors) {
-        if (this._maxMessageLength > 0 && e.message.length > this._maxMessageLength) {
-          e = new TemplateValidationError(e.message.substring(0, this._maxMessageLength) + "[...]", e.prefix, e.code, e.range);
-        }
-        this._errors.push(e);
-      }
-    }
-  }
-  /**
-   * Throws if any errors
-   * @param prefix The error message prefix
-   */
-  check(prefix) {
-    if (this._errors.length <= 0) {
-      return;
-    }
-    if (!prefix) {
-      prefix = "The template is not valid.";
-    }
-    throw new Error(`${prefix} ${this._errors.map((x) => x.message).join(",")}`);
-  }
-  clear() {
-    this._errors = [];
-  }
-  getErrors() {
-    return this._errors.slice();
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/definition-info.js
-var DefinitionInfo = class {
-  constructor(schemaOrParent, nameOrDefinition) {
-    this.isDefinitionInfo = true;
-    const parent = schemaOrParent?.isDefinitionInfo === true ? schemaOrParent : void 0;
-    this._schema = parent === void 0 ? schemaOrParent : parent._schema;
-    this.definition = typeof nameOrDefinition === "string" ? this._schema.getDefinition(nameOrDefinition) : nameOrDefinition;
-    if (this.definition.readerContext.length > 0) {
-      this.allowedContext = [];
-      const upperSeen = {};
-      for (const context of parent?.allowedContext ?? []) {
-        this.allowedContext.push(context);
-        upperSeen[context.toUpperCase()] = true;
-      }
-      for (const context of this.definition.readerContext) {
-        const upper = context.toUpperCase();
-        if (!upperSeen[upper]) {
-          this.allowedContext.push(context);
-          upperSeen[upper] = true;
-        }
-      }
-    } else {
-      this.allowedContext = parent?.allowedContext ?? [];
-    }
-  }
-  getScalarDefinitions() {
-    return this._schema.getScalarDefinitions(this.definition);
-  }
-  getDefinitionsOfType(type) {
-    return this._schema.getDefinitionsOfType(this.definition, type);
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/definition-type.js
-var DefinitionType;
-(function(DefinitionType2) {
-  DefinitionType2[DefinitionType2["Null"] = 0] = "Null";
-  DefinitionType2[DefinitionType2["Boolean"] = 1] = "Boolean";
-  DefinitionType2[DefinitionType2["Number"] = 2] = "Number";
-  DefinitionType2[DefinitionType2["String"] = 3] = "String";
-  DefinitionType2[DefinitionType2["Sequence"] = 4] = "Sequence";
-  DefinitionType2[DefinitionType2["Mapping"] = 5] = "Mapping";
-  DefinitionType2[DefinitionType2["OneOf"] = 6] = "OneOf";
-  DefinitionType2[DefinitionType2["AllowedValues"] = 7] = "AllowedValues";
-})(DefinitionType || (DefinitionType = {}));
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-constants.js
-var ALLOWED_VALUES = "allowed-values";
-var ANY = "any";
-var BOOLEAN = "boolean";
-var BOOLEAN_DEFINITION = "boolean-definition";
-var BOOLEAN_DEFINITION_PROPERTIES = "boolean-definition-properties";
-var CLOSE_EXPRESSION = "}}";
-var CONSTANT = "constant";
-var CONTEXT = "context";
-var DEFINITION = "definition";
-var DEFINITIONS = "definitions";
-var DESCRIPTION = "description";
-var IGNORE_CASE = "ignore-case";
-var INSERT_DIRECTIVE = "insert";
-var IS_EXPRESSION = "is-expression";
-var ITEM_TYPE = "item-type";
-var LOOSE_KEY_TYPE = "loose-key-type";
-var LOOSE_VALUE_TYPE = "loose-value-type";
-var MAX_CONSTANT = "MAX";
-var MAPPING = "mapping";
-var MAPPING_DEFINITION = "mapping-definition";
-var MAPPING_DEFINITION_PROPERTIES = "mapping-definition-properties";
-var MAPPING_PROPERTY_VALUE = "mapping-property-value";
-var NON_EMPTY_STRING = "non-empty-string";
-var NULL = "null";
-var NULL_DEFINITION = "null-definition";
-var NULL_DEFINITION_PROPERTIES = "null-definition-properties";
-var NUMBER = "number";
-var NUMBER_DEFINITION = "number-definition";
-var NUMBER_DEFINITION_PROPERTIES = "number-definition-properties";
-var ONE_OF = "one-of";
-var ONE_OF_DEFINITION = "one-of-definition";
-var OPEN_EXPRESSION = "${{";
-var PROPERTY_VALUE = "property-value";
-var PROPERTIES = "properties";
-var REQUIRED = "required";
-var REQUIRE_NON_EMPTY = "require-non-empty";
-var SCALAR = "scalar";
-var SEQUENCE = "sequence";
-var SEQUENCE_DEFINITION = "sequence-definition";
-var SEQUENCE_DEFINITION_PROPERTIES = "sequence-definition-properties";
-var TYPE = "type";
-var SEQUENCE_OF_NON_EMPTY_STRING = "sequence-of-non-empty-string";
-var STRING = "string";
-var STRING_DEFINITION = "string-definition";
-var STRING_DEFINITION_PROPERTIES = "string-definition-properties";
-var TEMPLATE_SCHEMA = "template-schema";
-var VERSION = "version";
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/scalar-token.js
-var ScalarToken = class extends TemplateToken {
-  constructor(type, file2, range, definitionInfo) {
-    super(type, file2, range, definitionInfo);
-  }
-  get isScalar() {
-    return true;
-  }
-  static trimDisplayString(displayString) {
-    let firstLine = displayString.trimStart();
-    const firstNewLine = firstLine.indexOf("\n");
-    const firstCarriageReturn = firstLine.indexOf("\r");
-    if (firstNewLine >= 0 || firstCarriageReturn >= 0) {
-      firstLine = firstLine.substr(0, Math.min(firstNewLine >= 0 ? firstNewLine : Number.MAX_VALUE, firstCarriageReturn >= 0 ? firstCarriageReturn : Number.MAX_VALUE));
-    }
-    return firstLine;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/literal-token.js
-var LiteralToken = class extends ScalarToken {
-  constructor(type, file2, range, definitionInfo) {
-    super(type, file2, range, definitionInfo);
-  }
-  get isLiteral() {
-    return true;
-  }
-  get isExpression() {
-    return false;
-  }
-  toDisplayString() {
-    return ScalarToken.trimDisplayString(this.toString());
-  }
-  /**
-   * Throws a good debug message when an unexpected literal value is encountered
-   */
-  assertUnexpectedValue(objectDescription) {
-    throw new Error(`Error while reading '${objectDescription}'. Unexpected value '${this.toString()}'`);
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/string-token.js
-var StringToken = class _StringToken extends LiteralToken {
-  constructor(file2, range, value, definitionInfo, source, blockScalarHeader) {
-    super(TokenType2.String, file2, range, definitionInfo);
-    this.value = value;
-    this.source = source;
-    this.blockScalarHeader = blockScalarHeader;
-  }
-  clone(omitSource) {
-    return omitSource ? new _StringToken(void 0, void 0, this.value, this.definitionInfo, this.source, this.blockScalarHeader) : new _StringToken(this.file, this.range, this.value, this.definitionInfo, this.source, this.blockScalarHeader);
-  }
-  toString() {
-    return this.value;
-  }
-  toJSON() {
-    return this.value;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/number-token.js
-var NumberToken = class _NumberToken extends LiteralToken {
-  constructor(file2, range, value, definitionInfo) {
-    super(TokenType2.Number, file2, range, definitionInfo);
-    this.num = value;
-  }
-  get value() {
-    return this.num;
-  }
-  clone(omitSource) {
-    return omitSource ? new _NumberToken(void 0, void 0, this.num, this.definitionInfo) : new _NumberToken(this.file, this.range, this.num, this.definitionInfo);
-  }
-  toString() {
-    return `${this.num}`;
-  }
-  toJSON() {
-    return this.num;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/boolean-token.js
-var BooleanToken = class _BooleanToken extends LiteralToken {
-  constructor(file2, range, value, definitionInfo) {
-    super(TokenType2.Boolean, file2, range, definitionInfo);
-    this.bool = value;
-  }
-  get value() {
-    return this.bool;
-  }
-  clone(omitSource) {
-    return omitSource ? new _BooleanToken(void 0, void 0, this.bool, this.definitionInfo) : new _BooleanToken(this.file, this.range, this.bool, this.definitionInfo);
-  }
-  toString() {
-    return this.bool ? "true" : "false";
-  }
-  toJSON() {
-    return this.bool;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/null-token.js
-var NullToken = class _NullToken extends LiteralToken {
-  constructor(file2, range, definitionInfo) {
-    super(TokenType2.Null, file2, range, definitionInfo);
-  }
-  clone(omitSource) {
-    return omitSource ? new _NullToken(void 0, void 0, this.definitionInfo) : new _NullToken(this.file, this.range, this.definitionInfo);
-  }
-  toString() {
-    return "";
-  }
-  toJSON() {
-    return null;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/key-value-pair.js
-var KeyValuePair = class {
-  constructor(key, value) {
-    this.key = key;
-    this.value = value;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/sequence-token.js
-var SequenceToken = class _SequenceToken extends TemplateToken {
-  constructor(file2, range, definitionInfo) {
-    super(TokenType2.Sequence, file2, range, definitionInfo);
-    this.seq = [];
-  }
-  get count() {
-    return this.seq.length;
-  }
-  get isScalar() {
-    return false;
-  }
-  get isLiteral() {
-    return false;
-  }
-  get isExpression() {
-    return false;
-  }
-  add(value) {
-    this.seq.push(value);
-  }
-  get(index) {
-    return this.seq[index];
-  }
-  clone(omitSource) {
-    const result = omitSource ? new _SequenceToken(void 0, void 0, this.definitionInfo) : new _SequenceToken(this.file, this.range, this.definitionInfo);
-    for (const item of this.seq) {
-      result.add(item.clone(omitSource));
-    }
-    return result;
-  }
-  toJSON() {
-    return {
-      type: TokenType2.Sequence,
-      seq: this.seq
-    };
-  }
-  *[Symbol.iterator]() {
-    for (const item of this.seq) {
-      yield item;
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/mapping-token.js
-var MappingToken = class _MappingToken extends TemplateToken {
-  constructor(file2, range, definitionInfo) {
-    super(TokenType2.Mapping, file2, range, definitionInfo);
-    this.map = [];
-  }
-  get count() {
-    return this.map.length;
-  }
-  get isScalar() {
-    return false;
-  }
-  get isLiteral() {
-    return false;
-  }
-  get isExpression() {
-    return false;
-  }
-  add(key, value) {
-    this.map.push(new KeyValuePair(key, value));
-  }
-  get(index) {
-    return this.map[index];
-  }
-  find(key) {
-    const pair = this.map.find((pair2) => pair2.key.toString() === key);
-    return pair?.value;
-  }
-  remove(index) {
-    this.map.splice(index, 1);
-  }
-  clone(omitSource) {
-    const result = omitSource ? new _MappingToken(void 0, void 0, this.definitionInfo) : new _MappingToken(this.file, this.range, this.definitionInfo);
-    for (const item of this.map) {
-      result.add(item.key.clone(omitSource), item.value.clone(omitSource));
-    }
-    return result;
-  }
-  toJSON() {
-    const items = [];
-    for (const item of this.map) {
-      items.push({ Key: item.key, Value: item.value });
-    }
-    return {
-      type: TokenType2.Mapping,
-      map: items
-    };
-  }
-  *[Symbol.iterator]() {
-    for (const item of this.map) {
-      yield item;
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/allowed-context.js
-function splitAllowedContext(allowedContext) {
-  const FUNCTION_REGEXP = /^([a-zA-Z0-9_]+)\(([0-9]+),([0-9]+|MAX)\)$/;
-  const namedContexts = [];
-  const functions = [];
-  if (allowedContext.length > 0) {
-    for (const contextItem of allowedContext) {
-      const match = contextItem.match(FUNCTION_REGEXP);
-      if (match) {
-        const functionName = match[1];
-        const minParameters = Number.parseInt(match[2]);
-        const maxParametersRaw = match[3];
-        const maxParameters = maxParametersRaw === MAX_CONSTANT ? Number.MAX_SAFE_INTEGER : Number.parseInt(maxParametersRaw);
-        functions.push({
-          name: functionName,
-          minArgs: minParameters,
-          maxArgs: maxParameters
-        });
-      } else {
-        namedContexts.push(contextItem);
-      }
-    }
-  }
-  return {
-    namedContexts,
-    functions
-  };
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/expression-token.js
-var ExpressionToken = class extends ScalarToken {
-  constructor(type, file2, range, directive, definitionInfo) {
-    super(type, file2, range, definitionInfo);
-    this.directive = directive;
-  }
-  get isLiteral() {
-    return false;
-  }
-  get isExpression() {
-    return true;
-  }
-  static validateExpression(expression, allowedContext) {
-    const { namedContexts, functions } = splitAllowedContext(allowedContext);
-    const lexer = new Lexer(expression);
-    const result = lexer.lex();
-    const p = new Parser(result.tokens, namedContexts, functions);
-    p.parse();
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/basic-expression-token.js
-var BasicExpressionToken = class _BasicExpressionToken extends ExpressionToken {
-  /**
-   * @param file The file ID where this token originated
-   * @param range The range of the entire expression including `${{` and `}}`
-   * @param expression The expression string without `${{` and `}}` markers
-   * @param definitionInfo Schema definition info for this token
-   * @param originalExpressions If transformed from individual expressions (e.g., format()), these are the originals
-   * @param source The original source string from the YAML
-   * @param expressionRange The range of just the expression, excluding `${{` and `}}`
-   * @param blockScalarHeader The block scalar header (e.g., "|", "|-") if parsed from a YAML block scalar
-   */
-  constructor(file2, range, expression, definitionInfo, originalExpressions, source, expressionRange, blockScalarHeader) {
-    super(TokenType2.BasicExpression, file2, range, void 0, definitionInfo);
-    this.expr = expression;
-    this.source = source;
-    this.originalExpressions = originalExpressions;
-    this.expressionRange = expressionRange;
-    this.blockScalarHeader = blockScalarHeader;
-  }
-  get expression() {
-    return this.expr;
-  }
-  clone(omitSource) {
-    return omitSource ? new _BasicExpressionToken(void 0, void 0, this.expr, this.definitionInfo, this.originalExpressions, this.source, this.expressionRange, this.blockScalarHeader) : new _BasicExpressionToken(this.file, this.range, this.expr, this.definitionInfo, this.originalExpressions, this.source, this.expressionRange, this.blockScalarHeader);
-  }
-  toString() {
-    return `${OPEN_EXPRESSION} ${this.expr} ${CLOSE_EXPRESSION}`;
-  }
-  toDisplayString() {
-    return ScalarToken.trimDisplayString(this.toString());
-  }
-  toJSON() {
-    return {
-      type: TokenType2.BasicExpression,
-      expr: this.expr
-    };
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/insert-expression-token.js
-var InsertExpressionToken = class _InsertExpressionToken extends ExpressionToken {
-  constructor(file2, range, definitionInfo) {
-    super(TokenType2.InsertExpression, file2, range, INSERT_DIRECTIVE, definitionInfo);
-  }
-  clone(omitSource) {
-    return omitSource ? new _InsertExpressionToken(void 0, void 0, this.definitionInfo) : new _InsertExpressionToken(this.file, this.range, this.definitionInfo);
-  }
-  toString() {
-    return `${OPEN_EXPRESSION} ${INSERT_DIRECTIVE} ${CLOSE_EXPRESSION}`;
-  }
-  toDisplayString() {
-    return ScalarToken.trimDisplayString(this.toString());
-  }
-  toJSON() {
-    return {
-      type: TokenType2.InsertExpression,
-      expr: "insert"
-    };
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/type-guards.js
-function isLiteral(t) {
-  return t.isLiteral;
-}
-function isString(t) {
-  return isLiteral(t) && t.templateTokenType === TokenType2.String;
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-reader.js
-var WHITESPACE_PATTERN = /\s/;
-var backgroundStepProperties = /* @__PURE__ */ new Set(["background", "wait", "wait-all", "cancel"]);
-var backgroundStepOnlyProperties = /* @__PURE__ */ new Set(["wait", "wait-all", "cancel"]);
-function readTemplate(context, type, objectReader, fileId) {
-  const reader = new TemplateReader(context, objectReader, fileId);
-  let value;
-  try {
-    objectReader.validateStart();
-    const definition = new DefinitionInfo(context.schema, type);
-    value = reader.readValue(definition);
-    objectReader.validateEnd();
-  } catch (err) {
-    context.error(fileId, err);
-  }
-  return value;
-}
-var TemplateReader = class {
-  constructor(context, objectReader, fileId) {
-    this._context = context;
-    this._schema = context.schema;
-    this._objectReader = objectReader;
-    this._fileId = fileId;
-  }
-  readValue(definition) {
-    const literal2 = this._objectReader.allowLiteral();
-    if (literal2) {
-      let scalar = this.parseScalar(literal2, definition);
-      scalar = this.validate(scalar, definition);
-      return scalar;
-    }
-    const sequence = this._objectReader.allowSequenceStart();
-    if (sequence) {
-      const sequenceDefinition = definition.getDefinitionsOfType(DefinitionType.Sequence)[0];
-      if (sequenceDefinition) {
-        const itemDefinition = new DefinitionInfo(definition, sequenceDefinition.itemType);
-        while (!this._objectReader.allowSequenceEnd()) {
-          const item = this.readValue(itemDefinition);
-          sequence.add(item);
-        }
-      } else {
-        this._context.error(sequence, "A sequence was not expected");
-        while (!this._objectReader.allowSequenceEnd()) {
-          this.skipValue();
-        }
-      }
-      sequence.definitionInfo = definition;
-      return sequence;
-    }
-    const mapping = this._objectReader.allowMappingStart();
-    if (mapping) {
-      const mappingDefinitions = definition.getDefinitionsOfType(DefinitionType.Mapping);
-      if (mappingDefinitions.length > 0) {
-        if (mappingDefinitions.length > 1 || Object.keys(mappingDefinitions[0].properties).length > 0 || !mappingDefinitions[0].looseKeyType) {
-          this.handleMappingWithWellKnownProperties(definition, mappingDefinitions, mapping);
-        } else {
-          const keyDefinition = new DefinitionInfo(definition, mappingDefinitions[0].looseKeyType);
-          const valueDefinition = new DefinitionInfo(definition, mappingDefinitions[0].looseValueType);
-          this.handleMappingWithAllLooseProperties(definition, keyDefinition, valueDefinition, mappingDefinitions[0], mapping);
-        }
-      } else {
-        this._context.error(mapping, "A mapping was not expected");
-        while (!this._objectReader.allowMappingEnd()) {
-          this.skipValue();
-          this.skipValue();
-        }
-      }
-      if (!mapping.definitionInfo) {
-        mapping.definitionInfo = definition;
-      }
-      return mapping;
-    }
-    throw new Error("Expected a scalar value, a sequence, or a mapping");
-  }
-  handleMappingWithWellKnownProperties(definition, mappingDefinitions, mapping) {
-    let looseKeyType;
-    let looseValueType;
-    let looseKeyDefinition;
-    let looseValueDefinition;
-    if (mappingDefinitions[0].looseKeyType) {
-      looseKeyType = mappingDefinitions[0].looseKeyType;
-      looseValueType = mappingDefinitions[0].looseValueType;
-    }
-    const upperKeys = {};
-    let hasExpressionKey = false;
-    let rawLiteral;
-    while (rawLiteral = this._objectReader.allowLiteral()) {
-      const nextKeyScalar = this.parseScalar(rawLiteral, definition);
-      if (nextKeyScalar.isExpression) {
-        hasExpressionKey = true;
-        if (definition.allowedContext.length > 0) {
-          const anyDefinition = new DefinitionInfo(definition, ANY);
-          mapping.add(nextKeyScalar, this.readValue(anyDefinition));
-        } else {
-          this._context.error(nextKeyScalar, "A template expression is not allowed in this context");
-          this.skipValue();
-        }
-        continue;
-      }
-      const nextKey = nextKeyScalar.templateTokenType === TokenType2.String ? nextKeyScalar : new StringToken(nextKeyScalar.file, nextKeyScalar.range, nextKeyScalar.toString(), nextKeyScalar.definitionInfo);
-      if (nextKey.value) {
-        const upperKey = nextKey.value.toUpperCase();
-        if (upperKeys[upperKey]) {
-          this._context.error(nextKey, `'${nextKey.value}' is already defined`);
-          this.skipValue();
-          continue;
-        }
-        upperKeys[upperKey] = true;
-      }
-      const nextPropertyDef = this._schema.matchPropertyAndFilter(mappingDefinitions, nextKey.value);
-      if (nextPropertyDef) {
-        if (!this.backgroundStepsEnabled() && backgroundStepProperties.has(nextKey.value)) {
-          this._context.error(nextKey, `Unexpected value '${nextKey.value}'`);
-          this.skipValue();
-          continue;
-        }
-        const nextDefinition = new DefinitionInfo(definition, nextPropertyDef.type);
-        nextKey.definitionInfo = nextDefinition;
-        if (nextPropertyDef.description) {
-          nextKey.description = nextPropertyDef.description;
-        }
-        const nextValue = this.readValue(nextDefinition);
-        mapping.add(nextKey, nextValue);
-        continue;
-      }
-      if (looseKeyType) {
-        if (!looseKeyDefinition) {
-          looseKeyDefinition = new DefinitionInfo(definition, looseKeyType);
-          looseValueDefinition = new DefinitionInfo(definition, looseValueType);
-        }
-        this.validate(nextKey, looseKeyDefinition);
-        const nextDefinition = new DefinitionInfo(definition, mappingDefinitions[0].looseValueType);
-        nextKey.definitionInfo = nextDefinition;
-        const nextValue = this.readValue(looseValueDefinition);
-        mapping.add(nextKey, nextValue);
-        continue;
-      }
-      this._context.error(nextKey, `Unexpected value '${nextKey.value}'`);
-      this.skipValue();
-    }
-    if (mappingDefinitions.length === 1) {
-      mapping.definitionInfo = new DefinitionInfo(definition, mappingDefinitions[0]);
-    }
-    if (mappingDefinitions.length > 1) {
-      const hitCount = {};
-      for (const mappingDefinition of mappingDefinitions) {
-        for (const key of Object.keys(mappingDefinition.properties)) {
-          hitCount[key] = (hitCount[key] ?? 0) + 1;
-        }
-      }
-      const nonDuplicates = [];
-      for (const key of Object.keys(hitCount)) {
-        if (hitCount[key] === 1) {
-          nonDuplicates.push(key);
-        }
-      }
-      const properties = this.backgroundStepsEnabled() ? nonDuplicates : nonDuplicates.filter((property) => !backgroundStepOnlyProperties.has(property));
-      this._context.error(mapping, `There's not enough info to determine what you meant. Add one of these properties: ${properties.sort().join(", ")}`);
-    } else if (mappingDefinitions.length === 1 && !hasExpressionKey) {
-      for (const propertyName of Object.keys(mappingDefinitions[0].properties)) {
-        const propertyDef = mappingDefinitions[0].properties[propertyName];
-        if (propertyDef.required && !upperKeys[propertyName.toUpperCase()]) {
-          this._context.error(mapping, `Required property is missing: ${propertyName}`);
-        }
-      }
-    }
-    this.expectMappingEnd();
-  }
-  handleMappingWithAllLooseProperties(definition, keyDefinition, valueDefinition, mappingDefinition, mapping) {
-    let nextValue;
-    const upperKeys = {};
-    let rawLiteral;
-    while (rawLiteral = this._objectReader.allowLiteral()) {
-      const nextKeyScalar = this.parseScalar(rawLiteral, definition);
-      nextKeyScalar.definitionInfo = keyDefinition;
-      if (nextKeyScalar.isExpression) {
-        if (definition.allowedContext.length > 0) {
-          nextValue = this.readValue(valueDefinition);
-          mapping.add(nextKeyScalar, nextValue);
-        } else {
-          this._context.error(nextKeyScalar, "A template expression is not allowed in this context");
-          this.skipValue();
-        }
-        continue;
-      }
-      const nextKey = nextKeyScalar.templateTokenType === TokenType2.String ? nextKeyScalar : new StringToken(nextKeyScalar.file, nextKeyScalar.range, nextKeyScalar.toString(), nextKeyScalar.definitionInfo);
-      if (nextKey.value) {
-        const upperKey = nextKey.value.toUpperCase();
-        if (upperKeys[upperKey]) {
-          this._context.error(nextKey, `'${nextKey.value}' is already defined`);
-          this.skipValue();
-          continue;
-        }
-        upperKeys[upperKey] = true;
-      }
-      this.validate(nextKey, keyDefinition);
-      const nextDefinition = new DefinitionInfo(definition, mappingDefinition.looseValueType);
-      nextKey.definitionInfo = nextDefinition;
-      nextValue = this.readValue(valueDefinition);
-      mapping.add(nextKey, nextValue);
-    }
-    this.expectMappingEnd();
-  }
-  expectMappingEnd() {
-    if (!this._objectReader.allowMappingEnd()) {
-      throw new Error("Expected mapping end");
-    }
-  }
-  skipValue() {
-    if (this._objectReader.allowLiteral()) {
-    } else if (this._objectReader.allowSequenceStart()) {
-      while (!this._objectReader.allowSequenceEnd()) {
-        this.skipValue();
-      }
-    } else if (this._objectReader.allowMappingStart()) {
-      while (!this._objectReader.allowMappingEnd()) {
-        this.skipValue();
-        this.skipValue();
-      }
-    } else {
-      throw new Error("Expected a scalar value, a sequence, or a mapping");
-    }
-  }
-  validate(scalar, definition) {
-    switch (scalar.templateTokenType) {
-      case TokenType2.Null:
-      case TokenType2.Boolean:
-      case TokenType2.Number:
-      case TokenType2.String: {
-        const literal2 = scalar;
-        const scalarDefinitions = definition.getScalarDefinitions();
-        let relevantDefinition;
-        if (relevantDefinition = scalarDefinitions.find((x) => x.isMatch(literal2))) {
-          scalar.definitionInfo = new DefinitionInfo(definition, relevantDefinition);
-          return scalar;
-        }
-        if (literal2.templateTokenType !== TokenType2.String) {
-          const stringLiteral = new StringToken(literal2.file, literal2.range, literal2.toString(), literal2.definitionInfo);
-          if (relevantDefinition = scalarDefinitions.find((x) => x.isMatch(stringLiteral))) {
-            stringLiteral.definitionInfo = new DefinitionInfo(definition, relevantDefinition);
-            return stringLiteral;
-          }
-        }
-        this._context.error(literal2, `Unexpected value '${literal2.toString()}'`);
-        return scalar;
-      }
-      case TokenType2.BasicExpression:
-        if (definition.allowedContext.length === 0) {
-          this._context.error(scalar, "A template expression is not allowed in this context");
-        }
-        return scalar;
-      default:
-        this._context.error(scalar, `Unexpected value '${scalar.toString()}'`);
-        return scalar;
-    }
-  }
-  parseScalar(token, definitionInfo) {
-    if (!isString(token) || !token.value) {
-      return token;
-    }
-    const allowedContext = definitionInfo.allowedContext;
-    const isSingleLine = token.range === void 0 || token.range.start.line === token.range.end.line;
-    const raw = isSingleLine ? token.value : token.source ?? token.value;
-    let startExpression = raw.indexOf(OPEN_EXPRESSION);
-    if (startExpression < 0) {
-      return token;
-    }
-    let encounteredError = false;
-    const segments = [];
-    let i = 0;
-    while (i < raw.length) {
-      if (i === startExpression) {
-        startExpression = i;
-        let endExpression = -1;
-        let inString = false;
-        for (i += OPEN_EXPRESSION.length; i < raw.length; i++) {
-          if (raw[i] === "'") {
-            inString = !inString;
-          } else if (!inString && raw[i] === "}" && raw[i - 1] === "}") {
-            endExpression = i;
-            i++;
-            break;
-          }
-        }
-        if (endExpression < startExpression) {
-          this._context.error(token, "The expression is not closed. An unescaped ${{ sequence was found, but the closing }} sequence was not found.");
-          return token;
-        }
-        const rawExpression = raw.substr(startExpression + OPEN_EXPRESSION.length, endExpression - startExpression + 1 - OPEN_EXPRESSION.length - CLOSE_EXPRESSION.length);
-        let tr = token.range;
-        if (isSingleLine) {
-          const offset = (token.source ?? raw).indexOf(OPEN_EXPRESSION) - raw.indexOf(OPEN_EXPRESSION);
-          tr = {
-            start: { line: tr.start.line, column: tr.start.column + startExpression + offset },
-            end: { line: tr.end.line, column: tr.start.column + endExpression + 1 + offset }
-          };
-        } else {
-          const startRaw = raw.substring(0, startExpression);
-          const adjustedStartLine = startRaw.split("\n").length;
-          const beginningOfLine = startRaw.lastIndexOf("\n");
-          const adjustedStart = startExpression - beginningOfLine;
-          const adjustedEnd = endExpression - beginningOfLine + 1;
-          tr = {
-            start: { line: tr.start.line + adjustedStartLine, column: adjustedStart },
-            end: { line: tr.start.line + adjustedStartLine, column: adjustedEnd }
-          };
-        }
-        const expression = this.parseIntoExpressionToken(tr, rawExpression, allowedContext, token, definitionInfo);
-        if (!expression) {
-          encounteredError = true;
-        } else {
-          if (expression.directive && (startExpression !== 0 || i < raw.length)) {
-            this._context.error(token, `The directive '${expression.directive}' is not allowed in this context. Directives are not supported for expressions that are embedded within a string. Directives are only supported when the entire value is an expression.`);
-            return token;
-          }
-          segments.push(expression);
-        }
-        startExpression = raw.indexOf(OPEN_EXPRESSION, i);
-      } else if (i < startExpression) {
-        this.addString(segments, token.range, raw.substr(i, startExpression - i), token.definitionInfo);
-        i = startExpression;
-      } else {
-        this.addString(segments, token.range, raw.substr(i), token.definitionInfo);
-        break;
-      }
-    }
-    if (encounteredError) {
-      return token;
-    }
-    if (segments.length === 1 && segments[0].templateTokenType === TokenType2.BasicExpression) {
-      const basicExpression = segments[0];
-      const str2 = this.getExpressionString(basicExpression.expression);
-      if (str2 !== void 0) {
-        return new StringToken(this._fileId, token.range, str2, token.definitionInfo);
-      }
-    }
-    if (segments.length === 1) {
-      return segments[0];
-    }
-    const format2 = [];
-    const args = [];
-    const expressionTokens = [];
-    let argIndex = 0;
-    for (const segment of segments) {
-      if (isString(segment)) {
-        const text3 = segment.value.replace(/'/g, "''").replace(/\{/g, "{{").replace(/\}/g, "}}");
-        format2.push(text3);
-      } else {
-        format2.push(`{${argIndex}}`);
-        argIndex++;
-        const expression = segment;
-        args.push(", ");
-        args.push(expression.expression);
-        expressionTokens.push(expression);
-      }
-    }
-    return new BasicExpressionToken(this._fileId, token.range, `format('${format2.join("")}'${args.join("")})`, definitionInfo, expressionTokens, raw, void 0, token.blockScalarHeader);
-  }
-  parseIntoExpressionToken(tr, rawExpression, allowedContext, token, definitionInfo) {
-    const parseExpressionResult = this.parseExpression(tr, token, rawExpression, allowedContext, definitionInfo);
-    if (parseExpressionResult.error) {
-      this._context.error(token, parseExpressionResult.error, tr);
-      return void 0;
-    }
-    return parseExpressionResult.expression;
-  }
-  parseExpression(range, token, value, allowedContext, definitionInfo) {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return {
-        error: new Error("An expression was expected")
-      };
-    }
-    const matchDirectiveResult = this.matchDirective(trimmed, INSERT_DIRECTIVE, 0);
-    if (matchDirectiveResult.isMatch) {
-      return {
-        expression: new InsertExpressionToken(this._fileId, range, definitionInfo)
-      };
-    } else if (matchDirectiveResult.error) {
-      return {
-        error: matchDirectiveResult.error
-      };
-    }
-    try {
-      ExpressionToken.validateExpression(trimmed, allowedContext);
-    } catch (err) {
-      return {
-        error: err
-      };
-    }
-    const startTrim = value.length - value.trimStart().length;
-    const endTrim = value.length - value.trimEnd().length;
-    const expressionRange = {
-      start: {
-        ...range.start,
-        column: range.start.column + OPEN_EXPRESSION.length + startTrim
-      },
-      end: {
-        ...range.end,
-        column: range.end.column - CLOSE_EXPRESSION.length - endTrim
-      }
-    };
-    return {
-      expression: new BasicExpressionToken(this._fileId, range, trimmed, definitionInfo, void 0, token.source, expressionRange, token.blockScalarHeader),
-      error: void 0
-    };
-  }
-  addString(segments, range, value, definition) {
-    if (segments.length > 0 && segments[segments.length - 1].templateTokenType === TokenType2.String) {
-      const lastSegment = segments[segments.length - 1];
-      segments[segments.length - 1] = new StringToken(this._fileId, range, `${lastSegment.value}${value}`, definition);
-    } else {
-      segments.push(new StringToken(this._fileId, range, value, definition));
-    }
-  }
-  matchDirective(trimmed, directive, expectedParameters) {
-    const parameters = [];
-    if (trimmed.startsWith(directive) && (trimmed.length === directive.length || WHITESPACE_PATTERN.test(trimmed[directive.length]))) {
-      let startIndex = directive.length;
-      let inString = false;
-      let parens = 0;
-      for (let i = startIndex; i < trimmed.length; i++) {
-        const c = trimmed[i];
-        if (WHITESPACE_PATTERN.test(c) && !inString && parens == 0) {
-          if (startIndex < 1) {
-            parameters.push(trimmed.substr(startIndex, i - startIndex));
-          }
-          startIndex = i + 1;
-        } else if (c === "'") {
-          inString = !inString;
-        } else if (c === "(" && !inString) {
-          parens++;
-        } else if (c === ")" && !inString) {
-          parens--;
-        }
-      }
-      if (startIndex < trimmed.length) {
-        parameters.push(trimmed.substr(startIndex));
-      }
-      if (expectedParameters != parameters.length) {
-        return {
-          isMatch: false,
-          parameters: [],
-          error: new Error(`Exactly ${expectedParameters} parameter(s) were expected following the directive '${directive}'. Actual parameter count: ${parameters.length}`)
-        };
-      }
-      return {
-        isMatch: true,
-        parameters
-      };
-    }
-    return {
-      isMatch: false,
-      parameters
-    };
-  }
-  getExpressionString(trimmed) {
-    const result = [];
-    let inString = false;
-    for (let i = 0; i < trimmed.length; i++) {
-      const c = trimmed[i];
-      if (c === "'") {
-        inString = !inString;
-        if (inString && i !== 0) {
-          result.push(c);
-        }
-      } else if (!inString) {
-        return void 0;
-      } else {
-        result.push(c);
-      }
-    }
-    return result.join("");
-  }
-  backgroundStepsEnabled() {
-    return this._context.state.featureFlags?.isEnabled("allowBackgroundSteps") ?? false;
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/workflow-constants.js
-var WORKFLOW_ROOT = "workflow-root-strict";
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/parse-event.js
-var ParseEvent = class {
-  constructor(type, token) {
-    this.type = type;
-    this.token = token;
-  }
-};
-var EventType;
-(function(EventType2) {
-  EventType2[EventType2["Literal"] = 0] = "Literal";
-  EventType2[EventType2["SequenceStart"] = 1] = "SequenceStart";
-  EventType2[EventType2["SequenceEnd"] = 2] = "SequenceEnd";
-  EventType2[EventType2["MappingStart"] = 3] = "MappingStart";
-  EventType2[EventType2["MappingEnd"] = 4] = "MappingEnd";
-  EventType2[EventType2["DocumentStart"] = 5] = "DocumentStart";
-  EventType2[EventType2["DocumentEnd"] = 6] = "DocumentEnd";
-})(EventType || (EventType = {}));
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/json-object-reader.js
-var JSONObjectReader = class {
-  constructor(fileId, input3) {
-    this._fileId = fileId;
-    const value = JSON.parse(input3);
-    this._generator = this.getParseEvents(value, true);
-    this._current = this._generator.next();
-  }
-  allowLiteral() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.Literal) {
-        this._current = this._generator.next();
-        return parseEvent.token;
-      }
-    }
-    return void 0;
-  }
-  allowSequenceStart() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.SequenceStart) {
-        this._current = this._generator.next();
-        return parseEvent.token;
-      }
-    }
-    return void 0;
-  }
-  allowSequenceEnd() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.SequenceEnd) {
-        this._current = this._generator.next();
-        return true;
-      }
-    }
-    return false;
-  }
-  allowMappingStart() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.MappingStart) {
-        this._current = this._generator.next();
-        return parseEvent.token;
-      }
-    }
-    return void 0;
-  }
-  allowMappingEnd() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.MappingEnd) {
-        this._current = this._generator.next();
-        return true;
-      }
-    }
-    return false;
-  }
-  validateEnd() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.DocumentEnd) {
-        this._current = this._generator.next();
-        return;
-      }
-    }
-    throw new Error("Expected end of reader");
-  }
-  validateStart() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.DocumentStart) {
-        this._current = this._generator.next();
-        return;
-      }
-    }
-    throw new Error("Expected start of reader");
-  }
-  /**
-   * Returns all tokens (depth first)
-   */
-  *getParseEvents(value, root) {
-    if (root) {
-      yield new ParseEvent(EventType.DocumentStart, void 0);
-    }
-    switch (typeof value) {
-      case "undefined":
-        yield new ParseEvent(EventType.Literal, new NullToken(this._fileId, void 0, void 0));
-        break;
-      case "boolean":
-        yield new ParseEvent(EventType.Literal, new BooleanToken(this._fileId, void 0, value, void 0));
-        break;
-      case "number":
-        yield new ParseEvent(EventType.Literal, new NumberToken(this._fileId, void 0, value, void 0));
-        break;
-      case "string":
-        yield new ParseEvent(EventType.Literal, new StringToken(this._fileId, void 0, value, void 0));
-        break;
-      case "object":
-        if (value === null) {
-          yield new ParseEvent(EventType.Literal, new NullToken(this._fileId, void 0, void 0));
-        } else if (Array.isArray(value)) {
-          yield new ParseEvent(EventType.SequenceStart, new SequenceToken(this._fileId, void 0, void 0));
-          for (const item of value) {
-            for (const e of this.getParseEvents(item)) {
-              yield e;
-            }
-          }
-          yield new ParseEvent(EventType.SequenceEnd, void 0);
-        } else {
-          yield new ParseEvent(EventType.MappingStart, new MappingToken(this._fileId, void 0, void 0));
-          for (const key of Object.keys(value)) {
-            yield new ParseEvent(EventType.Literal, new StringToken(this._fileId, void 0, key, void 0));
-            for (const e of this.getParseEvents(value[key])) {
-              yield e;
-            }
-          }
-          yield new ParseEvent(EventType.MappingEnd, void 0);
-        }
-        break;
-      default:
-        throw new Error(`Unexpected value type '${typeof value}' when reading object`);
-    }
-    if (root) {
-      yield new ParseEvent(EventType.DocumentEnd, void 0);
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/trace-writer.js
-var NoOperationTraceWriter = class {
-  error() {
-  }
-  info() {
-  }
-  verbose() {
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/definition.js
-var Definition = class {
-  constructor(key, definition) {
-    this.readerContext = [];
-    this.evaluatorContext = [];
-    this.key = key;
-    if (definition) {
-      for (let i = 0; i < definition.count; ) {
-        const definitionKey = definition.get(i).key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case CONTEXT: {
-            const context = definition.get(i).value.assertSequence(`${DEFINITION} ${CONTEXT}`);
-            definition.remove(i);
-            const seenReaderContext = {};
-            const seenEvaluatorContext = {};
-            for (const item of context) {
-              const itemStr = item.assertString(`${CONTEXT} item`).value;
-              const upperItemStr = itemStr.toUpperCase();
-              if (seenReaderContext[upperItemStr]) {
-                throw new Error(`Duplicate context item '${itemStr}'`);
-              }
-              seenReaderContext[upperItemStr] = true;
-              this.readerContext.push(itemStr);
-              const paramIndex = itemStr.indexOf("(");
-              const modifiedItemStr = paramIndex > 0 ? itemStr.substr(0, paramIndex + 1) + ")" : itemStr;
-              const upperModifiedItemStr = modifiedItemStr.toUpperCase();
-              if (seenEvaluatorContext[upperModifiedItemStr]) {
-                throw new Error(`Duplicate context item '${modifiedItemStr}'`);
-              }
-              seenEvaluatorContext[upperModifiedItemStr] = true;
-              this.evaluatorContext.push(modifiedItemStr);
-            }
-            break;
-          }
-          case DESCRIPTION: {
-            const value = definition.get(i).value;
-            this.description = value.assertString(DESCRIPTION).value;
-            definition.remove(i);
-            break;
-          }
-          default: {
-            i++;
-            break;
-          }
-        }
-      }
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/scalar-definition.js
-var ScalarDefinition = class extends Definition {
-  constructor(key, definition) {
-    super(key, definition);
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/boolean-definition.js
-var BooleanDefinition = class extends ScalarDefinition {
-  constructor(key, definition) {
-    super(key, definition);
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case BOOLEAN: {
-            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${BOOLEAN}`);
-            for (const mappingPair of mapping) {
-              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${BOOLEAN} key`);
-              switch (mappingKey.value) {
-                default:
-                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${BOOLEAN} key`);
-                  break;
-              }
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.Boolean;
-  }
-  isMatch(literal2) {
-    return literal2.templateTokenType === TokenType2.Boolean;
-  }
-  validate() {
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/property-definition.js
-var PropertyDefinition = class {
-  constructor(token) {
-    this.type = "";
-    this.required = false;
-    if (token.templateTokenType === TokenType2.String) {
-      this.type = token.value;
-    } else {
-      const mapping = token.assertMapping(MAPPING_PROPERTY_VALUE);
-      for (const mappingPair of mapping) {
-        const mappingKey = mappingPair.key.assertString(`${MAPPING_PROPERTY_VALUE} key`);
-        switch (mappingKey.value) {
-          case TYPE:
-            this.type = mappingPair.value.assertString(`${MAPPING_PROPERTY_VALUE} ${TYPE}`).value;
-            break;
-          case REQUIRED:
-            this.required = mappingPair.value.assertBoolean(`${MAPPING_PROPERTY_VALUE} ${REQUIRED}`).value;
-            break;
-          case DESCRIPTION:
-            this.description = mappingPair.value.assertString(`${MAPPING_PROPERTY_VALUE} ${DESCRIPTION}`).value;
-            break;
-          default:
-            mappingKey.assertUnexpectedValue(`${MAPPING_PROPERTY_VALUE} key`);
-        }
-      }
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/mapping-definition.js
-var MappingDefinition = class extends Definition {
-  constructor(key, definition) {
-    super(key, definition);
-    this.properties = {};
-    this.looseKeyType = "";
-    this.looseValueType = "";
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case MAPPING: {
-            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${MAPPING}`);
-            for (const mappingPair of mapping) {
-              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${MAPPING} key`);
-              switch (mappingKey.value) {
-                case PROPERTIES: {
-                  const properties = mappingPair.value.assertMapping(`${DEFINITION} ${MAPPING} ${PROPERTIES}`);
-                  for (const propertiesPair of properties) {
-                    const propertyName = propertiesPair.key.assertString(`${DEFINITION} ${MAPPING} ${PROPERTIES} key`);
-                    this.properties[propertyName.value] = new PropertyDefinition(propertiesPair.value);
-                  }
-                  break;
-                }
-                case LOOSE_KEY_TYPE: {
-                  const looseKeyType = mappingPair.value.assertString(`${DEFINITION} ${MAPPING} ${LOOSE_KEY_TYPE}`);
-                  this.looseKeyType = looseKeyType.value;
-                  break;
-                }
-                case LOOSE_VALUE_TYPE: {
-                  const looseValueType = mappingPair.value.assertString(`${DEFINITION} ${MAPPING} ${LOOSE_VALUE_TYPE}`);
-                  this.looseValueType = looseValueType.value;
-                  break;
-                }
-                default:
-                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${MAPPING} key`);
-                  break;
-              }
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.Mapping;
-  }
-  validate(schema3, name) {
-    if (this.looseKeyType) {
-      schema3.getDefinition(this.looseKeyType);
-      if (this.looseValueType) {
-        schema3.getDefinition(this.looseValueType);
-      } else {
-        throw new Error(`Property '${LOOSE_KEY_TYPE}' is defined but '${LOOSE_VALUE_TYPE}' is not defined on '${name}'`);
-      }
-    } else if (this.looseValueType) {
-      throw new Error(`Property '${LOOSE_VALUE_TYPE}' is defined but '${LOOSE_KEY_TYPE}' is not defined on '${name}'`);
-    }
-    for (const propertyName of Object.keys(this.properties)) {
-      const propertyDef = this.properties[propertyName];
-      if (!propertyDef.type) {
-        throw new Error(`Type not specified for the property '${propertyName}' on '${name}'`);
-      }
-      schema3.getDefinition(propertyDef.type);
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/null-definition.js
-var NullDefinition = class extends ScalarDefinition {
-  constructor(key, definition) {
-    super(key, definition);
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case NULL: {
-            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${NULL}`);
-            for (const mappingPair of mapping) {
-              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${NULL} key`);
-              switch (mappingKey.value) {
-                default:
-                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${NULL} key`);
-                  break;
-              }
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.Null;
-  }
-  isMatch(literal2) {
-    return literal2.templateTokenType === TokenType2.Null;
-  }
-  validate() {
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/number-definition.js
-var NumberDefinition = class extends ScalarDefinition {
-  constructor(key, definition) {
-    super(key, definition);
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case NUMBER: {
-            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${NUMBER}`);
-            for (const mappingPair of mapping) {
-              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${NUMBER} key`);
-              switch (mappingKey.value) {
-                default:
-                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${NUMBER} key`);
-                  break;
-              }
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.Number;
-  }
-  isMatch(literal2) {
-    return literal2.templateTokenType === TokenType2.Number;
-  }
-  validate() {
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/one-of-definition.js
-var OneOfDefinition = class extends Definition {
-  constructor(key, definition) {
-    super(key, definition);
-    this.oneOf = [];
-    this.oneOfPrefix = [];
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case ONE_OF: {
-            const oneOf2 = definitionPair.value.assertSequence(`${DEFINITION} ${ONE_OF}`);
-            for (const item of oneOf2) {
-              const oneOfItem = item.assertString(`${DEFINITION} ${ONE_OF} item`);
-              this.oneOf.push(oneOfItem.value);
-            }
-            break;
-          }
-          case ALLOWED_VALUES: {
-            const oneOf2 = definitionPair.value.assertSequence(`${DEFINITION} ${ALLOWED_VALUES}`);
-            for (const item of oneOf2) {
-              const oneOfItem = item.assertString(`${DEFINITION} ${ONE_OF} item`);
-              this.oneOf.push(this.key + "-" + oneOfItem.value);
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-            break;
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.OneOf;
-  }
-  validate(schema3, name) {
-    if (this.oneOf.length === 0) {
-      throw new Error(`'${name}' does not contain any references`);
-    }
-    let foundLooseKeyType = false;
-    const mappingDefinitions = [];
-    let allowedValuesDefinition;
-    let sequenceDefinition;
-    let nullDefinition;
-    let booleanDefinition;
-    let numberDefinition;
-    const stringDefinitions = [];
-    const seenNestedTypes = {};
-    for (const nestedType of this.oneOf) {
-      if (seenNestedTypes[nestedType]) {
-        throw new Error(`'${name}' contains duplicate nested type '${nestedType}'`);
-      }
-      seenNestedTypes[nestedType] = true;
-      const nestedDefinition = schema3.getDefinition(nestedType);
-      if (nestedDefinition.readerContext.length > 0) {
-        throw new Error(`'${name}' is a one-of definition and references another definition that defines context. This is currently not supported.`);
-      }
-      switch (nestedDefinition.definitionType) {
-        case DefinitionType.Mapping: {
-          const mappingDefinition = nestedDefinition;
-          mappingDefinitions.push(mappingDefinition);
-          if (mappingDefinition.looseKeyType) {
-            foundLooseKeyType = true;
-          }
-          break;
-        }
-        case DefinitionType.Sequence: {
-          if (sequenceDefinition) {
-            throw new Error(`'${name}' refers to more than one definition of type '${SEQUENCE}'`);
-          }
-          sequenceDefinition = nestedDefinition;
-          break;
-        }
-        case DefinitionType.Null: {
-          if (nullDefinition) {
-            throw new Error(`'${name}' refers to more than one definition of type '${NULL}'`);
-          }
-          nullDefinition = nestedDefinition;
-          break;
-        }
-        case DefinitionType.Boolean: {
-          if (booleanDefinition) {
-            throw new Error(`'${name}' refers to more than one definition of type '${BOOLEAN}'`);
-          }
-          booleanDefinition = nestedDefinition;
-          break;
-        }
-        case DefinitionType.Number: {
-          if (numberDefinition) {
-            throw new Error(`'${name}' refers to more than one definition of type '${NUMBER}'`);
-          }
-          numberDefinition = nestedDefinition;
-          break;
-        }
-        case DefinitionType.String: {
-          const stringDefinition = nestedDefinition;
-          if (stringDefinitions.length > 0 && (!stringDefinitions[0].constant || !stringDefinition.constant)) {
-            throw new Error(`'${name}' refers to more than one '${SCALAR}', but some do not set '${CONSTANT}'`);
-          }
-          stringDefinitions.push(stringDefinition);
-          break;
-        }
-        case DefinitionType.OneOf: {
-          if (allowedValuesDefinition) {
-            throw new Error(`'${name}' contains multiple allowed-values definitions`);
-          }
-          allowedValuesDefinition = nestedDefinition;
-          break;
-        }
-        default:
-          throw new Error(`'${name}' refers to a definition with type '${nestedDefinition.definitionType}'`);
-      }
-    }
-    if (mappingDefinitions.length > 1) {
-      if (foundLooseKeyType) {
-        throw new Error(`'${name}' refers to two mappings and at least one sets '${LOOSE_KEY_TYPE}'. This is not currently supported.`);
-      }
-      const seenProperties = {};
-      for (const mappingDefinition of mappingDefinitions) {
-        for (const propertyName of Object.keys(mappingDefinition.properties)) {
-          const newPropertyDef = mappingDefinition.properties[propertyName];
-          const existingPropertyDef = seenProperties[propertyName];
-          if (existingPropertyDef) {
-            if (existingPropertyDef.type === newPropertyDef.type) {
-              continue;
-            }
-            throw new Error(`'${name}' contains two mappings with the same property, but each refers to a different type. All matching properties must refer to the same type.`);
-          } else {
-            seenProperties[propertyName] = newPropertyDef;
-          }
-        }
-      }
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/sequence-definition.js
-var SequenceDefinition = class extends Definition {
-  constructor(key, definition) {
-    super(key, definition);
-    this.itemType = "";
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case SEQUENCE: {
-            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${SEQUENCE}`);
-            for (const mappingPair of mapping) {
-              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${SEQUENCE} key`);
-              switch (mappingKey.value) {
-                case ITEM_TYPE: {
-                  const itemType = mappingPair.value.assertString(`${DEFINITION} ${SEQUENCE} ${ITEM_TYPE}`);
-                  this.itemType = itemType.value;
-                  break;
-                }
-                default:
-                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${SEQUENCE} key`);
-                  break;
-              }
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.Sequence;
-  }
-  validate(schema3, name) {
-    if (!this.itemType) {
-      throw new Error(`'${name}' does not defined '${ITEM_TYPE}'`);
-    }
-    schema3.getDefinition(this.itemType);
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/string-definition.js
-var StringDefinition = class extends ScalarDefinition {
-  constructor(key, definition) {
-    super(key, definition);
-    this.constant = "";
-    this.ignoreCase = false;
-    this.requireNonEmpty = false;
-    this.isExpression = false;
-    if (definition) {
-      for (const definitionPair of definition) {
-        const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-        switch (definitionKey.value) {
-          case STRING: {
-            const mapping = definitionPair.value.assertMapping(`${DEFINITION} ${STRING}`);
-            for (const mappingPair of mapping) {
-              const mappingKey = mappingPair.key.assertString(`${DEFINITION} ${STRING} key`);
-              switch (mappingKey.value) {
-                case CONSTANT: {
-                  const constantStringToken = mappingPair.value.assertString(`${DEFINITION} ${STRING} ${CONSTANT}`);
-                  this.constant = constantStringToken.value;
-                  break;
-                }
-                case IGNORE_CASE: {
-                  const ignoreCaseBooleanToken = mappingPair.value.assertBoolean(`${DEFINITION} ${STRING} ${IGNORE_CASE}`);
-                  this.ignoreCase = ignoreCaseBooleanToken.value;
-                  break;
-                }
-                case REQUIRE_NON_EMPTY: {
-                  const requireNonEmptyBooleanToken = mappingPair.value.assertBoolean(`${DEFINITION} ${STRING} ${REQUIRE_NON_EMPTY}`);
-                  this.requireNonEmpty = requireNonEmptyBooleanToken.value;
-                  break;
-                }
-                case IS_EXPRESSION: {
-                  const isExpressionToken = mappingPair.value.assertBoolean(`${DEFINITION} ${STRING} ${IS_EXPRESSION}`);
-                  this.isExpression = isExpressionToken.value;
-                  break;
-                }
-                default:
-                  mappingKey.assertUnexpectedValue(`${DEFINITION} ${STRING} key`);
-                  break;
-              }
-            }
-            break;
-          }
-          default:
-            definitionKey.assertUnexpectedValue(`${DEFINITION} key`);
-        }
-      }
-    }
-  }
-  get definitionType() {
-    return DefinitionType.String;
-  }
-  isMatch(literal2) {
-    if (literal2.templateTokenType === TokenType2.String) {
-      const value = literal2.value;
-      if (this.constant) {
-        return this.ignoreCase ? this.constant.toUpperCase() === value.toUpperCase() : this.constant === value;
-      } else if (this.requireNonEmpty) {
-        return !!value;
-      } else {
-        return true;
-      }
-    }
-    return false;
-  }
-  validate() {
-    if (this.constant && this.requireNonEmpty) {
-      throw new Error(`Properties '${CONSTANT}' and '${REQUIRE_NON_EMPTY}' cannot both be set`);
-    }
-  }
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/schema/template-schema.js
-var TemplateSchema = class _TemplateSchema {
-  constructor(mapping) {
-    this.definitions = {};
-    this.version = "";
-    this.definitions[NULL] = new NullDefinition(NULL);
-    this.definitions[BOOLEAN] = new BooleanDefinition(BOOLEAN);
-    this.definitions[NUMBER] = new NumberDefinition(NUMBER);
-    this.definitions[STRING] = new StringDefinition(STRING);
-    const sequenceDefinition = new SequenceDefinition(SEQUENCE);
-    sequenceDefinition.itemType = ANY;
-    this.definitions[sequenceDefinition.key] = sequenceDefinition;
-    const mappingDefinition = new MappingDefinition(MAPPING);
-    mappingDefinition.looseKeyType = STRING;
-    mappingDefinition.looseValueType = ANY;
-    this.definitions[mappingDefinition.key] = mappingDefinition;
-    const anyDefinition = new OneOfDefinition(ANY);
-    anyDefinition.oneOf.push(NULL);
-    anyDefinition.oneOf.push(BOOLEAN);
-    anyDefinition.oneOf.push(NUMBER);
-    anyDefinition.oneOf.push(STRING);
-    anyDefinition.oneOf.push(SEQUENCE);
-    anyDefinition.oneOf.push(MAPPING);
-    this.definitions[anyDefinition.key] = anyDefinition;
-    if (mapping) {
-      for (const pair of mapping) {
-        const key = pair.key.assertString(`${TEMPLATE_SCHEMA} key`);
-        switch (key.value) {
-          case VERSION: {
-            this.version = pair.value.assertString(`${TEMPLATE_SCHEMA} ${VERSION}`).value;
-            break;
-          }
-          case DEFINITIONS: {
-            const definitions = pair.value.assertMapping(`${TEMPLATE_SCHEMA} ${DEFINITIONS}`);
-            for (const definitionsPair of definitions) {
-              const definitionsKey = definitionsPair.key.assertString(`${TEMPLATE_SCHEMA} ${DEFINITIONS} key`);
-              const definitionsValue = definitionsPair.value.assertMapping(`${TEMPLATE_SCHEMA} ${DEFINITIONS} value`);
-              let definition;
-              for (const definitionPair of definitionsValue) {
-                const definitionKey = definitionPair.key.assertString(`${DEFINITION} key`);
-                const mappingToken = definitionsPair.value;
-                switch (definitionKey.value) {
-                  case NULL:
-                    definition = new NullDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case BOOLEAN:
-                    definition = new BooleanDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case NUMBER:
-                    definition = new NumberDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case STRING:
-                    definition = new StringDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case SEQUENCE:
-                    definition = new SequenceDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case MAPPING:
-                    definition = new MappingDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case ONE_OF:
-                    definition = new OneOfDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case ALLOWED_VALUES:
-                    for (const item of mappingToken) {
-                      if (item.value.templateTokenType === TokenType2.Sequence) {
-                        const sequenceToken = item.value;
-                        for (const activity of sequenceToken) {
-                          if (activity.templateTokenType === TokenType2.String) {
-                            const stringToken = activity;
-                            const allowedValuesKey = definitionsKey.value + "-" + stringToken.value;
-                            const allowedValuesDef = new StringDefinition(allowedValuesKey);
-                            allowedValuesDef.constant = stringToken.toDisplayString();
-                            this.definitions[allowedValuesKey] = allowedValuesDef;
-                          }
-                        }
-                      }
-                    }
-                    definition = new OneOfDefinition(definitionsKey.value, definitionsValue);
-                    break;
-                  case CONTEXT:
-                  case DESCRIPTION:
-                    continue;
-                  default:
-                    definitionKey.assertUnexpectedValue(`${DEFINITION} mapping key`);
-                    break;
-                }
-                break;
-              }
-              if (!definition) {
-                throw new Error(`Not enough information to construct definition '${definitionsKey.value}'`);
-              }
-              this.definitions[definitionsKey.value] = definition;
-            }
-            break;
-          }
-          default:
-            key.assertUnexpectedValue(`${TEMPLATE_SCHEMA} key`);
-            break;
-        }
-      }
-    }
-  }
-  /**
-   * Looks up a definition by name
-   */
-  getDefinition(name) {
-    const result = this.definitions[name];
-    if (result) {
-      return result;
-    }
-    throw new Error(`Schema definition '${name}' not found`);
-  }
-  /**
-   * Expands one-of definitions and returns all scalar definitions
-   */
-  getScalarDefinitions(definition) {
-    const result = [];
-    switch (definition.definitionType) {
-      case DefinitionType.Null:
-      case DefinitionType.Boolean:
-      case DefinitionType.Number:
-      case DefinitionType.String:
-        result.push(definition);
-        break;
-      case DefinitionType.OneOf: {
-        const oneOf2 = definition;
-        for (const nestedName of oneOf2.oneOf) {
-          const nestedDefinition = this.getDefinition(nestedName);
-          result.push(...this.getScalarDefinitions(nestedDefinition));
-        }
-        break;
-      }
-    }
-    return result;
-  }
-  /**
-   * Expands one-of definitions and returns all matching definitions by type
-   */
-  getDefinitionsOfType(definition, type) {
-    const result = [];
-    if (definition.definitionType === type) {
-      result.push(definition);
-    } else if (definition.definitionType === DefinitionType.OneOf) {
-      const oneOf2 = definition;
-      for (const nestedName of oneOf2.oneOf) {
-        const nestedDefinition = this.getDefinition(nestedName);
-        if (nestedDefinition.definitionType === type) {
-          result.push(nestedDefinition);
-        }
-      }
-    }
-    return result;
-  }
-  /**
-   * Attempts match the property name to a property defined by any of the specified definitions.
-   * If matched, any unmatching definitions are filtered from the definitions array.
-   * Returns the type information for the matched property.
-   */
-  matchPropertyAndFilter(definitions, propertyName) {
-    let result;
-    let notFoundInSome = false;
-    for (const definition of definitions) {
-      const propertyDef = definition.properties[propertyName];
-      if (propertyDef) {
-        result = propertyDef;
-      } else {
-        notFoundInSome = true;
-      }
-    }
-    if (result && notFoundInSome) {
-      for (let i = 0; i < definitions.length; ) {
-        if (definitions[i].properties[propertyName]) {
-          i++;
-        } else {
-          definitions.splice(i, 1);
-        }
-      }
-    }
-    return result;
-  }
-  validate() {
-    const oneOfDefinitions = {};
-    for (const name of Object.keys(this.definitions)) {
-      if (!name.match(_TemplateSchema._definitionNamePattern)) {
-        throw new Error(`Invalid definition name '${name}'`);
-      }
-      const definition = this.definitions[name];
-      if (definition.definitionType === DefinitionType.OneOf) {
-        oneOfDefinitions[name] = definition;
-      } else {
-        definition.validate(this, name);
-      }
-    }
-    for (const name of Object.keys(oneOfDefinitions)) {
-      const oneOf2 = oneOfDefinitions[name];
-      oneOf2.validate(this, name);
-    }
-  }
-  /**
-   * Loads a user-defined schema file
-   */
-  static load(objectReader) {
-    const context = new TemplateContext(new TemplateValidationErrors(10, 500), _TemplateSchema.getInternalSchema(), new NoOperationTraceWriter());
-    const template = readTemplate(context, TEMPLATE_SCHEMA, objectReader, void 0);
-    context.errors.check();
-    const mapping = template.assertMapping(TEMPLATE_SCHEMA);
-    const schema3 = new _TemplateSchema(mapping);
-    schema3.validate();
-    return schema3;
-  }
-  /**
-   * Gets the internal schema used for reading user-defined schema files
-   */
-  static getInternalSchema() {
-    if (_TemplateSchema._internalSchema === void 0) {
-      const schema3 = new _TemplateSchema();
-      let mappingDefinition = new MappingDefinition(TEMPLATE_SCHEMA);
-      mappingDefinition.properties[VERSION] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[DEFINITIONS] = new PropertyDefinition(new StringToken(void 0, void 0, DEFINITIONS, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(DEFINITIONS);
-      mappingDefinition.looseKeyType = NON_EMPTY_STRING;
-      mappingDefinition.looseValueType = DEFINITION;
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      let oneOfDefinition = new OneOfDefinition(DEFINITION);
-      oneOfDefinition.oneOf.push(NULL_DEFINITION);
-      oneOfDefinition.oneOf.push(BOOLEAN_DEFINITION);
-      oneOfDefinition.oneOf.push(NUMBER_DEFINITION);
-      oneOfDefinition.oneOf.push(STRING_DEFINITION);
-      oneOfDefinition.oneOf.push(SEQUENCE_DEFINITION);
-      oneOfDefinition.oneOf.push(MAPPING_DEFINITION);
-      oneOfDefinition.oneOf.push(ONE_OF_DEFINITION);
-      schema3.definitions[oneOfDefinition.key] = oneOfDefinition;
-      mappingDefinition = new MappingDefinition(NULL_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[NULL] = new PropertyDefinition(new StringToken(void 0, void 0, NULL_DEFINITION_PROPERTIES, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(NULL_DEFINITION_PROPERTIES);
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(BOOLEAN_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[BOOLEAN] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN_DEFINITION_PROPERTIES, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(BOOLEAN_DEFINITION_PROPERTIES);
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(NUMBER_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[NUMBER] = new PropertyDefinition(new StringToken(void 0, void 0, NUMBER_DEFINITION_PROPERTIES, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(NUMBER_DEFINITION_PROPERTIES);
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(STRING_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[STRING] = new PropertyDefinition(new StringToken(void 0, void 0, STRING_DEFINITION_PROPERTIES, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(STRING_DEFINITION_PROPERTIES);
-      mappingDefinition.properties[CONSTANT] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[IGNORE_CASE] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
-      mappingDefinition.properties[REQUIRE_NON_EMPTY] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
-      mappingDefinition.properties[IS_EXPRESSION] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(SEQUENCE_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[SEQUENCE] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_DEFINITION_PROPERTIES, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(SEQUENCE_DEFINITION_PROPERTIES);
-      mappingDefinition.properties[ITEM_TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(MAPPING_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[MAPPING] = new PropertyDefinition(new StringToken(void 0, void 0, MAPPING_DEFINITION_PROPERTIES, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(MAPPING_DEFINITION_PROPERTIES);
-      mappingDefinition.properties[PROPERTIES] = new PropertyDefinition(new StringToken(void 0, void 0, PROPERTIES, void 0));
-      mappingDefinition.properties[LOOSE_KEY_TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[LOOSE_VALUE_TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(PROPERTIES);
-      mappingDefinition.looseKeyType = NON_EMPTY_STRING;
-      mappingDefinition.looseValueType = PROPERTY_VALUE;
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      oneOfDefinition = new OneOfDefinition(PROPERTY_VALUE);
-      oneOfDefinition.oneOf.push(NON_EMPTY_STRING);
-      oneOfDefinition.oneOf.push(MAPPING_PROPERTY_VALUE);
-      schema3.definitions[oneOfDefinition.key] = oneOfDefinition;
-      mappingDefinition = new MappingDefinition(MAPPING_PROPERTY_VALUE);
-      mappingDefinition.properties[TYPE] = new PropertyDefinition(new StringToken(void 0, void 0, NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[REQUIRED] = new PropertyDefinition(new StringToken(void 0, void 0, BOOLEAN, void 0));
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      mappingDefinition = new MappingDefinition(ONE_OF_DEFINITION);
-      mappingDefinition.properties[DESCRIPTION] = new PropertyDefinition(new StringToken(void 0, void 0, STRING, void 0));
-      mappingDefinition.properties[CONTEXT] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[ONE_OF] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      mappingDefinition.properties[ALLOWED_VALUES] = new PropertyDefinition(new StringToken(void 0, void 0, SEQUENCE_OF_NON_EMPTY_STRING, void 0));
-      schema3.definitions[mappingDefinition.key] = mappingDefinition;
-      const stringDefinition = new StringDefinition(NON_EMPTY_STRING);
-      stringDefinition.requireNonEmpty = true;
-      schema3.definitions[stringDefinition.key] = stringDefinition;
-      const sequenceDefinition = new SequenceDefinition(SEQUENCE_OF_NON_EMPTY_STRING);
-      sequenceDefinition.itemType = NON_EMPTY_STRING;
-      schema3.definitions[sequenceDefinition.key] = sequenceDefinition;
-      schema3.validate();
-      _TemplateSchema._internalSchema = schema3;
-    }
-    return _TemplateSchema._internalSchema;
-  }
-};
-TemplateSchema._definitionNamePattern = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflow-v1.0.min.json
-var workflow_v1_0_min_default = { version: "workflow-v1.0", definitions: { "workflow-root": { description: "A workflow file.", mapping: { properties: { on: "on", name: "workflow-name", description: "workflow-description", "run-name": "run-name", defaults: "workflow-defaults", env: "workflow-env", permissions: "permissions", concurrency: "workflow-concurrency", jobs: { type: "jobs", required: true } } } }, "workflow-root-strict": { description: "Workflow file with strict validation", mapping: { properties: { on: { type: "on-strict", required: true }, name: "workflow-name", description: "workflow-description", "run-name": "run-name", defaults: "workflow-defaults", env: "workflow-env", permissions: "permissions", concurrency: "workflow-concurrency", jobs: { type: "jobs", required: true } } } }, "workflow-name": { description: "The name of the workflow that GitHub displays on your repository's 'Actions' tab.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#name)", string: {} }, "workflow-description": { description: "A description for your workflow or reusable workflow", string: {} }, "run-name": { context: ["github", "inputs", "vars"], string: {}, description: "The name for workflow runs generated from the workflow. GitHub displays the workflow run name in the list of workflow runs on your repository's 'Actions' tab.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#run-name)" }, on: { description: "The GitHub event that triggers the workflow. Events can be a single string, array of events, array of event types, or an event configuration map that schedules a workflow or restricts the execution of a workflow to specific files, tags, or branch changes. View a full list of [events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#on)", "one-of": ["string", "sequence", "on-mapping"] }, "on-mapping": { mapping: { properties: { workflow_call: "workflow-call" }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "on-strict": { description: "The GitHub event that triggers the workflow.  Events can be a single string, array of events, array of event types, or an event configuration map that schedules a workflow or restricts the execution of a workflow to specific files, tags, or branch changes. View a full list of [events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#on)", "one-of": ["on-string-strict", "on-sequence-strict", "on-mapping-strict"] }, "on-mapping-strict": { description: "The GitHub event that triggers the workflow.  Events can be a single string, array of events, array of event types, or an event configuration map that schedules a workflow or restricts the execution of a workflow to specific files, tags, or branch changes. View a full list of [events that trigger workflows](https://docs.github.com/actions/using-workflows/events-that-trigger-workflows).\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#on)", mapping: { properties: { branch_protection_rule: "branch-protection-rule", check_run: "check-run", check_suite: "check-suite", create: "create", delete: "delete", deployment: "deployment", deployment_status: "deployment-status", discussion: "discussion", discussion_comment: "discussion-comment", fork: "fork", gollum: "gollum", image_version: "image-version", issue_comment: "issue-comment", issues: "issues", label: "label", merge_group: "merge-group", milestone: "milestone", page_build: "page-build", project: "project", project_card: "project-card", project_column: "project-column", public: "public", pull_request: "pull-request", pull_request_comment: "pull-request-comment", pull_request_review: "pull-request-review", pull_request_review_comment: "pull-request-review-comment", pull_request_target: "pull-request-target", push: "push", registry_package: "registry-package", release: "release", repository_dispatch: "repository-dispatch", schedule: "schedule", status: "status", watch: "watch", workflow_call: "workflow-call", workflow_dispatch: "workflow-dispatch", workflow_run: "workflow-run" } } }, "on-string-strict": { "one-of": ["branch-protection-rule-string", "check-run-string", "check-suite-string", "create-string", "delete-string", "deployment-string", "deployment-status-string", "discussion-string", "discussion-comment-string", "fork-string", "gollum-string", "image-version-string", "issue-comment-string", "issues-string", "label-string", "merge-group-string", "milestone-string", "page-build-string", "project-string", "project-card-string", "project-column-string", "public-string", "pull-request-string", "pull-request-comment-string", "pull-request-review-string", "pull-request-review-comment-string", "pull-request-target-string", "push-string", "registry-package-string", "release-string", "repository-dispatch-string", "schedule-string", "status-string", "watch-string", "workflow-call-string", "workflow-dispatch-string", "workflow-run-string"] }, "on-sequence-strict": { sequence: { "item-type": "on-string-strict" } }, "branch-protection-rule-string": { description: "Runs your workflow when branch protection rules in the workflow repository are changed.", string: { constant: "branch_protection_rule" } }, "branch-protection-rule": { description: "Runs your workflow when branch protection rules in the workflow repository are changed.", "one-of": ["null", "branch-protection-rule-mapping"] }, "branch-protection-rule-mapping": { mapping: { properties: { types: "branch-protection-rule-activity" } } }, "branch-protection-rule-activity": { description: "The types of branch protection rule activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["branch-protection-rule-activity-type", "branch-protection-rule-activity-types"] }, "branch-protection-rule-activity-types": { sequence: { "item-type": "branch-protection-rule-activity-type" } }, "branch-protection-rule-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "check-run-string": { description: "Runs your workflow when activity related to a check run occurs. A check run is an individual test that is part of a check suite.", string: { constant: "check_run" } }, "check-run": { description: "Runs your workflow when activity related to a check run occurs. A check run is an individual test that is part of a check suite.", "one-of": ["null", "check-run-mapping"] }, "check-run-mapping": { mapping: { properties: { types: "check-run-activity" } } }, "check-run-activity": { description: "The types of check run activity that trigger the workflow. Supported activity types: `created`, `rerequested`, `completed`, `requested_action`.", "one-of": ["check-run-activity-type", "check-run-activity-types"] }, "check-run-activity-types": { sequence: { "item-type": "check-run-activity-type" } }, "check-run-activity-type": { "allowed-values": ["completed", "created", "rerequested", "requested_action"] }, "check-suite-string": { description: "Runs your workflow when check suite activity occurs. A check suite is a collection of the check runs created for a specific commit. Check suites summarize the status and conclusion of the check runs that are in the suite.", string: { constant: "check_suite" } }, "check-suite": { description: "Runs your workflow when check suite activity occurs. A check suite is a collection of the check runs created for a specific commit. Check suites summarize the status and conclusion of the check runs that are in the suite.", "one-of": ["null", "check-suite-mapping"] }, "check-suite-mapping": { mapping: { properties: { types: "check-suite-activity" } } }, "check-suite-activity": { description: "The types of check suite activity that trigger the workflow. Supported activity types: `completed`.", "one-of": ["check-suite-activity-type", "check-suite-activity-types"] }, "check-suite-activity-types": { sequence: { "item-type": "check-suite-activity-type" } }, "check-suite-activity-type": { "allowed-values": ["completed"] }, "create-string": { description: "Runs your workflow when someone creates a Git reference (Git branch or tag) in the workflow's repository.", string: { constant: "create" } }, create: { description: "Runs your workflow when someone creates a Git reference (Git branch or tag) in the workflow's repository.", null: {} }, "delete-string": { description: "Runs your workflow when someone deletes a Git reference (Git branch or tag) in the workflow's repository.", string: { constant: "delete" } }, delete: { description: "Runs your workflow when someone deletes a Git reference (Git branch or tag) in the workflow's repository.", null: {} }, "deployment-string": { description: "Runs your workflow when someone creates a deployment in the workflow's repository. Deployments created with a commit SHA may not have a Git ref.", string: { constant: "deployment" } }, deployment: { description: "Runs your workflow when someone creates a deployment in the workflow's repository. Deployments created with a commit SHA may not have a Git ref.", null: {} }, "deployment-status-string": { description: "Runs your workflow when a third party provides a deployment status. Deployments created with a commit SHA may not have a Git ref.", string: { constant: "deployment_status" } }, "deployment-status": { description: "Runs your workflow when a third party provides a deployment status. Deployments created with a commit SHA may not have a Git ref.", null: {} }, "discussion-string": { description: "Runs your workflow when a discussion in the workflow's repository is created or modified. For activity related to comments on a discussion, use the `discussion_comment` event.", string: { constant: "discussion" } }, discussion: { description: "Runs your workflow when a discussion in the workflow's repository is created or modified. For activity related to comments on a discussion, use the `discussion_comment` event.", "one-of": ["null", "discussion-mapping"] }, "discussion-mapping": { mapping: { properties: { types: "discussion-activity" } } }, "discussion-activity": { description: "The types of discussion activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`, `transferred`, `pinned`, `unpinned`, `labeled`, `unlabeled`, `locked`, `unlocked`, `category_changed`, `answered`, `unanswered`.", "one-of": ["discussion-activity-type", "discussion-activity-types"] }, "discussion-activity-types": { sequence: { "item-type": "discussion-activity-type" } }, "discussion-activity-type": { "allowed-values": ["created", "edited", "deleted", "transferred", "pinned", "unpinned", "labeled", "unlabeled", "locked", "unlocked", "category_changed", "answered", "unanswered"] }, "discussion-comment-string": { description: "Runs your workflow when a comment on a discussion in the workflow's repository is created or modified. For activity related to a discussion as opposed to comments on the discussion, use the `discussion` event.", string: { constant: "discussion_comment" } }, "discussion-comment": { description: "Runs your workflow when a comment on a discussion in the workflow's repository is created or modified. For activity related to a discussion as opposed to comments on the discussion, use the `discussion` event.", "one-of": ["null", "discussion-comment-mapping"] }, "discussion-comment-mapping": { mapping: { properties: { types: "discussion-comment-activity" } } }, "discussion-comment-activity": { description: "The types of discussion comment activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["discussion-comment-activity-type", "discussion-comment-activity-types"] }, "discussion-comment-activity-types": { sequence: { "item-type": "discussion-comment-activity-type" } }, "discussion-comment-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "fork-string": { description: "Runs your workflow when someone forks a repository.", string: { constant: "fork" } }, fork: { description: "Runs your workflow when someone forks a repository.", null: {} }, "gollum-string": { description: "Runs your workflow when someone creates or updates a Wiki page.", string: { constant: "gollum" } }, gollum: { description: "Runs your workflow when someone creates or updates a Wiki page.", null: {} }, "image-version-string": { description: "Runs your workflow when an image version is created or changes state.", string: { constant: "image_version" } }, "image-version": { description: "Runs your workflow when an image version is created or changes state.", "one-of": ["null", "image-version-mapping"] }, "image-version-mapping": { mapping: { properties: { types: "image-version-activity", names: "event-names", versions: "event-versions" } } }, "image-version-activity": { description: "The types of image version activity that trigger the workflow. Supported activity types: `created`, `ready`, `deleted`.", "one-of": ["image-version-activity-type", "image-version-activity-types"] }, "image-version-activity-types": { sequence: { "item-type": "image-version-activity-type" } }, "image-version-activity-type": { "allowed-values": ["created", "ready", "deleted"] }, "issue-comment-string": { description: "Runs your workflow when an issue or pull request comment is created, edited, or deleted.", string: { constant: "issue_comment" } }, "issue-comment": { description: "Runs your workflow when an issue or pull request comment is created, edited, or deleted.", "one-of": ["null", "issue-comment-mapping"] }, "issue-comment-mapping": { mapping: { properties: { types: "issue-comment-activity" } } }, "issue-comment-activity": { description: "The types of issue comment activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["issue-comment-activity-type", "issue-comment-activity-types"] }, "issue-comment-activity-types": { sequence: { "item-type": "issue-comment-activity-type" } }, "issue-comment-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "issues-string": { description: "Runs your workflow when an issue in the workflow's repository is created or modified. For activity related to comments in an issue, use the `issue_comment` event.", string: { constant: "issues" } }, issues: { description: "Runs your workflow when an issue in the workflow's repository is created or modified. For activity related to comments in an issue, use the `issue_comment` event.", "one-of": ["null", "issues-mapping"] }, "issues-mapping": { mapping: { properties: { types: "issues-activity" } } }, "issues-activity": { description: "The types of issue activity that trigger the workflow. Supported activity types: `opened`, `edited`, `deleted`, `transferred`, `pinned`, `unpinned`, `closed`, `reopened`, `assigned`, `unassigned`, `labeled`, `unlabeled`, `locked`, `unlocked`, `milestoned`, `demilestoned`, `field_added`, `field_removed`, `typed`, `untyped`.", "one-of": ["issues-activity-type", "issues-activity-types"] }, "issues-activity-types": { sequence: { "item-type": "issues-activity-type" } }, "issues-activity-type": { "allowed-values": ["opened", "edited", "deleted", "transferred", "pinned", "unpinned", "closed", "reopened", "assigned", "unassigned", "labeled", "unlabeled", "locked", "unlocked", "milestoned", "demilestoned", "field_added", "field_removed", "typed", "untyped"] }, "label-string": { description: "Runs your workflow when a label in your workflow's repository is created or modified.", string: { constant: "label" } }, label: { description: "Runs your workflow when a label in your workflow's repository is created or modified.", "one-of": ["null", "label-mapping"] }, "label-mapping": { mapping: { properties: { types: "label-activity" } } }, "label-activity": { description: "The types of label activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["label-activity-type", "label-activity-types"] }, "label-activity-types": { sequence: { "item-type": "label-activity-type" } }, "label-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "merge-group-string": { description: "Runs your workflow when a pull request is added to a merge queue, which adds the pull request to a merge group.", string: { constant: "merge_group" } }, "merge-group": { description: "Runs your workflow when a pull request is added to a merge queue, which adds the pull request to a merge group.", "one-of": ["null", "merge-group-mapping"] }, "merge-group-mapping": { mapping: { properties: { types: "merge-group-activity", branches: "event-branches", "branches-ignore": "event-branches-ignore" } } }, "merge-group-activity": { description: "The types of merge group activity that trigger the workflow. Supported activity types: `checks_requested`.", "one-of": ["merge-group-activity-type", "merge-group-activity-types"] }, "merge-group-activity-types": { sequence: { "item-type": "merge-group-activity-type" } }, "merge-group-activity-type": { "allowed-values": ["checks_requested"] }, "milestone-string": { description: "Runs your workflow when a milestone in the workflow's repository is created or modified.", string: { constant: "milestone" } }, milestone: { description: "Runs your workflow when a milestone in the workflow's repository is created or modified.", "one-of": ["null", "milestone-mapping"] }, "milestone-mapping": { mapping: { properties: { types: "milestone-activity" } } }, "milestone-activity": { description: "The types of milestone activity that trigger the workflow. Supported activity types: `created`, `closed`, `opened`, `edited`, `deleted`.", "one-of": ["milestone-activity-type", "milestone-activity-types"] }, "milestone-activity-types": { sequence: { "item-type": "milestone-activity-type" } }, "milestone-activity-type": { "allowed-values": ["created", "closed", "opened", "edited", "deleted"] }, "page-build-string": { description: "Runs your workflow when someone pushes to a branch that is the publishing source for GitHub Pages, if GitHub Pages is enabled for the repository.", string: { constant: "page_build" } }, "page-build": { description: "Runs your workflow when someone pushes to a branch that is the publishing source for GitHub Pages, if GitHub Pages is enabled for the repository.", null: {} }, "project-string": { description: "Runs your workflow when a project board is created or modified. For activity related to cards or columns in a project board, use the `project_card` or `project_column` events instead.", string: { constant: "project" } }, project: { description: "Runs your workflow when a project board is created or modified. For activity related to cards or columns in a project board, use the `project_card` or `project_column` events instead.", "one-of": ["null", "project-mapping"] }, "project-mapping": { mapping: { properties: { types: "project-activity" } } }, "project-activity": { description: "The types of project activity that trigger the workflow. Supported activity types: `created`, `closed`, `reopened`, `edited`, `deleted`.", "one-of": ["project-activity-type", "project-activity-types"] }, "project-activity-types": { sequence: { "item-type": "project-activity-type" } }, "project-activity-type": { "allowed-values": ["created", "closed", "reopened", "edited", "deleted"] }, "project-card-string": { description: "Runs your workflow when a card on a project board is created or modified. For activity related to project boards or columns in a project board, use the `project` or `project_column` event instead.", string: { constant: "project_card" } }, "project-card": { description: "Runs your workflow when a card on a project board is created or modified. For activity related to project boards or columns in a project board, use the `project` or `project_column` event instead.", "one-of": ["null", "project-card-mapping"] }, "project-card-mapping": { mapping: { properties: { types: "project-card-activity" } } }, "project-card-activity": { description: "The types of project card activity that trigger the workflow. Supported activity types: `created`, `moved`, `converted`, `edited`, `deleted`.", "one-of": ["project-card-activity-type", "project-card-activity-types"] }, "project-card-activity-types": { sequence: { "item-type": "project-card-activity-type" } }, "project-card-activity-type": { "allowed-values": ["created", "moved", "converted", "edited", "deleted"] }, "project-column-string": { description: "Runs your workflow when a column on a project board is created or modified. For activity related to project boards or cards in a project board, use the `project` or `project_card` event instead.", string: { constant: "project_column" } }, "project-column": { description: "Runs your workflow when a column on a project board is created or modified. For activity related to project boards or cards in a project board, use the `project` or `project_card` event instead.", "one-of": ["null", "project-column-mapping"] }, "project-column-mapping": { mapping: { properties: { types: "project-column-activity" } } }, "project-column-activity": { description: "The types of project column activity that trigger the workflow. Supported activity types: `created`, `updated`, `moved`, `deleted`.", "one-of": ["project-column-activity-type", "project-column-activity-types"] }, "project-column-activity-types": { sequence: { "item-type": "project-column-activity-type" } }, "project-column-activity-type": { "allowed-values": ["created", "updated", "moved", "deleted"] }, "public-string": { description: "Runs your workflow when your workflow's repository changes from private to public.", string: { constant: "public" } }, public: { description: "Runs your workflow when your workflow's repository changes from private to public.", null: {} }, "pull-request-string": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.", string: { constant: "pull_request" } }, "pull-request": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.", "one-of": ["null", "pull-request-mapping"] }, "pull-request-mapping": { mapping: { properties: { types: "pull-request-activity", branches: "event-branches", "branches-ignore": "event-branches-ignore", paths: "event-paths", "paths-ignore": "event-paths-ignore" } } }, "pull-request-activity": { description: "The types of pull request activity that trigger the workflow. Supported activity types: `assigned`, `unassigned`, `labeled`, `unlabeled`, `opened`, `edited`, `closed`, `reopened`, `synchronize`, `converted_to_draft`, `locked`, `unlocked`, `enqueued`, `dequeued`, `milestoned`, `demilestoned`, `ready_for_review`, `review_requested`, `review_request_removed`, `auto_merge_enabled`, `auto_merge_disabled`, `stacked`.", "one-of": ["pull-request-activity-type", "pull-request-activity-types"] }, "pull-request-activity-types": { sequence: { "item-type": "pull-request-activity-type" } }, "pull-request-activity-type": { "allowed-values": ["assigned", "unassigned", "labeled", "unlabeled", "opened", "edited", "closed", "reopened", "synchronize", "converted_to_draft", "locked", "unlocked", "enqueued", "dequeued", "milestoned", "demilestoned", "ready_for_review", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled", "stacked"] }, "pull-request-comment-string": { description: "Please use the `issue_comment` event instead.", string: { constant: "pull_request_comment" } }, "pull-request-comment": { description: "Please use the `issue_comment` event instead.", "one-of": ["null", "issue-comment-mapping"] }, "pull-request-review-string": { description: "Runs your workflow when a pull request review is submitted, edited, or dismissed. A pull request review is a group of pull request review comments in addition to a body comment and a state. For activity related to pull request review comments or pull request comments, use the `pull_request_review_comment` or `issue_comment` events instead.", string: { constant: "pull_request_review" } }, "pull-request-review": { description: "Runs your workflow when a pull request review is submitted, edited, or dismissed. A pull request review is a group of pull request review comments in addition to a body comment and a state. For activity related to pull request review comments or pull request comments, use the `pull_request_review_comment` or `issue_comment` events instead.", "one-of": ["null", "pull-request-review-mapping"] }, "pull-request-review-mapping": { mapping: { properties: { types: "pull-request-review-activity" } } }, "pull-request-review-activity": { description: "The types of pull request review activity that trigger the workflow. Supported activity types: `submitted`, `edited`, `dismissed`.", "one-of": ["pull-request-review-activity-type", "pull-request-review-activity-types"] }, "pull-request-review-activity-types": { sequence: { "item-type": "pull-request-review-activity-type" } }, "pull-request-review-activity-type": { "allowed-values": ["submitted", "edited", "dismissed"] }, "pull-request-review-comment-string": { description: "", string: { constant: "pull_request_review_comment" } }, "pull-request-review-comment": { description: "", "one-of": ["null", "pull-request-review-comment-mapping"] }, "pull-request-review-comment-mapping": { mapping: { properties: { types: "pull-request-review-comment-activity" } } }, "pull-request-review-comment-activity": { description: "The types of pull request review comment activity that trigger the workflow. Supported activity types: `created`, `edited`, `deleted`.", "one-of": ["pull-request-review-comment-activity-type", "pull-request-review-comment-activity-types"] }, "pull-request-review-comment-activity-types": { sequence: { "item-type": "pull-request-review-comment-activity-type" } }, "pull-request-review-comment-activity-type": { "allowed-values": ["created", "edited", "deleted"] }, "pull-request-target-string": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.\n\nThis event runs in the context of the base of the pull request, rather than in the context of the merge commit, as the `pull_request` event does. This prevents execution of unsafe code from the head of the pull request that could alter your repository or steal any secrets you use in your workflow. This event allows your workflow to do things like label or comment on pull requests from forks. Avoid using this event if you need to build or run code from the pull request.", string: { constant: "pull_request_target" } }, "pull-request-target": { description: "Runs your workflow when activity on a pull request in the workflow's repository occurs. If no activity types are specified, the workflow runs when a pull request is opened, reopened, or when the head branch of the pull request is updated.\n\nThis event runs in the context of the base of the pull request, rather than in the context of the merge commit, as the `pull_request` event does. This prevents execution of unsafe code from the head of the pull request that could alter your repository or steal any secrets you use in your workflow. This event allows your workflow to do things like label or comment on pull requests from forks. Avoid using this event if you need to build or run code from the pull request.", "one-of": ["null", "pull-request-target-mapping"] }, "pull-request-target-mapping": { mapping: { properties: { types: "pull-request-target-activity", branches: "event-branches", "branches-ignore": "event-branches-ignore", paths: "event-paths", "paths-ignore": "event-paths-ignore" } } }, "pull-request-target-activity": { description: "The types of pull request activity that trigger the workflow. Supported activity types: `assigned`, `unassigned`, `labeled`, `unlabeled`, `opened`, `edited`, `closed`, `reopened`, `synchronize`, `converted_to_draft`, `locked`, `unlocked`, `enqueued`, `dequeued`, `milestoned`, `demilestoned`, `ready_for_review`, `review_requested`, `review_request_removed`, `auto_merge_enabled`, `auto_merge_disabled`, `stacked`.", "one-of": ["pull-request-target-activity-type", "pull-request-target-activity-types"] }, "pull-request-target-activity-types": { sequence: { "item-type": "pull-request-target-activity-type" } }, "pull-request-target-activity-type": { "allowed-values": ["assigned", "unassigned", "labeled", "unlabeled", "opened", "edited", "closed", "reopened", "synchronize", "converted_to_draft", "locked", "unlocked", "enqueued", "dequeued", "milestoned", "demilestoned", "ready_for_review", "review_requested", "review_request_removed", "auto_merge_enabled", "auto_merge_disabled", "stacked"] }, "push-string": { description: "Runs your workflow when you push a commit or tag.", string: { constant: "push" } }, push: { description: "Runs your workflow when you push a commit or tag.", "one-of": ["null", "push-mapping"] }, "push-mapping": { mapping: { properties: { branches: "event-branches", "branches-ignore": "event-branches-ignore", tags: "event-tags", "tags-ignore": "event-tags-ignore", paths: "event-paths", "paths-ignore": "event-paths-ignore" } } }, "registry-package-string": { description: "Runs your workflow when activity related to GitHub Packages occurs in your repository.", string: { constant: "registry_package" } }, "registry-package": { description: "Runs your workflow when activity related to GitHub Packages occurs in your repository.", "one-of": ["null", "registry-package-mapping"] }, "registry-package-mapping": { mapping: { properties: { types: "registry-package-activity" } } }, "registry-package-activity": { description: "The types of registry package activity that trigger the workflow. Supported activity types: `published`, `updated`.", "one-of": ["registry-package-activity-type", "registry-package-activity-types"] }, "registry-package-activity-types": { sequence: { "item-type": "registry-package-activity-type" } }, "registry-package-activity-type": { "allowed-values": ["published", "updated"] }, "release-string": { description: "Runs your workflow when release activity in your repository occurs.", string: { constant: "release" } }, release: { description: "Runs your workflow when release activity in your repository occurs.", "one-of": ["null", "release-mapping"] }, "release-mapping": { mapping: { properties: { types: "release-activity" } } }, "release-activity": { description: "The types of release activity that trigger the workflow. Supported activity types: `published`, `unpublished`, `created`, `edited`, `deleted`, `prereleased`, `released`.", "one-of": ["release-activity-type", "release-activity-types"] }, "release-activity-types": { sequence: { "item-type": "release-activity-type" } }, "release-activity-type": { "allowed-values": ["published", "unpublished", "created", "edited", "deleted", "prereleased", "released"] }, "schedule-string": { description: "The `schedule` event allows you to trigger a workflow at a scheduled time.\n\nYou can schedule a workflow to run at specific UTC times using POSIX cron syntax. Scheduled workflows run on the latest commit on the default or base branch. The shortest interval you can run scheduled workflows is once every 5 minutes. GitHub Actions does not support the non-standard syntax `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, and `@reboot`.", string: { constant: "schedule" } }, schedule: { description: "The `schedule` event allows you to trigger a workflow at a scheduled time.\n\nYou can schedule a workflow to run at specific UTC times using POSIX cron syntax. Scheduled workflows run on the latest commit on the default or base branch. The shortest interval you can run scheduled workflows is once every 5 minutes. GitHub Actions does not support the non-standard syntax `@yearly`, `@monthly`, `@weekly`, `@daily`, `@hourly`, and `@reboot`.", sequence: { "item-type": "cron-mapping" } }, "status-string": { description: "Runs your workflow when the status of a Git commit changes. For example, commits can be marked as `error`, `failure`, `pending`, or `success`. If you want to provide more details about the status change, you may want to use the `check_run` event.", string: { constant: "status" } }, status: { description: "Runs your workflow when the status of a Git commit changes. For example, commits can be marked as `error`, `failure`, `pending`, or `success`. If you want to provide more details about the status change, you may want to use the `check_run` event.", null: {} }, "watch-string": { description: "Runs your workflow when the workflow's repository is starred.", string: { constant: "watch" } }, watch: { description: "Runs your workflow when the workflow's repository is starred.", "one-of": ["null", "watch-mapping"] }, "watch-mapping": { mapping: { properties: { types: "watch-activity" } } }, "watch-activity": { description: "The types of watch activity that trigger the workflow. Supported activity types: `started`.", "one-of": ["watch-activity-type", "watch-activity-types"] }, "watch-activity-types": { sequence: { "item-type": "watch-activity-type" } }, "watch-activity-type": { "allowed-values": ["started"] }, "workflow-run-string": { description: "This event occurs when a workflow run is requested or completed. It allows you to execute a workflow based on execution or completion of another workflow. The workflow started by the `workflow_run` event is able to access secrets and write tokens, even if the previous workflow was not. This is useful in cases where the previous workflow is intentionally not privileged, but you need to take a privileged action in a later workflow.", string: { constant: "workflow_run" } }, "workflow-run": { description: "This event occurs when a workflow run is requested or completed. It allows you to execute a workflow based on execution or completion of another workflow. The workflow started by the `workflow_run` event is able to access secrets and write tokens, even if the previous workflow was not. This is useful in cases where the previous workflow is intentionally not privileged, but you need to take a privileged action in a later workflow.", "one-of": ["null", "workflow-run-mapping"] }, "workflow-run-mapping": { mapping: { properties: { types: "workflow-run-activity", workflows: "workflow-run-workflows", branches: "event-branches", "branches-ignore": "event-branches-ignore" } } }, "workflow-run-workflows": { description: "The name of the workflow that triggers the `workflow_run` event. The workflow must be in the same repository as the workflow that uses the `workflow_run` event.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "workflow-run-activity": { description: "The types of workflow run activity that trigger the workflow. Supported activity types: `completed`, `requested`, `in_progress`.", "one-of": ["workflow-run-activity-type", "workflow-run-activity-types"] }, "workflow-run-activity-types": { sequence: { "item-type": "workflow-run-activity-type" } }, "workflow-run-activity-type": { "allowed-values": ["requested", "completed", "in_progress"] }, "event-branches": { description: "Use the `branches` filter when you want to include branch name patterns or when you want to both include and exclude branch name patterns. You cannot use both the `branches` and `branches-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-branches-ignore": { description: "Use the `branches-ignore` filter when you only want to exclude branch name patterns. You cannot use both the `branches` and `branches-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-names": { description: "Use the `names` filter when you want to include names via patterns or when you want to both include and exclude names using patterns. ", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-tags": { description: "Use the `tags` filter when you want to include tag name patterns or when you want to both include and exclude tag names patterns. You cannot use both the `tags` and `tags-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-tags-ignore": { description: "Use the `tags-ignore` filter when you only want to exclude tag name patterns. You cannot use both the `tags` and `tags-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-paths": { description: "Use the `paths` filter when you want to include file path patterns or when you want to both include and exclude file path patterns. You cannot use both the `paths` and `paths-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-paths-ignore": { description: "Use the `paths-ignore` filter when you only want to exclude file path patterns. You cannot use both the `paths` and `paths-ignore` filters for the same event in a workflow.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "event-versions": { description: "Use the `versions` filter when you want to include versions via patterns or when you want to both include and exclude versions using patterns. ", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "repository-dispatch-string": { description: "You can use the GitHub API to trigger a webhook event called `repository_dispatch` when you want to trigger a workflow for activity that happens outside of GitHub.", string: { constant: "branch_protection_rule" } }, "repository-dispatch": { description: "You can use the GitHub API to trigger a webhook event called `repository_dispatch` when you want to trigger a workflow for activity that happens outside of GitHub.", "one-of": ["null", "repository-dispatch-mapping"] }, "repository-dispatch-mapping": { mapping: { properties: { types: "sequence-of-non-empty-string" } } }, "workflow-call-string": { description: "The `workflow_call` event is used to indicate that a workflow can be called by another workflow. When a workflow is triggered with the `workflow_call` event, the event payload in the called workflow is the same event payload from the calling workflow.", string: { constant: "workflow_call" } }, "workflow-call": { description: "The `workflow_call` event is used to indicate that a workflow can be called by another workflow. When a workflow is triggered with the `workflow_call` event, the event payload in the called workflow is the same event payload from the calling workflow.", "one-of": ["null", "workflow-call-mapping"] }, "workflow-call-mapping": { mapping: { properties: { inputs: "workflow-call-inputs", secrets: "workflow-call-secrets", outputs: "workflow-call-outputs" } } }, "workflow-call-inputs": { description: "Inputs that are passed to the called workflow from the caller workflow.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "workflow-call-input-definition" } }, "workflow-call-input-definition": { mapping: { properties: { description: { type: "string", description: "A string description of the input parameter." }, type: { type: "workflow-call-input-type", required: true }, required: { type: "boolean", description: "A boolean to indicate whether the action requires the input parameter. Set to `true` when the parameter is required." }, default: "workflow-call-input-default" } } }, "workflow-call-input-type": { description: "Required if input is defined for the `on.workflow_call` keyword. The value of this parameter is a string specifying the data type of the input. This must be one of: `boolean`, `number`, or `string`.", "one-of": ["input-type-string", "input-type-boolean", "input-type-number"] }, "input-type-string": { string: { constant: "string" } }, "input-type-boolean": { string: { constant: "boolean" } }, "input-type-number": { string: { constant: "number" } }, "input-type-choice": { string: { constant: "choice" } }, "input-type-environment": { string: { constant: "environment" } }, "workflow-call-input-default": { description: 'If a `default` parameter is not set, the default value of the input is `false` for boolean, `0` for a number, and `""` for a string.', context: ["github", "inputs", "vars"], "one-of": ["string", "boolean", "number"] }, "workflow-call-secrets": { description: "A map of the secrets that can be used in the called workflow. Within the called workflow, you can use the `secrets` context to refer to a secret.", mapping: { "loose-key-type": "workflow-call-secret-name", "loose-value-type": "workflow-call-secret-definition" } }, "workflow-call-secret-name": { string: { "require-non-empty": true }, description: "A string identifier to associate with the secret." }, "workflow-call-secret-definition": { "one-of": ["null", "workflow-call-secret-mapping-definition"] }, "workflow-call-secret-mapping-definition": { mapping: { properties: { description: { type: "string", description: "A string description of the secret parameter." }, required: { type: "boolean", description: "A boolean specifying whether the secret must be supplied." } } } }, "workflow-call-outputs": { description: "A reusable workflow may generate data that you want to use in the caller workflow. To use these outputs, you must specify them as the outputs of the reusable workflow.", mapping: { "loose-key-type": "workflow-call-output-name", "loose-value-type": "workflow-call-output-definition" } }, "workflow-call-output-name": { string: { "require-non-empty": true }, description: "A string identifier to associate with the output. The value of `<output_id>` is a map of the input's metadata. The `<output_id>` must be a unique identifier within the outputs object and must start with a letter or _ and contain only alphanumeric characters, -, or _." }, "workflow-call-output-definition": { mapping: { properties: { description: { type: "string", description: "A string description of the output parameter." }, value: { type: "workflow-output-context", required: true } } } }, "workflow-output-context": { description: "The value to assign to the output parameter.", context: ["github", "inputs", "vars", "jobs"], string: {} }, "workflow-dispatch-string": { description: "The `workflow_dispatch` event allows you to manually trigger a workflow run. A workflow can be manually triggered using the GitHub API, GitHub CLI, or GitHub browser interface.", string: { constant: "workflow_dispatch" } }, "workflow-dispatch": { description: "The `workflow_dispatch` event allows you to manually trigger a workflow run. A workflow can be manually triggered using the GitHub API, GitHub CLI, or GitHub browser interface.", "one-of": ["null", "workflow-dispatch-mapping"] }, "workflow-dispatch-mapping": { mapping: { properties: { inputs: "workflow-dispatch-inputs" } } }, "workflow-dispatch-inputs": { description: "You can configure custom-defined input properties, default input values, and required inputs for the event directly in your workflow. When you trigger the event, you can provide the `ref` and any `inputs`. When the workflow runs, you can access the input values in the `inputs` context.", mapping: { "loose-key-type": "workflow-dispatch-input-name", "loose-value-type": "workflow-dispatch-input" } }, "workflow-dispatch-input-name": { string: { "require-non-empty": true }, description: "A string identifier to associate with the input. The value of <input_id> is a map of the input's metadata. The <input_id> must be a unique identifier within the inputs object. The <input_id> must start with a letter or _ and contain only alphanumeric characters, -, or _." }, "workflow-dispatch-input": { mapping: { properties: { description: { type: "string", description: "A string description of the input parameter." }, type: { type: "workflow-dispatch-input-type" }, required: { type: "boolean", description: "A boolean to indicate whether the workflow requires the input parameter. Set to true when the parameter is required." }, default: "workflow-dispatch-input-default", options: { type: "sequence-of-string", description: "The options of the dropdown list, if the type is a choice." } } } }, "workflow-dispatch-input-type": { description: "A string representing the type of the input. This must be one of: `boolean`, `number`, `string`, `choice`, or `environment`.", "one-of": ["input-type-string", "input-type-boolean", "input-type-number", "input-type-environment", "input-type-choice"] }, "workflow-dispatch-input-default": { description: "The default value is used when an input parameter isn't specified in a workflow file.", "one-of": ["string", "boolean", "number"] }, permissions: { description: "You can use `permissions` to modify the default permissions granted to the `GITHUB_TOKEN`, adding or removing access as required, so that you only allow the minimum required access.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#permissions)", "one-of": ["permissions-mapping", "permission-level-shorthand-read-all", "permission-level-shorthand-write-all"] }, "permissions-mapping": { mapping: { properties: { actions: { type: "permission-level-any", description: "Actions workflows, workflow runs, and artifacts." }, "artifact-metadata": { type: "permission-level-any", description: "Storage and deployment records for build artifacts." }, attestations: { type: "permission-level-any", description: "Artifact attestations." }, checks: { type: "permission-level-any", description: "Check runs and check suites." }, "code-quality": { type: "permission-level-any", description: "Code quality data." }, contents: { type: "permission-level-any", description: "Repository contents, commits, branches, downloads, releases, and merges." }, "copilot-requests": { type: "permission-level-write-or-no-access", description: "GitHub Copilot requests." }, deployments: { type: "permission-level-any", description: "Deployments and deployment statuses." }, discussions: { type: "permission-level-any", description: "Discussions and related comments and labels." }, drives: { type: "permission-level-any", description: "GitHub Drives persistent workspace storage. Use `read` for checkout and `write` to commit changes." }, "id-token": { type: "permission-level-write-or-no-access", description: "Token to request an OpenID Connect token." }, issues: { type: "permission-level-any", description: "Issues and related comments, assignees, labels, and milestones." }, models: { type: "permission-level-read-or-no-access", description: "Call AI models with GitHub Models." }, packages: { type: "permission-level-any", description: "Packages published to the GitHub Package Platform." }, pages: { type: "permission-level-any", description: "Retrieve Pages statuses, configuration, and builds, as well as create new builds." }, "pull-requests": { type: "permission-level-any", description: "Pull requests and related comments, assignees, labels, milestones, and merges." }, "repository-projects": { type: "permission-level-any", description: "Classic projects within a repository." }, "security-events": { type: "permission-level-any", description: "Code scanning alerts." }, statuses: { type: "permission-level-any", description: "Commit statuses." }, "vulnerability-alerts": { type: "permission-level-read-or-no-access", description: "Dependabot alerts." } } } }, "permission-level-any": { description: "The permission level for the `GITHUB_TOKEN`.", "one-of": ["permission-level-read", "permission-level-write", "permission-level-no-access"] }, "permission-level-read-or-no-access": { "one-of": ["permission-level-read", "permission-level-no-access"] }, "permission-level-write-or-no-access": { "one-of": ["permission-level-write", "permission-level-no-access"] }, "permission-level-read": { description: "The permission level for the `GITHUB_TOKEN`. Grants `read` permission for the specified scope.", string: { constant: "read" } }, "permission-level-write": { description: "The permission level for the `GITHUB_TOKEN`. Grants `write` permission for the specified scope.", string: { constant: "write" } }, "permission-level-no-access": { description: "The permission level for the `GITHUB_TOKEN`. Restricts all access for the specified scope.", string: { constant: "none" } }, "permission-level-shorthand-read-all": { description: "The permission level for the `GITHUB_TOKEN`. Grants `read` access for all scopes.", string: { constant: "read-all" } }, "permission-level-shorthand-write-all": { description: "The permission level for the `GITHUB_TOKEN`. Grants `write` access for all scopes.", string: { constant: "write-all" } }, "workflow-defaults": { description: "Use `defaults` to create a map of default settings that will apply to all jobs in the workflow. You can also set default settings that are only available to a job.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#defaults)", mapping: { properties: { run: "workflow-defaults-run" } } }, "workflow-defaults-run": { mapping: { properties: { shell: "shell", "working-directory": "working-directory" } } }, "workflow-env": { description: "A map of environment variables that are available to the steps of all jobs in the workflow. You can also set environment variables that are only available to the steps of a single job or to a single step.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#env)", context: ["github", "inputs", "vars", "secrets"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, jobs: { description: "A workflow run is made up of one or more `jobs`, which run in parallel by default. To run jobs sequentially, you can define dependencies on other jobs using the `jobs.<job_id>.needs` keyword. Each job runs in a runner environment specified by `runs-on`.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#jobs)", mapping: { "loose-key-type": "job-id", "loose-value-type": "job" } }, "job-id": { string: { "require-non-empty": true }, description: "A unique identifier for the job. The identifier must start with a letter or _ and contain only alphanumeric characters, -, or _." }, job: { description: "Each job must have an id to associate with the job. The key `job_id` is a string and its value is a map of the job's configuration data. You must replace `<job_id>` with a string that is unique to the jobs object. The `<job_id>` must start with a letter or _ and contain only alphanumeric characters, -, or _.", "one-of": ["job-factory", "workflow-job"] }, "job-factory": { mapping: { properties: { needs: "needs", if: "job-if", strategy: "strategy", name: { type: "string-strategy-context", description: "The name of the job displayed on GitHub." }, "runs-on": { type: "runs-on", required: true }, "timeout-minutes": { type: "number-strategy-context", description: "The maximum number of minutes to let a workflow run before GitHub automatically cancels it. Default: 360" }, "cancel-timeout-minutes": "number-strategy-context", "continue-on-error": { type: "boolean-strategy-context", description: "Prevents a workflow run from failing when a job fails. Set to true to allow a workflow run to pass when this job fails." }, container: "container", services: "services", env: "job-env", environment: "job-environment", permissions: "permissions", concurrency: "job-concurrency", outputs: "job-outputs", defaults: "job-defaults", steps: "steps", snapshot: "snapshot" } } }, "workflow-job": { mapping: { properties: { name: { type: "string-strategy-context", description: "The name of the job displayed on GitHub." }, uses: { description: "The location and version of a reusable workflow file to run as a job. Use one of the following formats:\n\n* `{owner}/{repo}/.github/workflows/{filename}@{ref}` for reusable workflows in public and private repositories.\n* `./.github/workflows/{filename}` for reusable workflows in the same repository.\n\n{ref} can be a SHA, a release tag, or a branch name. Using the commit SHA is the safest for stability and security.", type: "non-empty-string", required: true }, with: "workflow-job-with", secrets: "workflow-job-secrets", needs: "needs", if: "job-if", permissions: "permissions", concurrency: "job-concurrency", strategy: "strategy" } } }, "workflow-job-with": { description: "When a job is used to call a reusable workflow, you can use `with` to provide a map of inputs that are passed to the called workflow.\n\nAny inputs that you pass must match the input specifications defined in the called workflow.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "scalar-needs-context" } }, "workflow-job-secrets": { description: "When a job is used to call a reusable workflow, you can use `secrets` to provide a map of secrets that are passed to the called workflow.\n\nAny secrets that you pass must match the names defined in the called workflow.", "one-of": ["workflow-job-secrets-mapping", "workflow-job-secrets-inherit"] }, "workflow-job-secrets-mapping": { mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "scalar-needs-context-with-secrets" } }, "workflow-job-secrets-inherit": { string: { constant: "inherit" } }, needs: { description: "Use `needs` to identify any jobs that must complete successfully before this job will run. It can be a string or array of strings. If a job fails, all jobs that need it are skipped unless the jobs use a conditional expression that causes the job to continue. If a run contains a series of jobs that need each other, a failure applies to all jobs in the dependency chain from the point of failure onwards.", "one-of": ["sequence-of-non-empty-string", "non-empty-string"] }, "job-if": { description: "You can use the `if` conditional to prevent a job from running unless a condition is met. You can use any supported context and expression to create a conditional.", context: ["github", "inputs", "vars", "needs", "always(0,0)", "failure(0,MAX)", "cancelled(0,0)", "success(0,MAX)"], string: {} }, "job-if-result": { context: ["github", "inputs", "vars", "needs", "always(0,0)", "failure(0,MAX)", "cancelled(0,0)", "success(0,MAX)"], "one-of": ["null", "boolean", "number", "string", "sequence", "mapping"] }, strategy: { description: "Use `strategy` to use a matrix strategy for your jobs. A matrix strategy lets you use variables in a single job definition to automatically create multiple job runs that are based on the combinations of the variables. ", context: ["github", "inputs", "vars", "needs"], mapping: { properties: { "fail-fast": { type: "boolean", description: "Setting `fail-fast` to `false` prevents GitHub from canceling all in-progress jobs if any matrix job fails. Default: `true`" }, "max-parallel": { type: "number", description: "The maximum number of jobs that can run simultaneously when using a matrix job strategy. By default, GitHub will maximize the number of jobs run in parallel depending on runner availability." }, matrix: "matrix" } } }, matrix: { description: "Use `matrix` to define a matrix of different job configurations. Within your matrix, define one or more variables followed by an array of values.", mapping: { properties: { include: { type: "matrix-filter", description: "Use `include` to expand existing matrix configurations or to add new configurations. The value of `include` is a list of objects.\n\nFor each object in the `include` list, the key:value pairs in the object will be added to each of the matrix combinations if none of the key:value pairs overwrite any of the original matrix values. If the object cannot be added to any of the matrix combinations, a new matrix combination will be created instead. Note that the original matrix values will not be overwritten, but added matrix values can be overwritten." }, exclude: { type: "matrix-filter", description: "To remove specific configurations defined in the matrix, use `exclude`. An excluded configuration only has to be a partial match for it to be excluded." } }, "loose-key-type": "non-empty-string", "loose-value-type": "sequence" } }, "matrix-filter": { sequence: { "item-type": "matrix-filter-item" } }, "matrix-filter-item": { mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, snapshot: { description: "Use `snapshot` to define a custom image you want to create or update after your job succeeds by taking a snapshot of your runner.", "one-of": ["non-empty-string", "snapshot-mapping"] }, "snapshot-mapping": { mapping: { properties: { "image-name": { description: "The desired name of the custom image you want to create or update.", type: "non-empty-string", required: true }, if: "snapshot-if", version: { description: "The desired major version updates upon a new custom image version creation.", type: "non-empty-string" } } } }, "snapshot-if": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], description: "Use the if conditional to prevent a snapshot from being taken unless a condition is met. Any supported context and expression can be used to create a conditional. Expressions in an `if` conditional do not require the bracketed expression syntax. When you use expressions in an `if` conditional, you may omit the expression syntax because GitHub automatically evaluates the `if` conditional as an expression.", string: {} }, "runs-on": { description: "Use `runs-on` to define the type of machine to run the job on.\n* The destination machine can be either a GitHub-hosted runner, larger runner, or a self-hosted runner.\n* You can target runners based on the labels assigned to them, or their group membership, or a combination of these.\n* You can provide `runs-on` as a single string or as an array of strings.\n* If you specify an array of strings, your workflow will execute on any runner that matches all of the specified `runs-on` values.\n* If you would like to run your workflow on multiple machines, use `jobs.<job_id>.strategy`.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["non-empty-string", "sequence-of-non-empty-string", "runs-on-mapping"] }, "runs-on-mapping": { mapping: { properties: { group: { description: "The group from which to select a runner.", type: "non-empty-string" }, labels: "runs-on-labels" } } }, "runs-on-labels": { description: "The label by which to filter for available runners.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "job-env": { description: "A map of variables that are available to all steps in the job.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "workflow-concurrency": { description: "Concurrency ensures that only a single job or workflow using the same concurrency group will run at a time. A concurrency group can be any string or expression.\n\nYou can also specify `concurrency` at the job level.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#concurrency)", context: ["github", "inputs", "vars"], "one-of": ["string", "concurrency-mapping"] }, "job-concurrency": { description: "Concurrency ensures that only a single job using the same concurrency group will run at a time. A concurrency group can be any string or expression. The expression can use any context except for the `secrets` context.\n\nYou can also specify `concurrency` at the workflow level.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["non-empty-string", "concurrency-mapping"] }, "concurrency-mapping": { description: "Concurrency ensures that only a single job or workflow using the same concurrency group will run at a time. A concurrency group can be any string or expression.\n\nYou can also specify `concurrency` at the job level.\n\n[Documentation](https://docs.github.com/actions/using-workflows/workflow-syntax-for-github-actions#concurrency)", mapping: { properties: { group: { type: "non-empty-string", required: true, description: "When a concurrent job or workflow is queued, if another job or workflow using the same concurrency group in the repository is in progress, the queued job or workflow will be `pending`. Any previously pending job or workflow in the concurrency group will be canceled. To also cancel any currently running job or workflow in the same concurrency group, specify `cancel-in-progress: true`." }, "cancel-in-progress": { type: "boolean", description: "To cancel any currently running job or workflow in the same concurrency group, specify cancel-in-progress: true." }, queue: { type: "concurrency-queue", description: "The queuing mode for the concurrency group. When set to `max`, workflows or jobs will wait in a queue for the concurrency group up to the maximum queue length. Default: `single` meaning at most one item can be pending." } } } }, "concurrency-queue": { "allowed-values": ["single", "max"] }, "job-environment": { description: "The environment that the job references. All environment protection rules must pass before a job referencing the environment is sent to a runner.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["string", "job-environment-mapping"] }, "job-environment-mapping": { mapping: { properties: { name: { type: "job-environment-name", required: true }, url: { type: "string-runner-context-no-secrets", description: "The environment URL, which maps to `environment_url` in the deployments API." }, deployment: { type: "boolean", description: "Whether to create a deployment record for this environment. Defaults to true." } } } }, "job-environment-name": { description: "The name of the environment used by the job.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], string: {} }, "job-defaults": { description: "A map of default settings that will apply to all steps in the job. You can also set default settings for the entire workflow.", mapping: { properties: { run: "job-defaults-run" } } }, "job-defaults-run": { context: ["github", "inputs", "vars", "strategy", "matrix", "needs", "env"], mapping: { properties: { shell: "shell", "working-directory": "working-directory" } } }, "job-outputs": { description: "A map of outputs for a called workflow. Called workflow outputs are available to all downstream jobs in the caller workflow. Each output has an identifier, an optional `description,` and a `value`. The `value` must be set to the value of an output from a job within the called workflow.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string-runner-context" } }, steps: { description: "A job contains a sequence of tasks called `steps`. Steps can run commands, run setup tasks, run an action in your repository, a public repository, or an action published in a Docker registry, wait for background steps to complete, or cancel a background step. Not all steps run actions, but all actions run as a step. Each step runs in its own process in the runner environment and has access to the workspace and filesystem. Because steps run in their own process, changes to environment variables are not preserved between steps. GitHub provides built-in steps to set up and complete a job.", sequence: { "item-type": "steps-item" } }, "steps-item": { "one-of": ["run-step", "regular-step", "wait-step", "wait-all-step", "cancel-step", "parallel-step"] }, "run-step": { mapping: { properties: { name: "step-name", id: "step-id", if: "step-if", "timeout-minutes": "step-timeout-minutes", run: { type: "string-steps-context", description: "Runs command-line programs using the operating system's shell. If you do not provide a `name`, the step name will default to the text specified in the `run` command. Commands run using non-login shells by default. You can choose a different shell and customize the shell used to run commands. Each `run` keyword represents a new process and shell in the virtual environment. When you provide multi-line commands, each line runs in the same shell.", required: true }, "continue-on-error": "step-continue-on-error", env: "step-env", "working-directory": "string-steps-context", shell: "shell", background: "step-background" } } }, "regular-step": { mapping: { properties: { name: "step-name", id: "step-id", if: "step-if", "continue-on-error": "step-continue-on-error", "timeout-minutes": "step-timeout-minutes", uses: { type: "step-uses", required: true }, with: "step-with", env: "step-env", background: "step-background" } } }, "wait-step": { mapping: { properties: { name: "step-name", id: "step-id", "continue-on-error": "step-continue-on-error", wait: { type: "step-wait-target", required: true } } } }, "wait-all-step": { mapping: { properties: { name: "step-name", id: "step-id", "continue-on-error": "step-continue-on-error", "wait-all": { type: "step-wait-all-value", required: true } } } }, "cancel-step": { mapping: { properties: { name: "step-name", id: "step-id", "continue-on-error": "step-continue-on-error", cancel: { type: "step-cancel-target", required: true } } } }, "parallel-step": { mapping: { properties: { parallel: { type: "parallel-steps", required: true, description: "Run a group of steps concurrently. All steps in the parallel block run as background steps and the workflow waits for all of them to complete before continuing." } } } }, "parallel-steps": { sequence: { "item-type": "steps-item" } }, "step-uses": { description: "Selects an action to run as part of a step in your job. An action is a reusable unit of code. You can use an action defined in the same repository as the workflow, a public repository, a [private repository with access enabled](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository#allowing-access-to-components-in-a-private-repository), or in a published Docker container image.", string: { "require-non-empty": true } }, "step-background": { boolean: {}, description: "When set to true, runs this step in the background. The workflow continues to the next step immediately without waiting for the background step to finish." }, "step-wait-target": { description: "The step ID or IDs of background steps to wait for.", "one-of": ["non-empty-string", "sequence-of-non-empty-string"] }, "step-wait-all-value": { description: "Wait for all prior background steps to complete. Use as a bare key (`wait-all:`) or with a boolean value.", "one-of": ["null", "boolean"] }, "step-cancel-target": { description: "The step ID of a background step to cancel.", string: { "require-non-empty": true } }, "step-continue-on-error": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], boolean: {}, description: "Prevents a job from failing when a step fails. Set to `true` to allow a job to pass when this step fails." }, "step-id": { string: { "require-non-empty": true }, description: "A unique identifier for the step. You can use the `id` to reference the step in contexts." }, "step-if": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "steps", "job", "runner", "env", "always(0,0)", "failure(0,0)", "cancelled(0,0)", "success(0,0)", "hashFiles(1,255)"], description: "Use the `if` conditional to prevent a step from running unless a condition is met. Any supported context and expression can be used to create a conditional. Expressions in an `if` conditional do not require the bracketed expression syntax. When you use expressions in an `if` conditional, you may omit the expression syntax because GitHub automatically evaluates the `if` conditional as an expression.", string: {} }, "step-if-result": { context: ["github", "inputs", "vars", "strategy", "matrix", "steps", "job", "runner", "env", "always(0,0)", "failure(0,0)", "cancelled(0,0)", "success(0,0)", "hashFiles(1,255)"], "one-of": ["null", "boolean", "number", "string", "sequence", "mapping"] }, "step-env": { description: "Sets variables for steps to use in the runner environment. You can also set variables for the entire workflow or a job.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "step-name": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], string: {}, description: "A name for your step to display on GitHub." }, "step-timeout-minutes": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], number: {}, description: "The maximum number of minutes to run the step before killing the process." }, "step-with": { description: "A map of the input parameters defined by the action. Each input parameter is a key/value pair. Input parameters are set as variables. When you specify an input in a workflow file or use a default input value, GitHub creates a variable for the input with the name `INPUT_<VARIABLE_NAME>`. The variable created converts input names to uppercase letters and replaces spaces with `_`.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, container: { description: "A container to run any steps in a job that don't already specify a container. If you have steps that use both script and container actions, the container actions will run as sibling containers on the same network with the same volume mounts.\n\nIf you do not set a container, all steps will run directly on the host specified by runs-on unless a step refers to an action configured to run in a container.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["string", "container-mapping"] }, "container-mapping": { mapping: { properties: { image: { type: "non-empty-string", description: "Use `jobs.<job_id>.container.image` to define the Docker image to use as the container to run the action. The value can be the Docker Hub image or a registry name." }, options: { type: "string", description: "Use `jobs.<job_id>.container.options` to configure additional Docker container resource options." }, env: "container-env", ports: { type: "sequence-of-non-empty-string", description: "Use `jobs.<job_id>.container.ports` to set an array of ports to expose on the container." }, volumes: { type: "sequence-of-non-empty-string", description: "Use `jobs.<job_id>.container.volumes` to set an array of volumes for the container to use. You can use volumes to share data between services or other steps in a job. You can specify named Docker volumes, anonymous Docker volumes, or bind mounts on the host." }, credentials: "container-registry-credentials" } } }, services: { description: "Additional containers to host services for a job in a workflow. These are useful for creating databases or cache services like redis. The runner on the virtual machine will automatically create a network and manage the life cycle of the service containers. When you use a service container for a job or your step uses container actions, you don't need to set port information to access the service. Docker automatically exposes all ports between containers on the same network. When both the job and the action run in a container, you can directly reference the container by its hostname. The hostname is automatically mapped to the service name. When a step does not use a container action, you must access the service using localhost and bind the ports.", context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "services-container" } }, "services-container": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["non-empty-string", "service-container-mapping"] }, "container-registry-credentials": { description: "If the image's container registry requires authentication to pull the image, you can use `jobs.<job_id>.container.credentials` to set a map of the username and password. The credentials are the same values that you would provide to the `docker login` command.", context: ["github", "inputs", "vars", "secrets", "env"], mapping: { properties: { username: "non-empty-string", password: "non-empty-string" } } }, "container-env": { description: "Use `jobs.<job_id>.container.env` to set a map of variables in the container.", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string-runner-context" } }, "non-empty-string": { string: { "require-non-empty": true } }, "sequence-of-non-empty-string": { sequence: { "item-type": "non-empty-string" } }, "sequence-of-string": { sequence: { "item-type": "string" } }, "boolean-needs-context": { context: ["github", "inputs", "vars", "needs"], boolean: {} }, "number-needs-context": { context: ["github", "inputs", "vars", "needs"], number: {} }, "string-needs-context": { context: ["github", "inputs", "vars", "needs"], string: {} }, "scalar-needs-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], "one-of": ["string", "boolean", "number"] }, "scalar-needs-context-with-secrets": { context: ["github", "inputs", "vars", "needs", "secrets", "strategy", "matrix"], "one-of": ["string", "boolean", "number"] }, "boolean-strategy-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], boolean: {} }, "number-strategy-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], number: {} }, "string-strategy-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix"], string: {} }, "boolean-steps-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], boolean: {} }, "number-steps-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], number: {} }, "string-runner-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env"], string: {} }, "string-runner-context-no-secrets": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "steps", "job", "runner", "env"], string: {} }, "string-steps-context": { context: ["github", "inputs", "vars", "needs", "strategy", "matrix", "secrets", "steps", "job", "runner", "env", "hashFiles(1,255)"], string: {} }, shell: { string: { "require-non-empty": true }, description: "Use `shell` to override the default shell settings in the runner's operating system. You can use built-in shell keywords, or you can define a custom set of shell options. The shell command that is run internally executes a temporary file that contains the commands specified in `run`." }, "working-directory": { string: { "require-non-empty": true }, description: "The `working-directory` keyword specifies the working directory where the command is run." }, "cron-mapping": { mapping: { properties: { cron: { type: "cron-pattern", required: true }, timezone: "timezone-string" } } }, "cron-pattern": { description: "A cron expression that represents a schedule. A scheduled workflow will run at most once every 5 minutes.", string: { "require-non-empty": true } }, "timezone-string": { description: "A string that represents the time zone a scheduled workflow will run relative to in IANA format (e.g. 'America/New_York' or 'Europe/London'). If omitted, the workflow will run relative to midnight UTC.", string: { "require-non-empty": true } }, "service-container-mapping": { mapping: { properties: { image: { type: "non-empty-string", description: "The Docker image to use as the container. The value can be the Docker Hub image or a registry name." }, options: { type: "string", description: "Additional Docker container resource options." }, env: "container-env", ports: { type: "sequence-of-non-empty-string", description: "An array of ports to expose on the container." }, volumes: { type: "sequence-of-non-empty-string", description: "An array of volumes for the container to use. You can use volumes to share data between services or other steps in a job. You can specify named Docker volumes, anonymous Docker volumes, or bind mounts on the host." }, credentials: "container-registry-credentials", entrypoint: { type: "string", description: "Override the default ENTRYPOINT in the service container image." }, command: { type: "string", description: "Override the default CMD in the service container image." } } } } } };
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/workflow-schema.js
-var schema;
-function getWorkflowSchema() {
-  if (schema === void 0) {
-    const json2 = JSON.stringify(workflow_v1_0_min_default);
-    schema = TemplateSchema.load(new JSONObjectReader(void 0, json2));
-  }
-  return schema;
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/yaml-object-reader.js
-var import_yaml3 = __toESM(require_dist(), 1);
-var YamlObjectReader = class _YamlObjectReader {
-  constructor(fileId, content) {
-    this.lineCounter = new import_yaml3.LineCounter();
-    this.errors = [];
-    this.doc = (0, import_yaml3.parseDocument)(content, {
-      lineCounter: this.lineCounter,
-      keepSourceTokens: true,
-      uniqueKeys: false
-      // Uniqueness is validated by the template reader
-    });
-    for (const err of this.doc.errors) {
-      this.errors.push({ message: err.message, range: rangeFromLinePos(err.linePos) });
-    }
-    this._generator = this.getNodes(this.doc, /* @__PURE__ */ new Set());
-    this.fileId = fileId;
-  }
-  *getNodes(node2, aliasResolutionStack) {
-    let range = this.getRange(node2);
-    if ((0, import_yaml3.isDocument)(node2)) {
-      yield new ParseEvent(EventType.DocumentStart);
-      for (const item of this.getNodes(node2.contents, /* @__PURE__ */ new Set())) {
-        yield item;
-      }
-      yield new ParseEvent(EventType.DocumentEnd);
-    }
-    if ((0, import_yaml3.isCollection)(node2)) {
-      if ((0, import_yaml3.isSeq)(node2)) {
-        yield new ParseEvent(EventType.SequenceStart, new SequenceToken(this.fileId, range, void 0));
-      } else if ((0, import_yaml3.isMap)(node2)) {
-        yield new ParseEvent(EventType.MappingStart, new MappingToken(this.fileId, range, void 0));
-      }
-      for (const item of node2.items) {
-        for (const child of this.getNodes(item, aliasResolutionStack)) {
-          yield child;
-        }
-      }
-      if ((0, import_yaml3.isSeq)(node2)) {
-        yield new ParseEvent(EventType.SequenceEnd);
-      } else if ((0, import_yaml3.isMap)(node2)) {
-        yield new ParseEvent(EventType.MappingEnd);
-      }
-    }
-    if ((0, import_yaml3.isScalar)(node2)) {
-      yield new ParseEvent(EventType.Literal, _YamlObjectReader.getLiteralToken(this.fileId, range, node2));
-    }
-    if ((0, import_yaml3.isAlias)(node2)) {
-      const resolved = node2.resolve(this.doc);
-      if (resolved) {
-        if (aliasResolutionStack.has(resolved)) {
-          return;
-        }
-        const newStack = new Set(aliasResolutionStack);
-        newStack.add(resolved);
-        yield* this.getNodes(resolved, newStack);
-      }
-      return;
-    }
-    if ((0, import_yaml3.isPair)(node2)) {
-      const scalarKey = node2.key;
-      range = this.getRange(scalarKey);
-      const key = scalarKey.value;
-      yield new ParseEvent(EventType.Literal, new StringToken(this.fileId, range, key, void 0));
-      for (const child of this.getNodes(node2.value, aliasResolutionStack)) {
-        yield child;
-      }
-    }
-  }
-  getRange(node2) {
-    const range = node2?.range ?? [];
-    const startPos = range[0];
-    const endPos = range[1];
-    if (startPos !== void 0 && endPos !== void 0) {
-      const slp = this.lineCounter.linePos(startPos);
-      const elp = this.lineCounter.linePos(endPos);
-      return {
-        start: { line: slp.line, column: slp.col },
-        end: { line: elp.line, column: elp.col }
-      };
-    }
-    return void 0;
-  }
-  static getLiteralToken(fileId, range, token) {
-    const value = token.value;
-    if (value === null || value === void 0) {
-      return new NullToken(fileId, range, void 0);
-    }
-    switch (typeof value) {
-      case "number":
-        return new NumberToken(fileId, range, value, void 0);
-      case "boolean":
-        return new BooleanToken(fileId, range, value, void 0);
-      case "string": {
-        let source;
-        let blockScalarHeader;
-        if (token.srcToken && "source" in token.srcToken) {
-          source = token.srcToken.source;
-          if (token.srcToken.type === "block-scalar" && "props" in token.srcToken) {
-            const props = token.srcToken.props;
-            const headerProp = props.find((p) => p.type === "block-scalar-header");
-            if (headerProp?.source) {
-              blockScalarHeader = headerProp.source;
-            }
-          }
-        }
-        return new StringToken(fileId, range, value, void 0, source, blockScalarHeader);
-      }
-      default:
-        throw new Error(`Unexpected value type '${typeof value}' when reading object`);
-    }
-  }
-  allowLiteral() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.Literal) {
-        this._current = this._generator.next();
-        return parseEvent.token;
-      }
-    }
-    return void 0;
-  }
-  allowSequenceStart() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.SequenceStart) {
-        this._current = this._generator.next();
-        return parseEvent.token;
-      }
-    }
-    return void 0;
-  }
-  allowSequenceEnd() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.SequenceEnd) {
-        this._current = this._generator.next();
-        return true;
-      }
-    }
-    return false;
-  }
-  allowMappingStart() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.MappingStart) {
-        this._current = this._generator.next();
-        return parseEvent.token;
-      }
-    }
-    return void 0;
-  }
-  allowMappingEnd() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.MappingEnd) {
-        this._current = this._generator.next();
-        return true;
-      }
-    }
-    return false;
-  }
-  validateEnd() {
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.DocumentEnd) {
-        this._current = this._generator.next();
-        return;
-      }
-    }
-    throw new Error("Expected end of reader");
-  }
-  validateStart() {
-    if (!this._current) {
-      this._current = this._generator.next();
-    }
-    if (!this._current.done) {
-      const parseEvent = this._current.value;
-      if (parseEvent.type === EventType.DocumentStart) {
-        this._current = this._generator.next();
-        return;
-      }
-    }
-    throw new Error("Expected start of reader");
-  }
-};
-function rangeFromLinePos(linePos) {
-  if (linePos === void 0) {
-    return;
-  }
-  const start = { line: linePos[0].line, column: linePos[0].col };
-  const end = linePos.length == 2 ? { line: linePos[1].line, column: linePos[1].col } : start;
-  return { start, end };
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/workflow-parser.js
-function parseWorkflow(entryFile, contextOrTrace) {
-  const context = contextOrTrace instanceof TemplateContext ? contextOrTrace : new TemplateContext(new TemplateValidationErrors(), getWorkflowSchema(), contextOrTrace);
-  const fileId = context.getFileId(entryFile.name);
-  const reader = new YamlObjectReader(fileId, entryFile.content);
-  if (reader.errors.length > 0) {
-    for (const err of reader.errors) {
-      context.error(fileId, err.message, err.range);
-    }
-    return {
-      context,
-      value: void 0
-    };
-  }
-  const result = readTemplate(context, WORKFLOW_ROOT, reader, fileId);
-  return {
-    context,
-    value: result
-  };
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/converter/cron.js
-var import_cronstrue = __toESM(require_cronstrue(), 1);
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/workflow-template.js
-var InputType;
-(function(InputType2) {
-  InputType2["string"] = "string";
-  InputType2["choice"] = "choice";
-  InputType2["boolean"] = "boolean";
-  InputType2["environment"] = "environment";
-})(InputType || (InputType = {}));
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/model/convert.js
-var ErrorPolicy;
-(function(ErrorPolicy2) {
-  ErrorPolicy2[ErrorPolicy2["ReturnErrorsOnly"] = 0] = "ReturnErrorsOnly";
-  ErrorPolicy2[ErrorPolicy2["TryConversion"] = 1] = "TryConversion";
-})(ErrorPolicy || (ErrorPolicy = {}));
-var defaultOptions = {
-  maxReusableWorkflowDepth: 4,
-  fetchReusableWorkflowDepth: 0,
-  errorPolicy: ErrorPolicy.ReturnErrorsOnly,
-  featureFlags: new FeatureFlags()
-};
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/actions/action-constants.js
-var ACTION_ROOT = "action-root-strict";
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/action-v1.0.min.json
-var action_v1_0_min_default = { definitions: { "action-root": { description: "Action file", mapping: { properties: { name: "string", description: "string", inputs: "inputs", outputs: "outputs", runs: "runs" }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "action-root-strict": { description: "GitHub Action manifest file (action.yml/action.yaml) that defines an action's metadata, inputs, outputs, and execution configuration.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions)", mapping: { properties: { name: { type: "non-empty-string", required: true, description: "The name of your action. GitHub displays the name in the Actions tab to help visually identify actions in each job.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#name)" }, description: { type: "string", required: true, description: "A short description of the action. GitHub displays this description in the Actions Marketplace.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#description)" }, author: { type: "string", description: "The name of the action's author.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#author)" }, inputs: "inputs-strict", outputs: "outputs", runs: { type: "runs-strict", required: true }, branding: "branding" } } }, inputs: { mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "input" } }, "inputs-strict": { description: "Input parameters allow you to specify data that the action expects to use during runtime. GitHub stores input parameters as environment variables. Inputs ids with uppercase letters are converted to lowercase during runtime.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputs)", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "input-strict" } }, input: { mapping: { properties: { default: "input-default-context" }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "input-strict": { description: "An input parameter for this action.", mapping: { properties: { description: { type: "string", description: "A string description of the input parameter.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddescription)" }, required: { type: "boolean", description: "A boolean to indicate whether the action requires the input parameter. Set to true when the parameter is required.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_idrequired)" }, default: { type: "input-default-context", description: "A string representing the default value. The default value is used when an input parameter isn't specified in a workflow file.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddefault)" }, deprecationMessage: { type: "string", description: "A string shown to users using the deprecated input, warning them that the input is deprecated and mentioning any alternatives.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddeprecationmessage)" } }, "loose-key-type": "non-empty-string", "loose-value-type": "any" } }, "input-default-context": { description: "A string representing the default value. The default value is used when an input parameter isn't specified in a workflow file.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#inputsinput_iddefault)", context: ["github", "strategy", "matrix", "job", "runner", "hashFiles(1,255)"], string: {} }, outputs: { description: "Output parameters allow you to declare data that an action sets. Actions that run later in a workflow can use the output data set in previously run actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputs-for-composite-actions)", mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "output-definition" } }, "output-definition": { description: "An output parameter for this action.", mapping: { properties: { description: { type: "string", description: "A string description of the output parameter.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputsoutput_iddescription)" }, value: { type: "output-value", description: "The value that the output parameter will be mapped to. You can set this to a string or an expression with context.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputsoutput_idvalue)" } } } }, "output-value": { description: "The value that the output parameter will be mapped to. You can set this to a string or an expression with context.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#outputsoutput_idvalue)", context: ["github", "strategy", "matrix", "steps", "inputs", "job", "runner", "env"], string: {} }, "runs-if": { description: "Condition to control when this action's pre or post script runs.", context: ["runner", "github", "job", "strategy", "matrix", "env", "inputs", "always(0,0)", "success(0,0)", "failure(0,0)", "cancelled(0,0)", "hashFiles(1,255)"], string: {} }, runs: { "one-of": ["container-runs", "node-runs", "composite-runs", "plugin-runs"] }, "runs-strict": { description: "Specifies whether this is a JavaScript action, a composite action, or a Docker container action and how the action is executed.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", "one-of": ["container-runs-strict", "node-runs-strict", "composite-runs-strict"] }, "plugin-runs": { mapping: { properties: { plugin: "non-empty-string" } } }, "container-runs": { mapping: { properties: { using: "non-empty-string", image: "non-empty-string", entrypoint: "non-empty-string", args: "container-runs-args", env: "container-runs-env", "pre-entrypoint": "non-empty-string", "pre-if": "non-empty-string", "post-entrypoint": "non-empty-string", "post-if": "non-empty-string" } } }, "container-runs-args": { description: "An array of strings that define the inputs for a Docker container. Inputs can include hardcoded strings. GitHub passes the args to the container's ENTRYPOINT when the container starts up.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsargs)", sequence: { "item-type": "container-runs-context" } }, "container-runs-env": { description: "Specifies a key/value map of environment variables to set in the container environment.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsenv)", context: ["inputs"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "container-runs-context": { context: ["inputs"], string: {} }, "node-runs": { mapping: { properties: { using: "non-empty-string", main: "non-empty-string", pre: "non-empty-string", "pre-if": "non-empty-string", post: "non-empty-string", "post-if": "non-empty-string" } } }, "composite-runs": { mapping: { properties: { using: "non-empty-string", steps: "composite-steps" } } }, "container-runs-strict": { description: "Configuration for Docker container actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", mapping: { properties: { using: { type: "using", required: true, description: "The runtime used to execute the action. Must be docker for Docker container actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsusing)" }, image: { type: "non-empty-string", required: true, description: "The Docker image to use as the container to run the action. The value can be the Docker base image name, a local Dockerfile in your repository, or a public image in Docker Hub or another registry.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsimage)" }, entrypoint: { type: "non-empty-string", description: "Overrides the Docker ENTRYPOINT in the Dockerfile, or sets it if one wasn't already specified.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsentrypoint)" }, args: "container-runs-args", env: "container-runs-env", "pre-entrypoint": { type: "non-empty-string", description: "Allows you to run a script before the entrypoint action begins.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre-entrypoint)" }, "pre-if": { type: "runs-if", description: "Allows you to define conditions for the pre: action execution. The pre: action will only run if the conditions in pre-if are met. If not set, then pre-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre-if)" }, "post-entrypoint": { type: "non-empty-string", description: "Allows you to run a cleanup script once the runs.entrypoint action has completed.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost-entrypoint)" }, "post-if": { type: "runs-if", description: "Allows you to define conditions for the post: action execution. The post: action will only run if the conditions in post-if are met. If not set, then post-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost-if)" } } } }, "node-runs-strict": { description: "Configuration for JavaScript actions executed with Node.js.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", mapping: { properties: { using: { type: "using", required: true, description: "The runtime used to execute the action. Use node20 or node24 for JavaScript actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsusing)" }, main: { type: "non-empty-string", required: true, description: "The file that contains your action code. The runtime specified in using executes this file.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsmain)" }, pre: { type: "non-empty-string", description: "Allows you to run a script at the start of a job, before the main: action begins. You can use pre: to run prerequisite setup scripts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre)" }, "pre-if": { type: "runs-if", description: "Allows you to define conditions for the pre: action execution. The pre: action will only run if the conditions in pre-if are met. If not set, then pre-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspre-if)" }, post: { type: "non-empty-string", description: "Allows you to run a script at the end of a job, once the main: action has completed. You can use post: to run cleanup scripts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost)" }, "post-if": { type: "runs-if", description: "Allows you to define conditions for the post: action execution. The post: action will only run if the conditions in post-if are met. If not set, then post-if defaults to always().\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runspost-if)" } } } }, "composite-runs-strict": { description: "Configuration for composite actions that run multiple steps.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runs)", mapping: { properties: { using: { type: "using", required: true, description: "The runtime used to execute the action. Must be composite for composite actions.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsusing)" }, steps: { type: "composite-steps", required: true } } } }, "composite-steps": { description: "The steps that you plan to run in this action. These can be either run steps or uses steps.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runssteps)", sequence: { "item-type": "composite-step" } }, "composite-step": { description: "A step within a composite action.", "one-of": ["run-step", "uses-step"] }, "run-step": { description: "Runs a command-line program using the operating system's shell.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsrun)", mapping: { properties: { name: { type: "string-steps-context", description: "A name for your step to display on GitHub.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsname)" }, id: { type: "non-empty-string", description: "A unique identifier for the step. You can use the id to reference the step in contexts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsid)" }, if: { type: "step-if", description: "You can use the if conditional to prevent a step from running unless a condition is met. You can use any supported context and expression to create a conditional.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsif)" }, run: { type: "string-steps-context", required: true, description: "The command you want to run. This can be inline or a script in your action repository.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsrun)" }, shell: { type: "string-steps-context", required: true, description: "The shell where you want to run the command. Any shell supported by the runner can be used. Required if run is set.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsshell)" }, env: "step-env", "continue-on-error": { type: "boolean-steps-context", description: "Prevents the action from failing when a step fails. Set to true to allow the action to pass when this step fails.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepscontinue-on-error)" }, "working-directory": { type: "string-steps-context", description: "Specifies the working directory where the command is run.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsworking-directory)" } } } }, "uses-step": { description: "Runs another action as part of a step in your action.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsuses)", mapping: { properties: { name: { type: "string-steps-context", description: "A name for your step to display on GitHub.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsname)" }, id: { type: "non-empty-string", description: "A unique identifier for the step. You can use the id to reference the step in contexts.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsid)" }, if: { type: "step-if", description: "You can use the if conditional to prevent a step from running unless a condition is met. You can use any supported context and expression to create a conditional.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsif)" }, uses: { type: "non-empty-string", required: true, description: "Selects an action to run as part of a step in your action. An action is a reusable unit of code.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsuses)" }, with: "step-with", env: "step-env", "continue-on-error": { type: "boolean-steps-context", description: "Prevents the action from failing when a step fails. Set to true to allow the action to pass when this step fails.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepscontinue-on-error)" } } } }, "string-steps-context": { context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], string: {} }, "boolean-steps-context": { context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], boolean: {} }, "step-env": { description: "Sets variables for steps to use in the runner environment. You can also set variables for the entire action.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsenv)", context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, "step-if": { description: "You can use the if conditional to prevent a step from running unless a condition is met. You can use any supported context and expression to create a conditional.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepsif)", context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "always(0,0)", "failure(0,0)", "cancelled(0,0)", "success(0,0)", "hashFiles(1,255)"], string: {} }, "step-with": { description: "A map of the input parameters defined by the action. Each input parameter is a key/value pair.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#runsstepswith)", context: ["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env", "hashFiles(1,255)"], mapping: { "loose-key-type": "non-empty-string", "loose-value-type": "string" } }, branding: { description: "You can use a color and Feather icon to create a badge to personalize and distinguish your action in GitHub Marketplace.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#branding)", mapping: { properties: { icon: { type: "branding-icon", description: "The name of the v4.28.0 Feather icon to use.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingicon)" }, color: { type: "branding-color", description: "The background color of the badge.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingcolor)" } } } }, "branding-icon": { description: "The name of the v4.28.0 Feather icon to use. Brand icons are omitted as well as: coffee, columns, divide-circle, divide-square, divide, frown, hexagon, key, meh, mouse-pointer, smile, tool, x-octagon.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingicon)", "allowed-values": ["activity", "airplay", "alert-circle", "alert-octagon", "alert-triangle", "align-center", "align-justify", "align-left", "align-right", "anchor", "aperture", "archive", "arrow-down-circle", "arrow-down-left", "arrow-down-right", "arrow-down", "arrow-left-circle", "arrow-left", "arrow-right-circle", "arrow-right", "arrow-up-circle", "arrow-up-left", "arrow-up-right", "arrow-up", "at-sign", "award", "bar-chart-2", "bar-chart", "battery-charging", "battery", "bell-off", "bell", "bluetooth", "bold", "book-open", "book", "bookmark", "box", "briefcase", "calendar", "camera-off", "camera", "cast", "check-circle", "check-square", "check", "chevron-down", "chevron-left", "chevron-right", "chevron-up", "chevrons-down", "chevrons-left", "chevrons-right", "chevrons-up", "circle", "clipboard", "clock", "cloud-drizzle", "cloud-lightning", "cloud-off", "cloud-rain", "cloud-snow", "cloud", "code", "command", "compass", "copy", "corner-down-left", "corner-down-right", "corner-left-down", "corner-left-up", "corner-right-down", "corner-right-up", "corner-up-left", "corner-up-right", "cpu", "credit-card", "crop", "crosshair", "database", "delete", "disc", "dollar-sign", "download-cloud", "download", "droplet", "edit-2", "edit-3", "edit", "external-link", "eye-off", "eye", "fast-forward", "feather", "file-minus", "file-plus", "file-text", "file", "film", "filter", "flag", "folder-minus", "folder-plus", "folder", "gift", "git-branch", "git-commit", "git-merge", "git-pull-request", "globe", "grid", "hard-drive", "hash", "headphones", "heart", "help-circle", "home", "image", "inbox", "info", "italic", "layers", "layout", "life-buoy", "link-2", "link", "list", "loader", "lock", "log-in", "log-out", "mail", "map-pin", "map", "maximize-2", "maximize", "menu", "message-circle", "message-square", "mic-off", "mic", "minimize-2", "minimize", "minus-circle", "minus-square", "minus", "monitor", "moon", "more-horizontal", "more-vertical", "move", "music", "navigation-2", "navigation", "octagon", "package", "paperclip", "pause-circle", "pause", "percent", "phone-call", "phone-forwarded", "phone-incoming", "phone-missed", "phone-off", "phone-outgoing", "phone", "pie-chart", "play-circle", "play", "plus-circle", "plus-square", "plus", "pocket", "power", "printer", "radio", "refresh-ccw", "refresh-cw", "repeat", "rewind", "rotate-ccw", "rotate-cw", "rss", "save", "scissors", "search", "send", "server", "settings", "share-2", "share", "shield-off", "shield", "shopping-bag", "shopping-cart", "shuffle", "sidebar", "skip-back", "skip-forward", "slash", "sliders", "smartphone", "speaker", "square", "star", "stop-circle", "sun", "sunrise", "sunset", "tablet", "tag", "target", "terminal", "thermometer", "thumbs-down", "thumbs-up", "toggle-left", "toggle-right", "trash-2", "trash", "trending-down", "trending-up", "triangle", "truck", "tv", "type", "umbrella", "underline", "unlock", "upload-cloud", "upload", "user-check", "user-minus", "user-plus", "user-x", "user", "users", "video-off", "video", "voicemail", "volume-1", "volume-2", "volume-x", "volume", "watch", "wifi-off", "wifi", "wind", "x-circle", "x-square", "x", "zap-off", "zap", "zoom-in", "zoom-out"] }, "branding-color": { description: "The background color of the badge.\n\n[Documentation](https://docs.github.com/actions/creating-actions/metadata-syntax-for-github-actions#brandingcolor)", "allowed-values": ["white", "yellow", "blue", "green", "orange", "red", "purple", "gray-dark"] }, using: { description: "The runtime used to execute the action.", "allowed-values": ["docker", "node12", "node16", "node20", "node24", "composite"] }, "non-empty-string": { string: { "require-non-empty": true } } } };
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/actions/action-schema.js
-var schema2;
-function getActionSchema() {
-  if (schema2 === void 0) {
-    const json2 = JSON.stringify(action_v1_0_min_default);
-    schema2 = TemplateSchema.load(new JSONObjectReader(void 0, json2));
-  }
-  return schema2;
-}
-
-// ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/actions/action-parser.js
-function parseAction(entryFile, contextOrTrace) {
-  const context = contextOrTrace instanceof TemplateContext ? contextOrTrace : new TemplateContext(new TemplateValidationErrors(), getActionSchema(), contextOrTrace);
-  const fileId = context.getFileId(entryFile.name);
-  const reader = new YamlObjectReader(fileId, entryFile.content);
-  if (reader.errors.length > 0) {
-    for (const err of reader.errors) {
-      context.error(fileId, err.message, err.range);
-    }
-    return {
-      context,
-      value: void 0
-    };
-  }
-  const result = readTemplate(context, ACTION_ROOT, reader, fileId);
-  return {
-    context,
-    value: result
-  };
-}
-
-// ../core/src/validate.ts
-var import_yaml4 = __toESM(require_dist(), 1);
-
-// ../core/src/ir.ts
-function lookup(rec, key) {
-  if (key in rec) return rec[key];
-  const lower = key.toLowerCase();
-  for (const k of Object.keys(rec)) if (k.toLowerCase() === lower) return rec[k];
-  return void 0;
-}
-function siteAt(sites, at) {
-  return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
-}
-
-// ../core/src/rules/util.ts
-function isWholeExpression(site) {
-  if (site.segments.length !== 1) return false;
-  const templated = findTemplateSegments(site.text);
-  return templated.length === 0 || templated.length === 1 && site.text.trim() === site.text.slice(templated[0].start, templated[0].end);
-}
-function guardOf(decl) {
-  return decl.ifValue === false ? false : decl.ifSite;
-}
-function useInCondition(site, ref) {
-  const seg = site.segments.find((s) => s.refs.includes(ref));
-  return seg ? conditionUses(seg.expr, isWholeExpression(site)).get(ref.start) : void 0;
-}
-function* refsOf(unit) {
-  for (const site of unit.sites)
-    for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
-}
-function readsContextDynamically(unit, context) {
-  if (unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error)))
-    return true;
-  for (const { ref } of refsOf(unit)) {
-    if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
-    if (context === "inputs" && ref.context === "github" && ref.path[0] === "event") {
-      if (ref.path.length === 1 || ref.path[1] === "inputs" && (ref.path.length === 2 || ref.path[2] === "?"))
-        return true;
-    }
-  }
-  return false;
-}
-function namesOwner(ref) {
-  const owner = ref.path[0];
-  return (ref.context === "needs" || ref.context === "jobs" || ref.context === "steps") && owner !== void 0 && owner !== "?" && owner !== "*";
-}
-function chainTo(index, target) {
-  const queue = [{ path: target, chain: [] }];
-  const seen = /* @__PURE__ */ new Set([target]);
-  let fallback = [];
-  while (queue.length) {
-    const { path, chain } = queue.shift();
-    const callers = index.callersOf(path);
-    if (callers.length === 0) return chain;
-    if (chain.length > fallback.length) fallback = chain;
-    for (const c of callers) {
-      if (seen.has(c.caller.path)) continue;
-      seen.add(c.caller.path);
-      queue.push({ path: c.caller.path, chain: [c, ...chain] });
-    }
-  }
-  return fallback;
-}
-function chainRelated(chain) {
-  return chain.map((c) => ({
-    loc: c.job.uses?.loc ?? c.job.loc,
-    message: `jobs.${c.job.id} calls ${c.callee.path}`
-  }));
-}
-function editDistance(a, b) {
-  const x = a.toLowerCase();
-  const y = b.toLowerCase();
-  const dp = Array.from({ length: x.length + 1 }, (_, i) => [i, ...Array(y.length).fill(0)]);
-  for (let j = 1; j <= y.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= x.length; i++) {
-    for (let j = 1; j <= y.length; j++) {
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + (x[i - 1] === y[j - 1] ? 0 : 1)
-      );
-    }
-  }
-  return dp[x.length][y.length];
-}
-function typoDistance(x, y) {
-  const d = Array.from(
-    { length: x.length + 1 },
-    (_, i) => Array.from({ length: y.length + 1 }, (_2, j) => i === 0 ? j : j === 0 ? i : 0)
-  );
-  for (let i = 1; i <= x.length; i++) {
-    for (let j = 1; j <= y.length; j++) {
-      const cost = x[i - 1] === y[j - 1] ? 0 : 1;
-      let best = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
-      if (i > 1 && j > 1 && x[i - 1] === y[j - 2] && x[i - 2] === y[j - 1])
-        best = Math.min(best, d[i - 2][j - 2] + 1);
-      d[i][j] = best;
-    }
-  }
-  return d[x.length][y.length];
-}
-function didYouMean(name, candidates) {
-  const norm = (s) => s.toLowerCase().replace(/[-_]/g, "");
-  let best;
-  for (const c of candidates) {
-    const [a, b] = [norm(name), norm(c)];
-    const prefix = Math.min(a.length, b.length) >= 3 && (a.startsWith(b) || b.startsWith(a));
-    const d = a === b ? 0 : prefix ? 1 : editDistance(name, c);
-    if (!best || d < best.d) best = { c, d };
-  }
-  if (!best) return void 0;
-  return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
-}
-var quote = (s) => `"${escapeControl(s)}"`;
-function listNames(names, max = 6) {
-  if (names.length === 0) return "(none)";
-  const shown = names.slice(0, max).join(", ");
-  return names.length > max ? `${shown}, \u2026 (+${names.length - max})` : shown;
-}
-function isCallOnly(wf) {
-  return wf.triggers.length === 1 && wf.triggers[0] === "workflow_call";
-}
-
-// ../core/src/schema.ts
-var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
-var CACHE_MODE = {
-  values: ["read", "write", "write-only", "none"],
-  in: ["workflow-root", "workflow-root-strict", "job-factory", "workflow-job"]
-};
-var workflow;
-function workflowSchema() {
-  if (workflow) return workflow;
-  const base = getWorkflowSchema();
-  if (base.definitions["cache-mode"]) {
-    workflow = base;
-    return workflow;
-  }
-  const definitions = { ...base.definitions };
-  const cacheMode = new OneOfDefinition("cache-mode");
-  for (const value of CACHE_MODE.values) {
-    const constant = new StringDefinition(`cache-mode-${value}`);
-    constant.constant = value;
-    definitions[constant.key] = constant;
-    cacheMode.oneOf.push(constant.key);
-  }
-  definitions[cacheMode.key] = cacheMode;
-  const property = new PropertyDefinition(new StringToken(void 0, void 0, cacheMode.key, void 0));
-  for (const name of CACHE_MODE.in) {
-    const mapping = definitions[name];
-    if (mapping?.definitionType !== DefinitionType.Mapping) continue;
-    const { properties } = mapping;
-    if (properties["cache-mode"]) continue;
-    definitions[name] = clone2(mapping, {
-      properties: { ...properties, "cache-mode": property }
-    });
-  }
-  workflow = clone2(base, { definitions });
-  return workflow;
-}
-function schemaFor(kind) {
-  return kind === "workflow" ? workflowSchema() : getActionSchema();
-}
-function clone2(value, overrides) {
-  return Object.assign(Object.create(Object.getPrototypeOf(value)), value, overrides);
-}
-function expand(schema3, name, seen = /* @__PURE__ */ new Set()) {
-  if (seen.has(name)) return [];
-  seen.add(name);
-  const def = schema3.definitions[name];
-  if (!def) return [];
-  if (def.definitionType !== DefinitionType.OneOf) return [def];
-  return def.oneOf.flatMap((n) => expand(schema3, n, seen));
-}
-function mappingsAt(schema3, root, path) {
-  let types = [root];
-  for (const seg of path) {
-    const next = /* @__PURE__ */ new Set();
-    for (const def of types.flatMap((t) => expand(schema3, t))) {
-      if (typeof seg === "number" && def.definitionType === DefinitionType.Sequence) {
-        next.add(def.itemType);
-      } else if (typeof seg === "string" && def.definitionType === DefinitionType.Mapping) {
-        const mapping = def;
-        const property = mapping.properties[seg];
-        if (property) next.add(property.type);
-        else if (mapping.looseValueType) next.add(mapping.looseValueType);
-      }
-    }
-    types = [...next];
-  }
-  const out = /* @__PURE__ */ new Set();
-  for (const t of types)
-    for (const def of expand(schema3, t))
-      if (def.definitionType === DefinitionType.Mapping) out.add(def);
-  return [...out];
-}
-
-// ../core/src/validate.ts
-var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
-var UNCLOSED = /^The expression is not closed\b/;
-var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
-var LOCAL_ACTION_NOISE = /Required property is missing: (name|description)\b/i;
-var CONTEXT_NAMES = new Set(KNOWN_CONTEXTS);
-var FUNCTION_NAMES = new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLowerCase()));
-var WORKFLOW_FEATURES = new FeatureFlags({ allowBackgroundSteps: true });
-var EVENT_FILTERS = [
-  "branches",
-  "branches-ignore",
-  "tags",
-  "tags-ignore",
-  "paths",
-  "paths-ignore",
-  "types",
-  "workflows"
-];
-function isContextError(message) {
-  const named = /Unrecognized named-value: '([^']+)'/i.exec(message);
-  if (named) return CONTEXT_NAMES.has(named[1].toLowerCase());
-  const fn = /Unrecognized function: '([^']+)'/i.exec(message);
-  return fn ? FUNCTION_NAMES.has(fn[1].toLowerCase()) : false;
-}
-function againstFP502(unit, d) {
-  const site = d.at && siteAt(unit.sites, d.at);
-  if (!site) return "own";
-  if (site.loc.endLine > site.loc.line) {
-    return site.segments.some((seg) => seg.expr.error) ? "fp502" : "misread";
-  }
-  const message = UNCLOSED.test(d.message) ? UNTERMINATED_EXPRESSION : d.message;
-  return site.segments.some((seg) => seg.expr.error?.message === message) ? "fp502" : "own";
-}
-var isExpressionError = (d) => d.kind !== "context" && !!d.at && EXPRESSION_ERROR.test(d.message);
-var atKey = (d) => d.at ? `${d.at.line}:${d.at.column}` : "";
-function classifyExpressions(unit, diagnostics) {
-  const failed = new Set(diagnostics.filter(isExpressionError).map(atKey));
-  const out = [];
-  for (const d of diagnostics) {
-    if (!d.kind && d.at && failed.has(atKey(d)) && UNPARSED_VALUE.test(d.message)) continue;
-    if (!isExpressionError(d)) {
-      out.push(d);
-      continue;
-    }
-    const relation = againstFP502(unit, d);
-    if (relation === "misread") continue;
-    out.push(relation === "fp502" ? { ...d, kind: "expression" } : d);
-  }
-  return out;
-}
-function workflowContext() {
-  const context = new TemplateContext(
-    new TemplateValidationErrors(),
-    workflowSchema(),
-    new NoOperationTraceWriter()
-  );
-  context.state.featureFlags = WORKFLOW_FEATURES;
-  return context;
-}
-function validateSchema(unit, logger) {
-  try {
-    const file2 = { name: unit.file, content: unit.source.text };
-    const result = unit.kind === "workflow" ? parseWorkflow(file2, workflowContext()) : parseAction(file2, new NoOperationTraceWriter());
-    const errors = result.context.errors.getErrors();
-    const diagnostics = errors.filter((e) => !(unit.kind === "action" && LOCAL_ACTION_NOISE.test(e.message))).map((e) => {
-      const r = e.range;
-      const at = /\(Line: (\d+), Col: (\d+)\)/.exec(e.message);
-      const message = (e.message.startsWith(unit.file) ? e.message.slice(unit.file.length) : e.message).replace(/^(?: \(Line: \d+, Col: \d+\))?:\s*/, "").replace(/\.\s*Located at position \d+ within expression:.*$/s, "");
-      return {
-        message,
-        ...isContextError(message) ? { kind: "context" } : {},
-        ...at ? { at: { line: Number(at[1]), column: Number(at[2]) } } : {},
-        loc: r ? {
-          file: unit.file,
-          line: r.start.line,
-          column: r.start.column,
-          endLine: r.end.line,
-          endColumn: r.end.column
-        } : { file: unit.file, line: 1, column: 1, endLine: 1, endColumn: 1 }
-      };
-    });
-    return explain(unit, classifyExpressions(unit, diagnostics));
-  } catch (err) {
-    logger.debug(`schema validation skipped for ${unit.file}`, { reason: err.message });
-    return [];
-  }
-}
-var posKey = (line, column) => `${line}:${column}`;
-function shapeOf(unit) {
-  const lineCounter = new import_yaml4.LineCounter();
-  const doc = (0, import_yaml4.parseDocument)(unit.source.text, { lineCounter, prettyErrors: false, strict: false });
-  if (doc.errors.length > 0) return void 0;
-  const shape = { maps: /* @__PURE__ */ new Map(), keys: /* @__PURE__ */ new Map() };
-  const locOf = (range) => {
-    const a = lineCounter.linePos(range[0]);
-    const b = lineCounter.linePos(range[1]);
-    return { file: unit.file, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
-  };
-  const mergeOf = (value) => {
-    const sources = (0, import_yaml4.isSeq)(value) ? value.items : [value];
-    const maps = sources.map((s) => (0, import_yaml4.isAlias)(s) ? s.resolve(doc) : s).filter(import_yaml4.isMap);
-    const keys = maps.flatMap((m) => m.items.flatMap((p) => (0, import_yaml4.isScalar)(p.key) ? [String(p.key.value)] : []));
-    const aliases = sources.filter(import_yaml4.isAlias).map((a) => `*${a.source}`);
-    return { aliases: [...new Set(aliases)], keys };
-  };
-  const walk = (node2, path) => {
-    if ((0, import_yaml4.isSeq)(node2)) {
-      for (const [i, item] of node2.items.entries()) walk(item, [...path, i]);
-      return;
-    }
-    if (!(0, import_yaml4.isMap)(node2) || !node2.range) return;
-    const map2 = { path, keys: [], loc: locOf(node2.range) };
-    shape.maps.set(posKey(map2.loc.line, map2.loc.column), map2);
-    for (const pair of node2.items) {
-      if (!(0, import_yaml4.isScalar)(pair.key) || !pair.key.range) continue;
-      const name = String(pair.key.value);
-      const key = { name, map: map2, loc: locOf(pair.key.range) };
-      if (name === "<<") key.merge = mergeOf(pair.value);
-      map2.keys.push(key);
-      shape.keys.set(posKey(key.loc.line, key.loc.column), key);
-      walk(pair.value, [...path, name]);
-    }
-  };
-  walk(doc.contents, []);
-  return shape;
-}
-var unexpectedValue = (name) => `Unexpected value '${name}'`;
-var propertyOf = (def, name) => Object.hasOwn(def.properties, name) ? def.properties[name] : void 0;
-function explain(unit, diagnostics) {
-  if (!diagnostics.some((d) => !d.kind)) return diagnostics;
-  const shape = shapeOf(unit);
-  if (!shape) return diagnostics;
-  const schema3 = schemaFor(unit.kind);
-  const root = SCHEMA_ROOT[unit.kind];
-  const keyOf = /* @__PURE__ */ new Map();
-  const groups = /* @__PURE__ */ new Map();
-  for (const d of diagnostics) {
-    if (d.kind) continue;
-    const pos = posKey(d.loc.line, d.loc.column);
-    const unexpected = /^Unexpected value '(.*)'$/s.exec(d.message);
-    const key = unexpected ? shape.keys.get(pos) : void 0;
-    let map2;
-    if (key && key.name === unexpected[1]) {
-      keyOf.set(d, key);
-      map2 = key.map;
-    } else if (d.message.startsWith("Required property is missing: ")) {
-      map2 = shape.maps.get(pos);
-    }
-    if (map2) groups.set(map2, [...groups.get(map2) ?? [], d]);
-  }
-  const replaced = /* @__PURE__ */ new Map();
-  for (const [map2, group2] of groups) {
-    const resolved = resolveAlternatives(map2, group2, keyOf, schema3, root);
-    if (!resolved) continue;
-    for (const [i, d] of group2.entries()) replaced.set(d, i === 0 ? resolved : []);
-  }
-  const out = [];
-  for (const d of diagnostics.flatMap((d2) => replaced.get(d2) ?? [d2])) {
-    const key = keyOf.get(d);
-    if (!key || d.message !== unexpectedValue(key.name)) {
-      out.push(d);
-      continue;
-    }
-    const ignored = ignoredKey(unit.kind, key, schema3, root);
-    if (ignored) out.push({ ...d, kind: "ignored", ...ignored });
-    else if (key.merge) out.push({ ...d, fix: mergeFix(key, "here", "the whole mapping") });
-    else out.push(d);
-  }
-  return out;
-}
-function resolveAlternatives(map2, group2, keyOf, schema3, root) {
-  const shapes = mappingsAt(schema3, root, map2.path);
-  if (shapes.length < 2) return void 0;
-  const names = new Set(map2.keys.map((k) => k.name));
-  const scored = shapes.map((def) => {
-    const unexpected = def.looseKeyType ? [] : map2.keys.filter((k) => !propertyOf(def, k.name));
-    const missing = Object.entries(def.properties).filter(([name, p]) => p.required && !names.has(name)).map(([name]) => name);
-    return { def, unexpected, missing, score: unexpected.length + missing.length };
-  }).sort((a, b) => a.score - b.score);
-  const [best, runnerUp] = scored;
-  if (!best || !runnerUp || best.score === 0) return void 0;
-  const agrees = (def) => group2.every((d) => {
-    const key = keyOf.get(d);
-    if (key) return !def.looseKeyType && !propertyOf(def, key.name);
-    return propertyOf(def, d.message.slice("Required property is missing: ".length))?.required === true;
-  });
-  const explained = (def) => {
-    const others = shapes.filter((s) => s !== def);
-    const own2 = map2.keys.filter((k) => propertyOf(def, k.name) && !others.some((o) => propertyOf(o, k.name)));
-    const anchor2 = own2.find((k) => propertyOf(def, k.name).required) ?? own2[0];
-    return (key, d) => {
-      if (!anchor2 || !others.some((o) => propertyOf(o, key.name))) return d;
-      const e = { ...d, message: `${d.message} (not allowed together with \`${anchor2.name}\`)` };
-      keyOf.set(e, key);
-      return e;
-    };
-  };
-  if (best.score < runnerUp.score && !agrees(best.def)) {
-    const explain3 = explained(best.def);
-    return [
-      ...best.unexpected.map((key) => {
-        const parsed = group2.find((d2) => keyOf.get(d2) === key);
-        const d = parsed ?? { message: unexpectedValue(key.name), loc: key.loc };
-        keyOf.set(d, key);
-        return explain3(key, d);
-      }),
-      ...best.missing.map((name) => {
-        const message = `Required property is missing: ${name}`;
-        return group2.find((d) => d.message === message) ?? { message, loc: map2.loc };
-      })
-    ];
-  }
-  const guesses = scored.filter((s) => s.score === best.score && agrees(s.def));
-  if (guesses.length !== 1) return void 0;
-  const explain2 = explained(guesses[0].def);
-  return group2.map((d) => keyOf.has(d) ? explain2(keyOf.get(d), d) : d);
-}
-function ignoredKey(kind, key, schema3, root) {
-  const { path } = key.map;
-  const shapes = mappingsAt(schema3, root, path);
-  const known2 = [...new Set(shapes.flatMap((s) => Object.keys(s.properties)))];
-  if (known2.includes(key.name)) return void 0;
-  const guess = didYouMean(key.name, known2);
-  const hint = guess ? ` (did you mean \`${guess}\`?)` : "";
-  const rename2 = guess ? `Rename it to \`${guess}\`.` : void 0;
-  if (kind === "action" && path.length === 0) {
-    if (key.merge) {
-      return {
-        message: `GitHub ignores this key: YAML merge keys (\`<<\`) are not supported, so ${merged(key)} are not applied`,
-        fix: mergeFix(key, "at the top level")
-      };
-    }
-    if (key.name === "env") {
-      return {
-        message: "GitHub ignores this key: actions have no top-level `env`, so the action's steps never see these values",
-        fix: "Set the variables in `env:` on the steps that read them, or declare them as inputs."
-      };
-    }
-    return {
-      message: `GitHub ignores this key: action metadata has no \`${key.name}\`${hint}, so it has no effect`,
-      fix: rename2 ?? "Remove it."
-    };
-  }
-  const event = path[1];
-  if (kind === "workflow" && path.length === 2 && path[0] === "on" && typeof event === "string" && event !== "workflow_call" && shapes.length > 0) {
-    if (key.merge) {
-      const filters = key.merge.keys.some((k) => EVENT_FILTERS.includes(k));
-      return {
-        message: `GitHub ignores this key: YAML merge keys (\`<<\`) are not supported, so ${merged(key, filters ? "filters" : "keys")} are not applied to \`${event}\`${filters ? " and the workflow runs regardless of them" : ""}`,
-        fix: mergeFix(key, `under \`${event}\``, `the whole event (\`${event}: ${key.merge.aliases[0]}\`)`)
-      };
-    }
-    const filter = didYouMean(key.name, EVENT_FILTERS) !== void 0;
-    return {
-      message: `GitHub ignores this key: the \`${event}\` event does not support \`${key.name}\`${hint}, ${filter ? "so the workflow runs regardless of it" : "so it has no effect"}`,
-      fix: rename2 ?? (filter ? "Remove it, or check the condition in a job's `if:` instead." : "Remove it.")
-    };
-  }
-  return void 0;
-}
-function merged(key, what = "keys") {
-  const aliases = key.merge?.aliases ?? [];
-  return aliases.length > 0 ? `the ${what} in ${aliases.map((a) => `\`${a}\``).join(", ")}` : `the ${what} merged here`;
-}
-function mergeFix(key, where, whole) {
-  const repeat = `GitHub does not support YAML merge keys (\`<<\`): repeat the keys ${where}`;
-  const single = key.merge?.aliases.length === 1 && key.map.keys.length === 1;
-  return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
-}
-
-// ../core/src/script-writes.ts
-import { posix as posix2 } from "path";
-var escapes = (path) => path === ".." || path.startsWith("../");
-var PREFIXES = /* @__PURE__ */ new Set([
-  "sudo",
-  "command",
-  "builtin",
-  "exec",
-  "nohup",
-  "time",
-  "env",
-  "if",
-  "while",
-  "until",
-  "then",
-  "do",
-  "else",
-  "!",
-  "{"
-]);
-var COPIES = /* @__PURE__ */ new Set([
-  "cp",
-  "mv",
-  "ln",
-  "rsync",
-  "install",
-  "scp",
-  "copy-item",
-  "move-item",
-  "copy",
-  "xcopy",
-  "move"
-]);
-var CREATES = /* @__PURE__ */ new Set(["mkdir", "md", "touch", "tee", "new-item"]);
-var OUTPUT_OPTIONS = /* @__PURE__ */ new Set([
-  "-o",
-  "--output",
-  "--output-dir",
-  "--output-directory",
-  "--out-dir",
-  "--outdir",
-  "--out",
-  "--dest",
-  "--destination",
-  "-destination"
-]);
-var COMMAND_OUTPUT_OPTIONS = {
-  tar: ["-C", "--directory"],
-  unzip: ["-d"],
-  wget: ["-O", "-P", "--output-document", "--directory-prefix"],
-  gh: ["-D", "--dir", "-O"],
-  cp: ["-t", "--target-directory"],
-  mv: ["-t", "--target-directory"],
-  ln: ["-t", "--target-directory"],
-  install: ["-t", "--target-directory"]
-};
-var CLONE_VALUE_OPTIONS = /* @__PURE__ */ new Set([
-  "-b",
-  "--branch",
-  "--depth",
-  "-o",
-  "--origin",
-  "--reference",
-  "--reference-if-able",
-  "--filter",
-  "-c",
-  "--config",
-  "-j",
-  "--jobs",
-  "--shallow-since",
-  "--shallow-exclude",
-  "--separate-git-dir",
-  "-u",
-  "--upload-pack",
-  "--template",
-  "--server-option",
-  "--bundle-uri",
-  "--name"
-]);
-var escaped = (line, i) => line[i] === "\\" && !/[\w.-]/.test(line[i + 1] ?? "");
-function tokenize(line) {
-  const tokens = [];
-  const heredocs = [];
-  let word;
-  const end = () => {
-    if (word !== void 0) tokens.push({ word });
-    word = void 0;
-  };
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === " " || c === "	" || c === "\r") {
-      end();
-    } else if (c === "#" && word === void 0) {
-      break;
-    } else if (c === "'") {
-      const close = line.indexOf("'", i + 1);
-      word = (word ?? "") + line.slice(i + 1, close < 0 ? line.length : close);
-      i = close < 0 ? line.length : close;
-    } else if (c === '"') {
-      let j = i + 1;
-      let text3 = "";
-      for (; j < line.length && line[j] !== '"'; j++) text3 += escaped(line, j) ? line[++j] ?? "" : line[j];
-      word = (word ?? "") + text3;
-      i = j;
-    } else if (escaped(line, i)) {
-      word = (word ?? "") + (line[++i] ?? "");
-    } else if (c === "<") {
-      const here = /^<<(?!<)-?\s*(['"]?)([\w.-]+)\1/.exec(line.slice(i));
-      if (here) heredocs.push(here[2]);
-      end();
-      tokens.push({ op: "<" });
-      i += here ? here[0].length - 1 : line[i + 1] === "<" ? line[i + 2] === "<" ? 2 : 1 : 0;
-    } else if (c === ">") {
-      if (word !== void 0 && /^\d+$/.test(word)) word = void 0;
-      end();
-      let j = i + 1;
-      if (line[j] === ">" || line[j] === "|") j++;
-      if (line[j] === "&") {
-        tokens.push({ op: ">&" });
-        j++;
-      } else tokens.push({ op: ">" });
-      i = j - 1;
-    } else if (c === "&" && line[i + 1] === ">") {
-      end();
-    } else if (";&|()".includes(c)) {
-      end();
-      tokens.push({ op: c });
-      if ((c === "&" || c === "|") && line[i + 1] === c) i++;
-    } else {
-      word = (word ?? "") + c;
-    }
-  }
-  end();
-  return { tokens, heredocs };
-}
-function resolveWord(word, cwd) {
-  let base = cwd;
-  let w = word.replaceAll("\\", "/");
-  const ws = /^\$(?:GITHUB_WORKSPACE|\{GITHUB_WORKSPACE\})(?=\/|$)/.exec(w);
-  if (ws) {
-    base = ".";
-    w = w.slice(ws[0].length).replace(/^\//, "") || ".";
-  }
-  if (base === void 0 || w === "" || /[$`*?[\]{}~]/.test(w) || w.startsWith("/")) return void 0;
-  if (/^[A-Za-z][\w+.-]*:/.test(w)) return void 0;
-  const path = normalizeRelative(posix2.join(base, w));
-  return escapes(path) ? void 0 : path;
-}
-var basename = (word) => posix2.basename(word.replaceAll("\\", "/").replace(/\/+$/, ""));
-function scriptWrites2(script) {
-  const writes = [];
-  const text3 = script.replace(/\$\{\{\s*github\.workspace\s*\}\}/g, "$GITHUB_WORKSPACE").replace(/\$\{\{[\s\S]*?\}\}/g, "$EXPR").replace(/\\\r?\n/g, " ");
-  let cwd = ".";
-  const dirs = [];
-  const write = (word, command2, at = cwd) => {
-    const path = word === void 0 ? void 0 : resolveWord(word, at);
-    if (path !== void 0) writes.push({ path, command: command2 });
-  };
-  const command = (words) => {
-    let i = 0;
-    for (; i < words.length; i++) {
-      const w = words[i];
-      if (/^[A-Za-z_]\w*=/.test(w)) continue;
-      if (!PREFIXES.has(w)) break;
-      while (words[i + 1]?.startsWith("-")) i++;
-    }
-    let name = words[i]?.replaceAll("\\", "/").split("/").pop()?.toLowerCase();
-    if (name === void 0) return;
-    let args = words.slice(i + 1);
-    if (name === "xargs") {
-      let j = 0;
-      while (args[j]?.startsWith("-")) j += /^-[IinPLdEs]$/.test(args[j]) ? 2 : 1;
-      name = args[j]?.split("/").pop()?.toLowerCase();
-      if (name === void 0) return;
-      args = args.slice(j + 1);
-    }
-    if (name === "git") {
-      gitWrites(args);
-      return;
-    }
-    const options = /* @__PURE__ */ new Set([...OUTPUT_OPTIONS, ...COMMAND_OUTPUT_OPTIONS[name] ?? []]);
-    const operands = [];
-    let target;
-    for (let j = 0; j < args.length; j++) {
-      const a = args[j];
-      const eq = /^(--?[\w-]+)=(.*)$/.exec(a);
-      const opt = eq ? eq[1] : a;
-      const value = eq ? eq[2] : args[j + 1];
-      if (options.has(opt) || opt.length > 2 && options.has(opt.toLowerCase())) {
-        if (/^(?:-t|--target-directory)$/.test(opt)) target = value;
-        else write(value, name);
-        if (!eq) j++;
-      } else if (name === "7z" || name === "7za") {
-        if (a.startsWith("-o")) write(a.slice(2), name);
-      } else if (a.startsWith("-") && a !== "-") {
-        if (/^-(?:path|literalpath|itemtype|name|value)$/i.test(a)) {
-          if (/^-(?:path|literalpath)$/i.test(a) && args[j + 1] !== void 0) operands.push(args[j + 1]);
-          j++;
-        }
-      } else operands.push(a);
-    }
-    if (name === "cd" || name === "pushd") {
-      if (name === "pushd") dirs.push(cwd);
-      cwd = operands[0] === void 0 ? "." : operands[0] === "-" ? void 0 : resolveWord(operands[0], cwd);
-    } else if (name === "popd") {
-      cwd = dirs.pop();
-    } else if (COPIES.has(name) || name === "robocopy") {
-      const dest = target ?? (name === "robocopy" ? operands[1] : operands.length > 1 ? operands.at(-1) : void 0);
-      const sources = target !== void 0 ? operands : name === "robocopy" ? [] : operands.slice(0, -1);
-      if (dest === void 0) return;
-      write(dest, name);
-      for (const s of sources) if (!/[$`*?[\]{}]/.test(basename(s))) write(`${dest}/${basename(s)}`, name);
-    } else if (CREATES.has(name)) {
-      for (const o of operands) write(o, name);
-    }
-  };
-  const gitWrites = (args) => {
-    let at = cwd;
-    let j = 0;
-    for (; j < args.length && args[j].startsWith("-"); j++)
-      if (args[j] === "-C") at = resolveWord(args[++j] ?? "", at);
-      else if (args[j] === "-c") j++;
-    const sub = args[j];
-    const rest = args.slice(j + 1);
-    const positional = [];
-    for (let k = 0; k < rest.length; k++) {
-      if (CLONE_VALUE_OPTIONS.has(rest[k]) || /^-[bB]$|^--reason$/.test(rest[k])) k++;
-      else if (!rest[k].startsWith("-")) positional.push(rest[k]);
-    }
-    const repoDir = (url2) => basename(url2).replace(/\.git$/, "");
-    if (sub === "clone" && positional[0] !== void 0)
-      write(positional[1] ?? repoDir(positional[0]), "git clone", at);
-    else if (sub === "worktree" && positional[0] === "add") write(positional[1], "git worktree add", at);
-    else if (sub === "submodule" && positional[0] === "add" && positional[1] !== void 0)
-      write(positional[2] ?? repoDir(positional[1]), "git submodule add", at);
-  };
-  const lines = text3.split(/\r?\n/);
-  const pending = [];
-  for (const line of lines) {
-    if (pending.length) {
-      if (line.trim() === pending[0]) pending.shift();
-      continue;
-    }
-    const { tokens, heredocs } = tokenize(line);
-    pending.push(...heredocs);
-    let words = [];
-    for (let k = 0; k < tokens.length; k++) {
-      const t = tokens[k];
-      if ("word" in t) {
-        words.push(t.word);
-      } else if (t.op === ">" || t.op === "<" || t.op === ">&") {
-        const next = tokens[k + 1];
-        if (next && "word" in next) {
-          if (t.op === ">") write(next.word, ">");
-          k++;
-        }
-      } else {
-        command(words);
-        words = [];
-      }
-    }
-    command(words);
-  }
-  return writes;
-}
-function writesTo(write, path, isRepoDir) {
-  if (path === ".") return false;
-  if (write.path === path || write.path.startsWith(`${path}/`)) return true;
-  return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
-}
-
-// ../core/src/workspace.ts
-var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
-var CHECKOUT = /^actions\/checkout(?:@|$)/i;
-var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
-var RUNNING_REF = /^github\.(?:sha|ref|ref_name|head_ref|event\.(?:after|head_commit\.id|release\.tag_name|pull_request\.(?:head\.(?:sha|ref)|merge_commit_sha)|workflow_run\.head_(?:sha|branch)|merge_group\.head_(?:sha|ref)|check_(?:suite|run)\.head_sha))$/;
-var PULL_REQUEST_REF = /^refs\/pull\/\$\{\{\s*github\.event\.(?:pull_request\.)?number\s*\}\}\/(?:merge|head)$/;
-function alternatives(value) {
-  const m = /^\$\{\{(.*)\}\}$/s.exec(value);
-  if (!m) return void 0;
-  return m[1].split("||").map(
-    (alt) => alt.split("&&").at(-1).trim().replace(/^\((.*)\)$/s, "$1").trim()
-  );
-}
-var ownRepositoryExpression = (value) => !!alternatives(value)?.every((a) => OWN_REPOSITORY.test(a));
-var runningCommit = (value) => value === "" || PULL_REQUEST_REF.test(value) || !!alternatives(value)?.every((a) => RUNNING_REF.test(a));
-var isCheckout = (uses) => CHECKOUT.test(uses.raw.trim());
-var escapes2 = (path) => path === ".." || path.startsWith("../") || path.startsWith("/");
-var text = (b) => b === void 0 || b.value === null || typeof b.value === "object" ? "" : String(b.value).trim();
-function checkoutRepository(b, repository) {
-  const value = text(b);
-  if (value === "" || ownRepositoryExpression(value)) return void 0;
-  if (repository && value.toLowerCase() === repository.toLowerCase()) return void 0;
-  return value;
-}
-function checkoutPath(b) {
-  const value = text(b).replace(/^\$\{\{\s*github\.workspace\s*\}\}(?:\/|$)/, "").replaceAll("\\", "/");
-  if (value.includes("${{")) return "dynamic";
-  if (value.startsWith("/") || /^[A-Za-z]:\//.test(value)) return "outside";
-  const path = normalizeRelative(value);
-  return escapes2(path) ? "outside" : { path };
-}
-var within = (path, dir) => dir === "." || path === dir || path.startsWith(`${dir}/`);
-function applyCheckout(ws, step, repository) {
-  const loc = step.uses?.loc ?? step.loc;
-  const other = checkoutRepository(step.with.repository, repository);
-  const placement = checkoutPath(step.with.path);
-  if (placement === "outside") return ws;
-  const repo = other !== void 0 ? { repository: other } : {};
-  if (placement === "dynamic")
-    return { ...ws, managed: true, dynamic: { path: text(step.with.path), ...repo, loc } };
-  const { path } = placement;
-  const ref = text(step.with.ref);
-  const mounts = ws.mounts.filter((m) => !within(m.path, path));
-  mounts.push({ path, ...repo, ...other === void 0 && !runningCommit(ref) ? { ref } : {}, loc });
-  return {
-    mounts,
-    managed: true,
-    // A checkout at the root empties the whole workspace first, including a checkout to a path computed at runtime.
-    ...ws.dynamic && path !== "." ? { dynamic: ws.dynamic } : {},
-    writes: ws.writes.filter((w) => !within(w.path, path))
-  };
-}
-function locate(ws, path) {
-  let best = ws.mounts.find((m) => m.path === ".") ?? { path: "." };
-  for (const m of ws.mounts)
-    if (m.path !== "." && within(path, m.path) && (best.path === "." || m.path.length > best.path.length))
-      best = m;
-  const rel = best.path === "." ? path : path === best.path ? "." : path.slice(best.path.length + 1);
-  return { mount: best, rel };
-}
-function workspaceKey(ws) {
-  return JSON.stringify([
-    ws.mounts.map((m) => [m.path, m.repository ?? null, m.ref ?? null, m.loc ? formatLoc(m.loc) : null]),
-    ws.managed,
-    ws.dynamic ? formatLoc(ws.dynamic.loc) : null,
-    ws.writes.map((w) => [w.path, formatLoc(w.loc)])
-  ]);
-}
-function workspaceResolver(opts) {
-  const records = /* @__PURE__ */ new Map();
-  const walkedIn = /* @__PURE__ */ new Map();
-  const active = /* @__PURE__ */ new Set();
-  const stepWrites = /* @__PURE__ */ new Map();
-  const inRepositoryDir = (rel) => rel === "." || opts.isDir(rel.split("/")[0]);
-  const writerOf = (ws, path) => {
-    let best;
-    let rank = 3;
-    for (const w of ws.writes) {
-      if (!writesTo(w, path, opts.isDir)) continue;
-      const r = w.path === path ? 0 : w.path.startsWith(`${path}/`) ? 1 : 2;
-      if (r <= rank) [best, rank] = [w, r];
-    }
-    return best;
-  };
-  const resolve7 = (uses, ws) => {
-    const target = uses.target;
-    if (uses.selfRef !== void 0) return { kind: "invalid" };
-    if (uses.workspacePath === void 0) {
-      const found = opts.loadAction(target) !== void 0;
-      if (!found && uses.sameRepoRef !== void 0 && !escapes2(target)) return { kind: "skip" };
-      return { kind: "local", target, found };
-    }
-    const path = uses.workspacePath;
-    if (escapes2(path)) return { kind: "unverified", info: { reason: "outside-workspace" } };
-    const { mount, rel } = locate(ws, path);
-    if (mount.repository !== void 0 && mount.loc) {
-      const checkout2 = { repository: mount.repository, path: mount.path, loc: mount.loc };
-      return { kind: "unverified", info: { reason: "other-repository", checkout: checkout2 } };
-    }
-    const checkout = mount.loc && mount.path !== "." ? { checkout: { path: mount.path, loc: mount.loc } } : {};
-    const rootless = mount.path === "." && !mount.loc && ws.managed && !ws.dynamic;
-    const elsewhere = () => ws.mounts.flatMap((m) => m.loc && m.repository === void 0 ? [{ path: m.path, loc: m.loc }] : []);
-    if (opts.loadAction(rel)) {
-      if (rootless && !writerOf(ws, path))
-        return { kind: "local", target: rel, found: true, elsewhere: elsewhere() };
-      return { kind: "local", target: rel, found: true, ...checkout };
-    }
-    const write = writerOf(ws, path);
-    if (write) {
-      const writer = { loc: write.loc, path: write.path, command: write.command };
-      return { kind: "unverified", info: { reason: "created-at-runtime", writer } };
-    }
-    if (mount.loc && mount.ref !== void 0) {
-      const at = { path: mount.path, ref: mount.ref, loc: mount.loc };
-      return { kind: "unverified", info: { reason: "other-ref", checkout: at } };
-    }
-    if (mount.path === "." && (ws.managed && !mount.loc || ws.dynamic) && !inRepositoryDir(rel)) {
-      const dynamic = ws.dynamic ? { checkout: ws.dynamic } : {};
-      return { kind: "unverified", info: { reason: "not-checked-out", ...dynamic } };
-    }
-    if (rootless) return { kind: "local", target: rel, found: false, elsewhere: elsewhere() };
-    return { kind: "local", target: rel, found: false, ...checkout };
-  };
-  const record2 = (unit, job, step, outcome, rooted, via) => {
-    let r = records.get(step);
-    if (!r) {
-      r = { unit, ...job !== void 0 ? { job } : {}, step, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
-      records.set(step, r);
-    }
-    const outcomes = rooted ? r.rooted : r.assumed;
-    const key = JSON.stringify(outcome);
-    if (!outcomes.has(key)) outcomes.set(key, { outcome, via });
-  };
-  const walk = (unit, job, steps2, start, rooted, via) => {
-    let ws = start;
-    for (const step of steps2) {
-      if (step.run !== void 0) {
-        let writes = stepWrites.get(step);
-        if (!writes) {
-          const loc = step.runLoc ?? step.loc;
-          writes = scriptWrites2(step.run).map((w) => ({ ...w, loc }));
-          stepWrites.set(step, writes);
-        }
-        if (writes.length) ws = { ...ws, writes: [...ws.writes, ...writes] };
-      }
-      const uses = step.uses;
-      if (!uses) continue;
-      if (isCheckout(uses)) {
-        ws = applyCheckout(ws, step, opts.repository);
-        continue;
-      }
-      if (uses.kind !== "local-action" || uses.target === void 0) continue;
-      const outcome = resolve7(uses, ws);
-      record2(unit, job, step, outcome, rooted, via);
-      const action = outcome.kind === "local" && outcome.found ? opts.loadAction(outcome.target) : void 0;
-      if (action) {
-        const caller = {
-          from: unit.path,
-          ...job !== void 0 ? { job } : {},
-          loc: uses.loc,
-          action: action.path
-        };
-        ws = enter(action, ws, rooted, [...via, caller]);
-      }
-    }
-    return ws;
-  };
-  const enter = (action, ws, rooted, via) => {
-    if (active.has(action)) return ws;
-    const key = `${rooted}|${workspaceKey(ws)}`;
-    const seen = walkedIn.get(action) ?? /* @__PURE__ */ new Map();
-    walkedIn.set(action, seen);
-    const known2 = seen.get(key);
-    if (known2) return known2;
-    active.add(action);
-    const after = walk(action, void 0, action.steps, ws, rooted, via);
-    active.delete(action);
-    seen.set(key, after);
-    return after;
-  };
-  return {
-    walkJob(wf, job) {
-      walk(wf, job.id, job.steps, initialWorkspace(), true, []);
-    },
-    /**
-     * Actions no workflow here reaches (published ones, or ones used from other repositories) run in an unknown
-     * workspace: assume this repository at the root. Those that others among them use go last, so they are walked in
-     * their callers' workspaces instead.
-     */
-    walkRemainingActions(actions) {
-      for (; ; ) {
-        const rest = [...actions.values()].filter((a) => !walkedIn.has(a));
-        if (!rest.length) return;
-        const used = new Set(rest.flatMap((a) => a.steps.map((s) => s.uses?.target)));
-        enter(rest.find((a) => !used.has(a.path)) ?? rest[0], initialWorkspace(), false, []);
-      }
-    },
-    /** Settles every step's `uses:` and lists what is missing, invalid or not verifiable. */
-    finish(out) {
-      for (const r of records.values()) {
-        const rooted = r.rooted.size > 0;
-        const entries2 = [...(rooted ? r.rooted : r.assumed).values()];
-        const local = entries2.flatMap(
-          (e) => e.outcome.kind === "local" ? [{ ...e, outcome: e.outcome }] : []
-        );
-        const { outcome } = local.find((e) => e.outcome.found && !e.outcome.elsewhere) ?? local.find((e) => e.outcome.found) ?? local[0] ?? entries2[0];
-        const uses = r.step.uses;
-        const where = {
-          uses,
-          from: r.unit.path,
-          ...r.job !== void 0 ? { job: r.job } : {},
-          step: r.step.index
-        };
-        if (outcome.kind === "local") {
-          uses.target = outcome.target;
-          const fails = (o) => o.kind === "local" && (!o.found || o.elsewhere !== void 0);
-          const reported = /* @__PURE__ */ new Set();
-          for (const { outcome: o, via } of local) {
-            if (!fails(o) || reported.has(o.target)) continue;
-            reported.add(o.target);
-            const varies = entries2.some(
-              (e) => !fails(e.outcome) || e.outcome.kind === "local" && e.outcome.target !== o.target
-            );
-            const missing = {
-              ...where,
-              ...o.target !== uses.target ? { target: o.target } : {},
-              ...o.found ? { inRepository: true } : {},
-              ...o.checkout ? { checkout: o.checkout } : {},
-              ...o.elsewhere ? { elsewhere: o.elsewhere } : {},
-              ...varies && rooted && via.length ? { via } : {}
-            };
-            out.missing.push(missing);
-            const what = o.found ? "local reference outside the workspace" : "unresolved local reference";
-            opts.logger.warn(`${what} ${uses.raw}`, { from: r.unit.path });
-          }
-        } else if (outcome.kind === "unverified") {
-          uses.kind = "workspace-action";
-          delete uses.target;
-          out.unverified.push({ ...where, ...outcome.info });
-          opts.logger.debug(`workspace path not verified (${outcome.info.reason}): ${uses.raw}`, {
-            from: r.unit.path
-          });
-        } else if (outcome.kind === "invalid") {
-          out.invalid.push({ ...where, reason: "self-ref" });
-        } else {
-          opts.logger.debug(`same-repository reference not in the working tree: ${uses.raw}`);
-        }
-      }
-    }
-  };
-}
-
-// ../core/src/project.ts
-var WORKFLOWS_DIR = ".github/workflows";
-var ACTIONS_DIR = ".github/actions";
-var toPosix = (p) => p.split("\\").join("/");
-function insideRepository(root, abs) {
-  let realRoot;
-  try {
-    realRoot = realpathSync(root);
-  } catch {
-    realRoot = resolve(root);
-  }
-  let target = resolve(abs);
-  let rest = "";
-  for (; ; ) {
-    try {
-      target = join2(realpathSync(target), rest);
-      break;
-    } catch {
-      const parent = dirname(target);
-      if (parent === target) return false;
-      rest = join2(basename2(target), rest);
-      target = parent;
-    }
-  }
-  const rel = toPosix(relative(realRoot, target));
-  if (rel === "") return true;
-  if (rel.startsWith("..") || isAbsolute(rel)) return false;
-  return rel !== ".git" && !rel.startsWith(".git/");
-}
-function nodeFileSystem(root) {
-  const abs = (p) => join2(root, p);
-  const listings = /* @__PURE__ */ new Map();
-  const exactCase = (p) => {
-    let dir = root;
-    for (const part of toPosix(p).split("/").filter((x) => x && x !== ".")) {
-      if (part === "..") return false;
-      let names = listings.get(dir);
-      if (!names) {
-        try {
-          names = new Set(readdirSync(dir));
-        } catch {
-          return false;
-        }
-        listings.set(dir, names);
-      }
-      if (!names.has(part)) return false;
-      dir = join2(dir, part);
-    }
-    return true;
-  };
-  const inside = (p) => existsSync2(abs(p)) && exactCase(p) && insideRepository(root, abs(p));
-  const isFile = (p) => inside(p) && statSync(abs(p)).isFile();
-  return {
-    read: (p) => isFile(p) ? readFileSync(abs(p), "utf8") : void 0,
-    list: (dir) => {
-      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
-      return readdirSync(abs(dir)).map((name) => toPosix(join2(dir, name))).filter((f) => isFile(f));
-    },
-    walk: (dir) => {
-      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
-      return readdirSync(abs(dir), { recursive: true, withFileTypes: true }).map((e) => toPosix(relative(root, join2(e.parentPath, e.name)))).filter((f) => !/(^|\/)(node_modules|\.git)\//.test(f) && isFile(f));
-    },
-    isDir: (p) => inside(p) && statSync(abs(p)).isDirectory()
-  };
-}
-var isYaml = (p) => /\.ya?ml$/i.test(p);
-var isActionFile = (p) => /(^|\/)action\.ya?ml$/i.test(p);
-var isWorkflowFile = (p) => /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(p);
-var isCallableWorkflowPath = (p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p.replace(/\.ya?ml$/i, (e) => e.toLowerCase()));
-var escapesRoot = (p) => p === ".." || p.startsWith("../") || isAbsolute(p);
-function detectRepository(root, env = process.env) {
-  if (env.GITHUB_REPOSITORY) return env.GITHUB_REPOSITORY;
-  const gitConfig = join2(root, ".git", "config");
-  if (!existsSync2(gitConfig)) return void 0;
-  const text3 = readFileSync(gitConfig, "utf8");
-  const origin = /\[remote "origin"\][^[]*?url\s*=\s*(\S+)/.exec(text3)?.[1];
-  const m = origin && /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(origin);
-  return m ? m[1] : void 0;
-}
-function loadProject(opts) {
-  const logger = (opts.logger ?? silentLogger).child("load");
-  const fs3 = opts.fs ?? nodeFileSystem(opts.root);
-  const ctx = createParseContext(opts.repository);
-  const workflows = /* @__PURE__ */ new Map();
-  const actions = /* @__PURE__ */ new Map();
-  const missing = [];
-  const invalid = [];
-  const loadWorkflow = (path) => {
-    if (workflows.has(path)) return workflows.get(path);
-    if (escapesRoot(path)) return void 0;
-    const text3 = fs3.read(path);
-    if (text3 === void 0) return void 0;
-    const wf = logger.time(`parse ${path}`, () => parseWorkflowFile(path, text3, ctx));
-    workflows.set(path, wf);
-    logger.debug(`parsed workflow ${path}`, {
-      jobs: Object.keys(wf.jobs).length,
-      expressions: wf.sites.length
-    });
-    return wf;
-  };
-  const loadAction = (dir) => {
-    if (actions.has(dir)) return actions.get(dir);
-    if (escapesRoot(dir)) return void 0;
-    const base = dir === "." ? "" : `${dir}/`;
-    const file2 = [`${base}action.yml`, `${base}action.yaml`].find((f) => fs3.read(f) !== void 0);
-    if (!file2) return void 0;
-    const action = logger.time(`parse ${file2}`, () => parseActionFile(dir, file2, fs3.read(file2), ctx));
-    actions.set(dir, action);
-    logger.debug(`parsed action ${dir}`, { using: action.using, steps: action.steps.length });
-    return action;
-  };
-  const discovered = fs3.list(WORKFLOWS_DIR).filter(isYaml).sort();
-  const actionFiles = fs3.walk(ACTIONS_DIR).filter(isActionFile).sort();
-  if (["action.yml", "action.yaml"].some((f) => fs3.read(f) !== void 0)) actionFiles.push("action.yml");
-  for (const pattern of opts.publish ?? []) {
-    if (!/[*?[]/.test(pattern)) {
-      const file2 = isActionFile(pattern) ? pattern : `${pattern.replace(/\/$/, "")}/action.yml`;
-      if (isActionFile(file2) && !file2.startsWith(".github/actions/") && fs3.read(file2) !== void 0)
-        actionFiles.push(file2);
-      continue;
-    }
-    const literal2 = pattern.split(/[*?[]/)[0];
-    const dir = literal2.includes("/") ? literal2.slice(0, literal2.lastIndexOf("/")) : "";
-    for (const f of dir ? fs3.walk(dir) : fs3.walk(".")) {
-      if (!isActionFile(f) || f.startsWith(".github/actions/")) continue;
-      const unitDir = f.replace(/\/?action\.ya?ml$/i, "") || ".";
-      if (matchesPattern(f, pattern) || matchesPattern(unitDir, pattern)) actionFiles.push(f);
-    }
-  }
-  logger.info(`discovered ${discovered.length} workflow(s) and ${actionFiles.length} local action(s)`);
-  logger.debug("files", { workflows: discovered, actions: actionFiles });
-  const targets = /* @__PURE__ */ new Set();
-  const missingTargets = [];
-  let wholeRepository = false;
-  const ignoredTargets = [];
-  for (const p of opts.paths ?? []) {
-    const rel = toPosix(relative(opts.root, resolve(opts.root, p))) || ".";
-    if (rel === "." || rel === "") {
-      wholeRepository = true;
-      continue;
-    }
-    if (escapesRoot(rel)) {
-      missingTargets.push(p);
-    } else if (fs3.isDir(rel)) {
-      const found = fs3.walk(rel).filter((f) => isWorkflowFile(f) || isActionFile(f));
-      if (found.length === 0) ignoredTargets.push(p);
-      for (const f of found) targets.add(f);
-    } else if (fs3.read(rel) === void 0) {
-      missingTargets.push(p);
-    } else if (isWorkflowFile(rel) || isActionFile(rel)) {
-      targets.add(rel);
-    } else {
-      ignoredTargets.push(p);
-    }
-  }
-  if (wholeRepository) targets.clear();
-  if (missingTargets.length) logger.warn(`paths not found: ${missingTargets.join(", ")}`);
-  if (ignoredTargets.length)
-    logger.warn(`paths that are not workflows or actions: ${ignoredTargets.join(", ")}`);
-  for (const t of targets) {
-    if (isActionFile(t)) loadAction(t.replace(/\/?action\.ya?ml$/i, "") || ".");
-    else if (isYaml(t)) loadWorkflow(t);
-  }
-  for (const f of discovered) loadWorkflow(f);
-  for (const f of actionFiles) loadAction(f.replace(/\/?action\.ya?ml$/i, "") || ".");
-  const unverified = [];
-  const resolver = workspaceResolver({
-    ...opts.repository ? { repository: opts.repository } : {},
-    loadAction,
-    isDir: (dir) => fs3.isDir(dir),
-    logger
-  });
-  const noteCall = (wf, job, pending2) => {
-    const uses = job.uses;
-    if (!uses?.target) return;
-    const where = { uses, from: wf.path, job: job.id };
-    if (uses.selfRef !== void 0) {
-      invalid.push({ ...where, reason: "self-ref" });
-      return;
-    }
-    if (!isCallableWorkflowPath(uses.target)) {
-      invalid.push({ ...where, reason: "not-callable" });
-      logger.warn(`reusable workflow outside .github/workflows: ${uses.raw}`, { from: wf.path });
-      return;
-    }
-    const found = loadWorkflow(uses.target);
-    if (!found && uses.sameRepoRef && !escapesRoot(uses.target)) {
-      logger.debug(`same-repository reference not in the working tree: ${uses.raw}`);
-    } else if (!found) {
-      missing.push(where);
-      logger.warn(`unresolved local reference ${uses.raw}`, { from: wf.path });
-    } else {
-      pending2.push(found);
-    }
-  };
-  const pending = [...workflows.values()];
-  const walked = /* @__PURE__ */ new Set();
-  while (pending.length) {
-    const wf = pending.shift();
-    if (walked.has(wf)) continue;
-    walked.add(wf);
-    for (const job of Object.values(wf.jobs)) {
-      if (job.uses?.kind === "local-workflow") noteCall(wf, job, pending);
-      resolver.walkJob(wf, job);
-    }
-  }
-  resolver.walkRemainingActions(actions);
-  resolver.finish({ missing, invalid, unverified });
-  if (opts.validateSchema !== false) {
-    logger.time("schema validation", () => {
-      for (const u of [...workflows.values(), ...actions.values()]) {
-        if (u.parseErrors.length === 0) u.schemaErrors = validateSchema(u, logger);
-      }
-    });
-  }
-  return {
-    root: opts.root,
-    ...opts.repository ? { repository: opts.repository } : {},
-    workflows,
-    actions,
-    targets,
-    ...wholeRepository ? { wholeRepository } : {},
-    missingTargets,
-    ignoredTargets,
-    missing,
-    invalidTargets: invalid,
-    unverified
-  };
-}
-
-// ../core/src/version.ts
+// ../lint/src/version.ts
 var TOOL_NAME = "flowpact";
 var VERSION2 = "0.11.0";
 var SCHEMA_VERSIONS = {
@@ -36122,7 +36922,7 @@ function bannerText(meta3 = toolMeta()) {
   return `${meta3.tool} v${meta3.version} \xB7 config schema v${s.config} \xB7 contract schema v${s.contract} \xB7 report schema v${s.report} \xB7 node ${meta3.node}`;
 }
 
-// ../core/src/config.ts
+// ../lint/src/config.ts
 var CONFIG_DIR = ".github/flowpact";
 var CONFIG_FILES = ["flowpact.config.yml", "flowpact.config.yaml"];
 var severitySettingSchema = external_exports.enum(["error", "warning", "info", "off"]);
@@ -36304,7 +37104,7 @@ function parseConfig(raw, file2) {
   return result.data;
 }
 
-// ../core/src/contracts.ts
+// ../lint/src/contracts.ts
 import { existsSync as existsSync4, lstatSync, mkdirSync, realpathSync as realpathSync2, rmSync, writeFileSync } from "fs";
 import { basename as basename3, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, relative as relative3, resolve as resolve3, sep } from "path";
 
@@ -36796,617 +37596,8 @@ function splitLines(text3) {
   return result;
 }
 
-// ../core/src/contracts.ts
+// ../lint/src/contracts.ts
 var import_yaml6 = __toESM(require_dist(), 1);
-
-// ../core/src/graph.ts
-var sym = {
-  input: (unit, name) => `${unit}#inputs.${name}`,
-  secret: (unit, name) => `${unit}#secrets.${name}`,
-  output: (unit, name) => `${unit}#outputs.${name}`,
-  job: (unit, job) => `${unit}#jobs.${job}`,
-  jobOutput: (unit, job, name) => `${unit}#jobs.${job}.outputs.${name}`,
-  stepOutput: (unit, job, step, name) => job === void 0 ? `${unit}#steps.${step}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step}.outputs.${name}`,
-  env: (unit, job, name) => job === void 0 ? `${unit}#env.${name}` : `${unit}#jobs.${job}.env.${name}`,
-  matrix: (unit, job, key) => `${unit}#jobs.${job}.matrix.${key}`,
-  var: (name) => `vars.${name}`,
-  remote: (raw) => `remote:${raw}`
-};
-var ProjectIndex = class {
-  constructor(project) {
-    this.project = project;
-    for (const wf of project.workflows.values()) this.indexWorkflow(wf);
-    for (const a of project.actions.values()) this.indexAction(a);
-    for (const unit of this.units()) for (const site of unit.sites) this.indexSite(unit, site);
-  }
-  project;
-  nodes = /* @__PURE__ */ new Map();
-  edges = [];
-  usages = /* @__PURE__ */ new Map();
-  callSites = [];
-  actionUses = [];
-  sitesById = /* @__PURE__ */ new Map();
-  units() {
-    return [...this.project.workflows.values(), ...this.project.actions.values()];
-  }
-  unit(path) {
-    return this.project.workflows.get(path) ?? this.project.actions.get(path);
-  }
-  site(id) {
-    return this.sitesById.get(id);
-  }
-  callersOf(workflowPath) {
-    return this.callSites.filter((c) => c.callee.path === workflowPath);
-  }
-  usersOf(actionPath) {
-    return this.actionUses.filter((u) => u.action.path === actionPath);
-  }
-  /** The reusable workflow a job calls. Workflows without `on.workflow_call` are not callable (see FP609). */
-  calleeOf(job) {
-    const wf = this.targetOf(job);
-    return wf?.call ? wf : void 0;
-  }
-  /** The local workflow file a job's `uses:` points at, reusable or not. */
-  targetOf(job) {
-    if (job.uses?.kind !== "local-workflow" || !job.uses.target || job.uses.selfRef !== void 0)
-      return void 0;
-    if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
-    return this.project.workflows.get(job.uses.target);
-  }
-  actionOf(step) {
-    if (step.uses?.kind !== "local-action" || !step.uses.target || step.uses.selfRef !== void 0)
-      return void 0;
-    return this.project.actions.get(step.uses.target);
-  }
-  usagesOf(symbol2) {
-    return this.usages.get(symbol2) ?? [];
-  }
-  outgoing(symbol2, kind) {
-    return this.edges.filter((e) => e.from === symbol2 && (!kind || e.kind === kind));
-  }
-  incoming(symbol2, kind) {
-    return this.edges.filter((e) => e.to === symbol2 && (!kind || e.kind === kind));
-  }
-  /** Serializable snapshot (used by `--dump-graph` and the JSON report). */
-  toJSON() {
-    return {
-      nodes: [...this.nodes.values()].sort((a, b) => a.id.localeCompare(b.id)),
-      edges: [...this.edges].sort(
-        (a, b) => a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.kind.localeCompare(b.kind)
-      )
-    };
-  }
-  node(n) {
-    if (!this.nodes.has(n.id)) this.nodes.set(n.id, n);
-    return n.id;
-  }
-  edge(e) {
-    this.edges.push(e);
-  }
-  indexWorkflow(wf) {
-    const u = wf.path;
-    this.node({ id: u, kind: "workflow", label: wf.name ?? u, unit: u });
-    for (const i of Object.values(wf.call?.inputs ?? {}))
-      this.node({ id: sym.input(u, i.name), kind: "input", label: `inputs.${i.name}`, unit: u, loc: i.loc });
-    for (const i of Object.values(wf.dispatch?.inputs ?? {}))
-      this.node({ id: sym.input(u, i.name), kind: "input", label: `inputs.${i.name}`, unit: u, loc: i.loc });
-    for (const s of Object.values(wf.call?.secrets ?? {}))
-      this.node({
-        id: sym.secret(u, s.name),
-        kind: "secret",
-        label: `secrets.${s.name}`,
-        unit: u,
-        loc: s.loc
-      });
-    for (const o of Object.values(wf.call?.outputs ?? {}))
-      this.node({
-        id: sym.output(u, o.name),
-        kind: "output",
-        label: `outputs.${o.name}`,
-        unit: u,
-        loc: o.loc
-      });
-    for (const e of Object.values(wf.env))
-      this.node({
-        id: sym.env(u, void 0, e.name),
-        kind: "env",
-        label: `env.${e.name}`,
-        unit: u,
-        loc: e.loc
-      });
-    for (const job of Object.values(wf.jobs)) {
-      const jid = this.node({
-        id: sym.job(u, job.id),
-        kind: "job",
-        label: `jobs.${job.id}`,
-        unit: u,
-        loc: job.loc
-      });
-      for (const n of job.needs) this.edge({ from: jid, to: sym.job(u, n.id), kind: "needs", loc: n.loc });
-      for (const o of Object.values(job.outputs))
-        this.node({
-          id: sym.jobOutput(u, job.id, o.name),
-          kind: "job-output",
-          label: `jobs.${job.id}.outputs.${o.name}`,
-          unit: u,
-          loc: o.loc
-        });
-      for (const e of Object.values(job.env))
-        this.node({
-          id: sym.env(u, job.id, e.name),
-          kind: "env",
-          label: `env.${e.name}`,
-          unit: u,
-          loc: e.loc
-        });
-      for (const d of job.matrix?.dims ?? [])
-        this.node({
-          id: sym.matrix(u, job.id, d.name),
-          kind: "matrix",
-          label: `matrix.${d.name}`,
-          unit: u,
-          loc: d.loc
-        });
-      for (const inc of job.matrix?.include ?? [])
-        for (const [k, loc] of Object.entries(inc.keyLocs))
-          this.node({ id: sym.matrix(u, job.id, k), kind: "matrix", label: `matrix.${k}`, unit: u, loc });
-      if (job.uses) {
-        const callee = this.calleeOf(job);
-        if (callee) {
-          this.callSites.push({ caller: wf, job, callee });
-          this.edge({ from: jid, to: callee.path, kind: "calls", loc: job.uses.loc });
-          for (const o of Object.values(callee.call?.outputs ?? {})) {
-            const jo = this.node({
-              id: sym.jobOutput(u, job.id, o.name),
-              kind: "job-output",
-              label: `jobs.${job.id}.outputs.${o.name}`,
-              unit: u,
-              loc: job.loc
-            });
-            this.edge({ from: sym.output(callee.path, o.name), to: jo, kind: "flows", loc: o.loc });
-          }
-          if (job.secretsInherit) {
-            this.edge({
-              from: jid,
-              to: callee.path,
-              kind: "inherits",
-              ...job.secretsLoc ? { loc: job.secretsLoc } : {}
-            });
-          }
-        } else if (job.uses.kind === "remote-workflow") {
-          const r = this.node({ id: sym.remote(job.uses.raw), kind: "remote", label: job.uses.raw });
-          this.edge({ from: jid, to: r, kind: "calls", loc: job.uses.loc });
-        }
-      }
-      for (const step of job.steps) this.indexStep(wf, job, step);
-    }
-  }
-  indexStep(unit, job, step) {
-    const action = this.actionOf(step);
-    if (!action) return;
-    this.actionUses.push({ unit, ...job ? { job } : {}, step, action });
-    if (step.uses) {
-      const from = job ? sym.job(unit.path, job.id) : unit.path;
-      this.edge({ from, to: action.path, kind: "uses", loc: step.uses.loc });
-    }
-    if (step.id) {
-      for (const o of Object.values(action.outputs)) {
-        const so = this.node({
-          id: sym.stepOutput(unit.path, job?.id, step.id, o.name),
-          kind: "step-output",
-          label: `steps.${step.id}.outputs.${o.name}`,
-          unit: unit.path,
-          loc: step.idLoc ?? step.loc
-        });
-        this.edge({ from: sym.output(action.path, o.name), to: so, kind: "flows", loc: o.loc });
-      }
-    }
-  }
-  indexAction(a) {
-    const u = a.path;
-    this.node({ id: u, kind: "action", label: a.name ?? u, unit: u });
-    for (const i of Object.values(a.inputs))
-      this.node({ id: sym.input(u, i.name), kind: "input", label: `inputs.${i.name}`, unit: u, loc: i.loc });
-    for (const o of Object.values(a.outputs))
-      this.node({
-        id: sym.output(u, o.name),
-        kind: "output",
-        label: `outputs.${o.name}`,
-        unit: u,
-        loc: o.loc
-      });
-    for (const step of a.steps) this.indexStep(a, void 0, step);
-  }
-  /** Which symbol does the site's value define? (e.g. `with: { foo: ... }` on a reusable call defines the callee's `inputs.foo`). */
-  sinkOf(unit, site) {
-    const key = site.key;
-    if (key === void 0) return void 0;
-    switch (site.field) {
-      case "job.with":
-      case "job.secrets": {
-        const job = unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
-        const callee = job && this.calleeOf(job);
-        if (!callee) return void 0;
-        const decls = site.field === "job.with" ? callee.call?.inputs : callee.call?.secrets;
-        const name = (decls && lookup(decls, key)?.name) ?? key;
-        return site.field === "job.with" ? sym.input(callee.path, name) : sym.secret(callee.path, name);
-      }
-      case "step.with": {
-        const step = this.stepOf(unit, site);
-        const action = step && this.actionOf(step);
-        if (!action) return void 0;
-        return sym.input(action.path, lookup(action.inputs, key)?.name ?? key);
-      }
-      case "job.output":
-        return site.job ? sym.jobOutput(unit.path, site.job, key) : void 0;
-      case "workflow.output":
-      case "action.output":
-        return sym.output(unit.path, key);
-      case "workflow.env":
-        return sym.env(unit.path, void 0, key);
-      case "job.env":
-        return site.job ? sym.env(unit.path, site.job, key) : void 0;
-      default:
-        return void 0;
-    }
-  }
-  stepOf(unit, site) {
-    if (site.step === void 0) return void 0;
-    if (unit.kind === "action") return unit.steps[site.step];
-    return site.job ? unit.jobs[site.job]?.steps[site.step] : void 0;
-  }
-  /** Resolves a reference inside `site` to the symbol it reads, or `undefined` for runtime-only contexts. */
-  resolveRef(unit, site, ref) {
-    const [a, b, c] = ref.path;
-    switch (ref.context) {
-      case "inputs": {
-        if (!a || a === "*" || a === "?") return void 0;
-        return sym.input(unit.path, this.canonicalInput(unit, a));
-      }
-      case "github":
-        if (a === "event" && b === "inputs" && c && c !== "*" && c !== "?" && unit.kind === "workflow" && unit.dispatch) {
-          return sym.input(unit.path, this.canonicalInput(unit, c));
-        }
-        return void 0;
-      case "secrets": {
-        if (!a || a === "*" || a === "?" || unit.kind !== "workflow") return void 0;
-        const decl = unit.call ? lookup(unit.call.secrets, a) : void 0;
-        return sym.secret(unit.path, decl?.name ?? a);
-      }
-      case "vars":
-        return a && a !== "?" && a !== "*" ? sym.var(a) : void 0;
-      case "matrix":
-        return a && site.job && a !== "?" && a !== "*" ? sym.matrix(unit.path, site.job, a) : void 0;
-      case "needs": {
-        if (unit.kind !== "workflow" || !a || b !== "outputs" || !c || c === "*" || c === "?")
-          return void 0;
-        const job = lookup(unit.jobs, a);
-        if (!job) return void 0;
-        return sym.jobOutput(unit.path, job.id, this.canonicalJobOutput(job, c));
-      }
-      case "jobs": {
-        if (unit.kind !== "workflow" || site.field !== "workflow.output" || !a || b !== "outputs" || !c || c === "*" || c === "?")
-          return void 0;
-        const job = lookup(unit.jobs, a);
-        if (!job) return void 0;
-        return sym.jobOutput(unit.path, job.id, this.canonicalJobOutput(job, c));
-      }
-      case "steps": {
-        if (!a || b !== "outputs" || !c || c === "*" || c === "?") return void 0;
-        const steps2 = unit.kind === "action" ? unit.steps : site.job ? unit.jobs[site.job]?.steps ?? [] : [];
-        const step = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
-        if (!step?.id) return void 0;
-        const action = this.actionOf(step);
-        const name = (action && lookup(action.outputs, c)?.name) ?? c;
-        return sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, step.id, name);
-      }
-      case "env": {
-        if (!a || a === "*" || a === "?") return void 0;
-        if (unit.kind === "workflow" && site.job) {
-          const job = unit.jobs[site.job];
-          if (job && lookup(job.env, a)) return sym.env(unit.path, job.id, lookup(job.env, a).name);
-        }
-        if (unit.kind === "workflow" && lookup(unit.env, a))
-          return sym.env(unit.path, void 0, lookup(unit.env, a).name);
-        return void 0;
-      }
-      default:
-        return void 0;
-    }
-  }
-  /**
-   * Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
-   * of outputs reads each of them: `toJSON(needs.build.outputs)`, `needs.build`, `steps.meta.outputs`,
-   * `needs.build.outputs[matrix.key]`, `toJSON(needs)` (every job the reading job needs), or `toJSON(steps)` (every
-   * step that ran before the reading step).
-   */
-  readsOf(unit, site, ref) {
-    const one = this.resolveRef(unit, site, ref);
-    if (one) return [one];
-    const [a, b, c] = ref.path;
-    const computed = (s) => s === void 0 || s === "*" || s === "?";
-    const pick2 = (names) => {
-      if (computed(b)) return names;
-      if (b.toLowerCase() !== "outputs") return [];
-      if (computed(c)) return names;
-      return names.filter((n) => n.toLowerCase() === c.toLowerCase());
-    };
-    switch (ref.context) {
-      case "needs":
-      case "jobs": {
-        if (unit.kind !== "workflow") return [];
-        if (ref.context === "jobs" && site.field !== "workflow.output") return [];
-        let jobs2;
-        if (!computed(a)) {
-          const job = lookup(unit.jobs, a);
-          jobs2 = job ? [job] : [];
-        } else if (ref.context === "jobs") {
-          jobs2 = Object.values(unit.jobs);
-        } else {
-          const reader = site.job ? unit.jobs[site.job] : void 0;
-          jobs2 = (reader?.needs ?? []).flatMap((n) => lookup(unit.jobs, n.id) ?? []);
-        }
-        return jobs2.flatMap(
-          (job) => pick2(this.jobOutputNames(job)).map((n) => sym.jobOutput(unit.path, job.id, n))
-        );
-      }
-      case "steps": {
-        const steps2 = unit.kind === "action" ? unit.steps : site.job ? unit.jobs[site.job]?.steps ?? [] : [];
-        const named = computed(a) ? steps2.filter((s) => site.step === void 0 || s.index < site.step) : steps2.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
-        return named.flatMap((step) => {
-          const action = this.actionOf(step);
-          if (!step.id || !action) return [];
-          return pick2(Object.keys(action.outputs)).map(
-            (n) => sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, step.id, n)
-          );
-        });
-      }
-      default:
-        return [];
-    }
-  }
-  /** Output names of a job: its own `outputs:`, or the callee's workflow outputs for a reusable call. */
-  jobOutputNames(job) {
-    const callee = this.calleeOf(job);
-    return Object.keys(callee ? callee.call?.outputs ?? {} : job.outputs);
-  }
-  canonicalInput(unit, name) {
-    if (unit.kind === "action") return lookup(unit.inputs, name)?.name ?? name;
-    return lookup(unit.call?.inputs ?? {}, name)?.name ?? lookup(unit.dispatch?.inputs ?? {}, name)?.name ?? name;
-  }
-  canonicalJobOutput(job, name) {
-    const own2 = lookup(job.outputs, name);
-    if (own2) return own2.name;
-    const callee = this.calleeOf(job);
-    return (callee?.call && lookup(callee.call.outputs, name)?.name) ?? name;
-  }
-  indexSite(unit, site) {
-    this.sitesById.set(site.id, site);
-    const sink = this.sinkOf(unit, site);
-    for (const seg of site.segments) {
-      for (const ref of seg.refs) {
-        for (const symbol2 of this.readsOf(unit, site, ref)) this.addUsage(unit, site, ref, symbol2, sink);
-      }
-    }
-  }
-  addUsage(unit, site, ref, symbol2, sink) {
-    if (!this.nodes.has(symbol2)) {
-      this.node({
-        id: symbol2,
-        kind: ref.context === "vars" ? "var" : "unresolved",
-        label: `${ref.context}.${ref.path.join(".")}`,
-        unit: unit.path
-      });
-    }
-    const usage = { symbol: symbol2, site, ref, ...sink ? { sink } : {} };
-    const list = this.usages.get(symbol2);
-    if (list) list.push(usage);
-    else this.usages.set(symbol2, [usage]);
-    if (sink) this.edge({ from: symbol2, to: sink, kind: "flows", loc: ref.loc, siteId: site.id });
-  }
-};
-
-// ../core/src/matrix.ts
-var GITHUB_MATRIX_LIMIT = 256;
-var MAX_COMBINATIONS = 2e4;
-function jsonEqual(a, b) {
-  if (a === b) return true;
-  if (typeof a === "string" && typeof b === "string") return a === b;
-  if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
-  if (Array.isArray(a) !== Array.isArray(b)) return false;
-  if (Array.isArray(a) && Array.isArray(b))
-    return a.length === b.length && a.every((x, i) => jsonEqual(x, b[i]));
-  const ka = Object.keys(a);
-  const kb = Object.keys(b);
-  return ka.length === kb.length && ka.every((k) => jsonEqual(a[k], b[k] ?? null));
-}
-function cellMatches(cell2, value) {
-  if (!cell2) return false;
-  if (!cell2.known) return void 0;
-  return jsonEqual(cell2.value, value);
-}
-function minJobsAfterExclude(m, productSize) {
-  if (m.excludeDynamic || m.includeDynamic) return void 0;
-  if (m.dims.some((d) => d.values === null || d.unknownIndexes.length > 0)) return void 0;
-  if (m.exclude.some((e) => e.dynamicKeys.length > 0)) return void 0;
-  const size = new Map(m.dims.map((d) => [d.name, Math.max(1, d.values.length)]));
-  const named = m.dims.filter((d) => m.exclude.some((e) => d.name in e.values));
-  const subSize = named.reduce((n, d) => n * size.get(d.name), 1);
-  const effective = m.exclude.filter((e) => Object.keys(e.values).every((k) => size.has(k)));
-  if (subSize <= MAX_COMBINATIONS) {
-    let survivors = 0;
-    const walk = (i, values) => {
-      if (i === named.length) {
-        if (!effective.some((e) => Object.entries(e.values).every(([k, v]) => jsonEqual(values[k], v))))
-          survivors++;
-        return;
-      }
-      const d = named[i];
-      for (const v of d.values) walk(i + 1, { ...values, [d.name]: v });
-    };
-    walk(0, {});
-    return survivors * (productSize / subSize);
-  }
-  const removed = effective.reduce(
-    (n, e) => n + productSize / Object.keys(e.values).reduce((p, k) => p * size.get(k), 1),
-    0
-  );
-  return Math.max(0, productSize - removed);
-}
-function expandMatrix(m) {
-  if (!m) return { combos: [], keys: [], exact: true, dynamic: false, truncated: false };
-  if (m.dynamic) return { combos: [], keys: [], exact: false, dynamic: true, truncated: false };
-  let exact = !m.includeDynamic && !m.excludeDynamic;
-  const truncated = false;
-  const dimNames = m.dims.map((d) => d.name);
-  const productSize = m.dims.reduce((n, d) => n * (d.values === null ? 1 : Math.max(1, d.values.length)), 1);
-  const truncatedResult = (minJobs) => {
-    const keys2 = [...dimNames];
-    for (const e of m.include) for (const k of Object.keys(e.values)) if (!keys2.includes(k)) keys2.push(k);
-    return {
-      combos: [],
-      keys: keys2,
-      exact: false,
-      dynamic: false,
-      truncated: true,
-      productSize,
-      ...minJobs !== void 0 ? { minJobs } : {}
-    };
-  };
-  const large = m.dims.length > 0 && productSize > MAX_COMBINATIONS;
-  if (large) {
-    const minJobs = minJobsAfterExclude(m, productSize);
-    if (minJobs === void 0 || minJobs > MAX_COMBINATIONS) return truncatedResult(minJobs);
-  }
-  const pruneAt = /* @__PURE__ */ new Map();
-  for (const ex of m.exclude) {
-    const idx = Object.keys(ex.values).map((k) => dimNames.indexOf(k));
-    if (ex.dynamicKeys.length || idx.length === 0 || idx.includes(-1)) continue;
-    const at = Math.max(...idx);
-    pruneAt.set(at, [...pruneAt.get(at) ?? [], ex]);
-  }
-  let product = [];
-  if (m.dims.length > 0) {
-    product = [{ values: {}, origin: "product", includes: [] }];
-    for (const [i, dim] of m.dims.entries()) {
-      const cells = dim.values === null ? [{ known: false }] : dim.values.map(
-        (v, i2) => dim.unknownIndexes.includes(i2) ? { known: false } : { known: true, value: v }
-      );
-      if (dim.values === null || dim.unknownIndexes.length > 0) exact = false;
-      const prune = pruneAt.get(i) ?? [];
-      const next = [];
-      for (const combo of product) {
-        for (const cell2 of cells) {
-          const values = { ...combo.values, [dim.name]: cell2 };
-          if (prune.some(
-            (ex) => Object.entries(ex.values).every(([k, v]) => cellMatches(values[k], v) === true)
-          ))
-            continue;
-          next.push({ origin: "product", includes: [], values });
-        }
-      }
-      if (large && next.length > MAX_COMBINATIONS)
-        return truncatedResult(minJobsAfterExclude(m, productSize));
-      product = next;
-    }
-  }
-  for (const ex of m.exclude) {
-    product = product.filter((combo) => {
-      let all = true;
-      for (const [k, v] of Object.entries(ex.values)) {
-        if (ex.dynamicKeys.includes(k)) {
-          exact = false;
-          all = false;
-          break;
-        }
-        const r = cellMatches(combo.values[k], v);
-        if (r === void 0) exact = false;
-        if (r !== true) {
-          all = false;
-          break;
-        }
-      }
-      return !all;
-    });
-  }
-  const originals = product;
-  const created = [];
-  m.include.forEach((entry, idx) => {
-    const entryCells = {};
-    for (const [k, v] of Object.entries(entry.values)) {
-      entryCells[k] = entry.dynamicKeys.includes(k) ? { known: false } : { known: true, value: v };
-    }
-    let merged2 = false;
-    for (const combo of originals) {
-      let fits = true;
-      for (const [k, cell2] of Object.entries(entryCells)) {
-        if (!dimNames.includes(k)) continue;
-        if (!cell2.known) {
-          exact = false;
-          continue;
-        }
-        const r = cellMatches(combo.values[k], cell2.value);
-        if (r === void 0) exact = false;
-        if (r === false) {
-          fits = false;
-          break;
-        }
-      }
-      if (!fits) continue;
-      for (const [k, cell2] of Object.entries(entryCells)) {
-        if (!dimNames.includes(k)) combo.values[k] = cell2;
-      }
-      combo.includes.push(idx);
-      merged2 = true;
-    }
-    if (!merged2) created.push({ values: { ...entryCells }, origin: "include", includes: [idx] });
-  });
-  const combos = [...originals, ...created];
-  const keys = [];
-  for (const c of combos) for (const k of Object.keys(c.values)) if (!keys.includes(k)) keys.push(k);
-  return { combos, keys, exact, dynamic: false, truncated, productSize };
-}
-function comboLabel(combo, keys) {
-  const shown = keys ?? Object.keys(combo.values);
-  const parts = shown.filter((k) => k in combo.values).map((k) => {
-    const c = combo.values[k];
-    return `${k}: ${c.known ? typeof c.value === "string" ? c.value : JSON.stringify(c.value) : "<expr>"}`;
-  });
-  return `{ ${parts.join(", ")} }`;
-}
-function matrixResolver(combo) {
-  return ({ context, path }) => {
-    if (context !== "matrix") return void 0;
-    if (path.length === 0) return UNKNOWN;
-    const key = path[0];
-    const cell2 = lookup(combo.values, key);
-    if (!cell2) return known(null, [{ kind: "missing-matrix-key", key }]);
-    if (!cell2.known) return UNKNOWN;
-    let value = cell2.value;
-    for (const seg of path.slice(1)) {
-      if (value && typeof value === "object" && !Array.isArray(value)) value = lookup(value, seg) ?? null;
-      else if (Array.isArray(value)) value = value[Number(seg)] ?? null;
-      else value = null;
-    }
-    return known(value);
-  };
-}
-function isEmptyValue(v) {
-  return v.known && (v.value === null || v.value === "");
-}
-function declaredMatrix(keys) {
-  const values = Object.fromEntries(keys.map((k) => [k, { known: false }]));
-  return {
-    combos: [{ values, origin: "product", includes: [] }],
-    keys,
-    exact: false,
-    dynamic: false,
-    truncated: false,
-    declared: true
-  };
-}
-
-// ../core/src/contracts.ts
 var CONTRACTS_DIR = `${CONFIG_DIR}/contracts`;
 function normalizeContractText(text3) {
   return text3.replace(/\r\n/g, "\n");
@@ -37981,159 +38172,7 @@ function scopePlan(plan, keep) {
   };
 }
 
-// ../core/src/checks.ts
-function formatNumber(n) {
-  if (!Number.isFinite(n)) return String(n);
-  if (n === 0) return "0";
-  const exp = Math.floor(Math.log10(Math.abs(n)));
-  const [mantissa, e] = n.toPrecision(15).split("e");
-  const trim = (s) => s.includes(".") ? s.replace(/0+$/, "").replace(/\.$/, "") : s;
-  if (exp > -5 && exp < 15 && e === void 0) return trim(mantissa);
-  const sci = n.toExponential(14);
-  const [m, x] = sci.split("e");
-  const power = Number(x);
-  return `${trim(m)}E${power < 0 ? "-" : "+"}${String(Math.abs(power)).padStart(2, "0")}`;
-}
-function suffixValues(value) {
-  if (value === null || value === "") return [];
-  if (typeof value === "boolean") return [value ? "true" : "false"];
-  if (typeof value === "number") return [formatNumber(value)];
-  if (typeof value === "string") return [value];
-  if (Array.isArray(value)) return value.flatMap(suffixValues);
-  return Object.values(value).flatMap(suffixValues);
-}
-var toText = (v) => {
-  if (!v.known) return void 0;
-  const value = v.value;
-  if (value === null) return "";
-  if (typeof value === "number") return formatNumber(value);
-  if (typeof value === "string" || typeof value === "boolean") return String(value);
-  return void 0;
-};
-function nameKind(job) {
-  const raw = job.name ?? "";
-  const segments = findTemplateSegments(raw);
-  if (segments.length === 0) return { kind: "static", text: raw.trim() };
-  const only = segments.length === 1 && raw.trim() === raw.slice(segments[0].start, segments[0].end).trim();
-  const ast = segments[0].expr.ast;
-  if (only && ast instanceof Literal) {
-    return { kind: "static", text: (toText(evaluate(ast, () => void 0)) ?? "").trim() };
-  }
-  return { kind: "dynamic", template: raw, segments };
-}
-function suffix(combo, exp, job) {
-  const m = job.matrix;
-  const keys = combo.origin === "include" ? Object.keys(m.include[combo.includes[0]]?.values ?? {}) : m.dims.map((d) => d.name);
-  let certain = exp.exact;
-  const parts = [];
-  for (const key of keys) {
-    const cell2 = lookup(combo.values, key);
-    if (!cell2) continue;
-    if (!cell2.known) {
-      certain = false;
-      continue;
-    }
-    parts.push(...suffixValues(cell2.value));
-  }
-  return { text: parts.length ? ` (${parts.join(", ")})` : "", certain };
-}
-function templateStem(template, segments) {
-  let out = "";
-  let at = 0;
-  for (const seg of segments) {
-    out += `${template.slice(at, seg.start)}\u2026`;
-    at = seg.end;
-  }
-  return (out + template.slice(at)).trim();
-}
-function nameResolver(combo, inputs) {
-  const matrix2 = combo ? matrixResolver(combo) : void 0;
-  return (ref) => {
-    if (ref.context === "matrix") return matrix2 ? matrix2(ref) : known(null);
-    if (ref.context === "inputs") {
-      if (ref.path.length !== 1) return UNKNOWN;
-      const v = lookup(inputs, ref.path[0]);
-      return v?.known ? known(v.value) : UNKNOWN;
-    }
-    return void 0;
-  };
-}
-function jobSegments(job, inputs = {}) {
-  const kind = nameKind(job);
-  const exp = job.matrix ? expandMatrix(job.matrix) : void 0;
-  const combos = exp && !exp.dynamic && !exp.truncated && exp.combos.length ? exp.combos : [void 0];
-  const matrixUnknown = !!exp && (exp.dynamic || exp.truncated);
-  const stem = kind.kind === "static" ? `${kind.text || job.id}${exp ? " (\u2026)" : ""}` : templateStem(kind.template, kind.segments);
-  return combos.map((combo) => {
-    if (kind.kind === "static") {
-      const base = kind.text || job.id;
-      if (!combo || !exp)
-        return { name: matrixUnknown ? `${base} (\u2026)` : base, stem, certain: !matrixUnknown };
-      const s = suffix(combo, exp, job);
-      return { name: `${base}${s.text}`, stem, certain: s.certain, combo };
-    }
-    const text3 = toText(evaluateTemplate(kind.template, nameResolver(combo, inputs)))?.trim();
-    const certain = text3 !== void 0 && !matrixUnknown && (!exp || exp.exact);
-    return {
-      name: text3 === void 0 ? kind.template.trim() : text3 || job.id,
-      stem,
-      certain,
-      ...combo ? { combo } : {}
-    };
-  });
-}
-function callerInputs(job, combo, own2) {
-  const out = {};
-  for (const [name, b] of Object.entries(job.with)) {
-    if (!b.site) {
-      out[name] = { known: true, value: b.value };
-      continue;
-    }
-    const v = evaluateTemplate(b.site.text, nameResolver(combo, own2));
-    out[name] = v.known ? { known: true, value: v.value } : { known: false };
-  }
-  return out;
-}
-var MAX_DEPTH = 12;
-function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ */ new Set()) {
-  const values = {};
-  for (const [name, input3] of Object.entries(wf.call?.inputs ?? {})) {
-    const given = inputs === "consumer" ? { known: false } : lookup(inputs, name);
-    if (given) values[name] = given;
-    else if (input3.hasDefault) values[name] = { known: true, value: input3.default };
-    else values[name] = { known: true, value: null };
-  }
-  const out = [];
-  for (const job of Object.values(wf.jobs)) {
-    const id = `${wf.path}#${job.id}`;
-    const callee = job.uses ? index.calleeOf(job) : void 0;
-    for (const seg of jobSegments(job, values)) {
-      if (!callee) {
-        out.push({ name: seg.name, stem: seg.stem, certain: seg.certain, jobs: [id] });
-        continue;
-      }
-      if (depth >= MAX_DEPTH || seen.has(callee.path)) continue;
-      const nested = workflowChecks(
-        index,
-        callee,
-        callerInputs(job, seg.combo, values),
-        depth + 1,
-        /* @__PURE__ */ new Set([...seen, wf.path])
-      );
-      for (const c of nested) {
-        out.push({
-          name: `${seg.name} / ${c.name}`,
-          stem: `${seg.stem} / ${c.stem}`,
-          certain: seg.certain && c.certain,
-          jobs: [id, ...c.jobs]
-        });
-      }
-    }
-  }
-  return out;
-}
-
-// ../core/src/impact.ts
+// ../lint/src/impact.ts
 var IMPACT_LEVELS = ["none", "patch", "minor", "major"];
 var levelRank = (l) => IMPACT_LEVELS.indexOf(l);
 var maxLevel = (levels) => levels.reduce((a, b) => levelRank(b) > levelRank(a) ? b : a, "none");
@@ -38482,7 +38521,7 @@ function computeImpact(base, head, baseline, declared, policy, headExists) {
   return { baseline, changes, verdict: impactVerdict(changes, declared, policy), policy, publishedFiles };
 }
 
-// ../core/src/rules/types.ts
+// ../lint/src/rules/types.ts
 var CATEGORIES = {
   1: { id: "inputs", title: "Inputs" },
   2: { id: "secrets", title: "Secrets" },
@@ -38498,7 +38537,73 @@ function defineRule(rule) {
   return rule;
 }
 
-// ../core/src/rules/contracts.ts
+// ../lint/src/rules/util.ts
+function isWholeExpression(site) {
+  if (site.segments.length !== 1) return false;
+  const templated = findTemplateSegments(site.text);
+  return templated.length === 0 || templated.length === 1 && site.text.trim() === site.text.slice(templated[0].start, templated[0].end);
+}
+function guardOf(decl) {
+  return decl.ifValue === false ? false : decl.ifSite;
+}
+function useInCondition(site, ref) {
+  const seg = site.segments.find((s) => s.refs.includes(ref));
+  return seg ? conditionUses(seg.expr, isWholeExpression(site)).get(ref.start) : void 0;
+}
+function* refsOf(unit) {
+  for (const site of unit.sites)
+    for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
+}
+function readsContextDynamically(unit, context) {
+  if (unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error)))
+    return true;
+  for (const { ref } of refsOf(unit)) {
+    if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
+    if (context === "inputs" && ref.context === "github" && ref.path[0] === "event") {
+      if (ref.path.length === 1 || ref.path[1] === "inputs" && (ref.path.length === 2 || ref.path[2] === "?"))
+        return true;
+    }
+  }
+  return false;
+}
+function namesOwner(ref) {
+  const owner = ref.path[0];
+  return (ref.context === "needs" || ref.context === "jobs" || ref.context === "steps") && owner !== void 0 && owner !== "?" && owner !== "*";
+}
+function chainTo(index, target) {
+  const queue = [{ path: target, chain: [] }];
+  const seen = /* @__PURE__ */ new Set([target]);
+  let fallback = [];
+  while (queue.length) {
+    const { path, chain } = queue.shift();
+    const callers = index.callersOf(path);
+    if (callers.length === 0) return chain;
+    if (chain.length > fallback.length) fallback = chain;
+    for (const c of callers) {
+      if (seen.has(c.caller.path)) continue;
+      seen.add(c.caller.path);
+      queue.push({ path: c.caller.path, chain: [c, ...chain] });
+    }
+  }
+  return fallback;
+}
+function chainRelated(chain) {
+  return chain.map((c) => ({
+    loc: c.job.uses?.loc ?? c.job.loc,
+    message: `jobs.${c.job.id} calls ${c.callee.path}`
+  }));
+}
+var quote = (s) => `"${escapeControl(s)}"`;
+function listNames(names, max = 6) {
+  if (names.length === 0) return "(none)";
+  const shown = names.slice(0, max).join(", ");
+  return names.length > max ? `${shown}, \u2026 (+${names.length - max})` : shown;
+}
+function isCallOnly(wf) {
+  return wf.triggers.length === 1 && wf.triggers[0] === "workflow_call";
+}
+
+// ../lint/src/rules/contracts.ts
 var fileStart2 = (file2) => ({ file: file2, line: 1, column: 1, endLine: 1, endColumn: 1 });
 function locFor(unit, path, fallback) {
   if (!unit) return fallback;
@@ -38661,7 +38766,7 @@ var contractRules = [
   contractInvalid
 ];
 
-// ../core/src/rules/expressions.ts
+// ../lint/src/rules/expressions.ts
 var GITHUB_ENV_HINTS = {
   GITHUB_SHA: "github.sha",
   GITHUB_REF: "github.ref",
@@ -38948,7 +39053,7 @@ var expressionRules = [
   yamlSyntaxError
 ];
 
-// ../core/src/rules/impact.ts
+// ../lint/src/rules/impact.ts
 var describeSource = (s) => s.kind === "explicit" ? "the explicit impact" : s.kind === "version" ? `the version bump ${s.value}` : `the ${s.kind === "title" ? "title" : "labels"} "${s.value}"`;
 var related = (changes) => changes.slice(0, 20).map((c) => ({ loc: c.loc, message: `${c.level}: ${c.message}` }));
 var verdictLoc = (impact, changes) => changes[0]?.loc ?? impact.changes[0]?.loc ?? {
@@ -39077,7 +39182,7 @@ var impactRules = [
 ];
 var IMPACT_CODES = impactRules.map((r) => r.code);
 
-// ../core/src/rules/inputs.ts
+// ../lint/src/rules/inputs.ts
 function eventInputReadsByRoot(index) {
   const out = /* @__PURE__ */ new Map();
   for (const root of index.project.workflows.values()) {
@@ -39501,7 +39606,7 @@ var inputRules = [
   undefinedInputRef
 ];
 
-// ../core/src/rules/matrix.ts
+// ../lint/src/rules/matrix.ts
 var hasMatrixRef = (site) => site.segments.some((s) => s.refs.some((r) => r.context === "matrix"));
 var readsKey = (seg, key) => seg.expr.refs.some((r) => r.context === "matrix" && r.path[0]?.toLowerCase() === key.toLowerCase());
 var TEST_OPEN = /(?:^|[;&|({])\s*(?:(?:if|elif|while|until|then|do|else|!)\s+)*(\[\[|\[|test)(?=\s)/g;
@@ -39942,7 +40047,7 @@ var matrixRules = [
   unusedMatrixShape
 ];
 
-// ../core/src/rules/outputs.ts
+// ../lint/src/rules/outputs.ts
 function publishedFix(kind, file2, publish) {
   const remove = `Remove the output, or make a ${kind === "workflow" ? "caller" : "user"} read it.`;
   return publish ? `${remove} If other repositories use this ${kind}, add ${quote(file2)} to \`impact.publish\`.` : `${remove} If other repositories use this ${kind}, set \`impact.publish\` to the units they use, ${quote(file2)} included; it replaces the default (reusable workflows and the root action.yml).`;
@@ -40226,7 +40331,7 @@ var outputRules = [
   stepOutputNeverWritten
 ];
 
-// ../core/src/rules/overrides.ts
+// ../lint/src/rules/overrides.ts
 var EXPIRY_WARNING_DAYS = 14;
 var configLoc = (loc) => loc ?? { file: ".github/flowpact/flowpact.config.yml", line: 1, column: 1, endLine: 1, endColumn: 1 };
 var describe3 = (o) => `${o.rule} on ${o.target ?? o.file}`;
@@ -40310,7 +40415,7 @@ var overrideExpiringSoon = defineRule({
 });
 var overrideRules = [overrideExpired, overrideUnused, overrideExpiringSoon];
 
-// ../core/src/rules/registry.ts
+// ../lint/src/rules/registry.ts
 var CODE_PATTERN = /^([A-Z][A-Z0-9]{1,9}?)(\d)(\d{2})$/;
 var NAME_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 var BUILTIN_PREFIX = "FP";
@@ -40367,7 +40472,7 @@ var RuleRegistry = class {
   }
 };
 
-// ../core/src/rules/secrets.ts
+// ../lint/src/rules/secrets.ts
 var BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
 function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
   const out = /* @__PURE__ */ new Set();
@@ -40591,7 +40696,7 @@ var secretRules = [
   undeclaredSecretRef
 ];
 
-// ../core/src/rules/structure.ts
+// ../lint/src/rules/structure.ts
 var callCycle = defineRule({
   code: "FP601",
   name: "call-cycle",
@@ -41065,7 +41170,7 @@ var structureRules = [
   workspaceUnverified
 ];
 
-// ../core/src/rules/index.ts
+// ../lint/src/rules/index.ts
 var builtinRules = [
   ...inputRules,
   ...secretRules,
@@ -41083,7 +41188,7 @@ function createRegistry() {
   return registry2;
 }
 
-// ../core/src/analyze.ts
+// ../lint/src/analyze.ts
 var compact = (s) => s.toLowerCase().replace(/[-_\s]/g, "");
 function typoOf(registry2, key) {
   const k = compact(key);
@@ -41520,114 +41625,7 @@ function exitCodeFor(summary2, failOn) {
   return 0;
 }
 
-// ../core/src/git.ts
-import { execFileSync } from "child_process";
-import { posix as posix3 } from "path";
-var GitError = class extends Error {
-};
-var MAX_BUFFER = 256 * 1024 * 1024;
-function git(root, args, input3) {
-  try {
-    return execFileSync("git", ["-C", root, ...args], {
-      maxBuffer: MAX_BUFFER,
-      stdio: ["pipe", "pipe", "pipe"],
-      ...input3 !== void 0 ? { input: input3 } : {}
-    });
-  } catch (err) {
-    const e = err;
-    if (e.code === "ENOENT") throw new GitError("git is not installed or not on PATH");
-    const detail = e.stderr?.toString().trim().split("\n")[0] ?? err.message;
-    throw new GitError(detail);
-  }
-}
-function gitTopLevel(root) {
-  try {
-    return git(root, ["rev-parse", "--show-toplevel"]).toString().trim() || void 0;
-  } catch {
-    return void 0;
-  }
-}
-function resolveCommit(root, ref) {
-  if (!ref || ref.startsWith("-")) throw new GitError(`invalid ref: ${JSON.stringify(ref)}`);
-  try {
-    return git(root, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]).toString().trim();
-  } catch {
-    throw new GitError(
-      `${ref} is not available in this clone. Fetch it first (for example \`git fetch origin ${ref}\`, or check out with fetch-depth: 0).`
-    );
-  }
-}
-function gitFileSystem(root, commit) {
-  const prefix = git(root, ["rev-parse", "--show-prefix"]).toString().trim();
-  const files = /* @__PURE__ */ new Set();
-  const links = [];
-  const out = git(root, ["ls-tree", "-r", "-z", "--full-tree", commit]).toString();
-  for (const entry of out.split("\0")) {
-    if (!entry) continue;
-    const tab = entry.indexOf("	");
-    const [mode, type] = entry.slice(0, tab).split(" ");
-    const path = entry.slice(tab + 1);
-    if (prefix && !path.startsWith(prefix)) continue;
-    if (type === "blob" && mode === "120000") links.push(path);
-    else if (type === "blob" && (mode === "100644" || mode === "100755"))
-      files.add(path.slice(prefix.length));
-  }
-  const alias = /* @__PURE__ */ new Map();
-  for (const link of links) {
-    const target = posix3.normalize(
-      posix3.join(posix3.dirname(link), git(root, ["cat-file", "blob", `${commit}:${link}`]).toString())
-    );
-    if (target.startsWith("../") || target === ".." || target === ".git" || target.startsWith(".git/"))
-      continue;
-    if (prefix && !target.startsWith(prefix)) continue;
-    const from = link.slice(prefix.length);
-    const to = target.slice(prefix.length);
-    if (files.has(to)) {
-      alias.set(from, to);
-      files.add(from);
-      continue;
-    }
-    for (const f of [...files]) {
-      if (!f.startsWith(`${to}/`)) continue;
-      const virtual = `${from}/${f.slice(to.length + 1)}`;
-      alias.set(virtual, f);
-      files.add(virtual);
-    }
-  }
-  const cache = /* @__PURE__ */ new Map();
-  const norm = (p) => trimChar(p.startsWith("./") ? p.slice(2) : p, "/");
-  const under = (dir) => {
-    const d = norm(dir);
-    return d === "" || d === "." ? "" : `${d}/`;
-  };
-  return {
-    commit,
-    read(path) {
-      const p = norm(path);
-      if (!files.has(p)) return void 0;
-      if (!cache.has(p))
-        cache.set(
-          p,
-          git(root, ["cat-file", "blob", `${commit}:${prefix}${alias.get(p) ?? p}`]).toString("utf8")
-        );
-      return cache.get(p);
-    },
-    list(dir) {
-      const d = under(dir);
-      return [...files].filter((f) => f.startsWith(d) && !f.slice(d.length).includes("/")).sort();
-    },
-    walk(dir) {
-      const d = under(dir);
-      return [...files].filter((f) => f.startsWith(d)).sort();
-    },
-    isDir(path) {
-      const d = under(path);
-      return [...files].some((f) => f.startsWith(d));
-    }
-  };
-}
-
-// ../core/src/impact-run.ts
+// ../lint/src/impact-run.ts
 import { readFileSync as readFileSync3 } from "fs";
 import { join as join5, relative as relative4 } from "path";
 var ImpactSetupError = class extends Error {
@@ -41844,7 +41842,7 @@ function prepareImpact(root, headConfig, req, logger) {
   };
 }
 
-// ../core/src/plugins.ts
+// ../lint/src/plugins.ts
 import { existsSync as existsSync5 } from "fs";
 import { isAbsolute as isAbsolute4, resolve as resolve4 } from "path";
 import { pathToFileURL } from "url";
@@ -41879,7 +41877,7 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   return loaded;
 }
 
-// ../core/src/report.ts
+// ../lint/src/report.ts
 var locSchema = external_exports.object({
   file: external_exports.string(),
   line: external_exports.number().int().positive(),

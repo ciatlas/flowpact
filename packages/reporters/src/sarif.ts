@@ -1,13 +1,12 @@
+import { jsonSafe, type Loc } from '@flowpact/core';
 import {
   type AnalysisResult,
   createRegistry,
   DOCS_BASE_URL,
   type Finding,
-  jsonSafe,
-  type Loc,
   type Severity,
   type SuppressedFinding,
-} from '@flowpact/core';
+} from '@flowpact/lint';
 import { inRepository } from './github';
 
 const SARIF_SCHEMA = 'https://json.schemastore.org/sarif-2.1.0.json';
