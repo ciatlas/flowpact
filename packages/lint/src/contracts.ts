@@ -12,7 +12,7 @@ import {
   sym,
   type UnitDecl,
   type WorkflowDecl,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { formatPatch, structuredPatch } from 'diff';
 import { parse as parseYaml, stringify } from 'yaml';
 import { z } from 'zod';

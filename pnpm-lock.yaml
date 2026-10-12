@@ -169,7 +169,7 @@ importers:
       '@biomejs/biome':
         specifier: ^2.5.15
         version: 2.5.15
-      '@flowpact/core':
+      '@ciatlas/core':
         specifier: workspace:*
         version: link:packages/core
       '@flowpact/lint':
@@ -261,7 +261,7 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1
     devDependencies:
-      '@flowpact/core':
+      '@ciatlas/core':
         specifier: workspace:*
         version: link:../core
       '@flowpact/lint':
@@ -279,7 +279,7 @@ importers:
 
   packages/cli:
     devDependencies:
-      '@flowpact/core':
+      '@ciatlas/core':
         specifier: workspace:*
         version: link:../core
       '@flowpact/language-server':
@@ -321,14 +321,10 @@ importers:
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
-    devDependencies:
-      tsup:
-        specifier: ^8.5.1
-        version: 8.5.1(jiti@2.7.0)(postcss@8.5.29)(supports-color@7.2.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)
 
   packages/language-server:
     dependencies:
-      '@flowpact/core':
+      '@ciatlas/core':
         specifier: workspace:*
         version: link:../core
       '@flowpact/lint':
@@ -350,7 +346,7 @@ importers:
 
   packages/lint:
     dependencies:
-      '@flowpact/core':
+      '@ciatlas/core':
         specifier: workspace:*
         version: link:../core
       diff:
@@ -369,7 +365,7 @@ importers:
 
   packages/reporters:
     dependencies:
-      '@flowpact/core':
+      '@ciatlas/core':
         specifier: workspace:*
         version: link:../core
       '@flowpact/lint':

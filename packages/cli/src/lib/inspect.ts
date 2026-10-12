@@ -1,5 +1,5 @@
 /** `graph`, `trace`, `rules` and `explain`: what flowpact knows about a repository and its rules. */
-import { didYouMean, resolveSymbols, type TraceDirection, type TraceNode, trace } from '@flowpact/core';
+import { didYouMean, resolveSymbols, type TraceDirection, type TraceNode, trace } from '@ciatlas/core';
 import { analyze, type RuleCategory, resolveSeverities, type SeveritySetting } from '@flowpact/lint';
 import { buildCallGraph, type CallGraph } from '@flowpact/reporters';
 import { attempt, NoSymbolMatchError, usage } from './errors';

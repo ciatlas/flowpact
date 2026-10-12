@@ -1,5 +1,5 @@
 import { sep } from 'node:path';
-import type { Loc } from '@flowpact/core';
+import type { Loc } from '@ciatlas/core';
 import type { Finding } from '@flowpact/lint';
 import { type Diagnostic, DiagnosticSeverity, DiagnosticTag, type Range } from 'vscode-languageserver';
 import { URI } from 'vscode-uri';

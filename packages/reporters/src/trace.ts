@@ -1,4 +1,4 @@
-import { formatLoc, type TraceDirection, type TraceNode } from '@flowpact/core';
+import { formatLoc, type TraceDirection, type TraceNode } from '@ciatlas/core';
 import { createTheme, finalize, type RenderOptions, safe, type Theme } from './theme';
 
 const KIND_COLOR: Record<string, 'green' | 'yellow' | 'magenta' | 'cyan' | 'blue'> = {

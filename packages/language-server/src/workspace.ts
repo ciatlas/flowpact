@@ -6,7 +6,7 @@ import {
   type Occurrence,
   overlayFileSystem,
   SymbolLocator,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import {
   type AnalysisResult,
   analyze,

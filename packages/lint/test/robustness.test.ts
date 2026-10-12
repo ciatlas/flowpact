@@ -1,4 +1,4 @@
-import { memoryFileSystem } from '@flowpact/core';
+import { memoryFileSystem } from '@ciatlas/core';
 import { analyze } from '@flowpact/lint';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';

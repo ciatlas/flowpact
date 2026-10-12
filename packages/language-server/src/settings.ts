@@ -1,4 +1,4 @@
-import type { LogLevel } from '@flowpact/core';
+import type { LogLevel } from '@ciatlas/core';
 
 /** What the client configures, through `initializationOptions` and `workspace/didChangeConfiguration`. */
 export interface Settings {

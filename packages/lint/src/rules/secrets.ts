@@ -16,7 +16,7 @@ import {
   sym,
   UNKNOWN,
   type WorkflowDecl,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { defineRule, type RuleDefinition } from './types';
 import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, quote } from './util';
 

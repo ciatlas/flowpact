@@ -20,7 +20,7 @@ import {
   silentLogger,
   typoDistance,
   type UnitDecl,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { ConfigError, defaultConfig, type FlowpactConfig, type Override } from './config';
 import { type ContractPlan, contractsInScope, planContracts, scopePlan } from './contracts';
 import { computeImpact, type DeclaredInput, type ImpactPolicy, type ImpactResult } from './impact';

@@ -1,4 +1,4 @@
-import { formatLoc, type Loc, type SourceFile } from '@flowpact/core';
+import { formatLoc, type Loc, type SourceFile } from '@ciatlas/core';
 import {
   type AnalysisResult,
   CATEGORIES,

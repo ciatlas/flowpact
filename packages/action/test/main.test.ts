@@ -682,7 +682,7 @@ describe('review fixes', () => {
   });
 
   it('shortens the job summary to stay within GitHub’s limit', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze: run2 } = await import('@flowpact/lint');
     const files: Record<string, string> = {};
     for (let i = 0; i < 200; i++) {

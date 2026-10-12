@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { memoryFileSystem } from '@flowpact/core';
+import { memoryFileSystem } from '@ciatlas/core';
 import {
   type AnalysisResult,
   analyze,

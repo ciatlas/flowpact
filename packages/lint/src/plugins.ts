@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { type Logger, silentLogger } from '@flowpact/core';
+import { type Logger, silentLogger } from '@ciatlas/core';
 import { ConfigError, type FlowpactConfig } from './config';
 import type { RuleRegistry } from './rules/registry';
 import type { RuleDefinition } from './rules/types';

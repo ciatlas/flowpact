@@ -1,4 +1,4 @@
-import { type CallSite, isCallOnly, type Loc, lookup, refsOf, sym } from '@flowpact/core';
+import { type CallSite, isCallOnly, type Loc, lookup, refsOf, sym } from '@ciatlas/core';
 import { defineRule, type RelatedLocation, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote } from './util';
 

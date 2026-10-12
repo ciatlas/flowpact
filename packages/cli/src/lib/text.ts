@@ -3,7 +3,7 @@
  * construction. Every text is safe to print in a CI log: no line of it can be read as a GitHub workflow command (it
  * embeds names from the analyzed YAML), which is what the CLI's stdout also guarantees.
  */
-import { neutralizeWorkflowCommands } from '@flowpact/core';
+import { neutralizeWorkflowCommands } from '@ciatlas/core';
 import {
   type CallGraph,
   finalize,

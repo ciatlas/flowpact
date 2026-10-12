@@ -6,7 +6,7 @@ import {
   escapeControl,
   findTemplateSegments,
   type LocatedRef,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import type { RelatedLocation } from './types';
 
 /**

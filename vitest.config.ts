@@ -6,7 +6,7 @@ const src = (pkg: string) => fileURLToPath(new URL(`./packages/${pkg}/src/index.
 export default defineConfig({
   resolve: {
     alias: {
-      '@flowpact/core': src('core'),
+      '@ciatlas/core': src('core'),
       '@flowpact/lint': src('lint'),
       '@flowpact/reporters': src('reporters'),
       '@flowpact/language-server': src('language-server'),

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { createLogger, type Logger, type LogRecord } from '@flowpact/core';
+import { createLogger, type Logger, type LogRecord } from '@ciatlas/core';
 import { VERSION } from '@flowpact/lint';
 import {
   type Connection,

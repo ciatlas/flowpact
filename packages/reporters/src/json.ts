@@ -1,4 +1,4 @@
-import { jsonSafe } from '@flowpact/core';
+import { jsonSafe } from '@ciatlas/core';
 import { type AnalysisResult, toJsonReport } from '@flowpact/lint';
 
 export function renderJson(result: AnalysisResult, opts: { includeGraph?: boolean } = {}): string {

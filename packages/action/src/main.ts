@@ -14,7 +14,7 @@ import {
   neutralizeWorkflowCommands,
   resolveCommit,
   resolveLogLevel,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import {
   type AnalysisResult,
   type AnalyzeOptions,

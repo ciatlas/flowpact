@@ -1,5 +1,5 @@
 /** Impact mode: grading changes to published units, the declared impact and the verdict. */
-import { memoryFileSystem, type ProjectIndex } from '@flowpact/core';
+import { memoryFileSystem, type ProjectIndex } from '@ciatlas/core';
 import {
   analyze,
   DEFAULT_IMPACT_POLICY,

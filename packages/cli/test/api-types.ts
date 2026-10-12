@@ -3,7 +3,7 @@
  * `pnpm typecheck`; there is nothing to run. src/api.ts is typed with the declarations too, so its functions must
  * return what they promise.
  */
-import type { ProjectIndex as EngineIndex, Loc as EngineLoc } from '@flowpact/core';
+import type { ProjectIndex as EngineIndex, Loc as EngineLoc } from '@ciatlas/core';
 import type {
   Finding as EngineFinding,
   RuleContext as EngineRuleContext,

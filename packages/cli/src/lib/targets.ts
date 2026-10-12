@@ -1,5 +1,5 @@
 import { isAbsolute, relative } from 'node:path';
-import type { Project } from '@flowpact/core';
+import type { Project } from '@ciatlas/core';
 import { usage } from './errors';
 
 /** Shows paths relative to the working directory when they are inside it. */

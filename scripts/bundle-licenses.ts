@@ -33,6 +33,8 @@ export interface BundleLicensesOptions {
 interface BundledPackage {
   name: string;
   version: string;
+  /** Where the package comes from, as a package URL (see purlOf). */
+  purl: string;
   license: string;
   homepage?: string;
   texts: string[];
@@ -82,6 +84,7 @@ function readPackage(root: string): BundledPackage | undefined {
   return {
     name: pkg.name,
     version: pkg.version,
+    purl: purlOf(pkg),
     license: licenseOf(pkg),
     ...(homepage ? { homepage } : {}),
     texts,
@@ -90,6 +93,40 @@ function readPackage(root: string): BundledPackage | undefined {
 
 const purl = (name: string, version: string) =>
   `pkg:npm/${name.startsWith('@') ? `%40${name.slice(1)}` : name}@${version}`;
+
+/** `owner/repo` of a manifest's GitHub `repository` (`github:owner/repo`, `owner/repo` or a github.com URL). */
+function githubRepository(pkg: Record<string, unknown>): string | undefined {
+  const repo = pkg.repository;
+  const url =
+    typeof repo === 'string'
+      ? repo
+      : typeof repo === 'object' && repo
+        ? (repo as { url?: unknown }).url
+        : undefined;
+  if (typeof url !== 'string') return undefined;
+  const match =
+    /^(?:github:)?([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(url) ??
+    /^(?:git\+)?(?:https?|ssh|git):\/\/(?:git@)?github\.com\/([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/.exec(url) ??
+    /^git@github\.com:([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(url);
+  return match?.[1];
+}
+
+/**
+ * The package URL of a bundled package. A package from npm is `pkg:npm/<name>@<version>`. A private package cannot
+ * come from npm: it is a git dependency on a version tag (`github:ciatlas/core#v0.1.0`), named by its repository and
+ * that tag, `pkg:github/<owner>/<repo>@v<version>`, so the SBOM never points at an npm name someone else could take.
+ */
+export function purlOf(pkg: Record<string, unknown>): string {
+  const name = String(pkg.name);
+  const version = String(pkg.version);
+  if (pkg.private !== true) return purl(name, version);
+  const repository = githubRepository(pkg);
+  if (!repository)
+    throw new Error(
+      `${name} is private, so it was not installed from npm, and its repository is not on GitHub: say in scripts/bundle-licenses.ts where it comes from`,
+    );
+  return `pkg:github/${repository.toLowerCase()}@v${version}`;
+}
 
 function notices(opts: BundleLicensesOptions, packages: BundledPackage[]): string {
   const rule = '-'.repeat(80);
@@ -118,7 +155,7 @@ function notices(opts: BundleLicensesOptions, packages: BundledPackage[]): strin
  */
 function serialNumber(opts: BundleLicensesOptions, packages: BundledPackage[]): string {
   const hash = createHash('sha1')
-    .update([`${opts.name}@${opts.version}`, ...packages.map((p) => purl(p.name, p.version))].join('\n'))
+    .update([`${opts.name}@${opts.version}`, ...packages.map((p) => p.purl)].join('\n'))
     .digest();
   hash[6] = (hash[6]! & 0x0f) | 0x50;
   hash[8] = (hash[8]! & 0x3f) | 0x80;
@@ -154,16 +191,14 @@ function sbom(opts: BundleLicensesOptions, packages: BundledPackage[]): string {
       },
       components: packages.map((p) => ({
         type: 'library',
-        'bom-ref': purl(p.name, p.version),
+        'bom-ref': p.purl,
         name: p.name,
         version: p.version,
-        purl: purl(p.name, p.version),
+        purl: p.purl,
         licenses: licenses(p.license),
         ...(p.homepage ? { externalReferences: [{ type: 'website', url: p.homepage }] } : {}),
       })),
-      dependencies: [
-        { ref: purl(opts.name, opts.version), dependsOn: packages.map((p) => purl(p.name, p.version)) },
-      ],
+      dependencies: [{ ref: purl(opts.name, opts.version), dependsOn: packages.map((p) => p.purl) }],
     },
     null,
     2,

@@ -24,7 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
-    "@flowpact/core": "workspace:*",
+    "@ciatlas/core": "workspace:*",
     "@flowpact/lint": "workspace:*",
     "@flowpact/reporters": "workspace:*",
     "@types/node": "^24.0.0",

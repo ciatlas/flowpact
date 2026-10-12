@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { memoryFileSystem, neutralizeWorkflowCommands, nodeFileSystem } from '@flowpact/core';
+import { memoryFileSystem, neutralizeWorkflowCommands, nodeFileSystem } from '@ciatlas/core';
 import {
   analyze,
   assertSafeWritePath,

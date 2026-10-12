@@ -1,4 +1,4 @@
-import { jsonSafe } from '@flowpact/core';
+import { jsonSafe } from '@ciatlas/core';
 import type { ImpactLevel } from '@flowpact/lint';
 import type { MarkdownOptions } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';

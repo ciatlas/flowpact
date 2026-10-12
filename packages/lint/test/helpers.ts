@@ -1,4 +1,4 @@
-import { createLogger, memoryFileSystem, memorySink } from '@flowpact/core';
+import { createLogger, memoryFileSystem, memorySink } from '@ciatlas/core';
 import { type AnalysisResult, analyze, type Finding, parseConfig } from '@flowpact/lint';
 
 /** Strips the common leading indentation so YAML can be written inline in tests. */

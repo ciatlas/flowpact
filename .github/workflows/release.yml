@@ -136,8 +136,8 @@ jobs:
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
-          for pkg in packages/core packages/lint packages/reporters packages/cli packages/action packages/language-server packages/vscode; do
-            # Older tags (re-published by hand) predate some packages.
+          for pkg in packages/lint packages/reporters packages/cli packages/action packages/language-server packages/vscode; do
+            # Older tags (re-published by hand) predate some packages. packages/core (@ciatlas/core) has its own version.
             [ -f "$pkg/package.json" ] || continue
             actual=$(node -p "require('./$pkg/package.json').version")
             if [ "$actual" != "$VERSION" ]; then

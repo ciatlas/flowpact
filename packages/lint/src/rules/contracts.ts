@@ -1,4 +1,4 @@
-import type { Loc, UnitDecl } from '@flowpact/core';
+import type { Loc, UnitDecl } from '@ciatlas/core';
 import type { ContractPlanEntry } from '../contracts';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { listNames } from './util';

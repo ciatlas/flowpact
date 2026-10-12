@@ -1,4 +1,4 @@
-import { memoryFileSystem, overlayFileSystem } from '@flowpact/core';
+import { memoryFileSystem, overlayFileSystem } from '@ciatlas/core';
 import { analyze, parseConfig } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { codes, WF, yaml } from './helpers';

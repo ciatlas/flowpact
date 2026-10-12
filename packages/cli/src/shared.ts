@@ -7,7 +7,7 @@ import {
   type LogRecord,
   neutralizeWorkflowCommands,
   resolveLogLevel,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import {
   assertSafeWritePath,
   ConfigError,

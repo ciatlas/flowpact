@@ -1,4 +1,4 @@
-import { jsonSafe, type Loc } from '@flowpact/core';
+import { jsonSafe, type Loc } from '@ciatlas/core';
 import {
   type AnalysisResult,
   createRegistry,

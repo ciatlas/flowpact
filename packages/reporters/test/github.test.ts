@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { memoryFileSystem } from '@flowpact/core';
+import { memoryFileSystem } from '@ciatlas/core';
 import { analyze, createRegistry, defineRule, type Severity } from '@flowpact/lint';
 import { githubAnnotation, renderGithub, renderJson, renderSarif } from '@flowpact/reporters';
 import { describe, expect, it } from 'vitest';

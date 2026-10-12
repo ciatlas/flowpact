@@ -3,7 +3,7 @@
  * functions (src/api.ts) and the CLI's commands are both built on these, so they cannot drift apart.
  */
 import { resolve } from 'node:path';
-import { createLogger, type Logger, type LogLevel, type LogSink, silentLogger } from '@flowpact/core';
+import { createLogger, type Logger, type LogLevel, type LogSink, silentLogger } from '@ciatlas/core';
 import {
   createRegistry,
   type LoadedConfig,

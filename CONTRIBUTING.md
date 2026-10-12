@@ -26,7 +26,7 @@ result whenever `packages/core`, `packages/lint`, `packages/reporters` or `packa
 
 | Path | What |
 | --- | --- |
-| `packages/core` | Workflow model: YAML → IR → expressions → graph → matrix expansion. No rules: it is the foundation flowpact's checks are built on |
+| `packages/core` | `@ciatlas/core`, the workflow model: YAML → IR → expressions → graph → matrix expansion. No rules: it is the foundation flowpact's checks are built on, versioned on its own (not with flowpact) and moving to its own repository, [ciatlas/core](https://github.com/ciatlas/core) |
 | `packages/lint` | flowpact's checks on the model: rules, config, contracts, impact mode, plugins, the JSON report and trace |
 | `packages/reporters` | Terminal (pretty), JSON, Markdown, SARIF, trace, graph and contract renderers |
 | `packages/cli` | The `flowpact` command and the API (published as `flowpact`): `src/lib` implements each command once, `src/api.ts` exports it as a function and `src/commands` prints it; the API's types are hand-written in `api.d.ts` |
@@ -90,9 +90,10 @@ key are the `ciatlas` organization variable `RELEASE_BOT_CLIENT_ID` and secret `
 the key, generate a new one (the app's **Credentials → Key pairs**), update the secret, run a workflow that uses it,
 then delete the old key; the app accepts both until then.
 
-1. Every push to `main` updates a **release pull request** that bumps the version in every package, rebuilds the
-   action bundle, moves the version references in the docs and READMEs to the new release line
-   (`scripts/sync-version-refs.mjs`) and adds the changelog entry from the commits since the last release.
+1. Every push to `main` updates a **release pull request** that bumps the version in every package but
+   `packages/core`, rebuilds the action bundle, moves the version references in the docs and READMEs to the new
+   release line (`scripts/sync-version-refs.mjs`) and adds the changelog entry from the commits since the last
+   release.
 2. Merging it tags the release (`vX.Y.Z`) and creates the GitHub release as a **draft**
    (`release-please-config.json`: `draft`, `force-tag-creation`).
 3. The release workflow then publishes `flowpact` to npm with provenance through npm trusted publishing (no

@@ -11,7 +11,7 @@ import {
   type SymbolLocator,
   type TraceNode,
   trace,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { DOCS_BASE_URL } from '@flowpact/lint';
 
 /**

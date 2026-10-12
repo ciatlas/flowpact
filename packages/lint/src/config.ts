@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { insideRepository, type Loc } from '@flowpact/core';
+import { insideRepository, type Loc } from '@ciatlas/core';
 import { isMap, isSeq, LineCounter, parseDocument } from 'yaml';
 import { z } from 'zod';
 import { SCHEMA_VERSIONS, schemaUrl } from './version';

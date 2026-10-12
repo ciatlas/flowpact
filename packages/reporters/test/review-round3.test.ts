@@ -2,7 +2,7 @@
  * Regression tests for the gaps found when re-verifying the round 2 fixes of the adversarial review: the cases that
  * render output (the rest are in packages/lint/test/review-round3.test.ts).
  */
-import { memoryFileSystem } from '@flowpact/core';
+import { memoryFileSystem } from '@ciatlas/core';
 import { type AnalysisResult, analyze, type Finding, parseConfig } from '@flowpact/lint';
 import { buildCallGraph, renderMarkdown } from '@flowpact/reporters';
 import { describe, expect, it } from 'vitest';

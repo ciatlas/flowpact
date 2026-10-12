@@ -56,7 +56,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@flowpact/core": "workspace:*",
+    "@ciatlas/core": "workspace:*",
     "@flowpact/lint": "workspace:*",
     "@flowpact/language-server": "workspace:*",
     "@flowpact/reporters": "workspace:*",

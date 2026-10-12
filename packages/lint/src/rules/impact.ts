@@ -1,4 +1,4 @@
-import type { Loc } from '@flowpact/core';
+import type { Loc } from '@ciatlas/core';
 import type { ImpactChange, ImpactLevel, ImpactResult } from '../impact';
 import { countedChanges, levelRank } from '../impact';
 import { defineRule, type RelatedLocation, type RuleDefinition } from './types';

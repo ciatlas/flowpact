@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { memoryFileSystem, sym, trace } from '@flowpact/core';
+import { memoryFileSystem, sym, trace } from '@ciatlas/core';
 import { analyze, createRegistry, reportSchema, toolMeta } from '@flowpact/lint';
 import {
   codeFrame,

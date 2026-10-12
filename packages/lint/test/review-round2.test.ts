@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { memoryFileSystem, nodeFileSystem, sym, trace } from '@flowpact/core';
+import { memoryFileSystem, nodeFileSystem, sym, trace } from '@ciatlas/core';
 import { analyze, buildContract, parseConfig, planContracts, serializeContract } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { byCode, codes, lint, WF, yaml } from './helpers';

@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@flowpact/core": "workspace:*",
+    "@ciatlas/core": "workspace:*",
     "@flowpact/lint": "workspace:*",
     "@flowpact/reporters": "workspace:*",
     "tsup": "^8.5.1",

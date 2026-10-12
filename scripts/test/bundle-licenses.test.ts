@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { purlOf } from '../bundle-licenses';
 
 const root = join(import.meta.dirname, '../..');
 const read = (path: string) => readFileSync(join(root, path), 'utf8');
@@ -47,5 +48,34 @@ describe('what the committed action bundle contains', () => {
     const { ProxyAgent } = await import('../../packages/action/src/stubs/undici');
     expect(() => new ProxyAgent()).toThrow('undici is not part of the flowpact action');
     expect(read('packages/action/dist/index.js')).toContain('undici is not part of the flowpact action');
+  });
+});
+
+describe('package URLs in the SBOM', () => {
+  it('names a package from npm by its npm name', () => {
+    expect(purlOf({ name: 'yaml', version: '2.9.1' })).toBe('pkg:npm/yaml@2.9.1');
+    expect(purlOf({ name: '@actions/core', version: '3.0.1' })).toBe('pkg:npm/%40actions/core@3.0.1');
+  });
+
+  it('names a private package, a git dependency on a version tag, by its GitHub repository and tag', () => {
+    const core = { name: '@ciatlas/core', version: '0.1.0', private: true };
+    for (const repository of [
+      { type: 'git', url: 'git+https://github.com/ciatlas/core.git' },
+      'https://github.com/CIAtlas/core',
+      'github:ciatlas/core',
+      'ciatlas/core',
+      'git@github.com:ciatlas/core.git',
+      'git+ssh://git@github.com/ciatlas/core.git',
+    ])
+      expect(purlOf({ ...core, repository }), JSON.stringify(repository)).toBe(
+        'pkg:github/ciatlas/core@v0.1.0',
+      );
+  });
+
+  it('refuses a private package it cannot place, rather than naming an npm package that may belong to someone else', () => {
+    for (const repository of [undefined, 'gitlab:ciatlas/core', 'https://gitlab.com/ciatlas/core.git'])
+      expect(() => purlOf({ name: '@ciatlas/core', version: '0.1.0', private: true, repository })).toThrow(
+        '@ciatlas/core is private',
+      );
   });
 });

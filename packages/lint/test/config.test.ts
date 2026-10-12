@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { matchesPattern } from '@flowpact/core';
+import { matchesPattern } from '@ciatlas/core';
 import { ConfigError, configJsonSchema, defaultConfig, loadConfig, parseConfig } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 

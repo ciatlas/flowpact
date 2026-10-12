@@ -1,4 +1,4 @@
-import { jsonSafe } from '@flowpact/core';
+import { jsonSafe } from '@ciatlas/core';
 import { type ArgsDef, defineCommand } from 'citty';
 import { listRules } from '../lib/inspect';
 import { rulesText } from '../lib/text';

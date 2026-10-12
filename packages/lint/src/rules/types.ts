@@ -1,4 +1,4 @@
-import type { JobDecl, Loc, Logger, MatrixExpansion, ProjectIndex, UnitDecl } from '@flowpact/core';
+import type { JobDecl, Loc, Logger, MatrixExpansion, ProjectIndex, UnitDecl } from '@ciatlas/core';
 import type { FlowpactConfig, Override } from '../config';
 import type { ContractPlan } from '../contracts';
 import type { ImpactResult } from '../impact';

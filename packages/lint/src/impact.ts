@@ -14,7 +14,7 @@ import {
   type UnitDecl,
   type WorkflowDecl,
   workflowChecks,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { buildContract, diffContracts } from './contracts';
 
 export const IMPACT_LEVELS = ['none', 'patch', 'minor', 'major'] as const;

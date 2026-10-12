@@ -122,7 +122,7 @@ describe('renderMermaid and renderDot', () => {
 
 describe('calls to workflows that are not reusable (review #23)', () => {
   it('keeps the edge and marks it', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze } = await import('@flowpact/lint');
     const r = analyze({
       root: '/v',
@@ -144,7 +144,7 @@ describe('calls to workflows that are not reusable (review #23)', () => {
 
 describe('$/ and workspace-relative uses:', () => {
   it('draws $/ calls and checkout-relative action uses as local edges', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze } = await import('@flowpact/lint');
     const r = analyze({
       root: '/v',
@@ -186,7 +186,7 @@ describe('$/ and workspace-relative uses:', () => {
 
 describe('local uses: outside the workspace (review of workspace-relative uses:)', () => {
   it('draws an action that is in the repository but not in the workspace as itself, and a missing one as missing', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze } = await import('@flowpact/lint');
     const r = analyze({
       root: '/v',
@@ -220,7 +220,7 @@ describe('local uses: outside the workspace (review of workspace-relative uses:)
 
 describe('mermaid ids', () => {
   it('trims underscores in linear time (js/polynomial-redos)', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     // A long run of separators between two letters: `/_+$/` retried it from every position.
     const name = `a${'_-'.repeat(40_000)}x`;
     const r = analyze({

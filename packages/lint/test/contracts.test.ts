@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { memoryFileSystem, nodeFileSystem } from '@flowpact/core';
+import { memoryFileSystem, nodeFileSystem } from '@ciatlas/core';
 import {
   analyze,
   buildContract,

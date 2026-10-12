@@ -6,7 +6,7 @@ import {
   type StepDecl,
   sym,
   type UnitDecl,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { defineRule, type RuleDefinition } from './types';
 import { listNames, quote } from './util';

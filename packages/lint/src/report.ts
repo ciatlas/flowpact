@@ -1,4 +1,4 @@
-import type { Loc, ProjectIndex } from '@flowpact/core';
+import type { Loc, ProjectIndex } from '@ciatlas/core';
 import { z } from 'zod';
 import type { AnalysisResult } from './analyze';
 import { schemaUrl } from './version';

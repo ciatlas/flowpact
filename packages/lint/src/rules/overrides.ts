@@ -1,4 +1,4 @@
-import type { Loc } from '@flowpact/core';
+import type { Loc } from '@ciatlas/core';
 import { defineRule, type RuleDefinition } from './types';
 
 /** Days before expiry at which FP903 starts reminding. */

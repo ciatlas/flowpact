@@ -1,4 +1,4 @@
-import { type Diagnostic, type ExprSite, type Loc, lookup, siteAt, sym } from '@flowpact/core';
+import { type Diagnostic, type ExprSite, type Loc, lookup, siteAt, sym } from '@ciatlas/core';
 import { defineRule, type RuleDefinition } from './types';
 import { quote } from './util';
 

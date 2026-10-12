@@ -1,4 +1,4 @@
-import { jsonSafe } from '@flowpact/core';
+import { jsonSafe } from '@ciatlas/core';
 import { type ArgsDef, defineCommand } from 'citty';
 import pc from 'picocolors';
 import { NoSymbolMatchError } from '../lib/errors';

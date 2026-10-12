@@ -1,6 +1,6 @@
 /** `lint`, `check` and `impact`: the analysis, and the reports rendered from it. */
 import { resolve } from 'node:path';
-import { neutralizeWorkflowCommands } from '@flowpact/core';
+import { neutralizeWorkflowCommands } from '@ciatlas/core';
 import {
   type AnalysisResult,
   analyze,

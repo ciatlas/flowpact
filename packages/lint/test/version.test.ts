@@ -7,7 +7,7 @@ const pkg = (p: string) =>
 
 describe('version', () => {
   it('matches every package.json', () => {
-    for (const p of ['core', 'lint', 'cli', 'reporters', 'action', 'language-server', 'vscode'])
+    for (const p of ['lint', 'cli', 'reporters', 'action', 'language-server', 'vscode'])
       expect(pkg(p), p).toBe(VERSION);
   });
   it('reports tool, version and schema versions in the banner', () => {

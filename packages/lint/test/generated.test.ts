@@ -1,4 +1,4 @@
-import { createLogger, generatedMarker, memoryFileSystem, memorySink } from '@flowpact/core';
+import { createLogger, generatedMarker, memoryFileSystem, memorySink } from '@ciatlas/core';
 import { analyze, createRegistry, defineRule, parseConfig } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { byCode, codes, lint, WF, yaml } from './helpers';

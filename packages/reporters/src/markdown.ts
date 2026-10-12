@@ -1,4 +1,4 @@
-import { type Loc, trimChar } from '@flowpact/core';
+import { type Loc, trimChar } from '@ciatlas/core';
 import {
   type AnalysisResult,
   type ContractPlan,

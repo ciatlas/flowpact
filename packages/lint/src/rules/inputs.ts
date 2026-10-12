@@ -13,7 +13,7 @@ import {
   UNKNOWN,
   type UnitDecl,
   type Usage,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { defineRule, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote, useInCondition } from './util';

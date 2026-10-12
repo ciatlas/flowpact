@@ -1,5 +1,5 @@
 /** Regressions for CodeQL code-scanning alerts: inputs that made regexes backtrack quadratically. */
-import { classifyUses, createParseContext, memoryFileSystem, trace, trimChar } from '@flowpact/core';
+import { classifyUses, createParseContext, memoryFileSystem, trace, trimChar } from '@ciatlas/core';
 import { analyze } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 
@@ -50,7 +50,7 @@ describe('linear on adversarial input (js/polynomial-redos)', () => {
 
 describe('expression parse errors (js/polynomial-redos)', () => {
   it('drops the position suffix in linear time', async () => {
-    const { parseExpression } = await import('@flowpact/core');
+    const { parseExpression } = await import('@ciatlas/core');
     const bad = parseExpression("1 'x'");
     expect(bad.error?.message).toBeTruthy();
     expect(bad.error?.message).not.toContain('Located at position');

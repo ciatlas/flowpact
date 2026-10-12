@@ -16,7 +16,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@flowpact/core": "workspace:*",
+    "@ciatlas/core": "workspace:*",
     "diff": "^9.0.0",
     "yaml": "^2.9.1",
     "zod": "^4.6.5"

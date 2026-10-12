@@ -6,7 +6,7 @@ import {
   trimChar,
   type UnitDecl,
   type UsesRef,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { createTheme, finalize, type RenderOptions, safe, type Theme } from './theme';
 
 export type CallGraphNodeKind = 'workflow' | 'action' | 'remote' | 'missing' | 'invalid';

@@ -1,4 +1,4 @@
-import { memoryFileSystem, SymbolLocator } from '@flowpact/core';
+import { memoryFileSystem, SymbolLocator } from '@ciatlas/core';
 import { analyze, parseConfig } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { hoverMarkdown } from '../src/hover';

@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { memoryFileSystem } from '@flowpact/core';
+import { memoryFileSystem } from '@ciatlas/core';
 import { type AnalysisResult, analyze, parseConfig, planContracts } from '@flowpact/lint';
 import { renderMarkdown } from '@flowpact/reporters';
 import { describe, expect, it } from 'vitest';
@@ -225,7 +225,7 @@ describe('renderMarkdown contracts and suppressions', () => {
 
 describe('markdown escaping of untrusted names', () => {
   it('does not let unbalanced backtick runs turn HTML, links or mentions live', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze } = await import('@flowpact/lint');
     const evil = "x```<a href='https://evil.example'>Click</a>`[link](https://evil.example) @team";
     const r = analyze({
@@ -249,7 +249,7 @@ describe('markdown escaping of untrusted names', () => {
   });
 
   it('escapes backslashes, so one cannot cancel the escape of a link bracket or a table pipe', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze } = await import('@flowpact/lint');
     const evil = '\\[x\\](https://evil.example) a\\|b';
     const r = analyze({
@@ -270,7 +270,7 @@ describe('markdown escaping of untrusted names', () => {
   });
 
   it('keeps values with backtick runs inside their code span, and links stay whole', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze } = await import('@flowpact/lint');
     const file = '.github/workflows/x`` @octocat <img src=x> [click](https:evil.example) ``.yml';
     const r = analyze({
@@ -292,7 +292,7 @@ describe('markdown escaping of untrusted names', () => {
   });
 
   it('does not pair a code span across a blank line', async () => {
-    const { memoryFileSystem } = await import('@flowpact/core');
+    const { memoryFileSystem } = await import('@ciatlas/core');
     const { analyze, planContracts } = await import('@flowpact/lint');
     const dep =
       'on:\n  workflow_call:\n    inputs:\n      a:\n        type: string\njobs:\n  j:\n    runs-on: x\n    steps:\n      - run: echo ${{ inputs.a }}\n';

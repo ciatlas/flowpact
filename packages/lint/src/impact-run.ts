@@ -12,7 +12,7 @@ import {
   gitTopLevel,
   type Logger,
   resolveCommit,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { type AnalyzeOptions, analyze } from './analyze';
 import {
   CONFIG_DIR,

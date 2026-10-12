@@ -28,7 +28,7 @@ import {
   UNKNOWN,
   type UnitDecl,
   type WorkflowDecl,
-} from '@flowpact/core';
+} from '@ciatlas/core';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, type Guard, guardOf, isWholeExpression, quote, useInCondition } from './util';
 
