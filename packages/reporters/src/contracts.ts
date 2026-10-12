@@ -1,5 +1,5 @@
 import type { ContractPlan } from '@flowpact/lint';
-import { createTheme, finalize, padEnd, type RenderOptions, visibleWidth } from './theme';
+import { createTheme, finalize, padEnd, type RenderOptions, visibleWidth } from './kit';
 
 const STATUS = {
   create: { label: 'new', color: 'green' },

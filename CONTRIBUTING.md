@@ -28,7 +28,7 @@ otherwise.
 | Path | What |
 | --- | --- |
 | `packages/lint` | flowpact's checks on the model: rules, config, contracts, impact mode, plugins, the JSON report and trace |
-| `packages/reporters` | Terminal (pretty), JSON, Markdown, SARIF, trace, graph and contract renderers |
+| `packages/reporters` | Terminal (pretty), JSON, Markdown, SARIF, trace, graph and contract renderers. `src/kit` holds the building blocks with nothing of flowpact in them (theme, code frames, safe Markdown, GitHub annotations, SARIF, call graph and trace rendering), for other tools built on `@ciatlas/core`; fallow's boundary rule (`.fallowrc.jsonc`) fails CI if it imports anything else in the repository |
 | `packages/cli` | The `flowpact` command and the API (published as `flowpact`): `src/lib` implements each command once, `src/api.ts` exports it as a function and `src/commands` prints it; the API's types are hand-written in `api.d.ts` |
 | `packages/action` | The GitHub Action (`action.yml` at the root runs `packages/action/dist/index.js`): job summary, annotations, SARIF, contract patch artifact |
 | `packages/language-server` | The language server (`flowpact lsp`): diagnostics, hover, definitions and references |

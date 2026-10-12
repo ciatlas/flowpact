@@ -1,4 +1,3 @@
-import { type Loc, trimChar } from '@ciatlas/core';
 import {
   type AnalysisResult,
   type ContractPlan,
@@ -7,8 +6,17 @@ import {
   type ImpactResult,
   type Severity,
 } from '@flowpact/lint';
-import { buildCallGraph, renderMermaid } from './graph';
 import { describeDeclared, listedChanges, shortCommit } from './impact';
+import {
+  buildCallGraph,
+  markdownCell as cell,
+  markdownCode as code,
+  markdownLocation as locLink,
+  markdownFence,
+  renderMermaid,
+  markdownTableCell as tableCell,
+  markdownText as text,
+} from './kit';
 
 export interface MarkdownOptions {
   /** Heading of the report. Default: `flowpact report`. */
@@ -35,120 +43,6 @@ const SEVERITY: Record<Severity, { icon: string; title: string; noun: (n: number
 
 const STATUS_LABEL = { create: 'new', update: 'changed', delete: 'removed', unchanged: 'unchanged' } as const;
 
-const PROSE_ESCAPES: Record<string, string> = {
-  // A backslash would otherwise cancel the escape that follows it: `\[x\](url)` would become a link again.
-  '\\': '\\\\',
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '[': '\\[',
-  ']': '\\]',
-  // GitHub finds mentions after decoding entities (`&#64;team` still pings); a zero-width space after `@` does not.
-  '@': '@\u200b',
-};
-
-/** The length of the longest run of `ch` in `s`. */
-function longestRun(s: string, ch: string): number {
-  let longest = 0;
-  let run = 0;
-  for (const c of s) {
-    run = c === ch ? run + 1 : 0;
-    if (run > longest) longest = run;
-  }
-  return longest;
-}
-
-/** Whether the line after the newline at `at` is blank (only spaces or tabs): the end of a paragraph. */
-function blankLineAfter(s: string, at: number): boolean {
-  let k = at + 1;
-  while (s[k] === ' ' || s[k] === '\t') k++;
-  return s[k] === '\n' || s[k] === '\r';
-}
-
-/**
- * Escapes text for Markdown prose. Messages embed names from the analyzed YAML, so nothing outside a genuine code
- * span may become HTML, a Markdown link, an image or an @mention (GitHub still autolinks bare URLs, as plain text).
- * Code spans follow CommonMark: a run of N backticks is closed only by a run of exactly N in the same paragraph; an
- * unmatched run is escaped so it cannot pair with a later one.
- */
-function text(s: string): string {
-  let out = '';
-  let i = 0;
-  while (i < s.length) {
-    const ch = s[i]!;
-    if (ch === '`') {
-      let n = 1;
-      while (s[i + n] === '`') n++;
-      let close = -1;
-      for (let j = i + n; j < s.length; ) {
-        if (s[j] === '\n' && blankLineAfter(s, j)) break; // a code span cannot cross paragraphs
-        if (s[j] !== '`') {
-          j++;
-          continue;
-        }
-        let m = 1;
-        while (s[j + m] === '`') m++;
-        if (m === n) {
-          close = j;
-          break;
-        }
-        j += m;
-      }
-      if (close >= 0) {
-        out += s.slice(i, close + n);
-        i = close + n;
-      } else {
-        out += '\\`'.repeat(n);
-        i += n;
-      }
-      continue;
-    }
-    out += PROSE_ESCAPES[ch] ?? ch;
-    i++;
-  }
-  return out;
-}
-
-/**
- * Fits Markdown that is already safe (escaped prose, code spans, links) into a table cell: pipes and line breaks.
- * GFM splits cells on a pipe after an even run of backslashes; prose has its backslashes doubled by `text`, so the
- * added one always makes the run odd, and the table parser removes it again before the inline content is rendered.
- */
-function tableCell(md: string): string {
-  return md.split('|').join('\\|').replace(/\r?\n/g, '<br/>');
-}
-
-/** Escapes text for a table cell. */
-function cell(s: string): string {
-  return tableCell(text(s));
-}
-
-/** Inline code that survives backticks inside the value. */
-function code(s: string): string {
-  // Longer than any backtick run in the value, so nothing in it can close the span early; the spaces keep a value
-  // that starts or ends with a backtick apart from the fence (CommonMark strips one on each side).
-  const longest = longestRun(s, '`');
-  const fence = '`'.repeat(longest + 1);
-  const pad = longest ? ' ' : '';
-  return `${fence}${pad}${s}${pad}${fence}`;
-}
-
-function locLink(
-  loc: Pick<Loc, 'file' | 'line' | 'column'>,
-  opts: MarkdownOptions,
-  withColumn = true,
-): string {
-  const label = code(`${loc.file}:${loc.line}${withColumn ? `:${loc.column}` : ''}`);
-  if (!opts.repoUrl || !opts.sha) return label;
-  const base = trimChar(opts.repoUrl, '/');
-  // encodeURIComponent leaves `(` and `)`, and an unbalanced one would end the link destination early.
-  const path = loc.file
-    .split('/')
-    .map((part) => encodeURIComponent(part).replace(/\(/g, '%28').replace(/\)/g, '%29'))
-    .join('/');
-  return `[${label}](${base}/blob/${opts.sha}/${path}#L${loc.line})`;
-}
-
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 function statusLine(result: AnalysisResult): string {
@@ -169,8 +63,7 @@ function labeled(label: string, value: string): string[] {
   const out = [`**${label}:** ${text(first)}`];
   if (!rest.length) return out;
   // The fence is longer than any backtick run in the snippet, so nothing in it can close the block early.
-  const longest = longestRun(rest.join('\n'), '`');
-  const fence = '`'.repeat(Math.max(3, longest + 1));
+  const fence = markdownFence(rest.join('\n'));
   out.push('', `${fence}yaml`, ...rest, fence);
   return out;
 }

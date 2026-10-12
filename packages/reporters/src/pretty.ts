@@ -1,4 +1,4 @@
-import { formatLoc, type Loc, type SourceFile } from '@ciatlas/core';
+import { formatLoc, type SourceFile } from '@ciatlas/core';
 import {
   type AnalysisResult,
   CATEGORIES,
@@ -12,6 +12,7 @@ import {
 import { describeDeclared, listedChanges, shortCommit } from './impact';
 import {
   box,
+  codeFrame,
   createTheme,
   finalize,
   padEnd,
@@ -20,7 +21,7 @@ import {
   type Theme,
   visibleWidth,
   wrap,
-} from './theme';
+} from './kit';
 
 const LABEL_WIDTH = 8;
 
@@ -41,41 +42,6 @@ function sourceMap(result: AnalysisResult): Map<string, SourceFile> {
     m.set(u.file, u.source);
   if (result.configSource) m.set(result.configSource.path, result.configSource);
   return m;
-}
-
-/** A code frame with line numbers and a caret underline under `loc`. */
-export function codeFrame(
-  t: Theme,
-  source: SourceFile,
-  loc: Loc,
-  opts: { context?: number; label?: string } = {},
-): string[] {
-  const { c, sym } = t;
-  const context = opts.context ?? 2;
-  const first = Math.max(1, loc.line - context);
-  let last = Math.min(source.lines.length, loc.line + Math.min(1, context));
-  while (last > loc.line && (source.lines[last - 1] ?? '').trim() === '') last--;
-  const gutter = String(last).length;
-  const out: string[] = [];
-  for (let n = first; n <= last; n++) {
-    const raw = source.lines[n - 1] ?? '';
-    const visual = (x: string) => safe(x.replace(/\t/g, '  '));
-    const text = visual(raw);
-    const isTarget = n === loc.line;
-    const num = String(n).padStart(gutter);
-    out.push(`${isTarget ? c.bold(num) : c.dim(num)} ${c.dim(sym.bar)} ${isTarget ? text : c.dim(text)}`);
-    if (isTarget) {
-      // Columns count characters; tabs and wide characters take more cells on screen.
-      const startCol = Math.max(1, loc.column);
-      const endCol = loc.endLine === loc.line ? Math.max(startCol + 1, loc.endColumn) : raw.length + 1;
-      const pad = visibleWidth(visual(raw.slice(0, startCol - 1)));
-      const width = Math.max(1, visibleWidth(visual(raw.slice(startCol - 1, endCol - 1))));
-      out.push(
-        `${' '.repeat(gutter)} ${c.dim(sym.bar)} ${' '.repeat(pad)}${c.red(c.bold(sym.caret.repeat(width)))}${opts.label ? ` ${c.red(opts.label)}` : ''}`,
-      );
-    }
-  }
-  return out;
 }
 
 function severityTag(t: Theme, s: Severity): string {

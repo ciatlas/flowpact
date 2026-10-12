@@ -20,6 +20,16 @@
     // that they still match the engine's.
     "ignore": ["packages/cli/api.d.ts"]
   },
+  // The reporters' rendering kit stays free of flowpact, so another tool can reuse it (packages/reporters/src/kit):
+  // it may import @ciatlas/core and npm packages, nothing else in this repository.
+  "boundaries": {
+    "zones": [
+      { "name": "reporters-kit", "patterns": ["packages/reporters/src/kit/**"] },
+      // Everything else in the repository: the kit may import none of it.
+      { "name": "flowpact", "patterns": ["packages/**", "apps/**", "scripts/**", "fixtures/**", "assets/**"] }
+    ],
+    "rules": [{ "from": "reporters-kit", "allow": [] }]
+  },
   "health": {
     "thresholdOverrides": [
       {

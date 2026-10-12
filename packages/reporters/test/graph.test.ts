@@ -113,9 +113,12 @@ describe('renderMermaid and renderDot', () => {
   });
 
   it('renders a Graphviz digraph', () => {
-    const out = renderDot(graphOf('cycles'));
+    const out = renderDot(graphOf('cycles'), { name: 'flowpact' });
     expect(out).toMatchSnapshot();
     expect(out).toMatch(/^digraph flowpact \{\n/);
+    expect(renderDot(graphOf('cycles'))).toBe(out.replace('digraph flowpact {', 'digraph calls {'));
+    // A name that is not a plain ID is quoted, or Graphviz would read `digraph simul - ci`.
+    expect(renderDot(graphOf('cycles'), { name: 'simul-ci' })).toMatch(/^digraph "simul-ci" \{\n/);
     expect(out.trimEnd().endsWith('}')).toBe(true);
   });
 });

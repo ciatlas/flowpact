@@ -1,4 +1,3 @@
-import { jsonSafe, type Loc } from '@ciatlas/core';
 import {
   type AnalysisResult,
   createRegistry,
@@ -7,38 +6,13 @@ import {
   type Severity,
   type SuppressedFinding,
 } from '@flowpact/lint';
-import { inRepository } from './github';
-
-const SARIF_SCHEMA = 'https://json.schemastore.org/sarif-2.1.0.json';
+import { sarifLocation as physicalLocation, type SarifRule, sarifLog } from './kit';
 
 const LEVEL: Record<Severity, 'error' | 'warning' | 'note'> = {
   error: 'error',
   warning: 'warning',
   info: 'note',
 };
-
-interface SarifRule {
-  id: string;
-  name: string;
-  shortDescription: { text: string };
-  fullDescription?: { text: string };
-  helpUri: string;
-  help: { text: string; markdown: string };
-  defaultConfiguration: { level: 'error' | 'warning' | 'note' };
-  properties: { tags: string[] };
-}
-
-const region = (loc: Loc) => ({
-  startLine: loc.line,
-  startColumn: loc.column,
-  endLine: loc.endLine,
-  endColumn: loc.endColumn,
-});
-
-const physicalLocation = (loc: Loc, pathPrefix?: string) => ({
-  artifactLocation: { uri: inRepository(loc.file, pathPrefix), uriBaseId: '%SRCROOT%' },
-  region: region(loc),
-});
 
 export interface SarifOptions {
   /**
@@ -123,24 +97,8 @@ export function renderSarif(result: AnalysisResult, opts: SarifOptions = {}): st
     },
   }));
 
-  const sarif = {
-    $schema: SARIF_SCHEMA,
-    version: '2.1.0',
-    runs: [
-      {
-        tool: {
-          driver: {
-            name: result.meta.tool,
-            version: result.meta.version,
-            semanticVersion: result.meta.version,
-            informationUri: DOCS_BASE_URL,
-            rules,
-          },
-        },
-        columnKind: 'utf16CodeUnits',
-        results,
-      },
-    ],
-  };
-  return jsonSafe(`${JSON.stringify(sarif, null, 2)}\n`);
+  return sarifLog(
+    { name: result.meta.tool, version: result.meta.version, informationUri: DOCS_BASE_URL, rules },
+    results,
+  );
 }

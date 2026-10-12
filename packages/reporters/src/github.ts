@@ -1,17 +1,5 @@
-import { posix } from 'node:path';
 import type { AnalysisResult, Finding, Severity } from '@flowpact/lint';
-
-/** A finding as a GitHub annotation: what the action passes to `@actions/core`, and `--format github` prints. */
-export interface GithubAnnotation {
-  level: 'error' | 'warning' | 'notice';
-  message: string;
-  title: string;
-  file: string;
-  startLine: number;
-  endLine: number;
-  startColumn?: number;
-  endColumn?: number;
-}
+import { type GithubAnnotation, inRepository, workflowCommands } from './kit';
 
 export interface GithubOptions {
   /**
@@ -27,11 +15,7 @@ const LEVEL: Record<Severity, GithubAnnotation['level']> = {
   info: 'notice',
 };
 
-/** A root-relative path relative to the repository instead. */
-export function inRepository(file: string, pathPrefix = ''): string {
-  return pathPrefix ? posix.join(pathPrefix, file) : file;
-}
-
+/** A finding as a GitHub annotation: what the action passes to `@actions/core`, and `--format github` prints. */
 export function githubAnnotation(f: Finding, opts: GithubOptions = {}): GithubAnnotation {
   const loc = f.loc;
   return {
@@ -46,36 +30,10 @@ export function githubAnnotation(f: Finding, opts: GithubOptions = {}): GithubAn
   };
 }
 
-// The escaping of `@actions/core`: a command is one line, and its properties are separated by `,` and end at `::`.
-const escapeData = (s: string) => s.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-const escapeProperty = (s: string) => escapeData(s).replace(/:/g, '%3A').replace(/,/g, '%2C');
-
 /**
  * `--format github`: one workflow command per finding (`::error file=…,line=…::message`), which GitHub Actions turns
  * into an annotation on the run and the pull request. Findings accepted by overrides are left out.
  */
 export function renderGithub(result: AnalysisResult, opts: GithubOptions = {}): string {
   return workflowCommands(result.findings.map((f) => githubAnnotation(f, opts)));
-}
-
-/** Annotations as workflow commands, every value escaped. */
-export function workflowCommands(annotations: GithubAnnotation[]): string {
-  return annotations
-    .map((a) => {
-      const props = (
-        [
-          ['title', a.title],
-          ['file', a.file],
-          ['line', a.startLine],
-          ['endLine', a.endLine],
-          ['col', a.startColumn],
-          ['endColumn', a.endColumn],
-        ] as const
-      )
-        .filter(([, v]) => v !== undefined)
-        .map(([k, v]) => `${k}=${escapeProperty(String(v))}`)
-        .join(',');
-      return `::${a.level} ${props}::${escapeData(a.message)}\n`;
-    })
-    .join('');
 }

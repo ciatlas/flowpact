@@ -14,7 +14,7 @@ export type CallGraphNodeKind = 'workflow' | 'action' | 'remote' | 'missing' | '
 export interface CallGraphNode {
   /**
    * Unit path for local workflows/actions, `remote:<uses>` for remote workflows, the target path when missing or when
-   * a job calls a file outside `.github/workflows` (`invalid`, FP606).
+   * a job calls a file outside `.github/workflows` (`invalid`).
    */
   id: string;
   kind: CallGraphNodeKind;
@@ -33,7 +33,7 @@ export interface CallGraphEdge {
   matrix?: number;
   /** The call passes every secret with `secrets: inherit`. */
   inherits?: boolean;
-  /** The called workflow exists but has no `on.workflow_call` (FP609). */
+  /** The called workflow exists but has no `on.workflow_call`. */
   notReusable?: boolean;
 }
 
@@ -108,7 +108,7 @@ export function buildCallGraph(index: ProjectIndex): CallGraph {
       if (job.uses) {
         let to: string | undefined;
         if (job.uses.kind === 'local-workflow' && invalidCalls.has(`${wf.path}#${job.id}`)) {
-          // A job-level call to a file outside .github/workflows (FP606): drawn, so graph and findings agree.
+          // A job-level call to a file outside .github/workflows: drawn, so the graph shows every call.
           to = job.uses.target ?? job.uses.raw;
           if (!nodes.has(to) || nodes.get(to)!.kind === 'missing')
             nodes.set(to, { id: to, kind: 'invalid', label: job.uses.raw });
@@ -212,9 +212,20 @@ export function renderMermaid(graph: CallGraph, opts: MermaidOptions = {}): stri
   return `${lines.join('\n')}\n`;
 }
 
+export interface DotOptions {
+  /** The graph's name (`digraph <name> {`). Default: `calls`. */
+  name?: string;
+}
+
+/** A quoted Graphviz string. */
+const dotQuote = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+
+/** A Graphviz ID: a plain name as it is, anything else quoted (`simul-ci` would end the ID at the `-`). */
+const dotId = (s: string) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(s) ? s : dotQuote(s));
+
 /** A Graphviz `digraph` of the call graph. */
-export function renderDot(graph: CallGraph): string {
-  const q = (s: string) => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
+export function renderDot(graph: CallGraph, opts: DotOptions = {}): string {
+  const q = dotQuote;
   const style: Record<CallGraphNodeKind, string> = {
     workflow: 'shape=box, style="rounded,filled", fillcolor="#e8f1ff", color="#3b82f6"',
     action: 'shape=hexagon, style=filled, fillcolor="#f3e8ff", color="#8b5cf6"',
@@ -223,7 +234,7 @@ export function renderDot(graph: CallGraph): string {
     invalid: 'shape=box, style="filled,dashed", fillcolor="#fee2e2", color="#dc2626", fontcolor="#991b1b"',
   };
   const lines = [
-    'digraph flowpact {',
+    `digraph ${dotId(opts.name ?? 'calls')} {`,
     '  rankdir=LR;',
     '  node [fontname="Helvetica", fontsize=11];',
     '  edge [fontname="Helvetica", fontsize=9];',

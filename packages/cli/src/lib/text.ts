@@ -90,7 +90,7 @@ export function graphText(graph: CallGraph, format: GraphFormat | undefined, opt
     case 'mermaid':
       return safe(renderMermaid(graph));
     case 'dot':
-      return safe(renderDot(graph));
+      return safe(renderDot(graph, { name: 'flowpact' }));
     default:
       return safe(renderGraphTree(graph, opts));
   }

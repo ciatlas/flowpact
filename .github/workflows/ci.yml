@@ -231,6 +231,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec fallow dead-code
+      # The architecture boundaries (.fallowrc.jsonc), which fallow's next major version leaves out of dead-code.
+      - run: pnpm exec fallow architecture
       - run: pnpm exec fallow dupes
       - if: github.event_name == 'pull_request'
         env:

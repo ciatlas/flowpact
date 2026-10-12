@@ -1241,14 +1241,14 @@ var require_foldFlowLines = __commonJS({
     var FOLD_FLOW = "flow";
     var FOLD_BLOCK = "block";
     var FOLD_QUOTED = "quoted";
-    function foldFlowLines(text3, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
+    function foldFlowLines(text2, indent, mode = "flow", { indentAtStart, lineWidth = 80, minContentWidth = 20, onFold, onOverflow } = {}) {
       if (!lineWidth || lineWidth < 0)
-        return text3;
+        return text2;
       if (lineWidth < minContentWidth)
         minContentWidth = 0;
       const endStep = Math.max(1 + minContentWidth, 1 + lineWidth - indent.length);
-      if (text3.length <= endStep)
-        return text3;
+      if (text2.length <= endStep)
+        return text2;
       const folds = [];
       const escapedFolds = {};
       let end = lineWidth - indent.length;
@@ -1265,14 +1265,14 @@ var require_foldFlowLines = __commonJS({
       let escStart = -1;
       let escEnd = -1;
       if (mode === FOLD_BLOCK) {
-        i = consumeMoreIndentedLines(text3, i, indent.length);
+        i = consumeMoreIndentedLines(text2, i, indent.length);
         if (i !== -1)
           end = i + endStep;
       }
-      for (let ch; ch = text3[i += 1]; ) {
+      for (let ch; ch = text2[i += 1]; ) {
         if (mode === FOLD_QUOTED && ch === "\\") {
           escStart = i;
-          switch (text3[i + 1]) {
+          switch (text2[i + 1]) {
             case "x":
               i += 3;
               break;
@@ -1289,12 +1289,12 @@ var require_foldFlowLines = __commonJS({
         }
         if (ch === "\n") {
           if (mode === FOLD_BLOCK)
-            i = consumeMoreIndentedLines(text3, i, indent.length);
+            i = consumeMoreIndentedLines(text2, i, indent.length);
           end = i + indent.length + endStep;
           split = void 0;
         } else {
           if (ch === " " && prev && prev !== " " && prev !== "\n" && prev !== "	") {
-            const next = text3[i + 1];
+            const next = text2[i + 1];
             if (next && next !== " " && next !== "\n" && next !== "	")
               split = i;
           }
@@ -1306,12 +1306,12 @@ var require_foldFlowLines = __commonJS({
             } else if (mode === FOLD_QUOTED) {
               while (prev === " " || prev === "	") {
                 prev = ch;
-                ch = text3[i += 1];
+                ch = text2[i += 1];
                 overflow = true;
               }
               const j = i > escEnd + 1 ? i - 2 : escStart - 1;
               if (escapedFolds[j])
-                return text3;
+                return text2;
               folds.push(j);
               escapedFolds[j] = true;
               end = j + endStep;
@@ -1326,39 +1326,39 @@ var require_foldFlowLines = __commonJS({
       if (overflow && onOverflow)
         onOverflow();
       if (folds.length === 0)
-        return text3;
+        return text2;
       if (onFold)
         onFold();
-      let res = text3.slice(0, folds[0]);
+      let res = text2.slice(0, folds[0]);
       for (let i2 = 0; i2 < folds.length; ++i2) {
         const fold = folds[i2];
-        const end2 = folds[i2 + 1] || text3.length;
+        const end2 = folds[i2 + 1] || text2.length;
         if (fold === 0)
           res = `
-${indent}${text3.slice(0, end2)}`;
+${indent}${text2.slice(0, end2)}`;
         else {
           if (mode === FOLD_QUOTED && escapedFolds[fold])
-            res += `${text3[fold]}\\`;
+            res += `${text2[fold]}\\`;
           res += `
-${indent}${text3.slice(fold + 1, end2)}`;
+${indent}${text2.slice(fold + 1, end2)}`;
         }
       }
       return res;
     }
-    function consumeMoreIndentedLines(text3, i, indent) {
+    function consumeMoreIndentedLines(text2, i, indent) {
       let end = i;
       let start = i + 1;
-      let ch = text3[start];
+      let ch = text2[start];
       while (ch === " " || ch === "	") {
         if (i < start + indent) {
-          ch = text3[++i];
+          ch = text2[++i];
         } else {
           do {
-            ch = text3[++i];
+            ch = text2[++i];
           } while (ch && ch !== "\n");
           end = i;
           start = i + 1;
-          ch = text3[start];
+          ch = text2[start];
         }
       }
       return end;
@@ -1421,8 +1421,8 @@ var require_stringifyString = __commonJS({
             case "u":
               {
                 str2 += json2.slice(start, i);
-                const code2 = json2.substr(i + 2, 4);
-                switch (code2) {
+                const code = json2.substr(i + 2, 4);
+                switch (code) {
                   case "0000":
                     str2 += "\\0";
                     break;
@@ -1448,8 +1448,8 @@ var require_stringifyString = __commonJS({
                     str2 += "\\P";
                     break;
                   default:
-                    if (code2.substr(0, 2) === "00")
-                      str2 += "\\x" + code2.substr(2);
+                    if (code.substr(0, 2) === "00")
+                      str2 += "\\x" + code.substr(2);
                     else
                       str2 += json2.substr(i, 6);
                 }
@@ -3948,22 +3948,22 @@ var require_errors = __commonJS({
   "../../node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/errors.js"(exports) {
     "use strict";
     var YAMLError = class extends Error {
-      constructor(name, pos, code2, message) {
+      constructor(name, pos, code, message) {
         super();
         this.name = name;
-        this.code = code2;
+        this.code = code;
         this.message = message;
         this.pos = pos;
       }
     };
     var YAMLParseError = class extends YAMLError {
-      constructor(pos, code2, message) {
-        super("YAMLParseError", pos, code2, message);
+      constructor(pos, code, message) {
+        super("YAMLParseError", pos, code, message);
       }
     };
     var YAMLWarning = class extends YAMLError {
-      constructor(pos, code2, message) {
-        super("YAMLWarning", pos, code2, message);
+      constructor(pos, code, message) {
+        super("YAMLWarning", pos, code, message);
       }
     };
     var prettifyError2 = (src, lc) => (error63) => {
@@ -4872,7 +4872,7 @@ var require_resolve_flow_scalar = __commonJS({
       const { offset, type, source, end } = scalar;
       let _type;
       let value;
-      const _onError = (rel, code2, msg) => onError(offset + rel, code2, msg);
+      const _onError = (rel, code, msg) => onError(offset + rel, code, msg);
       switch (type) {
         case "scalar":
           _type = Scalar.Scalar.PLAIN;
@@ -5070,9 +5070,9 @@ var require_resolve_flow_scalar = __commonJS({
     function parseCharCode(source, offset, length, onError) {
       const cc = source.substr(offset, length);
       const ok = cc.length === length && /^[0-9a-fA-F]+$/.test(cc);
-      const code2 = ok ? parseInt(cc, 16) : NaN;
+      const code = ok ? parseInt(cc, 16) : NaN;
       try {
-        return String.fromCodePoint(code2);
+        return String.fromCodePoint(code);
       } catch {
         const raw = source.substr(offset - 2, length + 2);
         onError(offset - 2, "BAD_DQ_ESCAPE", `Invalid escape sequence ${raw}`);
@@ -5394,12 +5394,12 @@ var require_composer = __commonJS({
         this.prelude = [];
         this.errors = [];
         this.warnings = [];
-        this.onError = (source, code2, message, warning2) => {
+        this.onError = (source, code, message, warning2) => {
           const pos = getErrorPos(source);
           if (warning2)
-            this.warnings.push(new errors.YAMLWarning(pos, code2, message));
+            this.warnings.push(new errors.YAMLWarning(pos, code, message));
           else
-            this.errors.push(new errors.YAMLParseError(pos, code2, message));
+            this.errors.push(new errors.YAMLParseError(pos, code, message));
         };
         this.directives = new directives.Directives({ version: options.version || "1.2" });
         this.options = options;
@@ -5561,12 +5561,12 @@ var require_cst_scalar = __commonJS({
     var stringifyString = require_stringifyString();
     function resolveAsScalar(token, strict = true, onError) {
       if (token) {
-        const _onError = (pos, code2, message) => {
+        const _onError = (pos, code, message) => {
           const offset = typeof pos === "number" ? pos : Array.isArray(pos) ? pos[0] : pos.offset;
           if (onError)
-            onError(offset, code2, message);
+            onError(offset, code, message);
           else
-            throw new errors.YAMLParseError([offset, offset + 1], code2, message);
+            throw new errors.YAMLParseError([offset, offset + 1], code, message);
         };
         switch (token.type) {
           case "scalar":
@@ -8630,9 +8630,9 @@ var require_cronstrue = __commonJS({
                       return values.shift();
                     });
                   };
-                  StringUtilities2.containsAny = function(text3, searchStrings) {
+                  StringUtilities2.containsAny = function(text2, searchStrings) {
                     return searchStrings.some(function(c) {
-                      return text3.indexOf(c) > -1;
+                      return text2.indexOf(c) > -1;
                     });
                   };
                   return StringUtilities2;
@@ -9695,8 +9695,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addRaw(text3, addEOL = false) {
-    this._buffer += text3;
+  addRaw(text2, addEOL = false) {
+    this._buffer += text2;
     return addEOL ? this.addEOL() : this;
   }
   /**
@@ -9715,9 +9715,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addCodeBlock(code2, lang) {
+  addCodeBlock(code, lang) {
     const attrs = Object.assign({}, lang && { lang });
-    const element = this.wrap("pre", this.wrap("code", code2), attrs);
+    const element = this.wrap("pre", this.wrap("code", code), attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -9743,11 +9743,11 @@ var Summary = class {
    */
   addTable(rows) {
     const tableBody = rows.map((row) => {
-      const cells = row.map((cell2) => {
-        if (typeof cell2 === "string") {
-          return this.wrap("td", cell2);
+      const cells = row.map((cell) => {
+        if (typeof cell === "string") {
+          return this.wrap("td", cell);
         }
-        const { header, data, colspan, rowspan } = cell2;
+        const { header, data, colspan, rowspan } = cell;
         const tag = header ? "th" : "td";
         const attrs = Object.assign(Object.assign({}, colspan && { colspan }), rowspan && { rowspan });
         return this.wrap(tag, data, attrs);
@@ -9792,10 +9792,10 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addHeading(text3, level) {
+  addHeading(text2, level) {
     const tag = `h${level}`;
     const allowedTag = ["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag) ? tag : "h1";
-    const element = this.wrap(allowedTag, text3);
+    const element = this.wrap(allowedTag, text2);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -9824,9 +9824,9 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addQuote(text3, cite) {
+  addQuote(text2, cite) {
     const attrs = Object.assign({}, cite && { cite });
-    const element = this.wrap("blockquote", text3, attrs);
+    const element = this.wrap("blockquote", text2, attrs);
     return this.addRaw(element).addEOL();
   }
   /**
@@ -9837,8 +9837,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addLink(text3, href) {
-    const element = this.wrap("a", text3, { href });
+  addLink(text2, href) {
+    const element = this.wrap("a", text2, { href });
     return this.addRaw(element).addEOL();
   }
 };
@@ -11293,35 +11293,35 @@ var KNOWN_CONTEXTS = [
   "inputs"
 ];
 var UNTERMINATED_EXPRESSION = "Unterminated expression: missing closing '}}'";
-function findTemplateSegments(text3) {
+function findTemplateSegments(text2) {
   const segments = [];
   let i = 0;
-  while (i < text3.length) {
-    const open3 = text3.indexOf("${{", i);
+  while (i < text2.length) {
+    const open3 = text2.indexOf("${{", i);
     if (open3 < 0) break;
     let j = open3 + 3;
     let inString = false;
     let close = -1;
-    while (j < text3.length) {
-      const ch = text3[j];
+    while (j < text2.length) {
+      const ch = text2[j];
       if (inString) {
         if (ch === "'") {
-          if (text3[j + 1] === "'") j++;
+          if (text2[j + 1] === "'") j++;
           else inString = false;
         }
       } else if (ch === "'") {
         inString = true;
-      } else if (ch === "}" && text3[j + 1] === "}") {
+      } else if (ch === "}" && text2[j + 1] === "}") {
         close = j;
         break;
       }
       j++;
     }
     if (close < 0) {
-      const inner = text3.slice(open3 + 3);
+      const inner = text2.slice(open3 + 3);
       segments.push({
         start: open3,
-        end: text3.length,
+        end: text2.length,
         innerStart: open3 + 3,
         expr: {
           source: inner.trim(),
@@ -11331,7 +11331,7 @@ function findTemplateSegments(text3) {
       });
       break;
     }
-    const rawInner = text3.slice(open3 + 3, close);
+    const rawInner = text2.slice(open3 + 3, close);
     const lead = rawInner.length - rawInner.trimStart().length;
     segments.push({
       start: open3,
@@ -11816,25 +11816,25 @@ function definitelyTruthy(e, resolve7) {
   const v = evaluate(e, resolve7);
   return v.known && truthy2(v.value);
 }
-function evaluateTemplate(text3, resolve7) {
-  const segments = findTemplateSegments(text3);
-  if (segments.length === 0) return known(text3);
+function evaluateTemplate(text2, resolve7) {
+  const segments = findTemplateSegments(text2);
+  if (segments.length === 0) return known(text2);
   const first = segments[0];
-  if (segments.length === 1 && first.start === 0 && first.end === text3.length) {
+  if (segments.length === 1 && first.start === 0 && first.end === text2.length) {
     return first.expr.ast ? evaluate(first.expr.ast, resolve7) : UNKNOWN;
   }
   let out = "";
   let cursor = 0;
   const parts = [];
   for (const seg of segments) {
-    out += text3.slice(cursor, seg.start);
+    out += text2.slice(cursor, seg.start);
     const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve7) : UNKNOWN;
     parts.push(v);
     if (!v.known) return { known: false, taint: mergeTaint(...parts) };
     out += toStr(v.value);
     cursor = seg.end;
   }
-  out += text3.slice(cursor);
+  out += text2.slice(cursor);
   return known(out, mergeTaint(...parts));
 }
 
@@ -11865,10 +11865,10 @@ function jsonEqual(a, b) {
     (k) => Object.hasOwn(b, k) && jsonEqual(a[k], b[k])
   );
 }
-function cellMatches(cell2, value) {
-  if (!cell2) return false;
-  if (!cell2.known) return void 0;
-  return jsonEqual(cell2.value, value);
+function cellMatches(cell, value) {
+  if (!cell) return false;
+  if (!cell.known) return void 0;
+  return jsonEqual(cell.value, value);
 }
 function minJobsAfterExclude(m, productSize) {
   if (m.excludeDynamic || m.includeDynamic) return void 0;
@@ -11941,8 +11941,8 @@ function expandMatrix(m) {
       const prune = pruneAt.get(i) ?? [];
       const next = [];
       for (const combo of product) {
-        for (const cell2 of cells) {
-          const values = { ...combo.values, [dim.name]: cell2 };
+        for (const cell of cells) {
+          const values = { ...combo.values, [dim.name]: cell };
           if (prune.some(
             (ex) => Object.entries(ex.values).every(([k, v]) => cellMatches(values[k], v) === true)
           ))
@@ -11984,13 +11984,13 @@ function expandMatrix(m) {
     let merged2 = false;
     for (const combo of originals) {
       let fits = true;
-      for (const [k, cell2] of Object.entries(entryCells)) {
+      for (const [k, cell] of Object.entries(entryCells)) {
         if (!dimNames.includes(k)) continue;
-        if (!cell2.known) {
+        if (!cell.known) {
           exact = false;
           continue;
         }
-        const r = cellMatches(combo.values[k], cell2.value);
+        const r = cellMatches(combo.values[k], cell.value);
         if (r === void 0) exact = false;
         if (r === false) {
           fits = false;
@@ -11998,8 +11998,8 @@ function expandMatrix(m) {
         }
       }
       if (!fits) continue;
-      for (const [k, cell2] of Object.entries(entryCells)) {
-        if (!dimNames.includes(k)) combo.values[k] = cell2;
+      for (const [k, cell] of Object.entries(entryCells)) {
+        if (!dimNames.includes(k)) combo.values[k] = cell;
       }
       combo.includes.push(idx);
       merged2 = true;
@@ -12024,10 +12024,10 @@ function matrixResolver(combo) {
     if (context !== "matrix") return void 0;
     if (path.length === 0) return UNKNOWN;
     const key = path[0];
-    const cell2 = lookup(combo.values, key);
-    if (!cell2) return known(null, [{ kind: "missing-matrix-key", key }]);
-    if (!cell2.known) return UNKNOWN;
-    let value = cell2.value;
+    const cell = lookup(combo.values, key);
+    if (!cell) return known(null, [{ kind: "missing-matrix-key", key }]);
+    if (!cell.known) return UNKNOWN;
+    let value = cell.value;
     for (const seg of path.slice(1)) {
       if (value && typeof value === "object" && !Array.isArray(value)) value = lookup(value, seg) ?? null;
       else if (Array.isArray(value)) value = value[Math.floor(Number(seg))] ?? null;
@@ -12085,13 +12085,13 @@ function suffix(combo, exp, job) {
   let certain = exp.exact;
   const parts = [];
   for (const key of keys) {
-    const cell2 = lookup(combo.values, key);
-    if (!cell2) continue;
-    if (!cell2.known) {
+    const cell = lookup(combo.values, key);
+    if (!cell) continue;
+    if (!cell.known) {
       certain = false;
       continue;
     }
-    parts.push(...suffixValues(cell2.value));
+    parts.push(...suffixValues(cell.value));
   }
   return { text: parts.length ? ` (${parts.join(", ")})` : "", certain };
 }
@@ -12130,10 +12130,10 @@ function jobSegments(job, inputs = {}) {
       const s = suffix(combo, exp, job);
       return { name: `${base}${s.text}`, stem, certain: s.certain, combo };
     }
-    const text3 = toText(evaluateTemplate(kind.template, nameResolver(combo, inputs)))?.trim();
-    const certain = text3 !== void 0 && !matrixUnknown && (!exp || exp.exact);
+    const text2 = toText(evaluateTemplate(kind.template, nameResolver(combo, inputs)))?.trim();
+    const certain = text2 !== void 0 && !matrixUnknown && (!exp || exp.exact);
     return {
-      name: text3 === void 0 ? kind.template.trim() : text3 || job.id,
+      name: text2 === void 0 ? kind.template.trim() : text2 || job.id,
       stem,
       certain,
       ...combo ? { combo } : {}
@@ -12830,10 +12830,10 @@ var ProjectIndex = class {
 // ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
-  constructor(path, text3) {
+  constructor(path, text2) {
     this.path = path;
-    this.text = text3;
-    this.lines = text3.split(/\r?\n/);
+    this.text = text2;
+    this.lines = text2.split(/\r?\n/);
   }
   path;
   text;
@@ -13012,16 +13012,16 @@ function collectSites(unit, kind, ownerPath, ctx, root) {
     const c = classify(kind, p);
     const isString2 = typeof node2.value === "string";
     if (!isString2 && !c.cond) return;
-    const text3 = isString2 ? node2.value : String(node2.value);
-    if (!c.cond && !text3.includes("${{")) return;
+    const text2 = isString2 ? node2.value : String(node2.value);
+    if (!c.cond && !text2.includes("${{")) return;
     if (c.cond && !isString2) return;
-    const site = buildSite(unit, node2, text3, c, p, ownerPath, ctx);
+    const site = buildSite(unit, node2, text2, c, p, ownerPath, ctx);
     unit.sites.push(site);
     unit.siteByPath.set(pathKey(p), site);
   };
   visit3(root, []);
 }
-function buildSite(unit, node2, text3, c, p, ownerPath, ctx) {
+function buildSite(unit, node2, text2, c, p, ownerPath, ctx) {
   const { source } = unit;
   const [start, end] = node2.range ?? [0, 0];
   const raw = source.text.slice(start, end);
@@ -13040,10 +13040,10 @@ function buildSite(unit, node2, text3, c, p, ownerPath, ctx) {
     });
     return { expr, loc: source.loc(absInner, absInner + expr.source.length), refs };
   };
-  const templated = findTemplateSegments(text3);
-  const wholeIsTemplate = templated.length === 1 && text3.trim() === text3.slice(templated[0].start, templated[0].end);
+  const templated = findTemplateSegments(text2);
+  const wholeIsTemplate = templated.length === 1 && text2.trim() === text2.slice(templated[0].start, templated[0].end);
   if (c.cond && !wholeIsTemplate && templated.length === 0) {
-    const inner = text3.trim();
+    const inner = text2.trim();
     const expr = parseExpression(inner);
     const idx = raw.indexOf(inner.slice(0, Math.min(inner.length, 40)));
     segments.push(locateSegment(start + Math.max(0, idx), expr));
@@ -13068,7 +13068,7 @@ function buildSite(unit, node2, text3, c, p, ownerPath, ctx) {
     ...c.step !== void 0 ? { step: c.step } : {},
     ...c.key !== void 0 ? { key: c.key } : {},
     yamlPath: p,
-    text: text3,
+    text: text2,
     loc: source.loc(start, end),
     isCondition: c.cond,
     segments
@@ -13254,17 +13254,17 @@ function scriptWrites(item, fileVar) {
 }
 var INERT_BUILTIN = /(?<![\w$.])(?:require|import)\s*\(\s*(['"])(?:node:)?(?:assert|buffer|crypto|dns|events|fs|http|https|net|os|path|querystring|readline|stream|string_decoder|timers|tls|url|util|zlib)(?:\/[\w/]*)?\1\s*\)/g;
 function scriptDelegates(script) {
-  const code2 = codeOf(script.replace(INERT_BUILTIN, "null"));
-  if (code2.includes("${{")) return true;
+  const code = codeOf(script.replace(INERT_BUILTIN, "null"));
+  if (code.includes("${{")) return true;
   if (/(?<![\w$.])(?:require|__original_require__|import|eval)\s*\(|^\s*import\s|\bnew\s+Function\b|(?<![\w$.])arguments\b(?!\s*:)|(?<![\w$.])exec\s*\.\s*(?:exec|getExecOutput)\s*\(/m.test(
-    code2
+    code
   ))
     return true;
-  return /(?<![\w$.])core(?![\w$])(?!\s*\??\.\s*[A-Za-z_$])/.test(code2);
+  return /(?<![\w$.])core(?![\w$])(?!\s*\??\.\s*[A-Za-z_$])/.test(code);
 }
 function codeOf(src) {
   let i = 0;
-  const code2 = (substitution) => {
+  const code = (substitution) => {
     let out = "";
     let depth = 0;
     while (i < src.length) {
@@ -13310,14 +13310,14 @@ function codeOf(src) {
         i = end < 0 ? src.length : end + 2;
       } else if (ch === "$" && src[i + 1] === "{") {
         i += 2;
-        out += ` ${code2(true)} `;
+        out += ` ${code(true)} `;
       } else {
         i++;
       }
     }
     return out;
   };
-  return code2(false);
+  return code(false);
 }
 function matrixEntries(unit, node2, base) {
   if (!(0, import_yaml2.isSeq)(node2)) return [];
@@ -13476,9 +13476,9 @@ function aliasExpansionTooLarge(doc) {
   };
   return size(doc.contents) > MAX_ALIAS_EXPANSION ? culprit ?? doc.contents : void 0;
 }
-function load(path, text3) {
-  const source = new SourceFile(path, text3);
-  const doc = (0, import_yaml2.parseDocument)(text3, { lineCounter: source.lineCounter, prettyErrors: false, strict: false });
+function load(path, text2) {
+  const source = new SourceFile(path, text2);
+  const doc = (0, import_yaml2.parseDocument)(text2, { lineCounter: source.lineCounter, prettyErrors: false, strict: false });
   const aliasBomb = doc.errors.length === 0 ? aliasExpansionTooLarge(doc) : void 0;
   if (doc.errors.length === 0 && !aliasBomb) {
     (0, import_yaml2.visit)(doc, {
@@ -13515,8 +13515,8 @@ var GENERATED_HEADER = [
   new RegExp(`^(?:(?:code|file|workflow) )?${AUTO}generated (?:(?:by|from|with|using) \\S+|file\\b)`, "i")
 ];
 var GENERATED_HEADER_LINES = 10;
-function generatedMarker(path, text3) {
-  for (const line of text3.split("\n", GENERATED_HEADER_LINES)) {
+function generatedMarker(path, text2) {
+  for (const line of text2.split("\n", GENERATED_HEADER_LINES)) {
     const t = line.trim();
     if (t === "" || t === "---" || t.startsWith("%")) continue;
     if (!t.startsWith("#")) break;
@@ -13530,9 +13530,9 @@ function generatedMarker(path, text3) {
   }
   return /\.lock\.ya?ml$/i.test(path) ? ".lock.yml" : void 0;
 }
-function parseWorkflowFile(path, text3, ctx) {
-  const { unit, root } = load(path, text3);
-  const generated = generatedMarker(path, text3);
+function parseWorkflowFile(path, text2, ctx) {
+  const { unit, root } = load(path, text2);
+  const generated = generatedMarker(path, text2);
   if (root) collectSites(unit, "workflow", path, ctx, root);
   const on = get(root, "on");
   const triggers = [];
@@ -13575,13 +13575,13 @@ function parseWorkflowFile(path, text3, ctx) {
     jobs: jobs(unit, get(root, "jobs"), ctx)
   };
 }
-function parseActionFile(dir, file2, text3, ctx) {
-  const { unit, root } = load(file2, text3);
+function parseActionFile(dir, file2, text2, ctx) {
+  const { unit, root } = load(file2, text2);
   if (root) collectSites(unit, "action", dir, ctx, root);
   const runs = get(root, "runs");
   const using = str(get(runs, "using"));
   const name = str(get(root, "name"));
-  const generated = generatedMarker(file2, text3);
+  const generated = generatedMarker(file2, text2);
   return {
     kind: "action",
     path: dir,
@@ -13843,10 +13843,10 @@ var TemplateToken = class {
 
 // ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/template-validation-error.js
 var TemplateValidationError = class {
-  constructor(rawMessage, prefix, code2, range) {
+  constructor(rawMessage, prefix, code, range) {
     this.rawMessage = rawMessage;
     this.prefix = prefix;
-    this.code = code2;
+    this.code = code;
     this.range = range;
   }
   get message() {
@@ -14744,8 +14744,8 @@ var TemplateReader = class {
     let argIndex = 0;
     for (const segment of segments) {
       if (isString(segment)) {
-        const text3 = segment.value.replace(/'/g, "''").replace(/\{/g, "{{").replace(/\}/g, "}}");
-        format2.push(text3);
+        const text2 = segment.value.replace(/'/g, "''").replace(/\{/g, "{{").replace(/\}/g, "}}");
+        format2.push(text2);
       } else {
         format2.push(`{${argIndex}}`);
         argIndex++;
@@ -16629,9 +16629,9 @@ function tokenize(line) {
       i = close < 0 ? line.length : close;
     } else if (c === '"') {
       let j = i + 1;
-      let text3 = "";
-      for (; j < line.length && line[j] !== '"'; j++) text3 += escaped(line, j) ? line[++j] ?? "" : line[j];
-      word = (word ?? "") + text3;
+      let text2 = "";
+      for (; j < line.length && line[j] !== '"'; j++) text2 += escaped(line, j) ? line[++j] ?? "" : line[j];
+      word = (word ?? "") + text2;
       i = j;
     } else if (escaped(line, i)) {
       word = (word ?? "") + (line[++i] ?? "");
@@ -16680,7 +16680,7 @@ function resolveWord(word, cwd) {
 var basename = (word) => posix3.basename(word.replaceAll("\\", "/").replace(/\/+$/, ""));
 function scriptWrites2(script) {
   const writes = [];
-  const text3 = script.replace(/\$\{\{\s*github\.workspace\s*\}\}/g, "$GITHUB_WORKSPACE").replace(/\$\{\{[\s\S]*?\}\}/g, "$EXPR").replace(/\\\r?\n/g, " ");
+  const text2 = script.replace(/\$\{\{\s*github\.workspace\s*\}\}/g, "$GITHUB_WORKSPACE").replace(/\$\{\{[\s\S]*?\}\}/g, "$EXPR").replace(/\\\r?\n/g, " ");
   let cwd = ".";
   const dirs = [];
   const write = (word, command2, at = cwd) => {
@@ -16765,7 +16765,7 @@ function scriptWrites2(script) {
     else if (sub === "submodule" && positional[0] === "add" && positional[1] !== void 0)
       write(positional[2] ?? repoDir(positional[1]), "git submodule add", at);
   };
-  const lines = text3.split(/\r?\n/);
+  const lines = text2.split(/\r?\n/);
   const pending = [];
   for (const line of lines) {
     if (pending.length) {
@@ -17149,8 +17149,8 @@ function detectRepository(root, env = process.env) {
   if (env.GITHUB_REPOSITORY) return env.GITHUB_REPOSITORY;
   const gitConfig = join2(root, ".git", "config");
   if (!existsSync2(gitConfig)) return void 0;
-  const text3 = readFileSync(gitConfig, "utf8");
-  const origin = /\[remote "origin"\][^[]*?^[ \t]*url\s*=\s*(\S+)/m.exec(text3)?.[1];
+  const text2 = readFileSync(gitConfig, "utf8");
+  const origin = /\[remote "origin"\][^[]*?^[ \t]*url\s*=\s*(\S+)/m.exec(text2)?.[1];
   const m = origin && /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(origin);
   return m ? m[1] : void 0;
 }
@@ -17165,9 +17165,9 @@ function loadProject(opts) {
   const loadWorkflow = (path) => {
     if (workflows.has(path)) return workflows.get(path);
     if (escapesRoot(path)) return void 0;
-    const text3 = fs3.read(path);
-    if (text3 === void 0) return void 0;
-    const wf = logger.time(`parse ${path}`, () => parseWorkflowFile(path, text3, ctx));
+    const text2 = fs3.read(path);
+    if (text2 === void 0) return void 0;
+    const wf = logger.time(`parse ${path}`, () => parseWorkflowFile(path, text2, ctx));
     workflows.set(path, wf);
     logger.debug(`parsed workflow ${path}`, {
       jobs: Object.keys(wf.jobs).length,
@@ -20465,12 +20465,12 @@ function isIso7064Mod97(iban3) {
   let remainder = 0;
   const len = iban3.length;
   for (let i = 4; i < len; i++) {
-    const code2 = iban3.charCodeAt(i);
-    remainder = (code2 >= 65 ? remainder * 100 + (code2 - 55) : remainder * 10 + (code2 - 48)) % 97;
+    const code = iban3.charCodeAt(i);
+    remainder = (code >= 65 ? remainder * 100 + (code - 55) : remainder * 10 + (code - 48)) % 97;
   }
   for (let i = 0; i < 4; i++) {
-    const code2 = iban3.charCodeAt(i);
-    remainder = (code2 >= 65 ? remainder * 100 + (code2 - 55) : remainder * 10 + (code2 - 48)) % 97;
+    const code = iban3.charCodeAt(i);
+    remainder = (code >= 65 ? remainder * 100 + (code - 55) : remainder * 10 + (code - 48)) % 97;
   }
   return remainder === 1;
 }
@@ -26686,8 +26686,8 @@ function ko_default() {
 }
 
 // ../../node_modules/.pnpm/zod@4.6.5/node_modules/zod/v4/locales/lt.js
-var capitalizeFirstCharacter = (text3) => {
-  return text3.charAt(0).toUpperCase() + text3.slice(1);
+var capitalizeFirstCharacter = (text2) => {
+  return text2.charAt(0).toUpperCase() + text2.slice(1);
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
@@ -30388,12 +30388,12 @@ function compileFn(schema3, options) {
   doc.write(outputAccessor === null ? `return true;` : `return ${outputAccessor};`);
   const constantNames = ["INVALID", ...ctx.constants.keys()];
   const constantValues = [INVALID, ...ctx.constants.values()];
-  const code2 = doc.content.join("\n");
+  const code = doc.content.join("\n");
   const fullCode = options?.debug ? constantNames.length > 0 ? `// Constants: ${constantNames.join(", ")}
-${code2}` : code2 : "";
+${code}` : code : "";
   const F = Function;
   const factoryCode = `return (input) => {
-${code2}
+${code}
 }`;
   let fn;
   try {
@@ -37063,7 +37063,7 @@ var REPOSITORY = location_default.repository;
 var REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
 var DOCS_BASE_URL = location_default.docsBaseUrl;
 var schemaUrl = (name) => `${DOCS_BASE_URL}/schemas/${name}/v${SCHEMA_VERSIONS[name]}.json`;
-var ruleDocsUrl = (code2) => `${DOCS_BASE_URL}/docs/rules/${code2.toLowerCase()}`;
+var ruleDocsUrl = (code) => `${DOCS_BASE_URL}/docs/rules/${code.toLowerCase()}`;
 function toolMeta() {
   return {
     tool: TOOL_NAME,
@@ -37214,14 +37214,14 @@ function loadConfig(root, explicit, opts = {}) {
     if (!explicit && !insideRepository(root, full)) {
       throw new ConfigError(`${rel} links outside the repository; flowpact does not read it`, rel);
     }
-    const text3 = readFileSync2(full, "utf8");
-    return { ...parseConfigText(text3, rel, base), file: rel, text: text3, ...withBase };
+    const text2 = readFileSync2(full, "utf8");
+    return { ...parseConfigText(text2, rel, base), file: rel, text: text2, ...withBase };
   }
   return { config: base ? parseConfig(base, opts.base) : defaultConfig(), ...withBase };
 }
-function readYaml(text3, file2) {
+function readYaml(text2, file2) {
   const lineCounter = new import_yaml5.LineCounter();
-  const doc = (0, import_yaml5.parseDocument)(text3, { lineCounter, prettyErrors: false });
+  const doc = (0, import_yaml5.parseDocument)(text2, { lineCounter, prettyErrors: false });
   if (doc.errors.length) {
     throw new ConfigError(`Config file is not valid YAML: ${doc.errors[0].message.split("\n")[0]}`, file2);
   }
@@ -37231,9 +37231,9 @@ function readYaml(text3, file2) {
     throw new ConfigError(`Config file cannot be read: ${err.message.split("\n")[0]}`, file2);
   }
 }
-function parseConfigText(text3, file2 = "flowpact.config.yml", base) {
-  const lines = text3.split(/\r?\n/);
-  const { doc, lineCounter, data: raw } = readYaml(text3, file2);
+function parseConfigText(text2, file2 = "flowpact.config.yml", base) {
+  const lines = text2.split(/\r?\n/);
+  const { doc, lineCounter, data: raw } = readYaml(text2, file2);
   const data = raw ?? {};
   const config2 = parseConfig(base ? mergeConfig(base, data) : data, file2);
   const overridesNode = (0, import_yaml5.isMap)(doc.contents) ? doc.contents.get("overrides", true) : void 0;
@@ -37741,9 +37741,9 @@ function formatPatch(patch, headerOptions) {
   }
   return ret.join("\n") + "\n";
 }
-function splitLines(text3) {
-  const hasTrailingNl = text3.endsWith("\n");
-  const result = text3.split("\n").map((line) => line + "\n");
+function splitLines(text2) {
+  const hasTrailingNl = text2.endsWith("\n");
+  const result = text2.split("\n").map((line) => line + "\n");
   if (hasTrailingNl) {
     result.pop();
   } else {
@@ -37755,8 +37755,8 @@ function splitLines(text3) {
 // ../lint/src/contracts.ts
 var import_yaml6 = __toESM(require_dist(), 1);
 var CONTRACTS_DIR = `${CONFIG_DIR}/contracts`;
-function normalizeContractText(text3) {
-  return text3.replace(/\r\n/g, "\n");
+function normalizeContractText(text2) {
+  return text2.replace(/\r\n/g, "\n");
 }
 var CONTRACT_HEADER = `# Generated by flowpact \u2014 do not edit by hand. Run \`flowpact generate\` to update.
 # Docs: ${DOCS_BASE_URL}/docs/contracts
@@ -38103,19 +38103,19 @@ function diffContracts(before, after) {
 function readContracts(fs3) {
   const out = /* @__PURE__ */ new Map();
   for (const file2 of fs3.walk(CONTRACTS_DIR).filter((f) => f.endsWith(".contract.yml")).sort()) {
-    const text3 = fs3.read(file2) ?? "";
+    const text2 = fs3.read(file2) ?? "";
     try {
-      const parsed = contractSchema.safeParse((0, import_yaml6.parse)(text3));
+      const parsed = contractSchema.safeParse((0, import_yaml6.parse)(text2));
       out.set(
         file2,
-        parsed.success ? { file: file2, text: text3, contract: parsed.data } : {
+        parsed.success ? { file: file2, text: text2, contract: parsed.data } : {
           file: file2,
-          text: text3,
+          text: text2,
           error: parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ")
         }
       );
     } catch (err) {
-      out.set(file2, { file: file2, text: text3, error: `not valid YAML: ${err.message.split("\n")[0]}` });
+      out.set(file2, { file: file2, text: text2, error: `not valid YAML: ${err.message.split("\n")[0]}` });
     }
   }
   return out;
@@ -38302,10 +38302,10 @@ function writeContracts(root, plan, outDir, trees = [root]) {
 }
 function entryConsumers(e) {
   const out = /* @__PURE__ */ new Set();
-  for (const text3 of [e.before, e.after]) {
-    if (!text3) continue;
+  for (const text2 of [e.before, e.after]) {
+    if (!text2) continue;
     try {
-      const data = (0, import_yaml6.parse)(text3);
+      const data = (0, import_yaml6.parse)(text2);
       for (const c of data?.consumers ?? []) if (typeof c?.from === "string") out.add(c.from);
     } catch {
     }
@@ -39759,13 +39759,13 @@ function unhandledReads(site, key) {
   );
   if (tested.size === 0) return all;
   if (tested.size === segments.filter((s) => readsKey(s, key)).length) return void 0;
-  let text3 = "";
+  let text2 = "";
   let at = 0;
   for (const i of [...tested].sort((a, b) => a - b)) {
-    text3 += site.text.slice(at, segments[i].start);
+    text2 += site.text.slice(at, segments[i].start);
     at = segments[i].end;
   }
-  return { text: text3 + site.text.slice(at), tested };
+  return { text: text2 + site.text.slice(at), tested };
 }
 function skippedIn(guard, combo) {
   if (guard === false) return true;
@@ -39780,7 +39780,7 @@ function guardsOf(job, site) {
     step && guardOf(step)
   ].filter((g) => g !== void 0 && g !== site);
 }
-function affectedCombos(site, exp, predicate, guards = [], onlyKey, text3 = site.text) {
+function affectedCombos(site, exp, predicate, guards = [], onlyKey, text2 = site.text) {
   const known2 = new Set(exp.keys.map((k) => k.toLowerCase()));
   if (onlyKey !== void 0) {
     for (const k of [...known2]) if (k !== onlyKey.toLowerCase()) known2.delete(k);
@@ -39789,7 +39789,7 @@ function affectedCombos(site, exp, predicate, guards = [], onlyKey, text3 = site
   const perKey = /* @__PURE__ */ new Map();
   for (const combo of exp.combos) {
     if (guards.some((g) => skippedIn(g, combo))) continue;
-    const v = evaluateTemplate(text3, matrixResolver(combo));
+    const v = evaluateTemplate(text2, matrixResolver(combo));
     const missing = v.taint.filter((t) => known2.has(t.key.toLowerCase()));
     if (missing.length === 0 || !predicate(v)) continue;
     combos.push(combo);
@@ -41313,15 +41313,15 @@ function typoOf(registry2, key) {
     1
   );
   if (k.startsWith("fp") && builtin) return { typo: true, rule: builtin };
-  const prefix = (code3) => CODE_PATTERN.exec(code3.toUpperCase())?.[1];
+  const prefix = (code2) => CODE_PATTERN.exec(code2.toUpperCase())?.[1];
   const asCode = CODE_PATTERN.exec(k.toUpperCase());
   const keyPrefix = asCode && asCode[2] !== "0" ? asCode[1] : /^([a-z][a-z0-9]{1,9}?)\d/.exec(k)?.[1]?.toUpperCase();
-  const code2 = nearest(
+  const code = nearest(
     codes.filter((c) => keyPrefix !== void 0 && prefix(c) === keyPrefix),
     fromCode,
     1
   );
-  if (code2) return { typo: true, rule: code2 };
+  if (code) return { typo: true, rule: code };
   const names = rules.map((r) => r.name);
   const spelled = key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase().replace(/[_\s]+/g, "-");
   const undashed = !/[-_\s]/.test(key) && !/[a-z0-9][A-Z]/.test(key);
@@ -41362,9 +41362,9 @@ function resolveSeverities(registry2, config2, opts = {}) {
   }
   return out;
 }
-function fingerprint(code2, symbol2, file2, message) {
+function fingerprint(code, symbol2, file2, message) {
   const normalized = message.replace(/\d+/g, "#");
-  return createHash("sha1").update(`${code2}|${symbol2 ?? ""}|${file2}|${normalized}`).digest("hex").slice(0, 16);
+  return createHash("sha1").update(`${code}|${symbol2 ?? ""}|${file2}|${normalized}`).digest("hex").slice(0, 16);
 }
 function analyze(opts) {
   const started = performance.now();
@@ -41468,8 +41468,8 @@ function analyze(opts) {
       opts.impact.policy
     )
   ) : void 0;
-  const runs = (code2) => {
-    const rule = registry2.get(code2);
+  const runs = (code) => {
+    const rule = registry2.get(code);
     if (!rule) return false;
     return (severities.get(rule.code) ?? rule.defaultSeverity) !== "off" && (!only || only.includes(rule.code));
   };
@@ -41527,11 +41527,11 @@ function analyze(opts) {
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join("; ")}`);
   for (const u of applied.usage) {
-    const code2 = registry2.get(u.override.rule)?.code ?? "";
-    const severity = severities.get(code2);
-    const rule = registry2.get(code2);
+    const code = registry2.get(u.override.rule)?.code ?? "";
+    const severity = severities.get(code);
+    const rule = registry2.get(code);
     const notRun = !rule || (IMPACT_CODES.includes(rule.code) ? !opts.impact : rule.category === "contracts" && !opts.checkContracts);
-    if (severity === "off" || only && !only.includes(code2) || notRun) u.inactive = true;
+    if (severity === "off" || only && !only.includes(code) || notRun) u.inactive = true;
     if (!u.matched && rule) {
       const n = skipped.filter((f) => overrideMatches(u.override, rule.code, f)).length;
       if (n) u.skippedInGenerated = n;
@@ -41668,8 +41668,8 @@ function matchesTarget(value, pattern) {
   );
   return re.test(value);
 }
-function overrideMatches(o, code2, f) {
-  if (code2 !== f.code) return false;
+function overrideMatches(o, code, f) {
+  if (code !== f.code) return false;
   if (o.target !== void 0 && (f.symbol === void 0 || !matchesTarget(f.symbol, o.target))) return false;
   if (o.file !== void 0 && !matchesPattern(f.loc.file, o.file) && !matchesTarget(f.loc.file, o.file))
     return false;
@@ -41746,10 +41746,10 @@ function isReleasePullRequest(title, labels) {
   return title !== void 0 && RELEASE_TITLE.test(title) || labels.includes(RELEASE_LABEL);
 }
 function readJson(fs3, path) {
-  const text3 = fs3.read(path);
-  if (text3 === void 0) return void 0;
+  const text2 = fs3.read(path);
+  if (text2 === void 0) return void 0;
   try {
-    return JSON.parse(text3);
+    return JSON.parse(text2);
   } catch {
     return void 0;
   }
@@ -41777,10 +41777,10 @@ function baselineConfig(fs3, configPath, base, notes) {
   const fallback = () => base ? parseConfig(base) : void 0;
   const candidates = configPath ? [configPath] : CONFIG_FILES.map((f) => `${CONFIG_DIR}/${f}`);
   for (const path of candidates) {
-    const text3 = fs3.read(path);
-    if (text3 === void 0) continue;
+    const text2 = fs3.read(path);
+    if (text2 === void 0) continue;
     try {
-      return parseConfigText(text3, path, base).config;
+      return parseConfigText(text2, path, base).config;
     } catch (err) {
       if (!(err instanceof ConfigError)) throw err;
       notes.push(
@@ -42158,33 +42158,13 @@ function reportGraph(index) {
   };
 }
 
-// ../reporters/src/github.ts
+// ../reporters/src/kit/github.ts
 import { posix as posix4 } from "path";
-var LEVEL = {
-  error: "error",
-  warning: "warning",
-  info: "notice"
-};
 function inRepository(file2, pathPrefix = "") {
   return pathPrefix ? posix4.join(pathPrefix, file2) : file2;
 }
-function githubAnnotation(f, opts = {}) {
-  const loc = f.loc;
-  return {
-    level: LEVEL[f.severity],
-    message: `${f.message}
-${f.fix}
-${f.docsUrl}`,
-    title: `${f.code} ${f.name}`,
-    file: inRepository(loc.file, opts.pathPrefix),
-    startLine: loc.line,
-    endLine: loc.endLine,
-    // GitHub only honours columns on single-line annotations.
-    ...loc.line === loc.endLine ? { startColumn: loc.column, endColumn: loc.endColumn } : {}
-  };
-}
 
-// ../reporters/src/graph.ts
+// ../reporters/src/kit/graph.ts
 var KIND_ORDER = {
   workflow: 0,
   action: 1,
@@ -42308,8 +42288,8 @@ function renderMermaid(graph, opts = {}) {
   const lines = [`flowchart ${opts.direction ?? "LR"}`];
   for (const n of graph.nodes) {
     const id = ids.get(n.id);
-    const text3 = quote2(nodeText(n));
-    const shape = n.kind === "workflow" ? `(${text3})` : n.kind === "action" ? `{{${text3}}}` : `[${text3}]`;
+    const text2 = quote2(nodeText(n));
+    const shape = n.kind === "workflow" ? `(${text2})` : n.kind === "action" ? `{{${text2}}}` : `[${text2}]`;
     lines.push(`  ${id}${shape}:::${n.kind}`);
   }
   for (const e of graph.edges) {
@@ -42325,6 +42305,148 @@ function renderMermaid(graph, opts = {}) {
   );
   return `${lines.join("\n")}
 `;
+}
+
+// ../reporters/src/kit/markdown.ts
+var PROSE_ESCAPES = {
+  // A backslash would otherwise cancel the escape that follows it: `\[x\](url)` would become a link again.
+  "\\": "\\\\",
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  "[": "\\[",
+  "]": "\\]",
+  // GitHub finds mentions after decoding entities (`&#64;team` still pings); a zero-width space after `@` does not.
+  "@": "@\u200B"
+};
+function longestRun(s, ch) {
+  let longest = 0;
+  let run2 = 0;
+  for (const c of s) {
+    run2 = c === ch ? run2 + 1 : 0;
+    if (run2 > longest) longest = run2;
+  }
+  return longest;
+}
+function blankLineAfter(s, at) {
+  let k = at + 1;
+  while (s[k] === " " || s[k] === "	") k++;
+  return s[k] === "\n" || s[k] === "\r";
+}
+function markdownText(s) {
+  let out = "";
+  let i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch !== "`") {
+      out += PROSE_ESCAPES[ch] ?? ch;
+      i++;
+      continue;
+    }
+    const n = runAt(s, i);
+    const close = closingRun(s, i + n, n);
+    out += close >= 0 ? s.slice(i, close + n) : "\\`".repeat(n);
+    i = close >= 0 ? close + n : i + n;
+  }
+  return out;
+}
+function runAt(s, at) {
+  let n = 0;
+  while (s[at + n] === "`") n++;
+  return n;
+}
+function closingRun(s, from, n) {
+  for (let j = from; j < s.length; ) {
+    if (s[j] === "\n" && blankLineAfter(s, j)) return -1;
+    if (s[j] !== "`") {
+      j++;
+      continue;
+    }
+    const m = runAt(s, j);
+    if (m === n) return j;
+    j += m;
+  }
+  return -1;
+}
+function markdownTableCell(md) {
+  return md.split("|").join("\\|").replace(/\r?\n/g, "<br/>");
+}
+function markdownCell(s) {
+  return markdownTableCell(markdownText(s));
+}
+function markdownCode(s) {
+  const longest = longestRun(s, "`");
+  const fence = "`".repeat(longest + 1);
+  const pad = longest ? " " : "";
+  return `${fence}${pad}${s}${pad}${fence}`;
+}
+function markdownFence(content) {
+  return "`".repeat(Math.max(3, longestRun(content, "`") + 1));
+}
+function markdownLocation(loc, opts, withColumn = true) {
+  const label = markdownCode(`${loc.file}:${loc.line}${withColumn ? `:${loc.column}` : ""}`);
+  if (!opts.repoUrl || !opts.sha) return label;
+  const base = trimChar(opts.repoUrl, "/");
+  const path = loc.file.split("/").map((part) => encodeURIComponent(part).replace(/\(/g, "%28").replace(/\)/g, "%29")).join("/");
+  return `[${label}](${base}/blob/${opts.sha}/${path}#L${loc.line})`;
+}
+
+// ../reporters/src/kit/sarif.ts
+var SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json";
+var region = (loc) => ({
+  startLine: loc.line,
+  startColumn: loc.column,
+  endLine: loc.endLine,
+  endColumn: loc.endColumn
+});
+var sarifLocation = (loc, pathPrefix) => ({
+  artifactLocation: { uri: inRepository(loc.file, pathPrefix), uriBaseId: "%SRCROOT%" },
+  region: region(loc)
+});
+function sarifLog(driver, results) {
+  const sarif = {
+    $schema: SARIF_SCHEMA,
+    version: "2.1.0",
+    runs: [
+      {
+        tool: {
+          driver: {
+            name: driver.name,
+            version: driver.version,
+            semanticVersion: driver.version,
+            informationUri: driver.informationUri,
+            rules: driver.rules
+          }
+        },
+        columnKind: "utf16CodeUnits",
+        results
+      }
+    ]
+  };
+  return jsonSafe(`${JSON.stringify(sarif, null, 2)}
+`);
+}
+
+// ../reporters/src/github.ts
+var LEVEL = {
+  error: "error",
+  warning: "warning",
+  info: "notice"
+};
+function githubAnnotation(f, opts = {}) {
+  const loc = f.loc;
+  return {
+    level: LEVEL[f.severity],
+    message: `${f.message}
+${f.fix}
+${f.docsUrl}`,
+    title: `${f.code} ${f.name}`,
+    file: inRepository(loc.file, opts.pathPrefix),
+    startLine: loc.line,
+    endLine: loc.endLine,
+    // GitHub only honours columns on single-line annotations.
+    ...loc.line === loc.endLine ? { startColumn: loc.column, endColumn: loc.endColumn } : {}
+  };
 }
 
 // ../reporters/src/json.ts
@@ -42353,87 +42475,6 @@ var SEVERITY = {
   info: { icon: "\u2139\uFE0F", title: "Info", noun: () => "info" }
 };
 var STATUS_LABEL = { create: "new", update: "changed", delete: "removed", unchanged: "unchanged" };
-var PROSE_ESCAPES = {
-  // A backslash would otherwise cancel the escape that follows it: `\[x\](url)` would become a link again.
-  "\\": "\\\\",
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  "[": "\\[",
-  "]": "\\]",
-  // GitHub finds mentions after decoding entities (`&#64;team` still pings); a zero-width space after `@` does not.
-  "@": "@\u200B"
-};
-function longestRun(s, ch) {
-  let longest = 0;
-  let run2 = 0;
-  for (const c of s) {
-    run2 = c === ch ? run2 + 1 : 0;
-    if (run2 > longest) longest = run2;
-  }
-  return longest;
-}
-function blankLineAfter(s, at) {
-  let k = at + 1;
-  while (s[k] === " " || s[k] === "	") k++;
-  return s[k] === "\n" || s[k] === "\r";
-}
-function text2(s) {
-  let out = "";
-  let i = 0;
-  while (i < s.length) {
-    const ch = s[i];
-    if (ch === "`") {
-      let n = 1;
-      while (s[i + n] === "`") n++;
-      let close = -1;
-      for (let j = i + n; j < s.length; ) {
-        if (s[j] === "\n" && blankLineAfter(s, j)) break;
-        if (s[j] !== "`") {
-          j++;
-          continue;
-        }
-        let m = 1;
-        while (s[j + m] === "`") m++;
-        if (m === n) {
-          close = j;
-          break;
-        }
-        j += m;
-      }
-      if (close >= 0) {
-        out += s.slice(i, close + n);
-        i = close + n;
-      } else {
-        out += "\\`".repeat(n);
-        i += n;
-      }
-      continue;
-    }
-    out += PROSE_ESCAPES[ch] ?? ch;
-    i++;
-  }
-  return out;
-}
-function tableCell(md) {
-  return md.split("|").join("\\|").replace(/\r?\n/g, "<br/>");
-}
-function cell(s) {
-  return tableCell(text2(s));
-}
-function code(s) {
-  const longest = longestRun(s, "`");
-  const fence = "`".repeat(longest + 1);
-  const pad = longest ? " " : "";
-  return `${fence}${pad}${s}${pad}${fence}`;
-}
-function locLink(loc, opts, withColumn = true) {
-  const label = code(`${loc.file}:${loc.line}${withColumn ? `:${loc.column}` : ""}`);
-  if (!opts.repoUrl || !opts.sha) return label;
-  const base = trimChar(opts.repoUrl, "/");
-  const path = loc.file.split("/").map((part) => encodeURIComponent(part).replace(/\(/g, "%28").replace(/\)/g, "%29")).join("/");
-  return `[${label}](${base}/blob/${opts.sha}/${path}#L${loc.line})`;
-}
 var plural2 = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function statusLine(result) {
   const s = result.summary;
@@ -42448,20 +42489,19 @@ function statusLine(result) {
 }
 function labeled(label, value) {
   const [first = "", ...rest] = value.split("\n");
-  const out = [`**${label}:** ${text2(first)}`];
+  const out = [`**${label}:** ${markdownText(first)}`];
   if (!rest.length) return out;
-  const longest = longestRun(rest.join("\n"), "`");
-  const fence = "`".repeat(Math.max(3, longest + 1));
+  const fence = markdownFence(rest.join("\n"));
   out.push("", `${fence}yaml`, ...rest, fence);
   return out;
 }
 function renderFinding(f, opts) {
   const out = [];
-  out.push(`**[${code(f.code)}](${f.docsUrl}) ${f.name}** \xB7 ${locLink(f.loc, opts)}`);
+  out.push(`**[${markdownCode(f.code)}](${f.docsUrl}) ${f.name}** \xB7 ${markdownLocation(f.loc, opts)}`);
   out.push("");
-  out.push(text2(f.message));
+  out.push(markdownText(f.message));
   if (f.combos?.length) {
-    const shown = f.combos.slice(0, 10).map(code).join(" \xB7 ");
+    const shown = f.combos.slice(0, 10).map(markdownCode).join(" \xB7 ");
     out.push("");
     out.push(`Matrix: ${shown}${f.combos.length > 10 ? ` \xB7 \u2026 ${f.combos.length - 10} more` : ""}`);
   }
@@ -42475,7 +42515,7 @@ function renderFinding(f, opts) {
     out.push("");
     out.push("**Related locations:**");
     out.push("");
-    for (const r of f.related) out.push(`- ${locLink(r.loc, opts)} \u2014 ${text2(r.message)}`);
+    for (const r of f.related) out.push(`- ${markdownLocation(r.loc, opts)} \u2014 ${markdownText(r.message)}`);
   }
   out.push("");
   out.push("</details>");
@@ -42500,17 +42540,17 @@ function renderContracts(plan, opts) {
   for (const e of changed) {
     const breaking = e.changes.filter((c) => c.breaking).length;
     const status = `${STATUS_LABEL[e.status]}${e.invalid ? " (invalid)" : ""}`;
-    out.push(`| ${tableCell(code(e.file))} | ${status} | ${breaking} |`);
+    out.push(`| ${markdownTableCell(markdownCode(e.file))} | ${status} | ${breaking} |`);
   }
   const withChanges = changed.filter((e) => e.changes.length > 0 || e.invalid);
   if (withChanges.length) {
     out.push("");
     for (const e of withChanges) {
-      out.push(`- ${code(e.file)}`);
+      out.push(`- ${markdownCode(e.file)}`);
       for (const c of [...e.changes].sort((a, b) => Number(b.breaking) - Number(a.breaking))) {
-        out.push(c.breaking ? `  - **${text2(c.message)}** (breaking)` : `  - ${text2(c.message)}`);
+        out.push(c.breaking ? `  - **${markdownText(c.message)}** (breaking)` : `  - ${markdownText(c.message)}`);
       }
-      if (e.invalid) out.push(`  - could not be read as a contract: ${text2(e.invalid)}`);
+      if (e.invalid) out.push(`  - could not be read as a contract: ${markdownText(e.invalid)}`);
     }
   }
   if (allChanged.length > changed.length) {
@@ -42529,7 +42569,7 @@ function renderContracts(plan, opts) {
       out.push(`gh run download ${opts.artifact.runId} -n ${opts.artifact.name}`);
     } else {
       out.push(
-        `To update the locked contracts, download the ${code(opts.artifact.name)} artifact from this run and apply it:`
+        `To update the locked contracts, download the ${markdownCode(opts.artifact.name)} artifact from this run and apply it:`
       );
       out.push("");
       out.push("```sh");
@@ -42537,10 +42577,10 @@ function renderContracts(plan, opts) {
     out.push(`git apply --index ${patch}`);
     out.push("```");
     out.push("");
-    out.push(`Or run ${code("flowpact generate")} locally and commit the result.`);
+    out.push(`Or run ${markdownCode("flowpact generate")} locally and commit the result.`);
   } else {
     out.push("");
-    out.push(`Run ${code("flowpact generate")} and commit the result to update the locked contracts.`);
+    out.push(`Run ${markdownCode("flowpact generate")} and commit the result to update the locked contracts.`);
   }
   return out;
 }
@@ -42550,7 +42590,7 @@ function renderImpactMarkdown(impact, opts) {
   const out = [
     "### Impact",
     "",
-    `${icon} Declared **${text2(describeDeclared(impact))}** \xB7 required **${v.required}**`
+    `${icon} Declared **${markdownText(describeDeclared(impact))}** \xB7 required **${v.required}**`
   ];
   const changes = listedChanges(impact);
   if (changes.length) {
@@ -42558,7 +42598,7 @@ function renderImpactMarkdown(impact, opts) {
     const limit = Math.max(1, opts.maxFindings ?? 50);
     for (const c of changes.slice(0, limit)) {
       out.push(
-        `| ${c.level === "major" ? "**major**" : c.level}${c.certain ? "" : " (uncertain)"} | ${tableCell(code(c.unit))} | ${cell(c.message)} |`
+        `| ${c.level === "major" ? "**major**" : c.level}${c.certain ? "" : " (uncertain)"} | ${markdownTableCell(markdownCode(c.unit))} | ${markdownCell(c.message)} |`
       );
     }
     if (changes.length > limit)
@@ -42568,7 +42608,7 @@ function renderImpactMarkdown(impact, opts) {
   }
   out.push(
     "",
-    `<sub>Baseline: ${impact.baseline.kind === "release" ? "last release " : ""}${code(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})</sub>`
+    `<sub>Baseline: ${impact.baseline.kind === "release" ? "last release " : ""}${markdownCode(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})</sub>`
   );
   return out;
 }
@@ -42633,7 +42673,7 @@ function renderMarkdown(result, opts = {}) {
     for (const f of result.suppressed.slice(0, max)) {
       const o = f.override;
       out.push(
-        `| [${code(f.code)}](${f.docsUrl}) | ${tableCell(locLink(f.loc, opts))} | ${cell(o.reason)} | ${o.expires ?? "\u2014"} | ${o.owner ? cell(o.owner) : "\u2014"} |`
+        `| [${markdownCode(f.code)}](${f.docsUrl}) | ${markdownTableCell(markdownLocation(f.loc, opts))} | ${markdownCell(o.reason)} | ${o.expires ?? "\u2014"} | ${o.owner ? markdownCell(o.owner) : "\u2014"} |`
       );
     }
     if (result.suppressed.length > max) {
@@ -42658,22 +42698,11 @@ function renderMarkdown(result, opts = {}) {
 }
 
 // ../reporters/src/sarif.ts
-var SARIF_SCHEMA = "https://json.schemastore.org/sarif-2.1.0.json";
 var LEVEL2 = {
   error: "error",
   warning: "warning",
   info: "note"
 };
-var region = (loc) => ({
-  startLine: loc.line,
-  startColumn: loc.column,
-  endLine: loc.endLine,
-  endColumn: loc.endColumn
-});
-var physicalLocation = (loc, pathPrefix) => ({
-  artifactLocation: { uri: inRepository(loc.file, pathPrefix), uriBaseId: "%SRCROOT%" },
-  region: region(loc)
-});
 function renderSarif(result, opts = {}) {
   const registry2 = createRegistry();
   const all = [
@@ -42683,13 +42712,13 @@ function renderSarif(result, opts = {}) {
   const firstFinding = /* @__PURE__ */ new Map();
   for (const f of all) if (!firstFinding.has(f.code)) firstFinding.set(f.code, f);
   const codes = result.rules.filter((r) => r.severity !== "off").map((r) => r.code);
-  for (const code2 of firstFinding.keys()) if (!codes.includes(code2)) codes.push(code2);
+  for (const code of firstFinding.keys()) if (!codes.includes(code)) codes.push(code);
   codes.sort();
-  const rules = codes.map((code2) => {
-    const configured = result.rules.find((r) => r.code === code2);
-    const def = registry2.get(code2);
-    const sample = firstFinding.get(code2);
-    const name = def?.name ?? configured?.name ?? sample?.name ?? code2;
+  const rules = codes.map((code) => {
+    const configured = result.rules.find((r) => r.code === code);
+    const def = registry2.get(code);
+    const sample = firstFinding.get(code);
+    const name = def?.name ?? configured?.name ?? sample?.name ?? code;
     const why = def?.docs.why ?? sample?.why ?? "";
     const fix = def?.docs.fix ?? sample?.fix ?? "";
     const summary2 = def?.docs.summary ?? why ?? name;
@@ -42697,7 +42726,7 @@ function renderSarif(result, opts = {}) {
     const severity = configured && configured.severity !== "off" ? configured.severity : sample?.severity ?? "warning";
     const category = def?.category ?? sample?.category;
     return {
-      id: code2,
+      id: code,
       name,
       shortDescription: { text: summary2 || name },
       ...why ? { fullDescription: { text: why } } : {},
@@ -42716,12 +42745,12 @@ function renderSarif(result, opts = {}) {
     ruleIndex: ruleIndex.get(f.code),
     level: LEVEL2[f.severity],
     message: { text: f.message },
-    locations: [{ physicalLocation: physicalLocation(f.loc, opts.pathPrefix) }],
+    locations: [{ physicalLocation: sarifLocation(f.loc, opts.pathPrefix) }],
     ...f.related.length ? {
       relatedLocations: f.related.map((r, id) => ({
         id,
         message: { text: r.message },
-        physicalLocation: physicalLocation(r.loc, opts.pathPrefix)
+        physicalLocation: sarifLocation(r.loc, opts.pathPrefix)
       }))
     } : {},
     partialFingerprints: { "flowpact/v1": f.fingerprint },
@@ -42731,27 +42760,10 @@ function renderSarif(result, opts = {}) {
       ...f.symbol ? { symbol: f.symbol } : {}
     }
   }));
-  const sarif = {
-    $schema: SARIF_SCHEMA,
-    version: "2.1.0",
-    runs: [
-      {
-        tool: {
-          driver: {
-            name: result.meta.tool,
-            version: result.meta.version,
-            semanticVersion: result.meta.version,
-            informationUri: DOCS_BASE_URL,
-            rules
-          }
-        },
-        columnKind: "utf16CodeUnits",
-        results
-      }
-    ]
-  };
-  return jsonSafe(`${JSON.stringify(sarif, null, 2)}
-`);
+  return sarifLog(
+    { name: result.meta.tool, version: result.meta.version, informationUri: DOCS_BASE_URL, rules },
+    results
+  );
 }
 
 // src/main.ts
@@ -42836,9 +42848,9 @@ async function twirp(http2, base, method, body) {
       if (!RETRY_STATUS.has(status)) throw new Final(`Failed to ${method}: ${failure2}`);
     } catch (err) {
       if (err instanceof Final) throw err;
-      const code2 = err.code;
-      if (code2 && UNREACHABLE.has(code2))
-        throw new Error(`Failed to ${method}: unable to make request: ${code2}`);
+      const code = err.code;
+      if (code && UNREACHABLE.has(code))
+        throw new Error(`Failed to ${method}: unable to make request: ${code}`);
       failure2 = err.message;
     }
     if (attempt === 5) throw new Error(`Failed to ${method} after 5 attempts: ${failure2}`);
@@ -42880,8 +42892,8 @@ async function blobRequest(http2, url2, body, headers, what, secrets) {
       const reply = await res.readBody();
       const status = res.message.statusCode ?? 0;
       if (status === 201) return;
-      const code2 = /<Code>([^<]*)<\/Code>/.exec(reply)?.[1];
-      failure2 = `(${status}) ${code2 ?? res.message.statusMessage}`;
+      const code = /<Code>([^<]*)<\/Code>/.exec(reply)?.[1];
+      failure2 = `(${status}) ${code ?? res.message.statusMessage}`;
       retryable = status === 500 || status === 503;
     } catch (err) {
       const e = err;
