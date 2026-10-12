@@ -11,7 +11,7 @@ pnpm test         # unit, property and end-to-end tests
 pnpm lint         # Biome
 pnpm typecheck
 pnpm docs:gen     # regenerate rule pages and JSON schemas after changing a rule or schema
-pnpm coverage     # tests with coverage thresholds (core and lint ≥ 90 % lines)
+pnpm coverage     # tests with coverage thresholds (lint ≥ 90 % lines)
 pnpm exec fallow  # code health (fallow.tools): unused code, duplication, complexity; the policy is .fallowrc.jsonc
 pnpm exec fallow audit  # what CI's Code health job checks on a pull request: nothing new compared with main
 pnpm docs:dev     # docs site with generated rule pages
@@ -20,13 +20,13 @@ pnpm --filter vscode-flowpact screenshots  # editor screenshots in a real VS Cod
 ```
 
 `packages/action/dist` is committed (GitHub runs the action from it). Rebuild it with `pnpm build` and commit the
-result whenever `packages/core`, `packages/lint`, `packages/reporters` or `packages/action` change; CI fails otherwise.
+result whenever `packages/lint`, `packages/reporters`, `packages/action` or the `@ciatlas/core` version change; CI fails
+otherwise.
 
 ## Repository layout
 
 | Path | What |
 | --- | --- |
-| `packages/core` | `@ciatlas/core`, the workflow model: YAML → IR → expressions → graph → matrix expansion. No rules: it is the foundation flowpact's checks are built on, versioned on its own (not with flowpact) and moving to its own repository, [ciatlas/core](https://github.com/ciatlas/core) |
 | `packages/lint` | flowpact's checks on the model: rules, config, contracts, impact mode, plugins, the JSON report and trace |
 | `packages/reporters` | Terminal (pretty), JSON, Markdown, SARIF, trace, graph and contract renderers |
 | `packages/cli` | The `flowpact` command and the API (published as `flowpact`): `src/lib` implements each command once, `src/api.ts` exports it as a function and `src/commands` prints it; the API's types are hand-written in `api.d.ts` |
@@ -36,6 +36,20 @@ result whenever `packages/core`, `packages/lint`, `packages/reporters` or `packa
 | `apps/docs` | Fumadocs site, deployed to GitHub Pages |
 | `fixtures/` | Small repositories used by tests, screenshots and docs |
 | `scripts/` | Rule-doc, schema and screenshot generators; link checker |
+
+### The workflow model: `@ciatlas/core`
+
+The model flowpact's checks are built on (YAML → IR → expressions → graph → matrix expansion; no rules) lives in its own
+repository, [ciatlas/core](https://github.com/ciatlas/core), with its own tests and releases. Every package that
+imports it depends on the same release tag, `"@ciatlas/core": "github:ciatlas/core#vX.Y.Z"`: pnpm installs its
+TypeScript source, and the CLI, the action and the extension bundle it with the `source` condition. It is not on npm.
+
+- **A new core release** reaches flowpact as a Renovate pull request (`fix(deps): update @ciatlas/core`), which
+  updates every package at once and gets the action bundle rebuilt; the whole suite runs against the new core.
+- **Changing core and flowpact together:** clone ciatlas/core next to this repository and run `pnpm link ../core` here.
+  That writes a `link:` override into `pnpm-workspace.yaml`; undo it before you commit. A pull request may point at an
+  unreleased core commit (`github:ciatlas/core#<sha>`) while it is a draft, but `scripts/test/core-dependency.test.ts`
+  fails until every package names the same release tag and nothing overrides it.
 
 `packages/lint/src/location.json` says where flowpact lives: its repository and its docs URL. The docs and schema
 URLs flowpact prints, `scripts/sync-version-refs.mjs` (action references) and `scripts/check-pack.mjs` (npm's
@@ -90,10 +104,9 @@ key are the `ciatlas` organization variable `RELEASE_BOT_CLIENT_ID` and secret `
 the key, generate a new one (the app's **Credentials → Key pairs**), update the secret, run a workflow that uses it,
 then delete the old key; the app accepts both until then.
 
-1. Every push to `main` updates a **release pull request** that bumps the version in every package but
-   `packages/core`, rebuilds the action bundle, moves the version references in the docs and READMEs to the new
-   release line (`scripts/sync-version-refs.mjs`) and adds the changelog entry from the commits since the last
-   release.
+1. Every push to `main` updates a **release pull request** that bumps the version in every package, rebuilds the
+   action bundle, moves the version references in the docs and READMEs to the new release line
+   (`scripts/sync-version-refs.mjs`) and adds the changelog entry from the commits since the last release.
 2. Merging it tags the release (`vX.Y.Z`) and creates the GitHub release as a **draft**
    (`release-please-config.json`: `draft`, `force-tag-creation`).
 3. The release workflow then publishes `flowpact` to npm with provenance through npm trusted publishing (no

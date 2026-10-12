@@ -16,7 +16,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@ciatlas/core": "workspace:*",
+    "@ciatlas/core": "github:ciatlas/core#v0.1.0",
     "@flowpact/lint": "workspace:*",
     "vscode-languageserver": "^10.1.2",
     "vscode-languageserver-textdocument": "^1.0.15",

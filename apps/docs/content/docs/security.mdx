@@ -84,7 +84,8 @@ If you do not use plugins, set `plugins: false` in the action.
 - **What each artifact contains:** every bundle ships `THIRD_PARTY_LICENSES.txt` (each bundled package with its license
   text) and `sbom.cdx.json` (a CycloneDX SBOM). Each SBOM is also attested against its artifact (a CycloneDX
   attestation whose subject is the artifact), and the release attaches a copy (`flowpact-X.Y.Z.cdx.json`,
-  `flowpact-action-X.Y.Z.cdx.json`, `flowpact-vscode-X.Y.Z.cdx.json`).
+  `flowpact-action-X.Y.Z.cdx.json`, `flowpact-vscode-X.Y.Z.cdx.json`). flowpact's workflow model, `@ciatlas/core`, is
+  built from its own repository's release tag rather than npm, and the SBOM names it so: `pkg:github/ciatlas/core@vX.Y.Z`.
 - **Published only once complete:** a release stays a draft until every signed asset and SBOM is attached, and a
   published release is never changed.
 - **Immutable:** from 0.10.0, every release is a GitHub

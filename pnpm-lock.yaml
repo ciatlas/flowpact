@@ -170,8 +170,8 @@ importers:
         specifier: ^2.5.15
         version: 2.5.15
       '@ciatlas/core':
-        specifier: workspace:*
-        version: link:packages/core
+        specifier: github:ciatlas/core#v0.1.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a
       '@flowpact/lint':
         specifier: workspace:*
         version: link:packages/lint
@@ -262,8 +262,8 @@ importers:
         version: 4.0.1
     devDependencies:
       '@ciatlas/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: github:ciatlas/core#v0.1.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a
       '@flowpact/lint':
         specifier: workspace:*
         version: link:../lint
@@ -280,8 +280,8 @@ importers:
   packages/cli:
     devDependencies:
       '@ciatlas/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: github:ciatlas/core#v0.1.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a
       '@flowpact/language-server':
         specifier: workspace:*
         version: link:../language-server
@@ -310,23 +310,11 @@ importers:
         specifier: ^8.5.1
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.29)(supports-color@7.2.0)(tsx@4.23.15)(typescript@7.0.2)(yaml@2.9.1)
 
-  packages/core:
-    dependencies:
-      '@actions/expressions':
-        specifier: ^0.3.61
-        version: 0.3.61
-      '@actions/workflow-parser':
-        specifier: ^0.3.61
-        version: 0.3.61
-      yaml:
-        specifier: ^2.9.1
-        version: 2.9.1
-
   packages/language-server:
     dependencies:
       '@ciatlas/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: github:ciatlas/core#v0.1.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a
       '@flowpact/lint':
         specifier: workspace:*
         version: link:../lint
@@ -347,8 +335,8 @@ importers:
   packages/lint:
     dependencies:
       '@ciatlas/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: github:ciatlas/core#v0.1.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -366,8 +354,8 @@ importers:
   packages/reporters:
     dependencies:
       '@ciatlas/core':
-        specifier: workspace:*
-        version: link:../core
+        specifier: github:ciatlas/core#v0.1.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a
       '@flowpact/lint':
         specifier: workspace:*
         version: link:../lint
@@ -605,6 +593,11 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a':
+    resolution: {gitHosted: true, integrity: sha512-3PWvPaJ5tywvI8xMA1wUA4Nc+d7xdfTe0acWgngy/LsKWV2iid1K6RfycXrms0xTdgyp68O5m6KNVKngcUCNUw==, tarball: https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a}
+    version: 0.1.0
+    engines: {node: '>=22'}
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -5227,6 +5220,12 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.15':
     optional: true
+
+  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/a6d323cb02597ec589e4b8874c3bebd10e16a08a':
+    dependencies:
+      '@actions/expressions': 0.3.61
+      '@actions/workflow-parser': 0.3.61
+      yaml: 2.9.1
 
   '@emnapi/runtime@1.11.3':
     dependencies:

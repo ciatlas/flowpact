@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:8e4763e3-59a1-596b-9cf7-93f78baffcc7",
+  "serialNumber": "urn:uuid:1e6d34d1-0836-5bd2-b397-db1b5abf87ff",
   "version": 1,
   "metadata": {
     "component": {
@@ -137,6 +137,26 @@
         {
           "type": "website",
           "url": "https://github.com/actions/languageservices"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:github/ciatlas/core@v0.1.0",
+      "name": "@ciatlas/core",
+      "version": "0.1.0",
+      "purl": "pkg:github/ciatlas/core@v0.1.0",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://github.com/ciatlas/core"
         }
       ]
     },
@@ -351,6 +371,7 @@
         "pkg:npm/%40actions/http-client@4.0.1",
         "pkg:npm/%40actions/io@3.0.2",
         "pkg:npm/%40actions/workflow-parser@0.3.61",
+        "pkg:github/ciatlas/core@v0.1.0",
         "pkg:npm/ansi-regex@6.4.0",
         "pkg:npm/cronstrue@2.59.0",
         "pkg:npm/diff@9.0.0",

@@ -6,7 +6,8 @@ const src = (pkg: string) => fileURLToPath(new URL(`./packages/${pkg}/src/index.
 export default defineConfig({
   resolve: {
     alias: {
-      '@ciatlas/core': src('core'),
+      // @ciatlas/core is a git dependency that ships its TypeScript source (github:ciatlas/core#vX.Y.Z), never built.
+      '@ciatlas/core': fileURLToPath(new URL('./node_modules/@ciatlas/core/src/index.ts', import.meta.url)),
       '@flowpact/lint': src('lint'),
       '@flowpact/reporters': src('reporters'),
       '@flowpact/language-server': src('language-server'),
@@ -20,7 +21,7 @@ export default defineConfig({
     // generated (scripts/test/broken-fixture.ts).
     globalSetup: ['scripts/test/build-cli.ts', 'scripts/test/broken-fixture.ts'],
     // @actions/workflow-parser imports JSON without import attributes; let Vite transform it like the bundler does.
-    server: { deps: { inline: [/@actions\/workflow-parser/, /@actions\/expressions/] } },
+    server: { deps: { inline: [/@actions\/workflow-parser/, /@actions\/expressions/, /@ciatlas\/core/] } },
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**'],
@@ -33,7 +34,6 @@ export default defineConfig({
       reporter: ['text-summary', 'html', 'json-summary'],
       thresholds: {
         lines: 80,
-        'packages/core/src/**': { lines: 90 },
         'packages/lint/src/**': { lines: 90 },
       },
     },

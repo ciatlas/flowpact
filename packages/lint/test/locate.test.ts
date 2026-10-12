@@ -3,7 +3,7 @@ import { analyze, parseConfig } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { codes, WF, yaml } from './helpers';
 
-// The SymbolLocator and overlayFileSystem tests live in packages/core/test/locate.test.ts.
+// The SymbolLocator and overlayFileSystem tests live in ciatlas/core (test/locate.test.ts).
 describe('overlayFileSystem', () => {
   it('lets the analysis see unsaved edits', () => {
     const disk = {
