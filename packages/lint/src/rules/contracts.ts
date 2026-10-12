@@ -37,7 +37,7 @@ function* entries(
 const GENERATE =
   'Run `flowpact generate` and commit the updated contracts. In CI, the flowpact action (check mode) attaches the regenerated contracts and a `git apply`-able patch to the run — see its job summary.';
 
-export const contractMissing = defineRule({
+const contractMissing = defineRule({
   code: 'FP801',
   name: 'contract-missing',
   category: 'contracts',
@@ -58,7 +58,7 @@ export const contractMissing = defineRule({
   },
 });
 
-export const contractOutdated = defineRule({
+const contractOutdated = defineRule({
   code: 'FP802',
   name: 'contract-outdated',
   category: 'contracts',
@@ -93,7 +93,7 @@ export const contractOutdated = defineRule({
   },
 });
 
-export const breakingInterfaceChange = defineRule({
+const breakingInterfaceChange = defineRule({
   code: 'FP803',
   name: 'breaking-interface-change',
   category: 'contracts',
@@ -141,7 +141,7 @@ on:
   },
 });
 
-export const orphanContract = defineRule({
+const orphanContract = defineRule({
   code: 'FP804',
   name: 'orphan-contract',
   category: 'contracts',
@@ -165,7 +165,7 @@ export const orphanContract = defineRule({
   },
 });
 
-export const contractInvalid = defineRule({
+const contractInvalid = defineRule({
   code: 'FP805',
   name: 'contract-invalid',
   category: 'contracts',

@@ -2,7 +2,7 @@
 import type { Settings } from '@flowpact/language-server';
 
 /** Rules that repeat checks GitHub's GitHub Actions extension makes: expressions, schema, YAML and contexts. */
-export const OVERLAPPING_RULES: ReadonlySet<string> = new Set(['FP502', 'FP503', 'FP504', 'FP505']);
+const OVERLAPPING_RULES: ReadonlySet<string> = new Set(['FP502', 'FP503', 'FP504', 'FP505']);
 
 /** The `flowpact.*` settings. */
 export interface ExtensionSettings {

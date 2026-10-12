@@ -2,7 +2,7 @@ import { type CallSite, isCallOnly, type Loc, lookup, refsOf, sym } from '@flowp
 import { defineRule, type RelatedLocation, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote } from './util';
 
-export const callCycle = defineRule({
+const callCycle = defineRule({
   code: 'FP601',
   name: 'call-cycle',
   category: 'structure',
@@ -103,7 +103,7 @@ function callComponents(paths: string[], byCaller: Map<string, CallSite[]>): str
   return components;
 }
 
-export const nestingDepth = defineRule({
+const nestingDepth = defineRule({
   code: 'FP602',
   name: 'nesting-depth',
   category: 'structure',
@@ -189,7 +189,7 @@ export const nestingDepth = defineRule({
   },
 });
 
-export const remoteUnverified = defineRule({
+const remoteUnverified = defineRule({
   code: 'FP603',
   name: 'remote-unverified',
   category: 'structure',
@@ -213,7 +213,7 @@ export const remoteUnverified = defineRule({
   },
 });
 
-export const needsWithoutData = defineRule({
+const needsWithoutData = defineRule({
   code: 'FP604',
   name: 'needs-without-data',
   category: 'structure',
@@ -251,7 +251,7 @@ export const needsWithoutData = defineRule({
   },
 });
 
-export const largeInterface = defineRule({
+const largeInterface = defineRule({
   code: 'FP605',
   name: 'large-interface',
   category: 'structure',
@@ -277,7 +277,7 @@ export const largeInterface = defineRule({
   },
 });
 
-export const missingLocalTarget = defineRule({
+const missingLocalTarget = defineRule({
   code: 'FP606',
   name: 'missing-local-target',
   category: 'structure',
@@ -363,7 +363,7 @@ export const missingLocalTarget = defineRule({
   },
 });
 
-export const workspaceUnverified = defineRule({
+const workspaceUnverified = defineRule({
   code: 'FP610',
   name: 'workspace-unverified',
   category: 'structure',
@@ -434,7 +434,7 @@ export const workspaceUnverified = defineRule({
   },
 });
 
-export const unreferencedReusableWorkflow = defineRule({
+const unreferencedReusableWorkflow = defineRule({
   code: 'FP607',
   name: 'unreferenced-reusable-workflow',
   category: 'structure',
@@ -457,7 +457,7 @@ export const unreferencedReusableWorkflow = defineRule({
   },
 });
 
-export const undefinedNeedsJob = defineRule({
+const undefinedNeedsJob = defineRule({
   code: 'FP608',
   name: 'undefined-needs-job',
   category: 'structure',
@@ -484,7 +484,7 @@ export const undefinedNeedsJob = defineRule({
   },
 });
 
-export const calleeNotReusable = defineRule({
+const calleeNotReusable = defineRule({
   code: 'FP609',
   name: 'callee-not-reusable',
   category: 'structure',

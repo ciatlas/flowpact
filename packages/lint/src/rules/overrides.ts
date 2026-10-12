@@ -2,7 +2,7 @@ import type { Loc } from '@flowpact/core';
 import { defineRule, type RuleDefinition } from './types';
 
 /** Days before expiry at which FP903 starts reminding. */
-export const EXPIRY_WARNING_DAYS = 14;
+const EXPIRY_WARNING_DAYS = 14;
 
 const configLoc = (loc: Loc | undefined): Loc =>
   loc ?? { file: '.github/flowpact/flowpact.config.yml', line: 1, column: 1, endLine: 1, endColumn: 1 };
@@ -10,7 +10,7 @@ const configLoc = (loc: Loc | undefined): Loc =>
 const describe = (o: { rule: string; target?: string | undefined; file?: string | undefined }) =>
   `${o.rule} on ${o.target ?? o.file}`;
 
-export const overrideExpired = defineRule({
+const overrideExpired = defineRule({
   code: 'FP901',
   name: 'override-expired',
   category: 'config',
@@ -49,7 +49,7 @@ export const overrideExpired = defineRule({
   },
 });
 
-export const overrideUnused = defineRule({
+const overrideUnused = defineRule({
   code: 'FP902',
   name: 'override-unused',
   category: 'config',
@@ -79,7 +79,7 @@ export const overrideUnused = defineRule({
   },
 });
 
-export const overrideExpiringSoon = defineRule({
+const overrideExpiringSoon = defineRule({
   code: 'FP903',
   name: 'override-expiring-soon',
   category: 'config',

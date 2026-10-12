@@ -38,7 +38,7 @@ const UNNECESSARY = new Set(['FP104', 'FP203', 'FP303', 'FP405', 'FP902']);
 const MAX_COMBOS = 5;
 
 /** What a published diagnostic carries for later requests (quick fixes). */
-export interface DiagnosticData {
+interface DiagnosticData {
   fingerprint: string;
   symbol?: string;
 }

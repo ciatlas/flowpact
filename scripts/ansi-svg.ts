@@ -35,7 +35,7 @@ interface Span extends Style {
   text: string;
 }
 
-export function parseAnsi(input: string): Span[][] {
+function parseAnsi(input: string): Span[][] {
   const clean = input.replace(/\u001B\]8;;[^\u0007]*\u0007/g, '');
   const lines: Span[][] = [];
   for (const raw of clean.split('\n')) {

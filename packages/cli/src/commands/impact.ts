@@ -1,6 +1,6 @@
 import { type ArgsDef, defineCommand } from 'citty';
 import { guard } from '../shared';
-import { type ReportArgs, reportArgs, runReport } from './lint';
+import { type ReportArgs, reportArgs, runReportCommand } from './lint';
 
 const { paths: _paths, impact: _impact, ...args } = reportArgs;
 
@@ -12,5 +12,5 @@ export const impactCommand = defineCommand({
   },
   args,
   run: ({ args, rawArgs, cmd }) =>
-    guard(() => runReport(args as unknown as ReportArgs, rawArgs, 'impact', cmd.args as ArgsDef)),
+    guard(() => runReportCommand(args as unknown as ReportArgs, rawArgs, 'impact', cmd.args as ArgsDef)),
 });

@@ -19,7 +19,7 @@ const GITHUB_ENV_HINTS: Record<string, string> = {
   RUNNER_ARCH: 'runner.arch',
 };
 
-export const undefinedEnvRef = defineRule({
+const undefinedEnvRef = defineRule({
   code: 'FP501',
   name: 'undefined-env-ref',
   category: 'expressions',
@@ -70,7 +70,7 @@ export const undefinedEnvRef = defineRule({
   },
 });
 
-export const expressionParseError = defineRule({
+const expressionParseError = defineRule({
   code: 'FP502',
   name: 'expression-parse-error',
   category: 'expressions',
@@ -104,7 +104,7 @@ export const expressionParseError = defineRule({
   },
 });
 
-export const schemaViolation = defineRule({
+const schemaViolation = defineRule({
   code: 'FP503',
   name: 'schema-violation',
   category: 'expressions',
@@ -162,7 +162,7 @@ runs:
   },
 });
 
-export const contextNotAvailable = defineRule({
+const contextNotAvailable = defineRule({
   code: 'FP505',
   name: 'context-not-available',
   category: 'expressions',
@@ -302,7 +302,7 @@ function refLocFor(sites: ExprSite[], e: Diagnostic, name: string | undefined): 
   return site?.loc;
 }
 
-export const yamlSyntaxError = defineRule({
+const yamlSyntaxError = defineRule({
   code: 'FP504',
   name: 'yaml-syntax-error',
   category: 'expressions',

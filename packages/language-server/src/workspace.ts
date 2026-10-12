@@ -27,7 +27,7 @@ import { pathToUri, toDiagnostic, toPosix } from './convert';
 import type { Settings } from './settings';
 
 /** Files the analysis reads: workflows, action metadata, and flowpact's config and contracts. */
-export function isRelevant(rel: string): boolean {
+function isRelevant(rel: string): boolean {
   return (
     /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(rel) ||
     /(^|\/)action\.ya?ml$/i.test(rel) ||
@@ -44,7 +44,7 @@ const isDir = (p: string) => {
 };
 
 /** The repository a file belongs to: the nearest directory above it with a `.github` folder. */
-export function findRoot(path: string): string | undefined {
+function findRoot(path: string): string | undefined {
   for (let dir = dirname(path); ; dir = dirname(dir)) {
     if (isDir(join(dir, '.github'))) return dir;
     if (dirname(dir) === dir) return undefined;
@@ -90,7 +90,7 @@ interface ConfigProblem {
 }
 
 /** Delay after the last edit before analyzing. */
-export const DEBOUNCE_MS = 200;
+const DEBOUNCE_MS = 200;
 
 /**
  * Tracks the repositories open in the editor and keeps their analysis current: each edit re-runs the whole analysis

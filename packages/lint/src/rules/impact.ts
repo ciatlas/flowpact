@@ -28,7 +28,7 @@ const verdictLoc = (impact: ImpactResult, changes: ImpactChange[]): Loc =>
 const driving = (impact: ImpactResult, level: ImpactLevel) =>
   countedChanges(impact.changes, impact.policy).filter((c) => c.level === level);
 
-export const impactUnderDeclared = defineRule({
+const impactUnderDeclared = defineRule({
   code: 'FP810',
   name: 'impact-under-declared',
   category: 'contracts',
@@ -67,7 +67,7 @@ jobs:
   },
 });
 
-export const impactConflict = defineRule({
+const impactConflict = defineRule({
   code: 'FP811',
   name: 'impact-declaration-conflict',
   category: 'contracts',
@@ -90,7 +90,7 @@ export const impactConflict = defineRule({
   },
 });
 
-export const impactOverDeclared = defineRule({
+const impactOverDeclared = defineRule({
   code: 'FP812',
   name: 'impact-over-declared',
   category: 'contracts',
@@ -111,7 +111,7 @@ export const impactOverDeclared = defineRule({
   },
 });
 
-export const impactUndeclared = defineRule({
+const impactUndeclared = defineRule({
   code: 'FP813',
   name: 'impact-undeclared',
   category: 'contracts',
@@ -134,7 +134,7 @@ export const impactUndeclared = defineRule({
   },
 });
 
-export const impactUncertain = defineRule({
+const impactUncertain = defineRule({
   code: 'FP814',
   name: 'impact-uncertain',
   category: 'contracts',

@@ -1,6 +1,6 @@
 import { type ArgsDef, defineCommand } from 'citty';
 import { guard } from '../shared';
-import { type ReportArgs, reportArgs, runReport } from './lint';
+import { type ReportArgs, reportArgs, runReportCommand } from './lint';
 
 export const checkCommand = defineCommand({
   meta: {
@@ -16,5 +16,5 @@ export const checkCommand = defineCommand({
     },
   },
   run: ({ args, rawArgs, cmd }) =>
-    guard(() => runReport(args as unknown as ReportArgs, rawArgs, 'check', cmd.args as ArgsDef)),
+    guard(() => runReportCommand(args as unknown as ReportArgs, rawArgs, 'check', cmd.args as ArgsDef)),
 });

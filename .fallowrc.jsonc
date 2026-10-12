@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+  // Files that something other than an import loads.
+  "entry": [
+    // The docs pages: fumadocs-mdx reads the folder (apps/docs/lib/source.ts).
+    "apps/docs/content/**/*.mdx",
+    // Regenerates the logo files, run by hand (see its header).
+    "assets/brand/build.cjs",
+    // Checks the hand-written API types against the engine's when `pnpm typecheck` compiles it.
+    "packages/cli/test/api-types.ts",
+    // Loaded by VS Code's test runner in the extension smoke test.
+    "packages/vscode/e2e/*.cjs",
+    // Run by the CI and release workflows.
+    "scripts/*.mjs"
+  ],
+  // assets/brand/build.cjs installs these outside the repository on purpose: the logo build is not a project dependency.
+  "ignoreDependencies": ["@resvg/resvg-js", "opentype.js"],
+  "duplicates": {
+    // The API's types are copied by hand so the published types stand alone; packages/cli/test/api-types.ts checks
+    // that they still match the engine's.
+    "ignore": ["packages/cli/api.d.ts"]
+  },
+  "health": {
+    "thresholdOverrides": [
+      {
+        "files": ["**/test/**", "**/e2e/**"],
+        "maxUnitSize": 500,
+        "reason": "Test suites: a describe() block groups many it() cases and is long by design"
+      }
+    ]
+  }
+}

@@ -236,7 +236,7 @@ function emptyInputImpact(
   };
 }
 
-export const emptyBindingForMatrixCombo = defineRule({
+const emptyBindingForMatrixCombo = defineRule({
   code: 'FP401',
   name: 'empty-binding-for-matrix-combo',
   category: 'matrix',
@@ -341,7 +341,7 @@ with:
 const SKIP_FIELDS = new Set(['job.strategy']);
 const WITH_FIELDS = new Set(['job.with', 'step.with']);
 
-export const matrixKeyMissingInCombo = defineRule({
+const matrixKeyMissingInCombo = defineRule({
   code: 'FP402',
   name: 'matrix-key-missing-in-combo',
   category: 'matrix',
@@ -395,7 +395,7 @@ export const matrixKeyMissingInCombo = defineRule({
   },
 });
 
-export const dynamicMatrixUnverified = defineRule({
+const dynamicMatrixUnverified = defineRule({
   code: 'FP403',
   name: 'dynamic-matrix-unverified',
   category: 'matrix',
@@ -426,7 +426,7 @@ export const dynamicMatrixUnverified = defineRule({
   },
 });
 
-export const undefinedMatrixKey = defineRule({
+const undefinedMatrixKey = defineRule({
   code: 'FP404',
   name: 'undefined-matrix-key',
   category: 'matrix',
@@ -532,7 +532,7 @@ function onlyFallbacks(site: ExprSite, key: string, job: JobDecl, exp: MatrixExp
   return true;
 }
 
-export const unusedMatrixShape = defineRule({
+const unusedMatrixShape = defineRule({
   code: 'FP405',
   name: 'unused-matrix-shape',
   category: 'matrix',
@@ -570,7 +570,7 @@ export const unusedMatrixShape = defineRule({
   },
 });
 
-export const matrixTooLarge = defineRule({
+const matrixTooLarge = defineRule({
   code: 'FP406',
   name: 'matrix-too-large',
   category: 'matrix',

@@ -12,6 +12,8 @@ pnpm lint         # Biome
 pnpm typecheck
 pnpm docs:gen     # regenerate rule pages and JSON schemas after changing a rule or schema
 pnpm coverage     # tests with coverage thresholds (core and lint ≥ 90 % lines)
+pnpm exec fallow  # code health (fallow.tools): unused code, duplication, complexity; the policy is .fallowrc.jsonc
+pnpm exec fallow audit  # what CI's Code health job checks on a pull request: nothing new compared with main
 pnpm docs:dev     # docs site with generated rule pages
 pnpm docs:screenshots                      # terminal screenshots from real CLI output
 pnpm --filter vscode-flowpact screenshots  # editor screenshots in a real VS Code (after pnpm build; opens windows)
@@ -49,7 +51,7 @@ fails when they are out of date.
 `main` is protected: changes land through pull requests that pass the **CI passed** and **Conventional PR title**
 checks, are approved by a code owner (`.github/CODEOWNERS`), and are squash-merged. GitHub does not let authors
 approve their own pull requests, so repository admins may merge their own without the approval (the `main reviews`
-ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed** sums up every CI job — tests on Node 22 and 24, the docs build, smoke
+ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed** sums up every CI job — tests on Node 22 and 24, code health (fallow), the docs build, smoke
 tests of the packed CLI on Linux, macOS and Windows, and the GitHub Action on this repository and on fixtures. New
 checks are added as jobs to `.github/workflows/ci.yml` and listed under the `ci-passed` job's `needs`.
 

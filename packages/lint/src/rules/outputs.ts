@@ -24,7 +24,7 @@ function stepsInScope(unit: UnitDecl, jobId: string | undefined): StepDecl[] {
   return jobId ? (unit.jobs[jobId]?.steps ?? []) : [];
 }
 
-export const undefinedOutputRef = defineRule({
+const undefinedOutputRef = defineRule({
   code: 'FP301',
   name: 'undefined-output-ref',
   category: 'outputs',
@@ -125,7 +125,7 @@ export const undefinedOutputRef = defineRule({
   },
 });
 
-export const outputRefWithoutNeeds = defineRule({
+const outputRefWithoutNeeds = defineRule({
   code: 'FP302',
   name: 'output-ref-without-needs',
   category: 'outputs',
@@ -190,7 +190,7 @@ export const outputRefWithoutNeeds = defineRule({
   },
 });
 
-export const unusedOutput = defineRule({
+const unusedOutput = defineRule({
   code: 'FP303',
   name: 'unused-output',
   category: 'outputs',
@@ -278,7 +278,7 @@ deploy:
   },
 });
 
-export const stepOutputNeverWritten = defineRule({
+const stepOutputNeverWritten = defineRule({
   code: 'FP304',
   name: 'step-output-never-written',
   category: 'outputs',

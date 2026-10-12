@@ -17,6 +17,7 @@ export async function GET(_req: Request, { params }: RouteContext<'/llms.mdx/doc
   });
 }
 
+// fallow-ignore-next-line unused-export -- Next.js calls it to pre-render each page (static export)
 export function generateStaticParams() {
   return source.getPages().map((page) => ({
     slug: getPageMarkdownUrl(page).segments,

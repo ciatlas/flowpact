@@ -199,7 +199,7 @@ export function repeatedFlag(rawArgs: string[], def: ArgsDef, name: string): str
   );
 }
 
-export function stderrSink(color: boolean) {
+function stderrSink(color: boolean) {
   const c = pc.createColors(color);
   const tag: Record<LogRecord['level'], string> = {
     error: c.red('error'),

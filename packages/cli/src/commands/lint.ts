@@ -76,7 +76,7 @@ export const reportArgs = {
 } satisfies ArgsDef;
 
 /** Flags of impact mode (`--impact` on lint/check, and `flowpact impact`). */
-export function impactArgs() {
+function impactArgs() {
   return {
     base: {
       type: 'string',
@@ -125,7 +125,7 @@ export type ReportArgs = ReportFlags & Parameters<typeof createContext>[0];
 type Format = 'pretty' | 'json' | 'markdown' | 'sarif' | 'github';
 
 /** The format `-o` writes, chosen by the file extension. */
-export function formatForFile(file: string): Format {
+function formatForFile(file: string): Format {
   const f = file.toLowerCase();
   if (f.endsWith('.sarif') || f.endsWith('.sarif.json')) return 'sarif';
   if (f.endsWith('.json')) return 'json';
@@ -137,7 +137,7 @@ export function formatForFile(file: string): Format {
  * A `-o` value: `<file>`, format by extension, or `<format>:<file>` for files without a telling name, such as
  * `markdown:$GITHUB_STEP_SUMMARY`. A one-letter prefix is a Windows drive, not a format.
  */
-export function parseOutput(spec: string): { format: Format; file: string } {
+function parseOutput(spec: string): { format: Format; file: string } {
   const named = /^(pretty|json|markdown|sarif|github):(.+)$/.exec(spec);
   if (!named) return { format: formatForFile(spec), file: spec };
   if (named[1] === 'github')
@@ -158,68 +158,38 @@ function markdownOptionsFromEnv(pathPrefix: string, env: NodeJS.ProcessEnv = pro
   };
 }
 
-/**
- * Shared implementation of `flowpact lint`, `flowpact check` and `flowpact impact`: the API's `lint`, `check` and
- * `impact`, with the banner, the `impact:` notes and the reports printed and written as the flags ask.
- */
-export async function runReport(
-  args: ReportArgs,
-  rawArgs: string[],
-  command: 'lint' | 'check' | 'impact',
-  def: ArgsDef,
-): Promise<number> {
-  const ctx = createContext(args, rawArgs, def);
-  printBanner(
-    ctx,
-    `root ${displayPath(ctx.root)}${ctx.loaded.file ? ` · config ${ctx.loaded.file}` : ''}${ctx.loaded.base ? ` · base ${ctx.loaded.base.file}` : ''}`,
-  );
-  const paths = pathArgs(args._, command, ctx.root);
-  const only = args.only
-    ? args.only
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined;
-  // Before the analysis, so a bad -o fails fast.
-  const outputs = repeatedFlag(rawArgs, def, 'output').filter(Boolean);
-  if (!outputs.length && args.output) outputs.push(args.output);
-  const files = outputs.map(parseOutput);
-  const analysis = await runAnalysis(
-    ctx.session,
-    command,
-    {
-      paths,
-      ...(only ? { only } : {}),
-      schema: args.schema !== false,
-      impact: Boolean(args.impact),
-      ...(args.base !== undefined ? { base: args.base } : {}),
-      ...(args.expect ? { expect: args.expect as ImpactLevel } : {}),
-      ...(args.title !== undefined ? { title: args.title } : {}),
-      ...(args.labels !== undefined
-        ? {
-            labels: args.labels
-              .split(',')
-              .map((l) => l.trim())
-              .filter(Boolean),
-          }
-        : {}),
-      ...(process.env.FLOWPACT_NOW ? { now: new Date(process.env.FLOWPACT_NOW) } : {}),
-    },
-    {
-      // `flowpact impact` has nothing to report when impact mode is skipped; `lint --impact` lints without it.
-      impactSkipped: (reason) => {
-        ctx.stderr(`impact: skipped (${reason})`);
-        return command === 'impact';
-      },
-      analyzed: (notes) => {
-        for (const note of notes) ctx.stderr(note);
-      },
-    },
-  );
-  if (!analysis) return 0;
+type AnalysisOptions = Parameters<typeof runAnalysis>[2];
+type Analysis = NonNullable<Awaited<ReturnType<typeof runAnalysis>>>;
+type Context = ReturnType<typeof createContext>;
+
+/** A comma-separated flag value as a list, without blanks. */
+function splitList(value: string): string[] {
+  return value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** The API options the report flags ask for. */
+function analysisOptions(args: ReportArgs, paths: string[]): AnalysisOptions {
+  return {
+    paths,
+    ...(args.only ? { only: splitList(args.only) } : {}),
+    schema: args.schema !== false,
+    impact: Boolean(args.impact),
+    ...(args.base !== undefined ? { base: args.base } : {}),
+    ...(args.expect ? { expect: args.expect as ImpactLevel } : {}),
+    ...(args.title !== undefined ? { title: args.title } : {}),
+    ...(args.labels !== undefined ? { labels: splitList(args.labels) } : {}),
+    ...(process.env.FLOWPACT_NOW ? { now: new Date(process.env.FLOWPACT_NOW) } : {}),
+  };
+}
+
+/** Renders the analysis in a format, for the terminal or, without colours and with every finding, for a file. */
+function renderer(analysis: Analysis, ctx: Context, args: ReportArgs) {
   const includeGraph = Boolean(args['include-graph']);
   const pathPrefix = workspacePrefix(ctx.root);
-  const render = (format: Format, toFile: boolean): string => {
+  return (format: Format, toFile: boolean): string => {
     switch (format) {
       case 'json':
         return analysis.json({ includeGraph });
@@ -235,6 +205,16 @@ export async function runReport(
           : analysis.pretty({ ...ctx.render, hideInfo: Boolean(args['hide-info']) });
     }
   };
+}
+
+/** Prints the report in `--format` and writes the files the flags ask for: `-o`, `--dump-graph` and `--patch`. */
+function writeReports(
+  analysis: Analysis,
+  ctx: Context,
+  args: ReportArgs,
+  files: { format: Format; file: string }[],
+): void {
+  const render = renderer(analysis, ctx, args);
   if (args.format === 'github') writeWorkflowCommands(render('github', false));
   else ctx.stdout(render(args.format as Format, false));
   for (const { format, file } of files)
@@ -246,6 +226,40 @@ export async function runReport(
   }
   const patch = args.patch ? analysis.contracts?.patch() : undefined;
   if (args.patch && patch !== undefined) writeOutput(args.patch, patch, ctx, 'data');
+}
+
+/**
+ * Shared implementation of `flowpact lint`, `flowpact check` and `flowpact impact`: the API's `lint`, `check` and
+ * `impact`, with the banner, the `impact:` notes and the reports printed and written as the flags ask.
+ */
+export async function runReportCommand(
+  args: ReportArgs,
+  rawArgs: string[],
+  command: 'lint' | 'check' | 'impact',
+  def: ArgsDef,
+): Promise<number> {
+  const ctx = createContext(args, rawArgs, def);
+  printBanner(
+    ctx,
+    `root ${displayPath(ctx.root)}${ctx.loaded.file ? ` · config ${ctx.loaded.file}` : ''}${ctx.loaded.base ? ` · base ${ctx.loaded.base.file}` : ''}`,
+  );
+  const paths = pathArgs(args._, command, ctx.root);
+  // Before the analysis, so a bad -o fails fast.
+  const outputs = repeatedFlag(rawArgs, def, 'output').filter(Boolean);
+  if (!outputs.length && args.output) outputs.push(args.output);
+  const files = outputs.map(parseOutput);
+  const analysis = await runAnalysis(ctx.session, command, analysisOptions(args, paths), {
+    // `flowpact impact` has nothing to report when impact mode is skipped; `lint --impact` lints without it.
+    impactSkipped: (reason) => {
+      ctx.stderr(`impact: skipped (${reason})`);
+      return command === 'impact';
+    },
+    analyzed: (notes) => {
+      for (const note of notes) ctx.stderr(note);
+    },
+  });
+  if (!analysis) return 0;
+  writeReports(analysis, ctx, args, files);
   return analysis.exitCode(args['fail-on'] as FailOn);
 }
 
@@ -256,5 +270,5 @@ export const lintCommand = defineCommand({
   },
   args: reportArgs,
   run: ({ args, rawArgs, cmd }) =>
-    guard(() => runReport(args as unknown as ReportArgs, rawArgs, 'lint', cmd.args as ArgsDef)),
+    guard(() => runReportCommand(args as unknown as ReportArgs, rawArgs, 'lint', cmd.args as ArgsDef)),
 });

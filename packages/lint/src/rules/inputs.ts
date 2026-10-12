@@ -50,7 +50,7 @@ function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {
   return { ...(unit.dispatch?.inputs ?? {}), ...(unit.call?.inputs ?? {}) };
 }
 
-export const missingRequiredInput = defineRule({
+const missingRequiredInput = defineRule({
   code: 'FP101',
   name: 'missing-required-input',
   category: 'inputs',
@@ -110,7 +110,7 @@ export const missingRequiredInput = defineRule({
   },
 });
 
-export const unknownInput = defineRule({
+const unknownInput = defineRule({
   code: 'FP102',
   name: 'unknown-input',
   category: 'inputs',
@@ -166,7 +166,7 @@ function jsonKind(v: Json): string {
   return typeof v;
 }
 
-export const inputTypeMismatch = defineRule({
+const inputTypeMismatch = defineRule({
   code: 'FP103',
   name: 'input-type-mismatch',
   category: 'inputs',
@@ -211,7 +211,7 @@ export const inputTypeMismatch = defineRule({
   },
 });
 
-export const unusedInput = defineRule({
+const unusedInput = defineRule({
   code: 'FP104',
   name: 'unused-input',
   category: 'inputs',
@@ -280,7 +280,7 @@ function callersOf(index: ProjectIndex, unit: UnitDecl): Caller[] {
   }));
 }
 
-export const optionalInputInCondition = defineRule({
+const optionalInputInCondition = defineRule({
   code: 'FP105',
   name: 'optional-input-no-default-in-condition',
   category: 'inputs',
@@ -388,7 +388,7 @@ function addName(bySite: Map<number, string[]>, site: number, name: string): voi
   bySite.set(site, names);
 }
 
-export const passthroughDropped = defineRule({
+const passthroughDropped = defineRule({
   code: 'FP106',
   name: 'passthrough-dropped',
   category: 'inputs',
@@ -418,7 +418,7 @@ export const passthroughDropped = defineRule({
   },
 });
 
-export const optionalForwardedToRequired = defineRule({
+const optionalForwardedToRequired = defineRule({
   code: 'FP107',
   name: 'optional-forwarded-to-required',
   category: 'inputs',
@@ -472,7 +472,7 @@ jobs:
   },
 });
 
-export const undefinedInputRef = defineRule({
+const undefinedInputRef = defineRule({
   code: 'FP108',
   name: 'undefined-input-ref',
   category: 'inputs',

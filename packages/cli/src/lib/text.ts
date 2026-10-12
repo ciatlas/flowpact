@@ -81,7 +81,7 @@ export function terminalRender(
 
 const safe = neutralizeWorkflowCommands;
 
-export const GRAPH_FORMATS = ['tree', 'mermaid', 'dot'] as const;
+const GRAPH_FORMATS = ['tree', 'mermaid', 'dot'] as const;
 export type GraphFormat = (typeof GRAPH_FORMATS)[number];
 
 /** `flowpact graph`: a tree for the terminal, a Mermaid flowchart (without code fences) or Graphviz DOT. */

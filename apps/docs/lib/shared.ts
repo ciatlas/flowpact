@@ -2,7 +2,7 @@ import { createGetUrl } from 'fumadocs-core/source';
 
 export const appName = 'flowpact';
 export const docsRoute = '/docs';
-export const docsContentRoute = '/llms.mdx/docs';
+const docsContentRoute = '/llms.mdx/docs';
 export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 export const gitConfig = {

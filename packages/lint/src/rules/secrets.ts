@@ -20,7 +20,7 @@ import {
 import { defineRule, type RuleDefinition } from './types';
 import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, quote } from './util';
 
-export const missingRequiredSecret = defineRule({
+const missingRequiredSecret = defineRule({
   code: 'FP201',
   name: 'missing-required-secret',
   category: 'secrets',
@@ -58,7 +58,7 @@ secrets:
   },
 });
 
-export const unknownSecret = defineRule({
+const unknownSecret = defineRule({
   code: 'FP202',
   name: 'unknown-secret',
   category: 'secrets',
@@ -92,7 +92,7 @@ export const unknownSecret = defineRule({
   },
 });
 
-export const unusedSecret = defineRule({
+const unusedSecret = defineRule({
   code: 'FP203',
   name: 'unused-secret',
   category: 'secrets',
@@ -127,7 +127,7 @@ export const unusedSecret = defineRule({
   },
 });
 
-export const secretsInherit = defineRule({
+const secretsInherit = defineRule({
   code: 'FP204',
   name: 'secrets-inherit',
   category: 'secrets',
@@ -166,7 +166,7 @@ secrets:
   },
 });
 
-export const undeclaredSecretRef = defineRule({
+const undeclaredSecretRef = defineRule({
   code: 'FP205',
   name: 'undeclared-secret-ref',
   category: 'secrets',
