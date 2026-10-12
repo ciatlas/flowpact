@@ -1,5 +1,7 @@
 # Contributing
 
+[MAINTAINERS.md](MAINTAINERS.md) lists who maintains flowpact, what each role does and who has access to what.
+
 ## Setup
 
 Node.js 22 or later and pnpm (the version is pinned in `package.json`; `corepack enable` picks it up).
@@ -64,14 +66,22 @@ fails when they are out of date.
 
 `main` is protected: changes land through pull requests that pass the **CI passed** and **Conventional PR title**
 checks, are approved by a code owner (`.github/CODEOWNERS`), and are squash-merged. GitHub does not let authors
-approve their own pull requests, so repository admins may merge their own without the approval (the `main reviews`
-ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed** sums up every CI job — tests on Node 22 and 24, code health (fallow), the docs build, smoke
+approve their own pull requests, so repository admins may merge any pull request without an approving review (the
+`main reviews` ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed** sums up every CI job — tests on Node 22 and 24, code health (fallow), the docs build, smoke
 tests of the packed CLI on Linux, macOS and Windows, and the GitHub Action on this repository and on fixtures. New
 checks are added as jobs to `.github/workflows/ci.yml` and listed under the `ci-passed` job's `needs`.
 
-A pull request that adds or changes behaviour adds tests for it, next to the code they test (`packages/<package>/test`,
+A pull request that adds or changes behavior adds tests for it, next to the code they test (`packages/<package>/test`,
 `scripts/test`); a bug fix adds a test that fails without the fix. CI also fails when line coverage drops below 80 %
 overall or 90 % in `packages/lint`.
+
+A pull request that adds a feature or makes a breaking change also revisits the
+[threat model](https://ciatlas.github.io/flowpact/docs/threat-model): it updates what the change affects there
+(assets, threats, mitigations, tests and residual risk) and the version and date of the review.
+
+Whatever you contribute is licensed under the project's [MIT license](LICENSE), as section D.6 of
+[GitHub's Terms of Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#6-contributions-under-repository-license)
+provides, and by submitting it you confirm that you have the right to license it under those terms.
 
 The branch and tag rules live in the repository, not only in the settings UI: `.github/rulesets/*.json` (GitHub's
 ruleset export format) and `.github/repository.json` (merge settings). A pull request that changes them shows the
@@ -81,8 +91,50 @@ the UI. Release tags (`v*`) can only be created or moved by the release bot and 
 Dependencies are updated by Renovate (`renovate.json`) with Conventional Commit titles. When a runtime dependency
 changes, the release bot rebuilds the committed action bundle on the Renovate branch. Non-major updates (except 0.x
 minors) merge themselves once every required check passes: Renovate may skip the code owner review, not the checks.
-Nothing reaches users that way — a dependency fix only updates the release pull request, which needs approval. Actions
-are pinned to commit SHAs, with the version in a comment.
+Nothing reaches users that way — a dependency fix only updates the release pull request, which the maintainer merges.
+Actions are pinned to commit SHAs, with the version in a comment.
+
+## Dependencies
+
+**Selecting.** The published packages have no runtime dependencies: the CLI, the GitHub Action and the VS Code
+extension bundle the code of every package they import, so whatever they use ships inside them. A new dependency
+arrives in a pull request like any other change. When the action bundles it, the rebuilt `packages/action/dist` in
+the same pull request lists each third-party package it brings in, with its license, in `THIRD_PARTY_LICENSES.txt`
+and `sbom.cdx.json`. Bundled dependencies have been replaced when they made the bundles much larger or brought in code
+that CodeQL flags: `@actions/artifact`, about two-thirds of the action bundle (5.1 MB to 1.8 MB) and 94 of its 111
+third-party packages for a single upload, gave way to `packages/action/src/upload.ts`
+([#77](https://github.com/ciatlas/flowpact/pull/77)), and classic zod to `zod/mini`, which validates without
+generating code ([#108](https://github.com/ciatlas/flowpact/pull/108)).
+
+**Obtaining.**
+
+- pnpm (the version `packageManager` in `package.json` pins) installs packages from the npm registry.
+  `pnpm-lock.yaml` records the exact version and integrity hash of every package, and the workflows install with
+  `pnpm install --frozen-lockfile`, which fails instead of changing the lockfile.
+- pnpm resolves to versions published at least a day earlier (its built-in `minimumReleaseAge`), and lists a younger
+  version it had to accept under `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`. Renovate waits until a version
+  is 2 days old before proposing it (`minimumReleaseAge` in `renovate.json`), except for `@ciatlas/core` and updates
+  that only pin the version in use (to an exact version or a commit SHA).
+- Dependencies' install scripts run only for the packages `allowBuilds` in `pnpm-workspace.yaml` allows, today only
+  esbuild. pnpm runs no build script of a package it does not allow there.
+- `@ciatlas/core` comes from a release tag of ciatlas/core, not from npm ([above](#the-workflow-model-ciatlascore)).
+  The lockfile pins the commit that tag names and the hash of its tarball.
+- Workflows pin every action to a commit SHA, with the version in a comment.
+
+**Tracking.**
+
+- Renovate (`renovate.json`) opens pull requests on Mondays for npm packages, pnpm, `@ciatlas/core` and the actions,
+  and lists every pending update in the [Dependency Dashboard](https://github.com/ciatlas/flowpact/issues/4);
+  [Pull requests](#pull-requests) says which of them merge themselves. `@types/vscode` is left out: it must match the
+  oldest VS Code the extension supports (`engines.vscode` in `packages/vscode/package.json`), so the two are raised
+  together by hand.
+- GitHub's Dependabot alerts are on (`.github/security.json`), and Renovate opens pull requests for the vulnerable
+  versions those alerts and OSV report (`osvVulnerabilityAlerts`). CodeQL also scans the committed action bundle,
+  which contains the bundled dependencies' code.
+- CI's **Code health** job (fallow) fails when a package declares a dependency it does not use.
+- Every release records what it ships. Each bundle carries `THIRD_PARTY_LICENSES.txt` (each bundled package with its
+  license text) and a CycloneDX SBOM, `sbom.cdx.json`, which `scripts/bundle-licenses.ts` writes from the files
+  esbuild put into it. The release attaches each SBOM, attested against its artifact ([Releases](#releases)).
 
 ## Commit messages
 

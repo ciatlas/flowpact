@@ -163,7 +163,8 @@ cross-repository resolution — see the [roadmap](https://ciatlas.github.io/flow
 
 Report bugs and ask for features in [GitHub Issues](https://github.com/ciatlas/flowpact/issues); report
 vulnerabilities privately, as the [security policy](SECURITY.md) explains. To contribute, see
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md); [MAINTAINERS.md](MAINTAINERS.md) lists who maintains flowpact and who has access
+to what.
 
 ## License
 

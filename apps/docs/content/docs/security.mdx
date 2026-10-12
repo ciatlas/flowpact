@@ -7,6 +7,10 @@ flowpact is a static analyzer: it reads the workflow, action, config and contrac
 on them. This page is for the people who review it before it runs in their organization. To report a vulnerability,
 see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
 
+The [threat model](/docs/threat-model) goes further: it names what flowpact and its releases protect and where
+untrusted data and code cross into them, ranks the threats, and gives for each the code and tests that defend against
+it and the risk that remains.
+
 ## What it reads and writes
 
 - **Reads** the repository it analyzes: `.github/workflows/*.yml`, local actions (`action.yml`), the config
@@ -27,7 +31,7 @@ flowpact treats the analyzed files as untrusted input:
   at the start of a line, `##[…]` anywhere), except the annotations it prints on purpose with `--format github`;
 - it reads the value of a flag only as that flag: `--title "$PR_TITLE"` cannot add a `--plugin` or an `-o`, turn off
   `--no-plugins`, or end the run as `--help` would;
-- it caps matrix expansion (the YAML parser limits alias expansion).
+- it caps matrix expansion and YAML alias expansion.
 
 Reports of a way around any of this are in scope of the
 [security policy](https://github.com/ciatlas/flowpact/security/policy).
@@ -136,11 +140,18 @@ Pin the action to the commit you verified: `uses: ciatlas/flowpact@<commit-sha> 
 
 ## Repository practices
 
-- Changes reach `main` through pull requests that must pass CI, including flowpact's lint of its own workflows (the
-  maintainer can bypass the rules).
+- Changes reach `main` only through squash-merged pull requests that pass the required checks: **CI passed**, which
+  includes flowpact's lint of its own workflows, and **Conventional PR title**. Nobody can push to `main` directly,
+  force-push it or delete it, and no one is exempt from the checks (the `main` ruleset has no bypass). A pull request
+  also needs a code owner's approval, except that the maintainer, the only repository admin, may merge any pull
+  request without an approving review (GitHub does not let authors approve their own), and Renovate, which merges only
+  its own pull requests (non-major updates, once the checks pass). The rules are kept in `.github/rulesets/`, and a
+  weekly run reverts changes made in the settings UI.
+  [MAINTAINERS.md](https://github.com/ciatlas/flowpact/blob/main/MAINTAINERS.md) lists who has access to what.
 - CodeQL (extended queries), secret scanning with push protection, dependency updates (Renovate) and the
   [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact) run on the repository.
 - Vulnerabilities are reported privately, and only the latest release receives fixes; see the
-  [security policy](https://github.com/ciatlas/flowpact/security/policy).
+  [security policy](https://github.com/ciatlas/flowpact/security/policy), which also lists the
+  [security fixes in past releases](https://github.com/ciatlas/flowpact/blob/main/SECURITY.md#security-fixes-in-past-releases).
 - flowpact meets the [OpenSSF Best Practices](https://www.bestpractices.dev/projects/15403) criteria at the passing
   level; `.bestpractices.json` in the repository records each answer and its evidence.

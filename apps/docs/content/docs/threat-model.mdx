@@ -1,0 +1,301 @@
+---
+title: Threat model
+description: What flowpact protects, where untrusted data and code cross into it, and its threats ranked by risk, each with the code and tests that defend against it and the risk that remains.
+---
+
+This is the security assessment of flowpact 0.12.3, built on `@ciatlas/core` 0.1.0, as of 2026-10-12. It names what
+flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
+For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
+It is revisited for every new feature and every breaking change, and the version and date above change with each
+review. The [security page](/docs/security) describes what flowpact reads, writes and sends, and how to verify a
+release; to report a vulnerability, see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
+
+Paths are in this repository, except those marked (core), which are in
+[ciatlas/core](https://github.com/ciatlas/core/tree/v0.1.0) at v0.1.0.
+
+## Assets
+
+- **The analyzed repository.** Its workflows, actions, config and contracts, and in impact mode the same files at the
+  base commit. They are untrusted input: in CI, whoever opens a pull request controls their contents, their names and
+  their symlinks, and flowpact's output repeats names and text from them.
+- **Plugins.** JavaScript modules named by the config, the action's `plugin` input or `--plugin`. Once loaded, a
+  plugin is trusted code with every right of the process; flowpact does not sandbox it.
+- **The CI runner.** The job's secrets and environment, the workspace, the action's `token` input (`github.token` by
+  default, used only for the `git fetch` of impact mode) and the runner's own token for the drift artifact. The runner
+  reads flowpact's log for workflow commands, and reviewers read its annotations and job summary.
+- **The user's machine.** For the CLI, the language server and the VS Code extension: files outside the repository,
+  the terminal that shows the output, and the editor.
+- **The release pipeline.** `release.yml`, running from `main`. The release bot's private key
+  (`RELEASE_BOT_PRIVATE_KEY`, an organization secret that only ciatlas/flowpact and ciatlas/core can read). The
+  publishing identities, each exchanged for a short-lived token at each publish: npm and Open VSX accept `release.yml`
+  in the `npm` and `open-vsx` environments, and the Marketplace's Azure identity accepts any job in the
+  `vscode-marketplace` environment (`release.yml` and `vscode-publisher.yml`); the three environments deploy only from
+  `main`. The accounts behind them: the maintainer's GitHub account (an organization owner; the organization requires
+  two-factor authentication), the npm account, the Marketplace publisher, the Open VSX namespace and the Azure
+  subscription that holds the Marketplace identity.
+- **Dependencies.** The npm packages in `pnpm-lock.yaml`, bundled into the CLI, the action and the extension, and the
+  build tools that run in CI; and `@ciatlas/core`, a git dependency on a release tag of ciatlas/core, which has the
+  same maintainer.
+- **The released artifacts.** The npm package, the action at its tags (including the floating tag of each minor line,
+  such as `v0.12`), the `.vsix` on the two registries, the signed files of each GitHub release, and this site, which
+  `docs.yml` deploys to GitHub Pages from `main`.
+
+## Trust boundaries
+
+1. **Repository to flowpact.** Everything read from the analyzed repository is parsed as untrusted data, and read only
+   from inside the repository.
+2. **flowpact to its readers.** Output goes to the runner's log, GitHub's annotations and job summary, a terminal and
+   an editor, and each of them reads some text as commands or markup.
+3. **Config to code.** Loading a plugin turns repository content into code that runs. The only control is whether it
+   loads.
+4. **Workflow to command line.** A workflow may put untrusted text, such as a pull request title, into a flag value.
+5. **Dependencies to the bundle.** Third-party code enters flowpact's artifacts when CI builds them.
+6. **Release workflow to registries.** The publishing identities and the release bot's key turn a commit on `main`
+   into what users install.
+7. **Registries to users.** Users get flowpact from npm, the action's tags, the Marketplace or Open VSX, and can check
+   it against the signed GitHub release.
+
+## Threats, ranked
+
+Likelihood and impact are rated low, medium or high. The rank is likelihood times impact before mitigation, and ties
+are ordered by the residual risk.
+
+| Rank | Threat | Likelihood | Impact | Residual risk |
+| --- | --- | --- | --- | --- |
+| 1 | [Plugins run on untrusted code](#plugins-run-on-untrusted-code) | medium | high | medium |
+| 2 | [A compromised dependency](#a-compromised-dependency) | medium | high | medium |
+| 3 | [Injection through output](#injection-through-output) | high | medium | low |
+| 4 | [Writes through symlinks](#writes-through-symlinks) | medium | high | low |
+| 5 | [A stolen release-bot key or publishing credential](#a-stolen-release-bot-key-or-publishing-credential) | low | high | medium |
+| 6 | [A compromised `@ciatlas/core` release](#a-compromised-ciatlascore-release) | low | high | low |
+| 7 | [A tampered release](#a-tampered-release) | low | high | low |
+| 8 | [Argument injection through flag values](#argument-injection-through-flag-values) | low | high | low |
+| 9 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
+
+### Plugins run on untrusted code
+
+A pull request adds a plugin to the config, or changes one the config lists. A CI job that runs flowpact on that
+checkout with plugins on runs the pull request's code with the job's token and secrets; on a developer's machine, it
+runs with the user's rights.
+
+- **Mitigation.** In the action, `plugins: auto` (the default) loads no plugin from the checkout on
+  `pull_request_target` and `workflow_run` (`pluginsAllowed` and `UNTRUSTED_EVENTS` in `packages/action/src/main.ts`).
+  A file of the `plugin` input that lies in the checkout is skipped there too, and the step warns that it skipped
+  them. The extension declares limited support for untrusted workspaces, with `flowpact.plugins` restricted
+  (`packages/vscode/package.json`), and turns plugins on in the language server only in a trusted workspace
+  (`serverSettings` in `packages/vscode/src/settings.ts`). The language server loads none unless the client asks
+  (`packages/language-server/src/settings.ts`), and then only for repositories inside the workspace folders
+  (`packages/language-server/src/workspace.ts`). The CLI skips the config's plugins when `--no-plugins` appears
+  anywhere in its arguments (`createContext` in `packages/cli/src/shared.ts`). A base config cannot list plugins
+  (`REPOSITORY_ONLY` in `packages/lint/src/config.ts`). Plugins are local files that `loadPlugins` imports
+  (`packages/lint/src/plugins.ts`); flowpact never downloads or installs one.
+- **Tests.** `packages/action/test/main.test.ts` (plugins on untrusted events, files of the `plugin` input in the
+  checkout), `packages/vscode/test/settings.test.ts`, `packages/language-server/test/server.test.ts` (plugins only
+  when the client trusts the workspace), `packages/cli/test/cli.e2e.test.ts` (`--no-plugins` and `--plugin`),
+  `packages/lint/test/config.test.ts` (plugins in a base config).
+- **Residual risk: medium.** A loaded plugin can read the `token` input, the environment and the file system.
+  `plugins: auto` goes by the event name only: a workflow that checks out a pull request's code on another event, such
+  as `issue_comment`, while it holds secrets, runs that pull request's plugins. Set `plugins: false` there. The CLI
+  loads the config's plugins by default, so a script that runs it on code it does not trust must pass `--no-plugins`.
+
+### A compromised dependency
+
+A malicious version of a package that flowpact bundles, or of a tool that builds or publishes it, is published to npm.
+
+- **Mitigation.** Users install nothing but flowpact's own files: the npm package declares no dependencies
+  (`scripts/check-pack.mjs` fails CI and the publish otherwise), the action runs its committed bundle, and the
+  extension bundles the language server. A dependency reaches users only inside a flowpact release. Versions and
+  integrity hashes are fixed in `pnpm-lock.yaml`, and every workflow installs with `--frozen-lockfile`. pnpm runs
+  install scripts only for esbuild (`allowBuilds` in `pnpm-workspace.yaml`), and the jobs that publish the extension
+  install with `--ignore-scripts`. Renovate proposes a version only two days after it was published
+  (`minimumReleaseAge` in `renovate.json`, except for `@ciatlas/core` and updates that only pin the version in use)
+  and raises OSV vulnerability alerts. Its pull requests must pass every required check; non-major updates then merge
+  without review, but nothing ships until the maintainer merges the release pull request. The extension is built in a
+  job with read access only (`vscode-package` in `release.yml`), and so is this site (the `build` job of `docs.yml`;
+  only its `deploy` job, which runs no build tool, can write to GitHub Pages). Each artifact lists what it bundles in
+  `THIRD_PARTY_LICENSES.txt` and a CycloneDX SBOM (`scripts/bundle-licenses.ts`).
+- **Tests.** `scripts/test/bundle-licenses.test.ts`; CI's **Action bundle is up to date** job, which rebuilds the
+  action and fails when the result differs from the committed bundle; `scripts/check-pack.mjs`, in CI and before the
+  npm publish.
+- **Residual risk: medium.** Third-party actions, pinned to a commit SHA, also update themselves after two days
+  (non-major) and run with the release bot's key or a publishing identity as soon as they are on `main`. A malicious
+  patch version that goes unnoticed for two days and passes the tests merges itself and ships with the next release;
+  reviewing the release pull request is unlikely to catch it in the rebuilt bundle. Third-party packages also run in
+  jobs that hold credentials: the release pull request job rebuilds the action bundle with the release bot's token
+  (`contents: write`), the npm job builds the package with the npm publishing identity, and the Marketplace and Open
+  VSX jobs of `release.yml`, and `vscode-publisher.yml`, run the lockfile-pinned vsce and ovsx with a publishing
+  identity (`--ignore-scripts` stops only their install scripts). A compromised package there could push to branches
+  other than `main`, move a floating tag, publish to npm with valid provenance, or publish the extension.
+
+### Injection through output
+
+Names, descriptions and source lines from the analyzed files appear in flowpact's output. A pull request can choose
+them to forge annotations or hide later log lines with workflow commands (`::…` at the start of a line, `##[…]`
+anywhere), to rewrite a terminal with escape sequences, or to add HTML, links, images or @mentions to the job summary.
+
+- **Mitigation.** `neutralizeWorkflowCommands` (core `src/text.ts`) puts a zero-width space into every line the runner
+  would read as a command: `::` at its start (after whitespace, U+0085 or color codes) and `##[` anywhere. The CLI
+  applies it to every string written to stdout and stderr (`packages/cli/src/index.ts`) and to every text report it
+  writes (`writeOutput` in `packages/cli/src/shared.ts`); the API's text output and the action's log lines use it too.
+  JSON and SARIF are written with `jsonSafe` (core), which encodes `##[` and the Unicode line separators. The only
+  workflow commands flowpact prints on purpose, annotations, have every value escaped (`workflowCommands` in
+  `packages/reporters/src/kit/github.ts`; the action uses `@actions/core`). For terminals, `escapeControl` (core) and
+  `safe` (`packages/reporters/src/kit/theme.ts`) print C0 and C1 control characters, ESC included, as visible escapes,
+  and colors and OSC 8 links appear only when asked for. For Markdown, `markdownText`
+  (`packages/reporters/src/kit/markdown.ts`) escapes HTML, link brackets and backslashes, keeps code spans balanced
+  and breaks @mentions; the job summary is cut to fit GitHub's 1 MiB limit (`summaryWithinLimit`). Hovers in the
+  editor show repository text escaped or as inline code (`packages/language-server/src/hover.ts`).
+- **Tests.** `test/text.test.ts` (core); `packages/cli/test/cli.e2e.test.ts` and `packages/cli/test/api.test.ts` (no
+  line GitHub would run as a workflow command, control characters from the YAML);
+  `packages/reporters/test/github.test.ts` (nothing can end an annotation early);
+  `packages/reporters/test/markdown.test.ts` (Markdown escaping of untrusted names);
+  `packages/reporters/test/reporters.test.ts` (colors and OSC 8 links only when asked);
+  `packages/lint/test/review-round3.test.ts`; `packages/language-server/test/hover.test.ts`.
+- **Residual risk: low.** Unicode bidirectional controls and look-alike characters are printed as they are, so a name
+  can read differently from what it is. GitHub still turns bare URLs in the job summary into links. Patches and
+  contracts are written byte for byte, as git must apply them; a later step that prints them prints text from the pull
+  request. No test runs the action's own log lines against hostile names; they go through the same function as the
+  CLI's.
+
+### Writes through symlinks
+
+A pull request commits a symlink where flowpact writes: a contract file, a report file, or a directory on the way to
+one. Followed, the link would let a write in CI land outside the repository, such as in the runner's home directory or
+another checkout, or in its `.git` directory.
+
+- **Mitigation.** For reports, patches, `--dump-graph` and `generate --out`, `assertSafeWritePath`
+  (`packages/lint/src/contracts.ts`) refuses a path that leads into the repository (or, in GitHub Actions, the
+  workspace; `protectedTrees` in `packages/cli/src/lib/targets.ts`) and then is a symlink itself, goes through a
+  symlink that lies inside that tree, even a linked directory that stays in it, such as one into `.git`
+  (`followsLinkIn`), or resolves outside it. It compares canonical real paths, so another spelling of a directory does
+  not skip the check, and links outside the tree, such as `/tmp` for `/private/tmp`, are still followed. The CLI's
+  reports, patches and graphs (`writeOutput`), `generate --out` (`writeContracts`) and the action's reports
+  (`writeReport`) are all written through it. `writeContracts` checks every contract before it writes or deletes any,
+  and refuses one that is a symlink, goes through one in the repository (`followsLinkIn`), or resolves outside the
+  repository or into `.git` (`insideRepository` in core `src/project.ts`). Reads are kept inside the repository and
+  out of `.git` too, the default config included (`loadConfig` in `packages/lint/src/config.ts`). The action writes
+  the drift artifact to the runner's temporary directory, or, outside GitHub Actions, to a new private directory
+  (`driftArtifact`).
+- **Tests.** `packages/lint/test/review-round3.test.ts` and `packages/lint/test/review-round2.test.ts` (writes and
+  reads through symlinks, linked directories in the repository, `.git`, the config);
+  `packages/cli/test/cli.e2e.test.ts` (reports, `--out` and contracts written in place, through a symlink or a linked
+  directory in the repository, also one into `.git`, refused before anything is written);
+  `packages/action/test/main.test.ts` (a report through a symlink or a linked directory in the checkout, also one into
+  `.git`; the drift artifact's folder); `test/project.test.ts` (core; reads through symlinks out of the repository,
+  into `.git` or up out of it).
+- **Residual risk: low.** The check runs before the write, and files are not opened with `O_NOFOLLOW`: a process that
+  changes the directory in between, such as a step running in the background, can still redirect a write. Paths
+  outside the repository and the workspace, such as `$GITHUB_STEP_SUMMARY`, are written as given. Versions before
+  0.12.3 followed some of these links; the
+  [security policy](https://github.com/ciatlas/flowpact/blob/main/SECURITY.md#security-fixes-in-past-releases) lists
+  which.
+
+### A stolen release-bot key or publishing credential
+
+Someone gets the release bot's private key, or the credentials of an account that can publish flowpact.
+
+- **Mitigation.** The key is an organization secret that only the workflows of ciatlas/flowpact and ciatlas/core can
+  read. In this repository, three workflows use it: `release.yml` (the release pull request and the floating tag),
+  `repo-settings.yml` (applying the rulesets and settings files from `main`, the only job that asks for
+  administration) and the commit job of `dependency-bundle.yml`, which runs nothing from the branch it commits to.
+  Each job asks only for the permissions it needs (the `permission-*` inputs of `actions/create-github-app-token`).
+  `CONTRIBUTING.md` describes how to rotate the key. No publishing token is stored in GitHub: npm and Open VSX accept
+  the release workflow (`release.yml`) in their environments, and the Marketplace's Azure identity accepts any job in
+  the `vscode-marketplace` environment (`release.yml` and `vscode-publisher.yml`); each issues a short-lived token,
+  and those environments deploy only from `main` (`.github/environments.json`). Every `flowpact` version from 0.2.1 on
+  was published through npm trusted publishing, with provenance. Nobody can push to `main`, no one is exempt from its
+  checks (the `main` ruleset has no bypass), the organization requires two-factor authentication, and secret scanning
+  with push protection runs on the repository.
+- **Tests.** None in the test suite. `repo-settings.yml` shows how the live rulesets and settings differ from the
+  files on every pull request that changes them, and applies them on every push to `main` that changes them, and
+  every week.
+- **Residual risk: medium.** The app has administration and contents write access. With its key, someone can push to
+  any branch but `main`, create or move `v*` tags other than those of immutable releases (0.10.0 and later), so the
+  floating tags and the tags of releases up to 0.9.0 included, and change the rulesets that keep it off `main`; from
+  `main`, a changed release workflow would publish everywhere with valid provenance. Workflows that pin the action to
+  a commit SHA do not follow a moved tag. Accounts outside GitHub can publish without the pipeline: the npm account
+  (the only owner of `flowpact` and of the deprecated `workflow-contracts`, which published their `0.0.0-stage`
+  placeholders by hand; `flowpact` 0.2.0 and `workflow-contracts` 0.1.0 came from the release workflow with its
+  token), the Marketplace publisher's members, the owner of the Open VSX namespace and the Azure subscription that
+  holds the Marketplace identity. A version published that way has no build provenance and no signed GitHub release,
+  which the checks under [Verify a release](/docs/security#verify-a-release) show. With one maintainer, the
+  maintainer's GitHub account, an organization owner, is a single point of compromise for all of the above.
+
+### A compromised `@ciatlas/core` release
+
+Someone releases a malicious version of the workflow model, or moves one of its tags.
+
+- **Mitigation.** Every package depends on the same release tag, and `pnpm-lock.yaml` pins it to a commit, with a
+  sha512 hash of its tarball; with `--frozen-lockfile`, a moved tag changes nothing until the lockfile does.
+  `scripts/test/core-dependency.test.ts` fails unless every package names the same release tag, nothing links a local
+  checkout, and the lockfile resolves it to a commit whose version is the tag's. ciatlas/core has the same branch and
+  tag rulesets as this repository, and immutable releases. A new core arrives as a Renovate pull request that runs the
+  whole suite, and ships only in a release that the maintainer merges. The SBOM names it
+  `pkg:github/ciatlas/core@vX.Y.Z`.
+- **Tests.** `scripts/test/core-dependency.test.ts`; `scripts/test/bundle-licenses.test.ts` (a git dependency on a
+  version tag is named by its repository and tag).
+- **Residual risk: low.** Core has the same maintainer, organization and release bot key, so the
+  [stolen key](#a-stolen-release-bot-key-or-publishing-credential) threat applies to it too. Core updates skip
+  Renovate's two-day wait, and a patch update merges itself once the checks pass.
+
+### A tampered release
+
+Someone changes what users download: a file of a GitHub release, the action at a tag, the npm tarball or the `.vsix`.
+
+- **Mitigation.** Releases are built only by `release.yml`, from a tag that the workflow checks exists. A release
+  stays a draft until every signed file is attached, and immutable releases, enabled in this repository (from 0.10.0)
+  and in ciatlas/core, lock its tag and files once it is published. Each artifact has a Sigstore bundle, in-toto build
+  provenance and an attested SBOM (`actions/attest`), and the npm package has npm provenance. The action's bundle is
+  committed and rebuilt in CI, and CI builds its release archive twice and compares the bytes
+  (`scripts/action-archive.sh`). The jobs that publish the extension check the `.vsix` against the release's file
+  (SHA-256) before they upload it. The published npm package is smoke-tested on Linux, macOS and Windows. [Verify a
+  release](/docs/security#verify-a-release) gives the commands to check each artifact.
+- **Tests.** CI's **Action bundle is up to date** job (the bundle and the archive are reproducible); the release
+  workflow's smoke tests of the published package.
+- **Residual risk: low.** Releases up to 0.9.0 are not immutable: an admin or the release bot can still move their
+  tags. Verification is up to the user. The floating tag of a minor line, such as `v0.12`, belongs to no release and
+  moves with each one, so a workflow that uses it trusts whoever can move it; pin a commit SHA instead. The
+  Marketplace and Open VSX serve their own copy of the `.vsix`, which can be compared with the signed release file
+  only by hand. Releases up to 0.11.1 verify under the old owner. The two `0.0.0-stage` placeholders, the first
+  versions of `flowpact` and `workflow-contracts` on npm, contain no code, have no provenance and are deprecated, like
+  the rest of `workflow-contracts`.
+
+### Argument injection through flag values
+
+A workflow passes untrusted text as a flag value, such as `--title "$PR_TITLE"`. Read as arguments, a title such as
+`--plugin=x.js`, `--` or `--help` could load a plugin, redirect a report, turn off `--no-plugins` or end the run.
+
+- **Mitigation.** Before citty reads the arguments, `normalizeArgv` (`packages/cli/src/shared.ts`) attaches every
+  value of a string flag to its flag (`--title X` becomes `--title=X`), and `repeatedFlag` reads repeated flags with
+  `node:util`'s `parseArgs`, so a value is never taken for another flag. Options before the command are a usage error.
+  Git runs without a shell; refs that start with `-` are refused, and other refs are passed after `--end-of-options`
+  (`resolveCommit` in core `src/git.ts`). The action reads its inputs from `with:`, not from a command line.
+- **Tests.** `packages/cli/test/args.test.ts`; `packages/cli/test/cli.e2e.test.ts` (a pull request title as `--plugin`
+  or `-o`, as `--`, as `--help`); `test/git.test.ts` (core; refs such as `--output=/tmp/x` are refused before git
+  runs).
+- **Residual risk: low.** Only flag values are protected. A positional argument, such as a path, that starts with `-`
+  is still read as an option; put untrusted paths after `--` (`flowpact lint -- "$PATHS"`). Quoting is the workflow's
+  job: pass untrusted text through `env:`, not by expression interpolation in `run:`.
+
+### Resource exhaustion
+
+A file built so that analyzing it takes disproportionate memory or time: YAML aliases that multiply, a matrix with a
+huge product, symlink loops or linked directories that fan out, or text that makes a regular expression backtrack.
+
+- **Mitigation.** Before resolving aliases, core counts the nodes they would produce; past 50,000 the file is not
+  analyzed and gets `FP504` (`aliasExpansionTooLarge` in core `src/parse.ts`). Matrix products above 20,000
+  combinations are not enumerated (`MAX_COMBINATIONS` in core `src/matrix.ts`), and more than 256 jobs is reported
+  (`FP406`). Directory walks follow at most 40 links in a path and expand at most 1,000 linked directories, keeping
+  the shallowest (`MAX_LINKS` and `MAX_LINKED_DIRS` in core `src/project.ts` and `src/git.ts`). Output read from git
+  is capped at 256 MiB. CodeQL's extended queries check the regular expressions, and code they flagged for
+  backtracking (`js/polynomial-redos`) was rewritten to run in linear time, such as `trimChar` in core `src/text.ts`.
+  The job summary stays under 1 MiB.
+- **Tests.** `packages/lint/test/review-round2.test.ts` (an alias bomb stops with `FP504` within 2 seconds; matrices
+  up to 256 jobs pass, and a product of 22,500 jobs is reported as at least that many);
+  `packages/lint/test/review-round3.test.ts` (an alias bomb in the config); `packages/lint/test/code-scanning.test.ts`
+  (linear time on adversarial input); `packages/lint/test/robustness.test.ts` (a property test: arbitrary
+  workflow-shaped input never throws); `test/matrix.test.ts`, `test/project.test.ts` and `test/git.test.ts` (core;
+  large products, a directory linked into itself, fan-out, link depth); `packages/action/test/main.test.ts` (the job
+  summary limit).
+- **Residual risk: low.** The size and number of files are not capped: time and memory grow with them, and in CI the
+  job's timeout is the limit.

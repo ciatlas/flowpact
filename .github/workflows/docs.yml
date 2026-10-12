@@ -11,14 +11,14 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: false
 
 jobs:
+  # The build runs the locked dependencies and the CLI with read access only; only the deploy job, which runs no
+  # build tool, can write to GitHub Pages.
   build:
     runs-on: ubuntu-latest
     steps:
@@ -43,6 +43,9 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
