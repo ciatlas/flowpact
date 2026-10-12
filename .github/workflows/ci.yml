@@ -22,6 +22,8 @@ jobs:
         node: ['22', '24']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -47,6 +49,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -66,6 +70,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -105,6 +111,8 @@ jobs:
         vscode: ['1.101.0', stable]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -138,6 +146,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -168,8 +178,10 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: flowpact
-        uses: ./
+        uses: $/
         with:
           mode: lint
           fail-on: warning
@@ -188,9 +200,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - id: incident
         name: lint finds the matrix incident
-        uses: ./
+        uses: $/
         with:
           working-directory: fixtures/incident-matrix
           fail-on: never
@@ -208,7 +222,7 @@ jobs:
   artifact-upload:
     # The contract drift artifact, uploaded for real and downloaded again; the same workflow also runs weekly.
     name: Artifact upload
-    uses: ./.github/workflows/_artifact-upload.yml
+    uses: $/.github/workflows/_artifact-upload.yml
 
   fallow:
     # Code health (fallow.tools, policy in .fallowrc.jsonc): no unused files, exports or dependencies and no duplicated
@@ -224,6 +238,7 @@ jobs:
         with:
           # The audit compares the pull request with its base branch.
           fetch-depth: 0
+          persist-credentials: false
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -239,11 +254,30 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: pnpm exec fallow audit --base "origin/$BASE_REF"
 
+  zizmor:
+    # Workflow security (zizmor.sh): template injection, credentials left in the checkout, cache poisoning, unpinned or
+    # impostor actions and more, in this repository's workflows and in the action's own action.yml. flowpact checks how
+    # data flows through workflows; zizmor checks how they can be attacked. Findings fail the job and annotate the
+    # pull request.
+    name: Workflow security (zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        with:
+          # The fixtures are test inputs that are unsafe on purpose.
+          inputs: .github/workflows action.yml
+          version: 1.30.1
+          advanced-security: false
+          annotations: true
+
   ci-passed:
     # The only required status check: add new jobs to `needs` instead of changing the branch rules.
     name: CI passed
     if: always()
-    needs: [test, fallow, docs, smoke, vscode, action-dist, action-dogfood, action-smoke, artifact-upload]
+    needs: [test, fallow, zizmor, docs, smoke, vscode, action-dist, action-dogfood, action-smoke, artifact-upload]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

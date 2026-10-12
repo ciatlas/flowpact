@@ -148,7 +148,8 @@ Pin the action to the commit you verified: `uses: ciatlas/flowpact@<commit-sha> 
   its own pull requests (non-major updates, once the checks pass). The rules are kept in `.github/rulesets/`, and a
   weekly run reverts changes made in the settings UI.
   [MAINTAINERS.md](https://github.com/ciatlas/flowpact/blob/main/MAINTAINERS.md) lists who has access to what.
-- CodeQL (extended queries), secret scanning with push protection, dependency updates (Renovate) and the
+- CodeQL (extended queries), [zizmor](https://docs.zizmor.sh) on the workflows and `action.yml` on every pull request,
+  secret scanning with push protection, dependency updates (Renovate) and the
   [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact) run on the repository.
 - Vulnerabilities are reported privately, and only the latest release receives fixes; see the
   [security policy](https://github.com/ciatlas/flowpact/security/policy), which also lists the

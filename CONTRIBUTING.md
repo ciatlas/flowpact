@@ -67,7 +67,7 @@ fails when they are out of date.
 `main` is protected: changes land through pull requests that pass the **CI passed** and **Conventional PR title**
 checks, are approved by a code owner (`.github/CODEOWNERS`), and are squash-merged. GitHub does not let authors
 approve their own pull requests, so repository admins may merge any pull request without an approving review (the
-`main reviews` ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed** sums up every CI job — tests on Node 22 and 24, code health (fallow), the docs build, smoke
+`main reviews` ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed** sums up every CI job — tests on Node 22 and 24, code health (fallow), workflow security (zizmor), the docs build, smoke
 tests of the packed CLI on Linux, macOS and Windows, and the GitHub Action on this repository and on fixtures. New
 checks are added as jobs to `.github/workflows/ci.yml` and listed under the `ci-passed` job's `needs`.
 
