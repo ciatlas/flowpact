@@ -1,6 +1,6 @@
 {
   "name": "@flowpact/language-server",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "private": true,
   "description": "Language server for flowpact: diagnostics, hover traces, go to definition and references across workflow calls.",
   "type": "module",
