@@ -15,13 +15,17 @@
   <a href="https://ciatlas.github.io/flowpact">Docs</a>
 </p>
 
-[![CI](https://github.com/ciatlas/flowpact/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ciatlas/flowpact/actions/workflows/ci.yml)
-[![Release](https://github.com/ciatlas/flowpact/actions/workflows/release.yml/badge.svg?branch=main)](https://github.com/ciatlas/flowpact/actions/workflows/release.yml)
-[![npm](https://img.shields.io/npm/v/flowpact?logo=npm)](https://www.npmjs.com/package/flowpact)
-[![Node.js](https://img.shields.io/node/v/flowpact?logo=nodedotjs)](https://www.npmjs.com/package/flowpact)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ciatlas/flowpact/badge)](https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15403/badge)](https://www.bestpractices.dev/projects/15403)
-[![License: MIT](https://img.shields.io/github/license/ciatlas/flowpact)](LICENSE)
+<p align="center">
+  <a href="https://github.com/ciatlas/flowpact/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ciatlas/flowpact/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://github.com/ciatlas/flowpact/actions/workflows/release.yml"><img alt="Release" src="https://github.com/ciatlas/flowpact/actions/workflows/release.yml/badge.svg?branch=main"></a>
+  <a href="https://www.npmjs.com/package/flowpact"><img alt="npm" src="https://img.shields.io/npm/v/flowpact?logo=npm"></a>
+  <a href="https://www.npmjs.com/package/flowpact"><img alt="Node.js" src="https://img.shields.io/node/v/flowpact?logo=nodedotjs"></a>
+  <br>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact"><img alt="OpenSSF Scorecard" src="https://api.scorecard.dev/projects/github.com/ciatlas/flowpact/badge"></a>
+  <a href="https://www.bestpractices.dev/projects/15403"><img alt="OpenSSF Best Practices" src="https://www.bestpractices.dev/projects/15403/badge"></a>
+  <a href="https://www.bestpractices.dev/projects/15403/baseline-2"><img alt="OpenSSF Baseline" src="https://www.bestpractices.dev/projects/15403/baseline"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/ciatlas/flowpact"></a>
+</p>
 
 **Data-flow linter for GitHub Actions.**
 
@@ -158,6 +162,20 @@ the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`), the GitHub 
 type, hover traces, go to definition across workflow calls; also on
 [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor, then
 cross-repository resolution — see the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
+
+## Security
+
+flowpact reads the repository it analyzes as untrusted input, and its releases are built only by GitHub Actions,
+signed, and published with provenance and an SBOM. It holds the
+[OpenSSF Best Practices](https://www.bestpractices.dev/projects/15403) badge at the passing level and meets the
+[OpenSSF Baseline](https://www.bestpractices.dev/projects/15403/baseline-2) at level 2; at level 1 it meets every
+control but one, because the GitHub Action's bundle is committed to the repository so that `uses:` can run it.
+
+- [Security](https://ciatlas.github.io/flowpact/docs/security): what flowpact reads, writes and sends, and how to
+  verify a release.
+- [Threat model](https://ciatlas.github.io/flowpact/docs/threat-model): its threats ranked, with the code and tests
+  that defend against them.
+- [Security policy](SECURITY.md): how to report a vulnerability, and the fixes in past releases.
 
 ## Feedback and contributing
 

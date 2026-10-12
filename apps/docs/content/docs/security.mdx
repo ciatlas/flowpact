@@ -154,4 +154,7 @@ Pin the action to the commit you verified: `uses: ciatlas/flowpact@<commit-sha> 
   [security policy](https://github.com/ciatlas/flowpact/security/policy), which also lists the
   [security fixes in past releases](https://github.com/ciatlas/flowpact/blob/main/SECURITY.md#security-fixes-in-past-releases).
 - flowpact meets the [OpenSSF Best Practices](https://www.bestpractices.dev/projects/15403) criteria at the passing
-  level; `.bestpractices.json` in the repository records each answer and its evidence.
+  level and the [OpenSSF Baseline](https://www.bestpractices.dev/projects/15403/baseline-2) at level 2. At level 1 it
+  meets every control but OSPS-QA-05.01 (no generated executables in version control): the GitHub Action's bundle is
+  committed so that `uses:` can run it, and CI rebuilds it from source on every pull request and fails on any
+  difference. `.bestpractices.json` in the repository records each answer and its evidence.
