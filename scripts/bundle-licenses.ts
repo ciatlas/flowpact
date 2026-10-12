@@ -28,6 +28,11 @@ export interface BundleLicensesOptions {
   version: string;
   /** What the bundle is, for the first line of the notices, e.g. "The flowpact command-line tool". */
   description: string;
+  /**
+   * The product's package URL, when it is not an npm package: the GitHub Action is `pkg:github/<owner>/<repo>@v<version>`
+   * and the VS Code extension `pkg:vscode-extension/<publisher>/<name>@<version>`. Default: `pkg:npm/<name>@<version>`.
+   */
+  purl?: string;
 }
 
 interface BundledPackage {
@@ -93,6 +98,8 @@ function readPackage(root: string): BundledPackage | undefined {
 
 const purl = (name: string, version: string) =>
   `pkg:npm/${name.startsWith('@') ? `%40${name.slice(1)}` : name}@${version}`;
+
+const productPurl = (opts: BundleLicensesOptions) => opts.purl ?? purl(opts.name, opts.version);
 
 /** `owner/repo` of a manifest's GitHub `repository` (`github:owner/repo`, `owner/repo` or a github.com URL). */
 function githubRepository(pkg: Record<string, unknown>): string | undefined {
@@ -182,10 +189,10 @@ function sbom(opts: BundleLicensesOptions, packages: BundledPackage[]): string {
       metadata: {
         component: {
           type: 'application',
-          'bom-ref': purl(opts.name, opts.version),
+          'bom-ref': productPurl(opts),
           name: opts.name,
           version: opts.version,
-          purl: purl(opts.name, opts.version),
+          purl: productPurl(opts),
           licenses: [{ license: { id: 'MIT' } }],
         },
       },
@@ -198,7 +205,7 @@ function sbom(opts: BundleLicensesOptions, packages: BundledPackage[]): string {
         licenses: licenses(p.license),
         ...(p.homepage ? { externalReferences: [{ type: 'website', url: p.homepage }] } : {}),
       })),
-      dependencies: [{ ref: purl(opts.name, opts.version), dependsOn: packages.map((p) => p.purl) }],
+      dependencies: [{ ref: productPurl(opts), dependsOn: packages.map((p) => p.purl) }],
     },
     null,
     2,

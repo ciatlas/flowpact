@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 import { bundleLicenses } from '../../scripts/bundle-licenses';
+import location from '../lint/src/location.json' with { type: 'json' };
 import pkg from './package.json' with { type: 'json' };
 
 export default defineConfig({
@@ -32,6 +33,8 @@ export default defineConfig({
       name: 'flowpact-action',
       version: pkg.version,
       description: 'The flowpact GitHub Action',
+      // The action is not an npm package: it is this repository at the release tag.
+      purl: `pkg:github/${location.repository.toLowerCase()}@v${pkg.version}`,
     }),
   ],
 });

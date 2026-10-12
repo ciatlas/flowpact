@@ -6,10 +6,10 @@
   "metadata": {
     "component": {
       "type": "application",
-      "bom-ref": "pkg:npm/flowpact-action@0.12.3",
+      "bom-ref": "pkg:github/ciatlas/flowpact@v0.12.3",
       "name": "flowpact-action",
       "version": "0.12.3",
-      "purl": "pkg:npm/flowpact-action@0.12.3",
+      "purl": "pkg:github/ciatlas/flowpact@v0.12.3",
       "licenses": [
         {
           "license": {
@@ -363,7 +363,7 @@
   ],
   "dependencies": [
     {
-      "ref": "pkg:npm/flowpact-action@0.12.3",
+      "ref": "pkg:github/ciatlas/flowpact@v0.12.3",
       "dependsOn": [
         "pkg:npm/%40actions/core@3.0.1",
         "pkg:npm/%40actions/exec@3.0.0",

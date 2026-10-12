@@ -12,6 +12,8 @@ const licenses = bundleLicenses({
   name: 'vscode-flowpact',
   version: pkg.version,
   description: 'The flowpact extension for VS Code',
+  // The extension is not an npm package: it is `<publisher>.<name>` on the VS Code Marketplace and Open VSX.
+  purl: `pkg:vscode-extension/${pkg.publisher.toLowerCase()}/${pkg.name.toLowerCase()}@${pkg.version}`,
 });
 
 const compact = (options: { minifyWhitespace?: boolean; minifySyntax?: boolean }) => {

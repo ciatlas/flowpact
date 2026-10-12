@@ -11,14 +11,18 @@ describe('what the committed action bundle contains', () => {
     bomFormat: string;
     specVersion: string;
     serialNumber: string;
-    metadata: { component: { name: string; version: string } };
+    metadata: { component: { name: string; version: string; purl: string } };
     components: { name: string; version: string; licenses: unknown[] }[];
   };
   const notices = read('packages/action/dist/THIRD_PARTY_LICENSES.txt');
 
   it('lists the same packages in the SBOM and the notices, each with a license', () => {
     const { version } = JSON.parse(read('packages/action/package.json')) as { version: string };
-    expect(sbom.metadata.component).toMatchObject({ name: 'flowpact-action', version });
+    expect(sbom.metadata.component).toMatchObject({
+      name: 'flowpact-action',
+      version,
+      purl: `pkg:github/ciatlas/flowpact@v${version}`,
+    });
     expect(notices).toContain(
       `bundles the code of the following ${sbom.components.length} third-party packages`,
     );
