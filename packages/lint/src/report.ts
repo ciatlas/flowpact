@@ -1,30 +1,36 @@
 import type { Loc, ProjectIndex } from '@ciatlas/core';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import type { AnalysisResult } from './analyze';
 import { schemaUrl } from './version';
+import { described } from './zod';
+
+/** A whole number, as the report's JSON Schema says (`type: integer`). */
+const int = () => z.number().check(z.int());
+const positiveInt = () => z.number().check(z.int(), z.positive());
+const LEVEL = ['none', 'patch', 'minor', 'major'] as const;
 
 const locSchema = z.object({
   file: z.string(),
-  line: z.number().int().positive(),
-  column: z.number().int().positive(),
-  endLine: z.number().int().positive(),
-  endColumn: z.number().int().positive(),
+  line: positiveInt(),
+  column: positiveInt(),
+  endLine: positiveInt(),
+  endColumn: positiveInt(),
 });
 
 export const findingSchema = z.object({
-  code: z.string().regex(/^[A-Z][A-Z0-9]{1,9}\d{3}$/),
+  code: z.string().check(z.regex(/^[A-Z][A-Z0-9]{1,9}\d{3}$/)),
   name: z.string(),
   severity: z.enum(['error', 'warning', 'info']),
   category: z.string(),
   message: z.string(),
   loc: locSchema,
   related: z.array(z.object({ loc: locSchema, message: z.string() })),
-  combos: z.array(z.string()).optional(),
-  symbol: z.string().optional(),
+  combos: z.optional(z.array(z.string())),
+  symbol: z.optional(z.string()),
   why: z.string(),
   fix: z.string(),
   docsUrl: z.url(),
-  fingerprint: z.string().regex(/^[0-9a-f]{16}$/),
+  fingerprint: z.string().check(z.regex(/^[0-9a-f]{16}$/)),
 });
 
 export const reportSchema = z.object({
@@ -36,97 +42,91 @@ export const reportSchema = z.object({
     node: z.string(),
     platform: z.string(),
     root: z.string(),
-    configFile: z.string().optional(),
-    repository: z.string().optional(),
-    durationMs: z.number().nonnegative(),
+    configFile: z.optional(z.string()),
+    repository: z.optional(z.string()),
+    durationMs: z.number().check(z.nonnegative()),
   }),
   summary: z.object({
-    errors: z.number().int(),
-    warnings: z.number().int(),
-    infos: z.number().int(),
-    total: z.number().int(),
-    workflows: z.number().int(),
-    actions: z.number().int(),
-    jobs: z.number().int(),
-    matrixCombinations: z.number().int(),
-    graph: z.object({ nodes: z.number().int(), edges: z.number().int() }),
-    byCode: z.record(z.string(), z.number().int()),
-    byFile: z.record(z.string(), z.number().int()),
-    suppressed: z.number().int(),
-    skippedInGenerated: z
-      .number()
-      .int()
-      .optional()
-      .describe('Findings not reported because they are about the internals of generated files.'),
+    errors: int(),
+    warnings: int(),
+    infos: int(),
+    total: int(),
+    workflows: int(),
+    actions: int(),
+    jobs: int(),
+    matrixCombinations: int(),
+    graph: z.object({ nodes: int(), edges: int() }),
+    byCode: z.record(z.string(), int()),
+    byFile: z.record(z.string(), int()),
+    suppressed: int(),
+    skippedInGenerated: described(
+      z.optional(int()),
+      'Findings not reported because they are about the internals of generated files.',
+    ),
   }),
   findings: z.array(findingSchema),
   suppressed: z.array(
-    findingSchema.extend({
+    z.extend(findingSchema, {
       override: z.object({
-        index: z.number().int(),
+        index: int(),
         reason: z.string(),
-        expires: z.string().optional(),
-        owner: z.string().optional(),
+        expires: z.optional(z.string()),
+        owner: z.optional(z.string()),
       }),
     }),
   ),
-  contracts: z
-    .object({
+  contracts: z.optional(
+    z.object({
       drift: z.boolean(),
-      breaking: z.number().int(),
-      counts: z.object({
-        create: z.number().int(),
-        update: z.number().int(),
-        delete: z.number().int(),
-        unchanged: z.number().int(),
-      }),
+      breaking: int(),
+      counts: z.object({ create: int(), update: int(), delete: int(), unchanged: int() }),
       entries: z.array(
         z.object({
           file: z.string(),
           status: z.enum(['create', 'update', 'delete', 'unchanged']),
-          unit: z.string().optional(),
-          invalid: z.string().optional(),
+          unit: z.optional(z.string()),
+          invalid: z.optional(z.string()),
           changes: z.array(z.object({ breaking: z.boolean(), path: z.string(), message: z.string() })),
         }),
       ),
-    })
-    .optional(),
-  impact: z
-    .object({
+    }),
+  ),
+  impact: z.optional(
+    z.object({
       baseline: z.object({ kind: z.enum(['ref', 'release']), ref: z.string(), commit: z.string() }),
-      required: z.enum(['none', 'patch', 'minor', 'major']),
-      declared: z
-        .object({
+      required: z.enum(LEVEL),
+      declared: z.optional(
+        z.object({
           kind: z.enum(['explicit', 'title', 'labels', 'version']),
           value: z.string(),
-          level: z.enum(['none', 'patch', 'minor', 'major']),
-        })
-        .optional(),
+          level: z.enum(LEVEL),
+        }),
+      ),
       ok: z.boolean(),
       changes: z.array(
         z.object({
           unit: z.string(),
           kind: z.string(),
-          level: z.enum(['none', 'patch', 'minor', 'major']),
+          level: z.enum(LEVEL),
           certain: z.boolean(),
           message: z.string(),
           loc: locSchema,
         }),
       ),
-    })
-    .optional(),
+    }),
+  ),
   rules: z.array(
     z.object({ code: z.string(), name: z.string(), severity: z.enum(['error', 'warning', 'info', 'off']) }),
   ),
-  graph: z
-    .object({
+  graph: z.optional(
+    z.object({
       nodes: z.array(
         z.object({
           id: z.string(),
           kind: z.string(),
           label: z.string(),
-          unit: z.string().optional(),
-          loc: locSchema.optional(),
+          unit: z.optional(z.string()),
+          loc: z.optional(locSchema),
         }),
       ),
       edges: z.array(
@@ -134,12 +134,12 @@ export const reportSchema = z.object({
           from: z.string(),
           to: z.string(),
           kind: z.string(),
-          loc: locSchema.optional(),
-          siteId: z.number().int().optional(),
+          loc: z.optional(locSchema),
+          siteId: z.optional(int()),
         }),
       ),
-    })
-    .optional(),
+    }),
+  ),
 });
 
 export type JsonReport = z.infer<typeof reportSchema>;

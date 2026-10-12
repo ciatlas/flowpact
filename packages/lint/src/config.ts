@@ -2,8 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { insideRepository, type Loc } from '@ciatlas/core';
 import { isMap, isSeq, LineCounter, parseDocument } from 'yaml';
-import { z } from 'zod';
+import * as z from 'zod/mini';
 import { SCHEMA_VERSIONS, schemaUrl } from './version';
+import { described } from './zod';
 
 export const CONFIG_DIR = '.github/flowpact';
 export const CONFIG_FILES = ['flowpact.config.yml', 'flowpact.config.yaml'] as const;
@@ -11,163 +12,159 @@ export const CONFIG_FILES = ['flowpact.config.yml', 'flowpact.config.yaml'] as c
 export const severitySettingSchema = z.enum(['error', 'warning', 'info', 'off']);
 
 export const overrideSchema = z
-  .object({
-    rule: z.string().min(1).describe('Rule code (FP104) or name (unused-input) to suppress.'),
-    target: z
-      .string()
-      .optional()
-      .describe(
-        'Symbol the finding is about, e.g. `.github/workflows/ci.yml#inputs.legacy`. Supports `*` and `**`.',
-      ),
-    file: z
-      .string()
-      .optional()
-      .describe('Repo-relative file path, prefix or glob the finding is located in.'),
-    reason: z.string().min(10).describe('Why this finding is accepted. Required, at least 10 characters.'),
-    expires: z.iso
-      .date()
-      .optional()
-      .describe(
-        'YYYY-MM-DD (UTC). After the end of this day the finding is reported again, together with FP901.',
-      ),
-    owner: z.string().optional().describe('Who owns the exception, e.g. `@platform-team`.'),
+  .strictObject({
+    rule: described(
+      z.string().check(z.minLength(1)),
+      'Rule code (FP104) or name (unused-input) to suppress.',
+    ),
+    target: described(
+      z.optional(z.string()),
+      'Symbol the finding is about, e.g. `.github/workflows/ci.yml#inputs.legacy`. Supports `*` and `**`.',
+    ),
+    file: described(
+      z.optional(z.string()),
+      'Repo-relative file path, prefix or glob the finding is located in.',
+    ),
+    reason: described(
+      z.string().check(z.minLength(10)),
+      'Why this finding is accepted. Required, at least 10 characters.',
+    ),
+    expires: described(
+      z.optional(z.iso.date()),
+      'YYYY-MM-DD (UTC). After the end of this day the finding is reported again, together with FP901.',
+    ),
+    owner: described(z.optional(z.string()), 'Who owns the exception, e.g. `@platform-team`.'),
   })
-  .strict()
-  .refine((o) => o.target !== undefined || o.file !== undefined, {
-    message:
-      'set `target` or `file` so the override cannot silence a rule everywhere (use `rules:` for that)',
-  });
+  .check(
+    z.refine((o) => o.target !== undefined || o.file !== undefined, {
+      message:
+        'set `target` or `file` so the override cannot silence a rule everywhere (use `rules:` for that)',
+    }),
+  );
 
 export type Override = z.infer<typeof overrideSchema>;
 
-export const configSchema = z
-  .object({
-    $schema: z.string().optional().describe('JSON Schema reference for editor autocomplete.'),
-    version: z
-      .literal(SCHEMA_VERSIONS.config)
-      .default(SCHEMA_VERSIONS.config)
-      .describe('Config schema version. Currently 1.'),
-    repository: z
-      .string()
-      .regex(/^[\w.-]+\/[\w.-]+$/)
-      .optional()
-      .describe(
-        'owner/repo of this repository. Lets `uses: owner/repo/.github/workflows/x.yml@ref` resolve locally.',
+const IMPACT_LABELS = {
+  major: 'semver:major',
+  minor: 'semver:minor',
+  patch: 'semver:patch',
+  none: 'semver:none',
+};
+
+export const configSchema = z.strictObject({
+  $schema: described(z.optional(z.string()), 'JSON Schema reference for editor autocomplete.'),
+  version: described(
+    z._default(z.literal(SCHEMA_VERSIONS.config), SCHEMA_VERSIONS.config),
+    'Config schema version. Currently 1.',
+  ),
+  repository: described(
+    z.optional(z.string().check(z.regex(/^[\w.-]+\/[\w.-]+$/))),
+    'owner/repo of this repository. Lets `uses: owner/repo/.github/workflows/x.yml@ref` resolve locally.',
+  ),
+  rules: described(
+    z._default(z.record(z.string(), severitySettingSchema), {}),
+    'Severity per rule, keyed by code (FP401) or name (empty-binding-for-matrix-combo).',
+  ),
+  limits: described(
+    z.prefault(
+      z.strictObject({
+        nestingDepth: described(
+          z._default(z.number().check(z.int(), z.positive()), 10),
+          'Maximum workflows in one call chain, counting the top-level workflow (FP602).',
+        ),
+        maxInputs: described(
+          z._default(z.number().check(z.int(), z.positive()), 30),
+          'Inputs on one workflow_call interface before FP605 suggests grouping them.',
+        ),
+      }),
+      {},
+    ),
+    'Thresholds used by structure rules.',
+  ),
+  ignore: described(
+    z._default(z.array(z.string()), []),
+    'Repo-relative path prefixes or globs (`*`, `**`) whose findings are suppressed.',
+  ),
+  overrides: described(
+    z._default(z.array(overrideSchema), []),
+    'Accepted findings, each with a reason and an optional expiry date.',
+  ),
+  matrixShapes: described(
+    z._default(
+      z.record(
+        z.string().check(z.regex(/^[^#]+#[^#]+$/, 'use `<workflow path>#<job id>`')),
+        z.strictObject({ keys: z.array(z.string()).check(z.minLength(1)) }),
       ),
-    rules: z
-      .record(z.string(), severitySettingSchema)
-      .default({})
-      .describe('Severity per rule, keyed by code (FP401) or name (empty-binding-for-matrix-combo).'),
-    limits: z
-      .object({
-        nestingDepth: z
-          .number()
-          .int()
-          .positive()
-          .default(10)
-          .describe('Maximum workflows in one call chain, counting the top-level workflow (FP602).'),
-        maxInputs: z
-          .number()
-          .int()
-          .positive()
-          .default(30)
-          .describe('Inputs on one workflow_call interface before FP605 suggests grouping them.'),
-      })
-      .strict()
-      .prefault({})
-      .describe('Thresholds used by structure rules.'),
-    ignore: z
-      .array(z.string())
-      .default([])
-      .describe('Repo-relative path prefixes or globs (`*`, `**`) whose findings are suppressed.'),
-    overrides: z
-      .array(overrideSchema)
-      .default([])
-      .describe('Accepted findings, each with a reason and an optional expiry date.'),
-    matrixShapes: z
-      .record(
-        z.string().regex(/^[^#]+#[^#]+$/, 'use `<workflow path>#<job id>`'),
-        z.object({ keys: z.array(z.string()).min(1) }).strict(),
-      )
-      .default({})
-      .describe(
-        'Declared keys of runtime-computed matrices, keyed by `<workflow path>#<job id>`. Lets flowpact verify `matrix.*` reads (FP404) instead of reporting FP403.',
-      ),
-    generated: z
-      .object({
-        include: z
-          .array(z.string())
-          .default([])
-          .describe('Files or globs of workflows and actions that are generated, even without a marker.'),
-        exclude: z
-          .array(z.string())
-          .default([])
-          .describe(
-            'Files or globs of workflows and actions written by hand, even with a marker or a `.lock.yml` name. Wins over `include`.',
+      {},
+    ),
+    'Declared keys of runtime-computed matrices, keyed by `<workflow path>#<job id>`. Lets flowpact verify `matrix.*` reads (FP404) instead of reporting FP403.',
+  ),
+  generated: described(
+    z.prefault(
+      z.strictObject({
+        include: described(
+          z._default(z.array(z.string()), []),
+          'Files or globs of workflows and actions that are generated, even without a marker.',
+        ),
+        exclude: described(
+          z._default(z.array(z.string()), []),
+          'Files or globs of workflows and actions written by hand, even with a marker or a `.lock.yml` name. Wins over `include`.',
+        ),
+      }),
+      {},
+    ),
+    'Which workflow and action files are generated. Rules about their internals are not reported there; flowpact detects them by a header comment or the `.lock.yml` name.',
+  ),
+  plugins: described(
+    z._default(z.array(z.string()), []),
+    'Repo-relative JavaScript modules (.js/.mjs) exporting extra rules (default export: rule or array of rules).',
+  ),
+  impact: described(
+    z._default(
+      z.strictObject({
+        publish: described(
+          z.optional(z.array(z.string())),
+          'Files or globs of the units other repositories use. Default: every workflow with `workflow_call` except `_`-prefixed files, and the root `action.yml`.',
+        ),
+        declaredBy: described(
+          z.optional(z.enum(['explicit', 'title', 'labels'])),
+          'The authoritative source of the declared impact; others are advisory. Default: `explicit` when given, else `title`.',
+        ),
+        labels: described(
+          z._default(
+            z.strictObject({
+              major: z._default(z.string(), 'semver:major'),
+              minor: z._default(z.string(), 'semver:minor'),
+              patch: z._default(z.string(), 'semver:patch'),
+              none: z._default(z.string(), 'semver:none'),
+            }),
+            IMPACT_LABELS,
           ),
-      })
-      .strict()
-      .prefault({})
-      .describe(
-        'Which workflow and action files are generated. Rules about their internals are not reported there; flowpact detects them by a header comment or the `.lock.yml` name.',
-      ),
-    plugins: z
-      .array(z.string())
-      .default([])
-      .describe(
-        'Repo-relative JavaScript modules (.js/.mjs) exporting extra rules (default export: rule or array of rules).',
-      ),
-    impact: z
-      .object({
-        publish: z
-          .array(z.string())
-          .optional()
-          .describe(
-            'Files or globs of the units other repositories use. Default: every workflow with `workflow_call` except `_`-prefixed files, and the root `action.yml`.',
-          ),
-        declaredBy: z
-          .enum(['explicit', 'title', 'labels'])
-          .optional()
-          .describe(
-            'The authoritative source of the declared impact; others are advisory. Default: `explicit` when given, else `title`.',
-          ),
-        labels: z
-          .object({
-            major: z.string().default('semver:major'),
-            minor: z.string().default('semver:minor'),
-            patch: z.string().default('semver:patch'),
-            none: z.string().default('semver:none'),
-          })
-          .strict()
-          .default({
-            major: 'semver:major',
-            minor: 'semver:minor',
-            patch: 'semver:patch',
-            none: 'semver:none',
-          })
-          .describe('Pull request labels that declare each impact level.'),
-        types: z
-          .record(z.string(), z.enum(['none', 'patch', 'minor', 'major']))
-          .default({ feat: 'minor', fix: 'patch', perf: 'patch' })
-          .describe(
-            'Conventional Commits types and the impact they declare; other types declare `none`, `!` declares `major`.',
-          ),
-        uncertain: z
-          .enum(['warn', 'fail'])
-          .default('warn')
-          .describe(
-            'Changes flowpact cannot fully resolve: only warn (default), or count them towards the required impact.',
-          ),
-      })
-      .strict()
-      .default({
-        labels: { major: 'semver:major', minor: 'semver:minor', patch: 'semver:patch', none: 'semver:none' },
-        types: { feat: 'minor', fix: 'patch', perf: 'patch' },
-        uncertain: 'warn',
-      })
-      .describe('Impact mode: which units are published and how pull requests declare their release impact.'),
-  })
-  .strict();
+          'Pull request labels that declare each impact level.',
+        ),
+        types: described(
+          z._default(z.record(z.string(), z.enum(['none', 'patch', 'minor', 'major'])), {
+            feat: 'minor',
+            fix: 'patch',
+            perf: 'patch',
+          }),
+          'Conventional Commits types and the impact they declare; other types declare `none`, `!` declares `major`.',
+        ),
+        uncertain: described(
+          z._default(z.enum(['warn', 'fail']), 'warn'),
+          'Changes flowpact cannot fully resolve: only warn (default), or count them towards the required impact.',
+        ),
+      }),
+      // A function, so each parse gets its own nested objects (a plain default is copied one level deep only).
+      () => ({
+        labels: { ...IMPACT_LABELS },
+        types: { feat: 'minor' as const, fix: 'patch' as const, perf: 'patch' as const },
+        uncertain: 'warn' as const,
+      }),
+    ),
+    'Impact mode: which units are published and how pull requests declare their release impact.',
+  ),
+});
 
 export type FlowpactConfig = z.infer<typeof configSchema>;
 
