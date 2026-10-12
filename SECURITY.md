@@ -62,10 +62,9 @@ place were already checked: flowpact refused one that was a link, or that a link
 
 From 0.9.0, flowpact also refused a report or patch path that was itself a link, or that a link took outside the
 repository or `GITHUB_WORKSPACE` ([#74](https://github.com/ciatlas/flowpact/pull/74)). Up to 0.12.2, though, it still
-followed a linked directory that stays inside the repository: for reports, patches, graphs and `generate --out`
-also one into `.git` (with
-`reports` committed as a link to `.git`, `-o reports/flowpact.sarif` wrote `.git/flowpact.sarif`), and for contracts
-written in place one that leads elsewhere in the repository.
+followed a linked directory that stays inside the repository: for reports, patches, graphs and `generate --out` also
+one into `.git` (with `reports` committed as a link to `.git`, `-o reports/flowpact.sarif` wrote
+`.git/flowpact.sarif`), and for contracts written in place one that leads elsewhere in the repository.
 
 - **Affected:** 0.1.0 to 0.12.2, in runs on pull request code that write a report, patch or contracts inside the
   checkout: the CLI's `-o`, `--patch`, `--dump-graph`, `generate --out` and `generate` writing contracts in place, and
