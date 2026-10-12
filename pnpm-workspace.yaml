@@ -7,5 +7,9 @@ allowBuilds:
   '@vscode/vsce-sign': false
   # Builds ovsx's OS keychain access (through its own vsce 3); publishing from CI passes credentials directly.
   keytar: false
+# The committed action bundle names each bundled file by its path, which for @ciatlas/core (a git dependency) is a
+# long node_modules/.pnpm directory. pnpm shortens such names past 60 characters on Windows and past 120 elsewhere;
+# 120 everywhere keeps the bundle the same whatever system builds it.
+virtualStoreDirMaxLength: 120
 minimumReleaseAgeExclude:
   - execa@10.1.0

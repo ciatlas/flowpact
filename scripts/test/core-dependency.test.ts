@@ -40,7 +40,8 @@ describe('@ciatlas/core', () => {
   });
 
   it('is not linked to a local checkout (pnpm link ../core writes an override)', () => {
-    expect(read('pnpm-workspace.yaml')).not.toMatch(/@ciatlas\/core/);
+    // An override is a key (`'@ciatlas/core': link:../core`); comments may name the package.
+    expect(read('pnpm-workspace.yaml')).not.toMatch(/^\s*['"]?@ciatlas\/core['"]?\s*:/m);
     // Every package's entry in the lockfile resolves to the release's tarball on GitHub, pinned by commit.
     const lockfile = read('pnpm-lock.yaml');
     const versions = [
@@ -49,5 +50,12 @@ describe('@ciatlas/core', () => {
     expect(versions).toHaveLength(Object.keys(specifiers()).length);
     for (const version of versions)
       expect(version).toMatch(/^https:\/\/codeload\.github\.com\/ciatlas\/core\/tar\.gz\/[0-9a-f]{40}$/);
+    // The commit it pins is the release's: its package.json has the tag's version. A lockfile edited by hand from a
+    // draft's commit to the tag would keep the draft (release-please releases from a later commit).
+    const tag = Object.values(specifiers())[0]!.split('#v')[1];
+    for (const url of new Set(versions)) {
+      const entry = lockfile.split(`\n  '@ciatlas/core@${url}':\n`)[1]?.split('\n\n')[0] ?? '';
+      expect(entry, url).toMatch(new RegExp(`^ {4}version: ${tag!.replaceAll('.', '\\.')}$`, 'm'));
+    }
   });
 });

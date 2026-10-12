@@ -53,8 +53,8 @@
       "automerge": false
     },
     {
-      "description": "@ciatlas/core, the workflow model, is bundled into the CLI, the action and the extension: fix(deps), so a new core ships in a patch release; in its own pull request, without the release-age wait (it is our own release, reviewed in its release pull request).",
-      "matchPackageNames": ["@ciatlas/core"],
+      "description": "@ciatlas/core, the workflow model, is bundled into the CLI, the action and the extension: fix(deps), so a new core ships in a patch release; one pull request for every package, without the release-age wait (it is our own release, reviewed in its release pull request). Matched by dependency name: for a github: dependency, Renovate's package name is the repository, ciatlas/core.",
+      "matchDepNames": ["@ciatlas/core"],
       "semanticCommitType": "fix",
       "groupName": null,
       "minimumReleaseAge": null
