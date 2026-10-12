@@ -9,7 +9,7 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "fumadocs-core": "16.16.2",
+    "fumadocs-core": "16.17.1",
     "fumadocs-mdx": "15.4.6",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.16.2",
     "lucide-react": "^1.50.0",
