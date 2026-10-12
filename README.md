@@ -20,6 +20,7 @@
 [![npm](https://img.shields.io/npm/v/flowpact?logo=npm)](https://www.npmjs.com/package/flowpact)
 [![Node.js](https://img.shields.io/node/v/flowpact?logo=nodedotjs)](https://www.npmjs.com/package/flowpact)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/ciatlas/flowpact/badge)](https://scorecard.dev/viewer/?uri=github.com/ciatlas/flowpact)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/15403/badge)](https://www.bestpractices.dev/projects/15403)
 [![License: MIT](https://img.shields.io/github/license/ciatlas/flowpact)](LICENSE)
 
 **Data-flow linter for GitHub Actions.**
