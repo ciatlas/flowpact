@@ -4,6 +4,25 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.12.1](https://github.com/ciatlas/flowpact/compare/v0.12.0...v0.12.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **core:** `always()` is known to be true, so a condition like `!always()` is known never to run ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** `impact.publish` lists each action once, finds `action.yaml` in an exact directory, and treats `./dir` like `dir` ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** a fractional array index is rounded down like GitHub, in expressions and matrix values ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** a step's own `env:` shadows the job's and the workflow's in that step's data flow ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** check names use GitHub's defaults for inputs without one, and are uncertain when a default is an expression ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** files whose names start with `..` are read, and locations before the start of a file are clamped ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** impact mode reads a base commit's linked files and directories like the working tree, bounded against loops and fan-out ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** keys named like `constructor` or `toString` are not treated as defined, and no longer hide a file's schema errors ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** matrix include and exclude entries tell object values with different keys apart ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** numbers convert to strings like GitHub (G15) in names, `format()`, `join()` and comparisons ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** the hint for a missing base like `origin/main` suggests `git fetch origin main` ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** the repository is detected from origin's url, not its pushurl ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+* **core:** walking the repository no longer loops on a directory linked into itself ([#94](https://github.com/ciatlas/flowpact/issues/94)) ([7756e28](https://github.com/ciatlas/flowpact/commit/7756e28879521de1dfcb1ae17f858b34dd797bcd))
+
 ## [0.12.0](https://github.com/ciatlas/flowpact/compare/v0.11.1...v0.12.0) (2026-10-11)
 
 
