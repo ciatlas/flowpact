@@ -158,6 +158,12 @@ type, hover traces, go to definition across workflow calls; also on
 [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor, then
 cross-repository resolution — see the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
 
+## Feedback and contributing
+
+Report bugs and ask for features in [GitHub Issues](https://github.com/ciatlas/flowpact/issues); report
+vulnerabilities privately, as the [security policy](SECURITY.md) explains. To contribute, see
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
 MIT

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/ciatlas/flowpact/security/advisories/new
+    about: Report security issues privately, not in a public issue (see SECURITY.md).
+  - name: Documentation
+    url: https://ciatlas.github.io/flowpact
+    about: Rules, configuration, contracts, impact mode and the GitHub Action.

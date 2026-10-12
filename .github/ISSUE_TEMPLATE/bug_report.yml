@@ -1,0 +1,37 @@
+name: Bug report
+description: flowpact reports something wrong, misses something, crashes or behaves unexpectedly.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: For a finding, include its code (e.g. FP401) and the message.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest workflow or repository that shows it, and the command or action step you ran.
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: flowpact version
+      description: The output of `flowpact --version`, or the action reference (e.g. `ciatlas/flowpact@v0.12`).
+    validations:
+      required: true
+  - type: dropdown
+    id: how
+    attributes:
+      label: How do you run it?
+      multiple: true
+      options:
+        - CLI
+        - GitHub Action
+        - VS Code extension
+        - API (`import … from 'flowpact'`)
+        - With plugins

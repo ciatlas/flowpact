@@ -69,6 +69,10 @@ ruleset); the checks still apply to everyone (the `main` ruleset). **CI passed**
 tests of the packed CLI on Linux, macOS and Windows, and the GitHub Action on this repository and on fixtures. New
 checks are added as jobs to `.github/workflows/ci.yml` and listed under the `ci-passed` job's `needs`.
 
+A pull request that adds or changes behaviour adds tests for it, next to the code they test (`packages/<package>/test`,
+`scripts/test`); a bug fix adds a test that fails without the fix. CI also fails when line coverage drops below 80 %
+overall or 90 % in `packages/lint`.
+
 The branch and tag rules live in the repository, not only in the settings UI: `.github/rulesets/*.json` (GitHub's
 ruleset export format) and `.github/repository.json` (merge settings). A pull request that changes them shows the
 difference from the live settings (**Settings diff**); merging applies them, and a weekly run reverts changes made in
