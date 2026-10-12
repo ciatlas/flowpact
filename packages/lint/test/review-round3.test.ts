@@ -82,9 +82,14 @@ describe('report paths', () => {
     symlinkSync(join(root, 'reports'), join(root, 'inner'));
     expect(() => assertSafeWritePath(join(root, 'report.sarif'), [root])).toThrow(UnsafePathError);
     expect(() => assertSafeWritePath(join(root, 'out/new.json'), [root])).toThrow(UnsafePathError);
-    // A symlinked directory that stays inside the repository, a plain file, and paths outside it are fine.
-    expect(() => assertSafeWritePath(join(root, 'inner/new.json'), [root])).not.toThrow();
+    // A symlinked directory that stays inside the repository is refused too: it could lead into .git.
+    expect(() => assertSafeWritePath(join(root, 'inner/new.json'), [root])).toThrow(UnsafePathError);
+    mkdirSync(join(root, '.git'));
+    symlinkSync('.git', join(root, 'meta'));
+    expect(() => assertSafeWritePath(join(root, 'meta/config'), [root])).toThrow(UnsafePathError);
+    // A plain file, a real directory, and paths outside the repository are fine.
     expect(() => assertSafeWritePath(join(root, 'flowpact.json'), [root])).not.toThrow();
+    expect(() => assertSafeWritePath(join(root, 'reports/new.json'), [root])).not.toThrow();
     expect(() => assertSafeWritePath(join(outside, 'target.txt'), [root])).not.toThrow();
     // Another spelling of a path into the repository is checked too: through a symlink outside that points in.
     const door = join(mkdtempSync(join(tmpdir(), 'flowpact-write-door-')), 'repo');

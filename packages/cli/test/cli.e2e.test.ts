@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  rmSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -480,7 +481,7 @@ describe('untrusted values', () => {
     symlinkSync(outside, join(root, 'out'));
     const r = await flowpact(['generate', '--root', root, '--out', join(root, 'out')]);
     expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain('is a symlink, or links outside');
+    expect(r.stderr).toContain('is a symlink, goes through one in');
     expect(readdirSync(outside)).toEqual([]);
   });
 
@@ -500,8 +501,48 @@ describe('untrusted values', () => {
     symlinkSync(outside, join(root, 'flowpact.sarif'));
     const r = await flowpact(['lint', '--root', root, '-o', join(root, 'flowpact.sarif')]);
     expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain('is a symlink, or links outside');
+    expect(r.stderr).toContain('is a symlink, goes through one in');
     expect(readFileSync(outside, 'utf8')).toBe('keep');
+  });
+
+  it('refuses to write a report through a directory link in the repository, also one into .git', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-symlink-dir-'));
+    cpSync(fixture('clean'), root, { recursive: true });
+    mkdirSync(join(root, '.git'));
+    symlinkSync('.git', join(root, 'reports'));
+    const r = await flowpact(['lint', '--root', root, '-o', join(root, 'reports', 'config')]);
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('is a symlink, goes through one in');
+    expect(existsSync(join(root, '.git', 'config'))).toBe(false);
+    // The same report into a real directory of the repository is written.
+    mkdirSync(join(root, 'out'));
+    const ok = await flowpact(['lint', '--root', root, '-o', join(root, 'out', 'report.json')]);
+    expect(ok.exitCode).toBe(0);
+    expect(existsSync(join(root, 'out', 'report.json'))).toBe(true);
+  });
+
+  it('refuses to write contracts with --out through a directory link that stays in the repository', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-symlink-out-in-'));
+    cpSync(fixture('clean'), root, { recursive: true });
+    mkdirSync(join(root, '.git'));
+    symlinkSync('.git', join(root, 'out'));
+    const r = await flowpact(['generate', '--root', root, '--out', join(root, 'out', 'contracts')]);
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('is a symlink, goes through one in');
+    expect(readdirSync(join(root, '.git'))).toEqual([]);
+  });
+
+  it('refuses to write contracts in place when their directory is a link within the repository', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-symlink-contracts-dir-'));
+    cpSync(fixture('clean'), root, { recursive: true });
+    mkdirSync(join(root, 'elsewhere'));
+    rmSync(join(root, '.github/flowpact/contracts'), { recursive: true, force: true });
+    mkdirSync(join(root, '.github/flowpact'), { recursive: true });
+    symlinkSync('../../elsewhere', join(root, '.github/flowpact/contracts'));
+    const r = await flowpact(['generate', '--root', root]);
+    expect(r.exitCode).toBe(2);
+    expect(r.stderr).toContain('Not writing contracts');
+    expect(readdirSync(join(root, 'elsewhere'))).toEqual([]);
   });
 });
 

@@ -301,8 +301,18 @@ describe('lint mode', () => {
     symlinkSync(outside, join(workspace, 'flowpact.sarif'));
     const s = await action(workspace, { 'report-sarif': 'flowpact.sarif' });
     expect(s.failed).toHaveLength(1);
-    expect(s.failed[0]).toContain('is a symlink, or links outside');
+    expect(s.failed[0]).toContain('is a symlink, goes through one in');
     expect(readFileSync(outside, 'utf8')).toBe('keep');
+  });
+
+  it('refuses to write a report through a directory link in the checkout, also one into .git', async () => {
+    const { workspace } = repoFrom('incident-matrix');
+    const gitConfig = readFileSync(join(workspace, '.git', 'config'), 'utf8');
+    symlinkSync('.git', join(workspace, 'reports'));
+    const s = await action(workspace, { 'report-sarif': 'reports/config' });
+    expect(s.failed).toHaveLength(1);
+    expect(s.failed[0]).toContain('is a symlink, goes through one in');
+    expect(readFileSync(join(workspace, '.git', 'config'), 'utf8')).toBe(gitConfig);
   });
 });
 

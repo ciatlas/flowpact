@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 import {
   type ActionDecl,
   type Binding,
@@ -698,11 +698,34 @@ export function pathInside(tree: string, p: string): boolean {
 }
 
 /**
+ * Whether reaching `target` follows a symbolic link that lies inside `realTree` (a tree's real path): the file itself, or
+ * a directory on the way to it, also one that stays inside the tree (a link into `.git`). Links outside the tree, such
+ * as `/tmp` for `/private/tmp`, are followed. Components that do not exist yet end the walk.
+ */
+function followsLinkIn(realTree: string, target: string): boolean {
+  const abs = resolve(target);
+  let at = parse(abs).root;
+  for (const part of abs.slice(at.length).split(sep).filter(Boolean)) {
+    const next = join(at, part);
+    let link: boolean;
+    try {
+      link = lstatSync(next).isSymbolicLink();
+    } catch {
+      return false;
+    }
+    if (link && withinOrAt(realTree, at)) return true;
+    at = link ? realpathSync.native(next) : next;
+  }
+  return false;
+}
+
+/**
  * Refuses to write a file (a report, a patch, a contract) at a path that leads into one of `trees` (the repository, the
- * CI workspace) and then through a symlink: one that is the file itself, or that leads out of the tree again. A pull
- * request can commit those. Whether a path leads into a tree is decided from the real path of each of its ancestors, so
- * no other spelling of it (`/tmp` for `/private/tmp`, a symlink outside pointing in) skips the check. Paths that never
- * enter a tree, such as `$GITHUB_STEP_SUMMARY`, are written as given.
+ * CI workspace) and then through a symlink: one that is the file itself, a directory on the way to it (even one that
+ * stays in the tree, such as a link into `.git`), or one that leads out of the tree again. A pull request can commit
+ * those. Whether a path leads into a tree is decided from the real path of each of its ancestors, so no other spelling
+ * of it (`/tmp` for `/private/tmp`, a symlink outside pointing in) skips the check. Paths that never enter a tree, such
+ * as `$GITHUB_STEP_SUMMARY`, are written as given.
  */
 export function assertSafeWritePath(abs: string, trees: string[]): void {
   const target = resolve(abs);
@@ -716,8 +739,10 @@ export function assertSafeWritePath(abs: string, trees: string[]): void {
     const realTree = realpathNearest(tree);
     const enters = ancestors.some((a) => existsSync(a) && withinOrAt(realTree, realpathSync.native(a)));
     if (!enters && !withinOrAt(resolve(tree), target)) continue;
-    if (isSymlink(target) || !withinOrAt(realTree, realParent))
-      throw new UnsafePathError(`Not writing ${abs}: it is a symlink, or links outside ${tree}`);
+    if (isSymlink(target) || !withinOrAt(realTree, realParent) || followsLinkIn(realTree, target))
+      throw new UnsafePathError(
+        `Not writing ${abs}: it is a symlink, goes through one in ${tree}, or links outside it`,
+      );
   }
 }
 
@@ -743,10 +768,15 @@ export function writeContracts(
     const unsafe = plan.entries
       .filter((e) => e.status !== 'unchanged')
       .map((e) => e.file)
-      .filter((f) => isSymlink(join(root, f)) || !insideRepository(root, join(root, f)));
+      .filter(
+        (f) =>
+          isSymlink(join(root, f)) ||
+          !insideRepository(root, join(root, f)) ||
+          followsLinkIn(realpathNearest(root), join(root, f)),
+      );
     if (unsafe.length)
       throw new UnsafePathError(
-        `Not writing contracts: ${unsafe.join(', ')} ${unsafe.length === 1 ? 'is a symlink or links' : 'are symlinks or link'} outside the repository`,
+        `Not writing contracts: ${unsafe.join(', ')} ${unsafe.length === 1 ? 'is a symlink, goes through one, or links' : 'are symlinks, go through one, or link'} outside the repository`,
       );
   }
   for (const e of plan.entries) {

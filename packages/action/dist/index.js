@@ -7504,7 +7504,7 @@ var require_public_api = __commonJS({
       }
       return doc;
     }
-    function parse2(src, reviver2, options) {
+    function parse3(src, reviver2, options) {
       let _reviver = void 0;
       if (typeof reviver2 === "function") {
         _reviver = reviver2;
@@ -7545,7 +7545,7 @@ var require_public_api = __commonJS({
         return value.toString(options);
       return new Document.Document(value, _replacer, options).toString(options);
     }
-    exports.parse = parse2;
+    exports.parse = parse3;
     exports.parseAllDocuments = parseAllDocuments;
     exports.parseDocument = parseDocument5;
     exports.stringify = stringify2;
@@ -8549,8 +8549,8 @@ var require_cronstrue = __commonJS({
                 var RangeValidator = (function() {
                   function RangeValidator2() {
                   }
-                  RangeValidator2.secondRange = function(parse2) {
-                    var parsed = parse2.split(",");
+                  RangeValidator2.secondRange = function(parse3) {
+                    var parsed = parse3.split(",");
                     for (var i = 0; i < parsed.length; i++) {
                       if (!isNaN(parseInt(parsed[i], 10))) {
                         var second = parseInt(parsed[i], 10);
@@ -8558,8 +8558,8 @@ var require_cronstrue = __commonJS({
                       }
                     }
                   };
-                  RangeValidator2.minuteRange = function(parse2) {
-                    var parsed = parse2.split(",");
+                  RangeValidator2.minuteRange = function(parse3) {
+                    var parsed = parse3.split(",");
                     for (var i = 0; i < parsed.length; i++) {
                       if (!isNaN(parseInt(parsed[i], 10))) {
                         var minute = parseInt(parsed[i], 10);
@@ -8567,8 +8567,8 @@ var require_cronstrue = __commonJS({
                       }
                     }
                   };
-                  RangeValidator2.hourRange = function(parse2) {
-                    var parsed = parse2.split(",");
+                  RangeValidator2.hourRange = function(parse3) {
+                    var parsed = parse3.split(",");
                     for (var i = 0; i < parsed.length; i++) {
                       if (!isNaN(parseInt(parsed[i], 10))) {
                         var hour = parseInt(parsed[i], 10);
@@ -8576,8 +8576,8 @@ var require_cronstrue = __commonJS({
                       }
                     }
                   };
-                  RangeValidator2.dayOfMonthRange = function(parse2) {
-                    var parsed = parse2.split(",");
+                  RangeValidator2.dayOfMonthRange = function(parse3) {
+                    var parsed = parse3.split(",");
                     for (var i = 0; i < parsed.length; i++) {
                       if (!isNaN(parseInt(parsed[i], 10))) {
                         var dayOfMonth = parseInt(parsed[i], 10);
@@ -8585,8 +8585,8 @@ var require_cronstrue = __commonJS({
                       }
                     }
                   };
-                  RangeValidator2.monthRange = function(parse2, monthStartIndexZero) {
-                    var parsed = parse2.split(",");
+                  RangeValidator2.monthRange = function(parse3, monthStartIndexZero) {
+                    var parsed = parse3.split(",");
                     for (var i = 0; i < parsed.length; i++) {
                       if (!isNaN(parseInt(parsed[i], 10))) {
                         var month = parseInt(parsed[i], 10);
@@ -8594,8 +8594,8 @@ var require_cronstrue = __commonJS({
                       }
                     }
                   };
-                  RangeValidator2.dayOfWeekRange = function(parse2, dayOfWeekStartIndexZero) {
-                    var parsed = parse2.split(",");
+                  RangeValidator2.dayOfWeekRange = function(parse3, dayOfWeekStartIndexZero) {
+                    var parsed = parse3.split(",");
                     for (var i = 0; i < parsed.length; i++) {
                       if (!isNaN(parseInt(parsed[i], 10))) {
                         var dayOfWeek = parseInt(parsed[i], 10);
@@ -20148,7 +20148,7 @@ function parseConfig(raw, file) {
 
 // ../lint/src/contracts.ts
 import { existsSync as existsSync4, lstatSync as lstatSync2, mkdirSync, realpathSync as realpathSync2, rmSync, writeFileSync } from "fs";
-import { basename as basename3, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, relative as relative3, resolve as resolve3, sep } from "path";
+import { basename as basename3, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, parse as parse2, relative as relative3, resolve as resolve3, sep } from "path";
 
 // ../../node_modules/.pnpm/diff@9.0.0/node_modules/diff/libesm/diff/base.js
 var Diff = class {
@@ -21147,6 +21147,22 @@ var withinOrAt = (root, p) => {
 function pathInside(tree, p) {
   return withinOrAt(realpathNearest(tree), realpathNearest(p));
 }
+function followsLinkIn(realTree, target) {
+  const abs = resolve3(target);
+  let at = parse2(abs).root;
+  for (const part of abs.slice(at.length).split(sep).filter(Boolean)) {
+    const next = join4(at, part);
+    let link;
+    try {
+      link = lstatSync2(next).isSymbolicLink();
+    } catch {
+      return false;
+    }
+    if (link && withinOrAt(realTree, at)) return true;
+    at = link ? realpathSync2.native(next) : next;
+  }
+  return false;
+}
 function assertSafeWritePath(abs, trees) {
   const target = resolve3(abs);
   const realParent = realpathNearest(dirname2(target));
@@ -21159,8 +21175,10 @@ function assertSafeWritePath(abs, trees) {
     const realTree = realpathNearest(tree);
     const enters = ancestors.some((a) => existsSync4(a) && withinOrAt(realTree, realpathSync2.native(a)));
     if (!enters && !withinOrAt(resolve3(tree), target)) continue;
-    if (isSymlink(target) || !withinOrAt(realTree, realParent))
-      throw new UnsafePathError(`Not writing ${abs}: it is a symlink, or links outside ${tree}`);
+    if (isSymlink(target) || !withinOrAt(realTree, realParent) || followsLinkIn(realTree, target))
+      throw new UnsafePathError(
+        `Not writing ${abs}: it is a symlink, goes through one in ${tree}, or links outside it`
+      );
   }
 }
 function writeContracts(root, plan, outDir, trees = [root]) {
@@ -21170,10 +21188,12 @@ function writeContracts(root, plan, outDir, trees = [root]) {
     for (const e of plan.entries) if (e.status !== "delete") assertSafeWritePath(join4(outDir, e.file), trees);
   }
   if (!outDir) {
-    const unsafe = plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter((f) => isSymlink(join4(root, f)) || !insideRepository(root, join4(root, f)));
+    const unsafe = plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter(
+      (f) => isSymlink(join4(root, f)) || !insideRepository(root, join4(root, f)) || followsLinkIn(realpathNearest(root), join4(root, f))
+    );
     if (unsafe.length)
       throw new UnsafePathError(
-        `Not writing contracts: ${unsafe.join(", ")} ${unsafe.length === 1 ? "is a symlink or links" : "are symlinks or link"} outside the repository`
+        `Not writing contracts: ${unsafe.join(", ")} ${unsafe.length === 1 ? "is a symlink, goes through one, or links" : "are symlinks, go through one, or link"} outside the repository`
       );
   }
   for (const e of plan.entries) {
@@ -21526,9 +21546,9 @@ function levelFromLabels(labels, map) {
   return found.length ? maxLevel([...found]) : void 0;
 }
 function levelFromVersions(previous, next, bumps) {
-  const parse2 = (v) => v.replace(/^v/, "").split(/[.-]/).slice(0, 3).map(Number);
-  const [pa, pb, pc] = parse2(previous);
-  const [na, nb, nc] = parse2(next);
+  const parse3 = (v) => v.replace(/^v/, "").split(/[.-]/).slice(0, 3).map(Number);
+  const [pa, pb, pc] = parse3(previous);
+  const [na, nb, nc] = parse3(next);
   if (na > pa) return "major";
   if (nb > pb) return na === 0 && bumps.bumpMinorPreMajor ? "major" : "minor";
   if (nc > pc) return na === 0 && bumps.bumpPatchForMinorPreMajor ? "minor" : "patch";
