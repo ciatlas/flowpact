@@ -55,6 +55,15 @@ export function namesKey(segment: string | undefined): segment is string {
   return !!segment && segment !== '*' && segment !== '?';
 }
 
+/**
+ * True when a reference's path segment is the context property `name` (written in lower case), compared the way GitHub
+ * looks properties up: ignoring case. `@actions/expressions` lower-cases the keys of its `Dictionary`, and the runner's
+ * `DictionaryContextData` compares them with `OrdinalIgnoreCase`, so `github.Event.Inputs` is `github.event.inputs`.
+ */
+export function isProperty(segment: string | undefined, name: string): boolean {
+  return segment?.toLowerCase() === name;
+}
+
 export function listNames(names: string[], max = 6): string {
   if (names.length === 0) return '(none)';
   const shown = names.slice(0, max).join(', ');

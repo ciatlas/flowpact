@@ -21,7 +21,7 @@ import {
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
-import { chainRelated, didYouMeanNote, listNames, namesKey, quote, useInCondition } from './util';
+import { chainRelated, didYouMeanNote, isProperty, listNames, namesKey, quote, useInCondition } from './util';
 
 /**
  * For every workflow with `workflow_dispatch`: its inputs read through `github.event.inputs` in it and in the workflows
@@ -533,9 +533,12 @@ const passthroughDropped = defineRule({
   },
 });
 
-/** Whether a reference is `github.event.inputs…`: in a called workflow, the caller's event rather than its inputs. */
+/**
+ * Whether a reference is `github.event.inputs…`, in any case (`github.Event.Inputs…`): in a called workflow, the
+ * caller's event rather than its inputs.
+ */
 function isEventInputs(ref: { context: string; path: string[] }): boolean {
-  return ref.context === 'github' && ref.path[0] === 'event' && ref.path[1] === 'inputs';
+  return ref.context === 'github' && isProperty(ref.path[0], 'event') && isProperty(ref.path[1], 'inputs');
 }
 
 const optionalForwardedToRequired = defineRule({
@@ -664,14 +667,15 @@ function checkInputRead(
   });
 }
 
-/** The input a reference reads: `inputs.<name>`, or `github.event.inputs.<name>` in a workflow that can be dispatched. */
+/**
+ * The input a reference reads: `inputs.<name>`, or `github.event.inputs.<name>` (in any case) in a workflow that can be
+ * dispatched.
+ */
 function inputReadName(unit: UnitDecl, ref: LocatedRef): string | undefined {
   if (ref.context === 'inputs') return ref.path[0];
   // Elsewhere `github.event` belongs to the triggering workflow, not to this unit.
   const dispatched = unit.kind === 'workflow' && unit.dispatch;
-  if (ref.context === 'github' && ref.path[0] === 'event' && ref.path[1] === 'inputs' && dispatched)
-    return ref.path[2];
-  return undefined;
+  return dispatched && isEventInputs(ref) ? ref.path[2] : undefined;
 }
 
 export const inputRules: RuleDefinition[] = [
