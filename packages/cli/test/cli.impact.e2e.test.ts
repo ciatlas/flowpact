@@ -575,6 +575,40 @@ describe('flowpact impact with paths the change removed', () => {
     expect((await flowpact(root, ['lint', 'b'])).exitCode).toBe(2);
   });
 
+  it('does not refuse a removed unit whose directory keeps other files when impact mode is skipped', async () => {
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a'),
+        'b/action.yml': action('b'),
+        'b/README.md': '# b\n',
+      },
+      { 'notes.txt': 'b goes\n' },
+    );
+    git(root, 'rm', '-q', 'b/action.yml');
+    git(root, 'commit', '-qm', 'remove b, keep its README');
+    // The pull request's run grades the removal.
+    const pr = await flowpact(root, ['lint', '--impact', 'b', '--base', 'main', '--expect', 'patch']);
+    expect(pr.exitCode).toBe(1);
+    expect(pr.stdout).toContain('action b was removed or moved');
+    // Before: exit 2, "None of the paths is a workflow … or an action", in the merge queue after that run passed.
+    const merge = await flowpact(root, ['lint', '--impact', 'b', '--base', 'main', '--format', 'json'], {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'merge_group',
+    });
+    expect(merge.exitCode).toBe(0);
+    expect(merge.stderr).toContain(
+      'impact: paths without a workflow or action, not refused while impact mode is skipped (the change may have removed them): b',
+    );
+    expect(JSON.parse(merge.stdout).findings).toEqual([]);
+    // Beside a path that names a workflow or action, b was never refused, so there is nothing to note.
+    const beside = await flowpact(root, ['lint', '--impact', 'b', 'a', '--base', 'HEAD']);
+    expect(beside.exitCode).toBe(0);
+    expect(beside.stderr).not.toContain('not refused');
+    // Without impact mode, still refused.
+    expect((await flowpact(root, ['lint', 'b'])).exitCode).toBe(2);
+  });
+
   it('takes a removed path relative to the working directory, as an existing one, with --root', async () => {
     const root = removedB('sub');
     const top = dirname(root);

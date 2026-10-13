@@ -79,9 +79,9 @@ graded.
   removal (major): give both paths, or their parent `actions/`. Prefer directory paths, above all in the action's
   `paths` input: a pull request that deletes a unit and drops its path from the input is never graded for the removal.
 - When impact mode is skipped (`merge_group`, a push without a commit before it, `impact: auto` outside pull
-  requests), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks is a
-  warning there, not an error. The pull request's run, which has the baseline, still refuses a path that never
-  existed.
+  requests), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks, or one
+  left without a workflow or action (a removed action's directory that keeps its README or `dist/`), is a warning
+  there, not an error. The pull request's run, which has the baseline, still refuses a path that never held one.
 - Units within the paths that are not published (an internal workflow, an action `impact.publish` does not list) are not
   graded. With no published unit there, the required impact is `none`.
 - Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths: a

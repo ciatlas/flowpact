@@ -738,20 +738,28 @@ async function analyzeRoot(
 }
 
 /**
- * The paths the working tree lacks that do not fail the step. In impact mode, a path that names a workflow or action
- * of the baseline stands for what the change removed. When impact mode was asked for but skipped (on merge_group or
- * push, or `impact: auto` off pull requests), there is no baseline to tell a removed path from a mistake, so a missing
- * path is a warning: the pull request's run, which has the baseline, refuses a mistake.
+ * The paths that name no workflow or action of the working tree yet do not fail the step. In impact mode, a path that
+ * names a workflow or action of the baseline stands for what the change removed. When impact mode was asked for but
+ * skipped (on merge_group or push, or `impact: auto` off pull requests), there is no baseline to tell a removed path
+ * from a mistake, so a path that would fail the step (one the working tree lacks, or one that holds no workflow or
+ * action, such as a removed action's directory that keeps its README) is a warning: the pull request's run, which has
+ * the baseline, refuses a mistake.
  */
 function unrefused(result: AnalysisResult, inputs: Inputs, where: string): string[] {
   const skipped = inputs.impact !== 'off' && !result.impact && !result.impactSkipped;
   if (!skipped) return result.removedPaths ?? [];
-  const missing = result.project.missingTargets ?? [];
-  if (missing.length)
-    core.warning(
-      `paths not found under ${where}: ${missing.join(', ')}. Not refused while impact mode is skipped, as the change may have removed them.`,
-    );
-  return missing;
+  const { missingTargets: missing = [], ignoredTargets = [], targets, wholeRepository } = result.project;
+  // Beside a path that names a workflow or action, one that holds none does not fail the step anyway.
+  const empty = targets.size || wholeRepository ? [] : ignoredTargets;
+  const warn = (what: string, paths: string[]) => {
+    if (paths.length)
+      core.warning(
+        `${what} under ${where}: ${paths.join(', ')}. Not refused while impact mode is skipped, as the change may have removed them.`,
+      );
+  };
+  warn('paths not found', missing);
+  warn('paths without a workflow or action', empty);
+  return [...missing, ...empty];
 }
 
 /** Why the paths give nothing to report on: some do not exist, or none names a workflow or action. */

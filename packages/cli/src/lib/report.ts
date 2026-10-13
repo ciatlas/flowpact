@@ -95,7 +95,7 @@ export interface ReportHooks {
   impactSkipped?(reason: string): boolean;
   /**
    * The analysis ran, before its paths are checked; `notes` are impact mode's notes about its baseline, and about the
-   * paths it does not refuse though the working tree lacks them.
+   * paths it does not refuse though they name no workflow or action of the working tree.
    */
   analyzed?(notes: string[]): void;
   /**
@@ -153,20 +153,28 @@ function impactFor(
 }
 
 /**
- * The paths the working tree lacks that are not refused, and a note about them: in impact mode, what the change
- * removed; when impact mode was asked for but skipped, every such path, since without a baseline a path the change
- * removed cannot be told from a mistake.
+ * The paths that name no workflow or action of the working tree yet are not refused, and notes about them: in impact
+ * mode, what the change removed; when impact mode was asked for but skipped, every such path that would be refused
+ * (one the working tree lacks, or one that holds no workflow or action, such as a removed action's directory that
+ * keeps its README), since without a baseline a path the change removed cannot be told from a mistake.
  */
 function unrefused(
   result: AnalysisResult,
   impact: PreparedImpact | undefined,
-): { paths: string[]; note?: string } {
-  if (!impact || !('skip' in impact)) return { paths: result.removedPaths ?? [] };
-  const missing = result.project.missingTargets ?? [];
-  if (!missing.length) return { paths: [] };
+): { paths: string[]; notes: string[] } {
+  if (!impact || !('skip' in impact)) return { paths: result.removedPaths ?? [], notes: [] };
+  const { missingTargets: missing = [], ignoredTargets = [], targets, wholeRepository } = result.project;
+  // Beside a path that names a workflow or action, one that holds none is not refused anyway.
+  const empty = targets.size || wholeRepository ? [] : ignoredTargets;
+  const note = (what: string, paths: string[]) =>
+    paths.length
+      ? [
+          `impact: ${what}, not refused while impact mode is skipped (the change may have removed them): ${paths.join(', ')}`,
+        ]
+      : [];
   return {
-    paths: missing,
-    note: `impact: paths not found, not refused while impact mode is skipped (the change may have removed them): ${missing.join(', ')}`,
+    paths: [...missing, ...empty],
+    notes: [...note('paths not found', missing), ...note('paths without a workflow or action', empty)],
   };
 }
 
@@ -212,11 +220,8 @@ function skipped(reason: string, notes: string[], hooks: ReportHooks): boolean {
 }
 
 /** Impact mode's notes once the analysis ran: about its baseline, and about the paths it does not refuse. */
-function analyzedNotes(impact: PreparedImpact | undefined, note: string | undefined): string[] {
-  return [
-    ...(impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : []),
-    ...(note ? [note] : []),
-  ];
+function analyzedNotes(impact: PreparedImpact | undefined, unrefusedNotes: string[]): string[] {
+  return [...(impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : []), ...unrefusedNotes];
 }
 
 /** Runs `lint`, `check` or `impact`; undefined only when a hook stopped it. */
@@ -240,7 +245,7 @@ export async function runReport(
   const result = await analyzeSession(session, commandOptions(command, options, paths, only, impact));
   // In impact mode, a path the change removed (one that names a workflow or action of the baseline) is not missing.
   const accepted = unrefused(result, impact);
-  const analyzed = analyzedNotes(impact, accepted.note);
+  const analyzed = analyzedNotes(impact, accepted.notes);
   notes.push(...analyzed);
   hooks.analyzed?.(analyzed);
   checkTargets(result.project, paths, root, accepted.paths);

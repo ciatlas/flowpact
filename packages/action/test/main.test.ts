@@ -730,6 +730,56 @@ describe('impact mode', () => {
     expect((await fresh('push', {})).failed[0]).toContain('paths not found');
   });
 
+  it('does not fail on a removed unit whose directory keeps other files when impact mode is skipped', async () => {
+    const workspace = renamedRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    g('checkout', '-q', 'main');
+    mkdirSync(join(workspace, 'actions/old'), { recursive: true });
+    writeFileSync(
+      join(workspace, 'actions/old/action.yml'),
+      'name: old\ndescription: d\nruns:\n  using: composite\n  steps: [{ shell: bash, run: "true" }]\n',
+    );
+    writeFileSync(join(workspace, 'actions/old/README.md'), '# old\n');
+    g('add', '-A');
+    g('commit', '-q', '-m', 'old');
+    g('checkout', '-q', 'change');
+    g('merge', '-q', '--no-edit', 'main');
+    g('rm', '-q', 'actions/old/action.yml');
+    g('commit', '-q', '-m', 'remove old, keep its README');
+    const fresh = (event: string, given: Record<string, string>) => {
+      Object.assign(state, { outputs: {}, annotations: [], infos: [], summary: '', failed: [] });
+      process.env.GITHUB_EVENT_NAME = event;
+      return action(workspace, { paths: 'actions/old', ...given });
+    };
+
+    // Before: "None of the paths is a workflow … or an action" failed the step in the merge queue and on push.
+    for (const [event, given] of [
+      ['merge_group', { impact: 'auto', 'base-ref': 'main' }],
+      ['merge_group', { impact: 'on', 'base-ref': 'main' }],
+      ['push', { impact: 'auto' }],
+    ] as const) {
+      const s = await fresh(event, given);
+      expect(s.failed).toEqual([]);
+      expect(s.outputs['exit-code']).toBe('0');
+      expect(s.annotations.map((a) => [a.level, a.message])).toEqual([
+        [
+          'warning',
+          'paths without a workflow or action under .: actions/old. Not refused while impact mode is skipped, as the change may have removed them.',
+        ],
+      ]);
+    }
+    // Beside a path that names a workflow, actions/old was never refused, so there is nothing to warn about.
+    const beside = await fresh('merge_group', {
+      impact: 'auto',
+      'base-ref': 'main',
+      paths: 'actions/old .github/workflows/ci-reusable.yml',
+    });
+    expect(beside.failed).toEqual([]);
+    expect(beside.annotations.filter((a) => a.level === 'warning')).toEqual([]);
+    // Without impact mode, still a failure.
+    expect((await fresh('push', {})).failed[0]).toContain('None of the paths is a workflow');
+  });
+
   it('skips impact: auto when nothing within the paths is published', async () => {
     const workspace = renamedRepo();
     const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });

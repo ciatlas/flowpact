@@ -27201,12 +27201,17 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
 function unrefused(result, inputs, where) {
   const skipped = inputs.impact !== "off" && !result.impact && !result.impactSkipped;
   if (!skipped) return result.removedPaths ?? [];
-  const missing = result.project.missingTargets ?? [];
-  if (missing.length)
-    warning(
-      `paths not found under ${where}: ${missing.join(", ")}. Not refused while impact mode is skipped, as the change may have removed them.`
-    );
-  return missing;
+  const { missingTargets: missing = [], ignoredTargets = [], targets, wholeRepository } = result.project;
+  const empty = targets.size || wholeRepository ? [] : ignoredTargets;
+  const warn = (what, paths) => {
+    if (paths.length)
+      warning(
+        `${what} under ${where}: ${paths.join(", ")}. Not refused while impact mode is skipped, as the change may have removed them.`
+      );
+  };
+  warn("paths not found", missing);
+  warn("paths without a workflow or action", empty);
+  return [...missing, ...empty];
 }
 function badPaths(result, inputs, where) {
   const removed = unrefused(result, inputs, where);
