@@ -451,9 +451,10 @@ export interface TraceNode {
   /**
    * How the value got here from the parent node: the expression (`text`) at `loc`, or `workflow output` (a reusable
    * workflow's), `action output` (an action's) or `secrets: inherit`. `note` qualifies it:
-   * - `when dispatched`: upstream, a workflow input read through `github.event.inputs` in a workflow that can also be
-   *   called. The input holds the value only when the workflow is dispatched (a called workflow gets its caller's
-   *   event), so it is not traced further up; a `context` leaf stands for the called case;
+   * - `when dispatched`: upstream, a workflow input read through `github` (`github.event.inputs.<name>`, or a whole or
+   *   computed `github` such as `toJSON(github)`) in a workflow that can also be called. The input holds the value only
+   *   when the workflow is dispatched (a called workflow gets its caller's `github` context), so it is not traced
+   *   further up; a `context` leaf stands for the called case;
    * - `the default of inputs.<name>`: upstream, an input or variable that the default of `inputs.<name>` reads;
    * - `exposed to the caller`: downstream, an output of a reusable workflow or action that becomes the output of the
    *   job or step that uses it;
@@ -463,10 +464,12 @@ export interface TraceNode {
   /**
    * Downstream, the symbols the value flows to; upstream, the symbols it is computed from. A whole or computed read
    * (`toJSON(inputs)`, `matrix[inputs.key]`, `secrets[inputs.name]`, `toJSON(env)`) reads every member the files
-   * declare: one child each. In a workflow that callers hand every secret to through `secrets: inherit`, a whole
-   * `secrets` also reads each secret those callers declare or read by name; downstream, a caller's secret goes through
-   * `secrets: inherit` into a callee that reads, or may read, every secret, itself or further down (an expression that
-   * does not parse, or a remote workflow it hands every secret on to, may).
+   * declare: one child each. In a workflow that can be dispatched, a whole or computed `github` (`toJSON(github)`,
+   * `github.event[x]`) reads each of its `workflow_dispatch` inputs, which `github.event.inputs` holds. In a workflow
+   * that callers hand every secret to through `secrets: inherit`, a whole `secrets` also reads each secret those
+   * callers declare or read by name; downstream, a caller's secret goes through `secrets: inherit` into a callee that
+   * reads, or may read, every secret, itself or further down (an expression that does not parse, or a remote workflow
+   * it hands every secret on to, may).
    */
   children: TraceNode[];
   /**
@@ -474,9 +477,10 @@ export interface TraceNode {
    * not another symbol: `literal` (a plain value: passed by a caller or a step, an env variable's or output's own
    * value, or an input's default), `omitted` (a caller or step does not pass the input), `value`, `missing` or
    * `dynamic` (a matrix key's combinations), `context` (read from a context flowpact does not follow, such as
-   * `github.event.pull_request.title`; `github.event.inputs.<name>` in a workflow that can be called, which then holds
-   * the caller's event; or a whole object that may hold members the files do not declare, such as `toJSON(secrets)`,
-   * `toJSON(env)` or an action's `toJSON(inputs)`, next to the members it reads; `text` is the reference as written),
+   * `github.event.pull_request.title`; `github` in a workflow that can be called (`github.event.inputs.<name>`,
+   * `toJSON(github)`), which then is the caller's; or a whole object that may hold members the files do not declare,
+   * such as `toJSON(secrets)`, `toJSON(env)`, `toJSON(github)` or an action's `toJSON(inputs)`, next to the members it
+   * reads; `text` is the reference as written),
    * `invalid` (an expression that does not parse, or, in an input's default, a reference to a context or a call to a
    * function GitHub does not allow there; `text` is then the reference, or the function's name and `()`) or
    * `expression` (an expression that reads no context). When a caller or step omits an input whose default GitHub uses
@@ -946,6 +950,12 @@ export interface Usage {
    * `toJSON(env)`) or indexes one with a computed key (`matrix[inputs.key]`, `secrets[inputs.name]`), and so reads every
    * member, this one among them. Such a read counts as a read of each member, but does not single one out: a rule
    * about how one input is read, such as how a condition treats it when it is empty, skips it.
+   *
+   * In a workflow that can be dispatched, a read through `github` (`github.event.inputs.<name>`, or a whole or computed
+   * `toJSON(github)`, `github.event[x]`) is a usage of its `workflow_dispatch` inputs, which `github.event.inputs` holds
+   * when it is dispatched. In a workflow that can also be called, `github` is then the caller's, so such a usage never
+   * takes in what a caller passes in `with:` (`ref.context` is `github`, or the usage reads a step's own `env:` value
+   * that reads `github`).
    */
   whole?: true;
 }

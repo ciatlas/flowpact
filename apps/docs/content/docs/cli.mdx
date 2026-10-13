@@ -306,9 +306,10 @@ A workflow that can be both called and dispatched holds an input in `github.even
 dispatched. When it is called, GitHub gives it the caller's `github` context, so `github.event.inputs` is the caller's
 event, never what the caller passes in `with:`. Upstream, such a read shows the input as a branch noted
 `(when dispatched)`, with nothing traced under it, next to a `context` leaf for the called case; downstream, an input
-reached through a caller's `with:` does not go on through its `github.event.inputs` reads. Read it as `inputs.<name>`,
-which holds the value in both cases. Here `release.yml` calls `deploy.yml` with `environment: production`, a value
-that never reaches the action:
+reached through a caller's `with:` does not go on through its `github.event.inputs` reads. The same holds for a whole or
+computed `github` (`toJSON(github)`, `github.event[x]`), which reads every dispatch input, and for the step's own `env:`
+values that read `github`. Read it as `inputs.<name>`, which holds the value in both cases. Here `release.yml` calls
+`deploy.yml` with `environment: production`, a value that never reaches the action:
 
 ```text
 $ flowpact trace ship:environment --up
