@@ -247,3 +247,45 @@ describe('whole reads are reads (FP104, FP106, FP203)', () => {
     for (const code of ['FP104', 'FP106', 'FP203']) expect(byCode(r, code)).toEqual([]);
   });
 });
+
+describe('github.event.inputs in a called workflow (FP106)', () => {
+  // GitHub gives a called workflow its caller's `github` context, so `github.event.inputs` there is the caller's event:
+  // a callee that reads an input only that way drops the value the call passes, named or as a whole.
+  const callee = (reads: string) => yaml`
+    on:
+      workflow_call:
+        inputs:
+          target: { type: string, required: false }
+      workflow_dispatch:
+        inputs:
+          target: { type: string, required: false }
+    jobs:
+      j:
+        runs-on: x
+        steps:
+          - run: echo "${reads}"
+  `;
+  const caller = yaml`
+    on: push
+    jobs:
+      c:
+        uses: ./.github/workflows/callee.yml
+        with:
+          target: prod
+  `;
+  const fp106 = (reads: string) =>
+    byCode(lint({ [`${WF}/callee.yml`]: callee(reads), [`${WF}/caller.yml`]: caller }), 'FP106').map(
+      (f) => f.message,
+    );
+
+  it('reports a value the callee reads only through github.event.inputs', () => {
+    const only = `jobs.c passes "target" to ${WF}/callee.yml, which reads it only through github.event.inputs, the caller’s event when it is called`;
+    expect(fp106('${{ github.event.inputs.target }}')).toEqual([only]);
+    expect(fp106('${{ github.event.inputs.* }}')).toEqual([only]);
+  });
+
+  it('does not report a value the callee also reads through inputs', () => {
+    expect(fp106('${{ github.event.inputs.target }} ${{ inputs.target }}')).toEqual([]);
+    expect(fp106('${{ inputs.target }}')).toEqual([]);
+  });
+});

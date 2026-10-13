@@ -489,9 +489,16 @@ const passthroughDropped = defineRule({
       for (const b of Object.values(call.job.with)) {
         const input = lookup(call.callee.call?.inputs ?? {}, b.name);
         if (!input) continue;
-        if (ctx.index.usagesOf(sym.input(call.callee.path, input.name)).length > 0) continue;
+        const reads = ctx.index.usagesOf(sym.input(call.callee.path, input.name));
+        // A called workflow's `github.event.inputs` is its caller's event (GitHub gives it the caller's `github`
+        // context), so reading the input only that way never takes in the value this call passes.
+        if (reads.some((u) => !isEventInputs(u.ref))) continue;
         ctx.report({
-          message: `jobs.${call.job.id} passes ${quote(b.name)} to ${call.callee.path}, which never reads it`,
+          message: `jobs.${call.job.id} passes ${quote(b.name)} to ${call.callee.path}, which ${
+            reads.length > 0
+              ? 'reads it only through github.event.inputs, the caller’s event when it is called'
+              : 'never reads it'
+          }`,
           loc: b.loc,
           symbol: sym.input(call.callee.path, input.name),
           related: [{ loc: input.loc, message: 'declared here, never read' }],
@@ -500,6 +507,11 @@ const passthroughDropped = defineRule({
     }
   },
 });
+
+/** Whether a reference is `github.event.inputs…`: in a called workflow, the caller's event rather than its inputs. */
+function isEventInputs(ref: { context: string; path: string[] }): boolean {
+  return ref.context === 'github' && ref.path[0] === 'event' && ref.path[1] === 'inputs';
+}
 
 const optionalForwardedToRequired = defineRule({
   code: 'FP107',
