@@ -1,0 +1,25 @@
+{
+  // The repository formats and lints with Biome (biome.json), and CI fails on any difference (`pnpm lint`). These
+  // settings make the editor do the same on save, over a user's own formatter. They are per language because a
+  // user's [typescript]-style settings take precedence over plain workspace ones.
+  "[javascript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[javascriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescript]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[typescriptreact]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[json]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[jsonc]": { "editor.defaultFormatter": "biomejs.biome" },
+  "[css]": { "editor.defaultFormatter": "biomejs.biome" },
+  // Biome orders imports its own way, and `pnpm lint` checks that order; TypeScript's organizer sorts differently.
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "never",
+    "source.organizeImports.biome": "explicit",
+    "source.fixAll.biome": "explicit"
+  },
+  // Biome does not format YAML, Markdown or MDX, and the repository has no formatter for them: keep them as written.
+  "[yaml]": { "editor.formatOnSave": false, "editor.formatOnPaste": false },
+  "[github-actions-workflow]": { "editor.formatOnSave": false, "editor.formatOnPaste": false },
+  "[markdown]": { "editor.formatOnSave": false, "editor.formatOnPaste": false },
+  "[mdx]": { "editor.formatOnSave": false, "editor.formatOnPaste": false },
+  // Nothing here is formatted with Prettier.
+  "prettier.enable": false
+}
