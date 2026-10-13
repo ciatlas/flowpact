@@ -452,3 +452,82 @@ describe('flowpact impact with paths', () => {
     });
   });
 });
+
+describe('flowpact impact with paths: where the verdict is reported', () => {
+  const CONFIG = '.github/flowpact/flowpact.config.yml';
+  const CI = '.github/workflows/ci.yml';
+  const action = (name: string) =>
+    `name: ${name}\ndescription: action ${name}\ninputs:\n  token: { description: t, required: false }\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "\${{ inputs.token }}"\n`;
+  const ci = 'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./a\n';
+  /** Published actions a and b, no root action.yml, and a CI workflow that is not published. */
+  const actions = () =>
+    repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a'),
+        'b/action.yml': action('b'),
+      },
+      { [CI]: ci },
+    );
+  const declared = ['--base', 'main', '--title', 'fix: x', '--labels', 'semver:major'];
+
+  it('places the verdict findings on a file within paths that hold no published unit', async () => {
+    const root = actions();
+    // Before: FP811 and FP812 on action.yml, a file outside the paths that does not even exist.
+    const json = await flowpact(root, ['impact', CI, ...declared, '--format', 'json']);
+    expect(json.exitCode).toBe(1);
+    const report = JSON.parse(json.stdout);
+    expect(report.impact).toMatchObject({ required: 'none', ok: false, scope: { paths: [CI], units: [] } });
+    expect(
+      report.findings.map((f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`),
+    ).toEqual([`FP811@${CI}`, `FP812@${CI}`]);
+    const github = await flowpact(root, ['impact', CI, ...declared, '--format', 'github']);
+    expect(github.stdout.match(/file=[^,]+/g)).toEqual([`file=${CI}`, `file=${CI}`]);
+    const sarif = JSON.parse((await flowpact(root, ['impact', CI, ...declared, '--format', 'sarif'])).stdout);
+    expect(
+      sarif.runs[0].results.map(
+        (r: { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }) =>
+          r.locations[0]!.physicalLocation.artifactLocation.uri,
+      ),
+    ).toEqual([CI, CI]);
+  });
+
+  it('skips impact mode when the paths hold only what the change removed, none of it published', async () => {
+    const root = actions();
+    git(root, 'rm', '-q', CI);
+    git(root, 'commit', '-qm', 'remove ci');
+    // Compared with the commit that still has the CI workflow.
+    const declared = ['--base', 'HEAD~1', '--title', 'fix: x', '--labels', 'semver:major'];
+    const impact = await flowpact(root, ['impact', CI, ...declared]);
+    expect(impact.exitCode).toBe(0);
+    expect(impact.stdout).toBe('');
+    expect(impact.stderr).toContain('impact: skipped (nothing within the paths to grade or to report on)');
+    const lint = await flowpact(root, ['lint', '--impact', CI, ...declared, '--format', 'json']);
+    expect(lint.exitCode).toBe(0);
+    expect(lint.stderr).toContain('impact: skipped (nothing within the paths to grade or to report on)');
+    const report = JSON.parse(lint.stdout);
+    expect(report.impact).toBeUndefined();
+    expect(report.findings).toEqual([]);
+  });
+
+  it('accepts a removed path beside the whole repository', async () => {
+    const root = actions();
+    git(root, 'rm', '-rq', 'b');
+    git(root, 'commit', '-qm', 'remove b');
+    const r = await flowpact(root, [
+      'impact',
+      '.',
+      'b',
+      '--base',
+      'main',
+      '--expect',
+      'patch',
+      '--format',
+      'json',
+    ]);
+    expect(r.exitCode).toBe(1);
+    const report = JSON.parse(r.stdout);
+    expect(report.impact.scope).toBeUndefined();
+    expect(report.findings.map((f: { code: string }) => f.code)).toEqual(['FP810']);
+  });
+});

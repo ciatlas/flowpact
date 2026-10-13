@@ -491,7 +491,7 @@ describe('paths narrow impact mode', () => {
     const a = run(changed, ['a']);
     expect(a.impact?.changes).toEqual([]);
     expect(a.impact?.verdict).toMatchObject({ required: 'none', ok: true });
-    expect(a.impact?.scope).toEqual({ paths: ['a'], units: ['a'], fromBaseline: ['a'] });
+    expect(a.impact?.scope).toEqual({ paths: ['a'], units: ['a'], anchor: 'a/action.yml' });
     expect(a.impact?.publishedFiles).toEqual(['a/action.yml']);
     expect(codes(a)).toEqual(['FP812']);
 
@@ -512,7 +512,8 @@ describe('paths narrow impact mode', () => {
   it('grades a unit the head removed when its baseline path is within the paths, and reports nothing else', () => {
     const removed = run({ 'a/action.yml': action('a', token) }, ['b']);
     expect(removed.impact?.changes.map((c) => [c.unit, c.kind, c.level])).toEqual([['b', 'unit', 'major']]);
-    expect(removed.impact?.scope).toEqual({ paths: ['b'], units: ['b'], fromBaseline: ['b'] });
+    expect(removed.impact?.scope).toEqual({ paths: ['b'], units: ['b'] });
+    expect(removed.removedPaths).toEqual(['b']);
     // The working tree has nothing at the path, so only impact mode reports: FP810, about b.
     expect(removed.findings.map((f) => [f.code, f.loc.file])).toEqual([['FP810', 'b/action.yml']]);
   });
@@ -520,9 +521,51 @@ describe('paths narrow impact mode', () => {
   it('does not grade units within the paths that are not published', () => {
     const ci = `on: push\njobs:\n${job('t')}`;
     const r = run({ ...changed, [`${WF}/ci.yml`]: ci }, [`${WF}/ci.yml`]);
-    expect(r.impact?.scope).toEqual({ paths: [`${WF}/ci.yml`], units: [], fromBaseline: [] });
+    expect(r.impact?.scope).toEqual({ paths: [`${WF}/ci.yml`], units: [], anchor: `${WF}/ci.yml` });
     expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: true });
     expect(r.impact?.changes).toEqual([]);
+  });
+
+  it('reports the verdict on a file within the paths when none of them holds a published unit', () => {
+    // 0.14 and the first cut placed FP811-FP813 on the root action.yml: outside the paths, and here missing.
+    const ci = `on: push\njobs:\n${job('t')}`;
+    const head = { ...changed, [`${WF}/ci.yml`]: ci, [`${WF}/docs.yml`]: ci };
+    const r = run(head, [WF]);
+    expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: true });
+    expect(r.findings.map((f) => `${f.code}@${f.loc.file}`)).toEqual([`FP812@${WF}/ci.yml`]);
+    // Within the paths, a published unit graded in the working tree comes first.
+    expect(run(head, [WF, 'a']).findings.map((f) => f.loc.file)).toEqual(['a/action.yml']);
+  });
+
+  it('does not run impact mode on paths that hold nothing to grade or report on', () => {
+    // The paths name only an unpublished workflow the change removed: nothing within them is left to report on.
+    const ci = `on: push\njobs:\n${job('t')}`;
+    const base = { 'a/action.yml': action('a', token), [`${WF}/ci.yml`]: ci };
+    const r = analyze({
+      root: '/v',
+      fs: memoryFileSystem({ 'a/action.yml': action('a', token) }),
+      config,
+      validateSchema: false,
+      repository: 'a/b',
+      paths: [`${WF}/ci.yml`],
+      impact: {
+        base: index(base, publish),
+        baseline: { kind: 'ref', ref: 'main', commit: 'abc' },
+        declared: { title: 'fix: x', labels: ['semver:major'] },
+        policy: { ...DEFAULT_IMPACT_POLICY, publish },
+      },
+    });
+    expect(r.impact).toBeUndefined();
+    expect(r.impactSkipped).toBe('nothing within the paths to grade or to report on');
+    expect(r.removedPaths).toEqual([`${WF}/ci.yml`]);
+    expect(r.findings).toEqual([]);
+  });
+
+  it('knows a removed path also beside the whole repository', () => {
+    const removed = run({ 'a/action.yml': action('a', token) }, ['.', 'b']);
+    expect(removed.removedPaths).toEqual(['b']);
+    expect(removed.impact?.scope).toBeUndefined();
+    expect(removed.impact?.verdict.required).toBe('major');
   });
 
   it('grades only the given units in impactChanges', () => {
@@ -566,8 +609,11 @@ describe('ignore leaves units out of impact mode', () => {
     expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: true });
     expect(r.impact?.publishedFiles).toEqual(['a/action.yml']);
     expect(located(r)).toEqual(['FP812@a/action.yml']);
-    // With paths too.
-    expect(run(['b/**'], { explicit: 'patch' }, ['b']).impact?.verdict).toMatchObject({ required: 'none' });
+    // With paths too; paths that hold only ignored files leave nothing to report on.
+    expect(run(['b/**'], { explicit: 'patch' }, ['a', 'b']).impact?.verdict).toMatchObject({
+      required: 'none',
+    });
+    expect(run(['b/**'], { explicit: 'patch' }, ['b']).impactSkipped).toBeDefined();
     // Not ignored, b is graded as before.
     expect(run([], { explicit: 'patch' }).impact?.verdict).toMatchObject({ required: 'major', ok: false });
   });

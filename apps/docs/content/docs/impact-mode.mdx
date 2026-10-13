@@ -79,6 +79,10 @@ graded.
 - Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths: a
   published unit whose file is ignored is not graded, so neither the verdict nor the findings are about it. Like every
   other finding's, `ignore` comes from the checked-out config, not the baseline's.
+- Findings about the declaration that no change points at (`FP811`–`FP813`) go on a file within the paths: the first
+  published file graded, else the first workflow or action file there. When the paths hold neither (say, only an
+  unpublished workflow the change removed), there is nothing to grade or to report on, and impact mode is skipped:
+  `impact: skipped (nothing within the paths to grade or to report on)`.
 - The reports say so: the terminal and Markdown reports add `only within <paths>: graded <units>`, and the JSON
   report's `impact.scope` lists the `paths` and the `units` graded.
 

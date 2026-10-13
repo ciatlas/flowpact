@@ -90,8 +90,8 @@ export interface Analysis {
 /** Where the CLI prints, in order, what the API returns in `notes`. */
 export interface ReportHooks {
   /**
-   * Impact mode is skipped (on `merge_group`). Returning true stops before the analysis, and `runReport` returns
-   * undefined.
+   * Impact mode is skipped: on `merge_group`, before the analysis, or after it when the paths hold nothing to grade or
+   * report on. Returning true stops there, and `runReport` returns undefined.
    */
   impactSkipped?(reason: string): boolean;
   /** The analysis ran, before its paths are checked; `notes` are impact mode's notes about its baseline. */
@@ -199,8 +199,12 @@ export async function runReport(
   notes.push(...baseline);
   hooks.analyzed?.(baseline);
   // In impact mode, a path the change removed (one that names a workflow or action of the baseline) is not missing.
-  checkTargets(result.project, paths, root, result.impact?.scope?.fromBaseline);
+  checkTargets(result.project, paths, root, result.removedPaths);
   if (command !== 'impact') checkNotEmpty(result.summary, root);
+  if (result.impactSkipped) {
+    notes.push(`impact: skipped (${result.impactSkipped})`);
+    if (hooks.impactSkipped?.(result.impactSkipped)) return undefined;
+  }
   return analysisOf(result, notes);
 }
 

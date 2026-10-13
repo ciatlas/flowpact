@@ -711,7 +711,7 @@ async function analyzeRoot(
   );
   if (impact.note) core.info(impact.note);
 
-  return log.group(`flowpact ${inputs.mode}: analyze`, async () => {
+  const result = await log.group(`flowpact ${inputs.mode}: analyze`, async () => {
     const registry = createRegistry();
     if (inputs.plugins) await loadPlugins(root, loaded.config, registry, logger);
     if (extraPlugins.length)
@@ -729,6 +729,8 @@ async function analyzeRoot(
       ...(impact.options ? { impact: impact.options } : {}),
     });
   });
+  if (result.impactSkipped) core.info(`impact: skipped (${result.impactSkipped})`);
+  return result;
 }
 
 /**
@@ -736,11 +738,11 @@ async function analyzeRoot(
  * path that names a workflow or action of the baseline stands for what the change removed, so it is neither.
  */
 function badPaths(result: AnalysisResult, paths: string[], where: string): string | undefined {
-  const fromBaseline = result.impact?.scope?.fromBaseline ?? [];
-  const missing = (result.project.missingTargets ?? []).filter((p) => !fromBaseline.includes(p));
+  const removed = result.removedPaths ?? [];
+  const missing = (result.project.missingTargets ?? []).filter((p) => !removed.includes(p));
   if (missing.length) return `paths not found under ${where}: ${missing.join(', ')}`;
   const { targets, wholeRepository } = result.project;
-  if (paths.length && targets.size === 0 && !wholeRepository && !fromBaseline.length)
+  if (paths.length && targets.size === 0 && !wholeRepository && !removed.length)
     return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${paths.join(', ')}`;
   return undefined;
 }

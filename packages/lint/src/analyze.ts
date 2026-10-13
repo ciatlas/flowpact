@@ -37,6 +37,8 @@ import {
   type ImpactPaths,
   type ImpactPolicy,
   type ImpactResult,
+  type ImpactScope,
+  pathHolds,
 } from './impact';
 import { createRegistry, IMPACT_CODES } from './rules/index';
 import { CODE_PATTERN, type RuleRegistry } from './rules/registry';
@@ -127,6 +129,16 @@ export interface AnalysisResult {
   configSource?: SourceFile;
   /** Impact mode's changes and verdict, when it ran. */
   impact?: ImpactResult;
+  /**
+   * Why impact mode did not run although it was set up: the paths hold nothing published and no workflow or action of
+   * the working tree that is not ignored (say, only what the change removed), so nothing to grade or to report on.
+   */
+  impactSkipped?: string;
+  /**
+   * Impact mode: the paths, as given, that name no workflow or action of the working tree but one of the baseline (or a
+   * directory that held one): what the change removed. Such a path is not missing.
+   */
+  removedPaths?: string[];
   /**
    * Config entries naming rules that are not loaded, such as the rules of a plugin that this run does not load. They
    * are ignored for this run, and logged as a warning.
@@ -414,6 +426,17 @@ function compareContracts(
 const rootRelative = (root: string, path: string) =>
   relative(root, resolve(root, path)).split('\\').join('/') || '.';
 
+/**
+ * Impact mode: the paths, as given, that name no workflow or action of the working tree but one of the baseline, or a
+ * directory that held one. They name what the change removed, so they are neither missing nor beside the point.
+ */
+function removedPathsOf(opts: AnalyzeOptions, project: Project): string[] {
+  if (!opts.impact) return [];
+  const absent = [...(project.missingTargets ?? []), ...(project.ignoredTargets ?? [])];
+  const baseFiles = opts.impact.base.units().map((u) => u.file);
+  return absent.filter((p) => baseFiles.some((f) => pathHolds(rootRelative(opts.root, p), f)));
+}
+
 /** Impact mode's paths: the paths given, unless there are none or one is the whole repository. */
 function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | undefined {
   if (!opts.impact || !opts.paths?.length || project.wholeRepository) return undefined;
@@ -424,20 +447,31 @@ function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | un
 }
 
 /**
+ * Why impact mode does not run with these paths: they hold nothing to grade or to report on, i.e. nothing published
+ * and no workflow or action of the working tree that is not ignored (say, only what the change removed).
+ */
+function impactSkip(scope: ImpactScope | undefined): string | undefined {
+  if (!scope || scope.units.length || scope.anchor) return undefined;
+  return 'nothing within the paths to grade or to report on';
+}
+
+/**
  * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
- * them; never one whose file `ignore` matches).
+ * them; never one whose file `ignore` matches). With paths that hold nothing to grade or report on, why it does not.
  */
 function impactOf(
   opts: AnalyzeOptions,
   index: ProjectIndex,
   lookAt: ImpactLookAt,
   logger: Logger,
-): ImpactResult | undefined {
+): Pick<RuleRun, 'impact' | 'impactSkipped'> {
   const impact = opts.impact;
-  if (!impact) return undefined;
-  return logger.time('impact', () =>
+  if (!impact) return { impact: undefined };
+  const result = logger.time('impact', () =>
     computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt),
   );
+  const skipped = impactSkip(result.scope);
+  return skipped ? { impact: undefined, impactSkipped: skipped } : { impact: result };
 }
 
 /** What running the rules of one analysis needs. */
@@ -453,6 +487,8 @@ interface RuleRun {
   configFile: string | undefined;
   contracts: ContractPlan | undefined;
   impact: ImpactResult | undefined;
+  /** Why impact mode did not run although it was set up. */
+  impactSkipped?: string;
   /** Generated files, whose internals rules with `generatedFiles: 'skip'` stay quiet about. */
   generatedFiles: Map<string, string>;
   /** Whether a rule runs in this analysis (`ctx.runs`). */
@@ -645,7 +681,10 @@ function metaOf(opts: AnalyzeOptions, repository: string | undefined): AnalysisR
 function resultOf(
   opts: AnalyzeOptions,
   run: RuleRun,
-  r: Pick<AnalysisResult, 'project' | 'findings' | 'summary' | 'suppressed' | 'durationMs'> & {
+  r: Pick<
+    AnalysisResult,
+    'project' | 'findings' | 'summary' | 'suppressed' | 'durationMs' | 'removedPaths'
+  > & {
     repository: string | undefined;
     unloaded: string[];
   },
@@ -665,6 +704,8 @@ function resultOf(
     ...(run.contracts ? { contracts: run.contracts } : {}),
     ...(r.unloaded.length ? { unloadedRules: r.unloaded } : {}),
     ...(run.impact ? { impact: run.impact } : {}),
+    ...(run.impactSkipped ? { impactSkipped: run.impactSkipped } : {}),
+    ...(r.removedPaths?.length ? { removedPaths: r.removedPaths } : {}),
     ...(opts.configFile && opts.configText !== undefined
       ? { configSource: new SourceFile(opts.configFile, opts.configText) }
       : {}),
@@ -693,6 +734,7 @@ function prepareRules(
   };
   const contracts = compareContracts(opts, index, scope, logger);
   const impact = impactOf(opts, index, { ...(within ? { within } : {}), ignore: config.ignore }, logger);
+  if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
   const run = ruleRun({
     ...base,
     severities,
@@ -700,7 +742,7 @@ function prepareRules(
     ruleLog,
     configFile: opts.configFile,
     contracts,
-    impact,
+    ...impact,
     generatedFiles,
   });
   return { run, scope };
@@ -779,6 +821,7 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
     suppressed,
     unloaded,
     durationMs,
+    removedPaths: removedPathsOf(opts, project),
   });
 }
 

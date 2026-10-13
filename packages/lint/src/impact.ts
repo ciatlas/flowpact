@@ -633,14 +633,15 @@ export interface ImpactScope {
   /** The published units within them, in the baseline or the working tree: the only units graded. */
   units: string[];
   /**
-   * The paths, as given, that name a workflow or action of the baseline, or a directory holding one. Such a path is
-   * not missing when the working tree no longer has it: the change removed what it names.
+   * Where findings about the verdict go when no change is there to place them on: the first published file graded in
+   * the working tree, else the first workflow or action file within the paths that is not ignored. Absent when the
+   * paths hold neither (only what the change removed, none of it published): there is nothing within them to report on.
    */
-  fromBaseline: string[];
+  anchor?: string;
 }
 
 /** Whether `file` is the file `path` names, or lies in the directory it names (both relative to the root). */
-const pathHolds = (path: string, file: string) => file === path || file.startsWith(`${path}/`);
+export const pathHolds = (path: string, file: string) => file === path || file.startsWith(`${path}/`);
 
 /** What impact mode looks at: every unit, or with paths those within them; never one whose file is ignored. */
 export interface ImpactLookAt {
@@ -661,15 +662,21 @@ function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore 
   );
 }
 
+/** The file of the working tree to place findings about the verdict on, when no change is there (see `anchor`). */
+function anchorOf(head: ProjectIndex, { within, ignore = [] }: ImpactLookAt, published: UnitDecl[]) {
+  const headFiles = new Set(head.units().map((u) => u.file));
+  const graded = published.map((u) => u.file).filter((f) => headFiles.has(f));
+  const targets = [...(within?.targets ?? [])].filter((f) => !ignore.some((p) => matchesPattern(f, p)));
+  return graded.sort()[0] ?? targets.sort()[0];
+}
+
 /** What the paths narrowed impact mode to, given the published units within them. */
-function scopeOf(base: ProjectIndex, within: ImpactPaths, published: UnitDecl[]): ImpactScope {
-  const baseFiles = base.units().map((u) => u.file);
+function scopeOf(head: ProjectIndex, lookAt: ImpactLookAt, published: UnitDecl[]): ImpactScope {
+  const anchor = anchorOf(head, lookAt, published);
   return {
-    paths: [...new Set(within.paths.map((p) => p.relative))],
+    paths: [...new Set(lookAt.within!.paths.map((p) => p.relative))],
     units: [...new Set(published.map((u) => u.path))].sort(),
-    fromBaseline: within.paths
-      .filter((p) => baseFiles.some((f) => pathHolds(p.relative, f)))
-      .map((p) => p.given),
+    ...(anchor ? { anchor } : {}),
   };
 }
 
@@ -712,6 +719,6 @@ export function computeImpact(
     verdict: impactVerdict(changes, declared, policy),
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
-    ...(within ? { scope: scopeOf(base, within, published) } : {}),
+    ...(within ? { scope: scopeOf(head, lookAt, published) } : {}),
   };
 }

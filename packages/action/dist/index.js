@@ -21888,12 +21888,18 @@ function unitsLookedAt(base, head, { within: within2, ignore = [] }) {
     [...base.units(), ...head.units()].filter((u) => covered(u.file) && !ignored(u.file)).map((u) => u.path)
   );
 }
-function scopeOf(base, within2, published) {
-  const baseFiles = base.units().map((u) => u.file);
+function anchorOf(head, { within: within2, ignore = [] }, published) {
+  const headFiles = new Set(head.units().map((u) => u.file));
+  const graded = published.map((u) => u.file).filter((f) => headFiles.has(f));
+  const targets = [...within2?.targets ?? []].filter((f) => !ignore.some((p) => matchesPattern(f, p)));
+  return graded.sort()[0] ?? targets.sort()[0];
+}
+function scopeOf(head, lookAt, published) {
+  const anchor2 = anchorOf(head, lookAt, published);
   return {
-    paths: [...new Set(within2.paths.map((p) => p.relative))],
+    paths: [...new Set(lookAt.within.paths.map((p) => p.relative))],
     units: [...new Set(published.map((u) => u.path))].sort(),
-    fromBaseline: within2.paths.filter((p) => baseFiles.some((f) => pathHolds(p.relative, f))).map((p) => p.given)
+    ...anchor2 ? { anchor: anchor2 } : {}
   };
 }
 function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
@@ -21909,7 +21915,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
     verdict: impactVerdict(changes, declared, policy),
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
-    ...within2 ? { scope: scopeOf(base, within2, published) } : {}
+    ...within2 ? { scope: scopeOf(head, lookAt, published) } : {}
   };
 }
 
@@ -22440,7 +22446,7 @@ var expressionRules = [
 var describeSource = (s) => s.kind === "explicit" ? "the explicit impact" : s.kind === "version" ? `the version bump ${s.value}` : `the ${s.kind === "title" ? "title" : "labels"} "${s.value}"`;
 var related = (changes) => changes.slice(0, 20).map((c) => ({ loc: c.loc, message: `${c.level}: ${c.message}` }));
 var verdictLoc = (impact, changes) => changes[0]?.loc ?? impact.changes[0]?.loc ?? {
-  file: impact.publishedFiles[0] ?? "action.yml",
+  file: impact.scope?.anchor ?? impact.publishedFiles[0] ?? "action.yml",
   line: 1,
   column: 1,
   endLine: 1,
@@ -24921,6 +24927,12 @@ function compareContracts(opts, index, scope, logger) {
   return contracts;
 }
 var rootRelative = (root, path) => relative4(root, resolve4(root, path)).split("\\").join("/") || ".";
+function removedPathsOf(opts, project) {
+  if (!opts.impact) return [];
+  const absent = [...project.missingTargets ?? [], ...project.ignoredTargets ?? []];
+  const baseFiles = opts.impact.base.units().map((u) => u.file);
+  return absent.filter((p) => baseFiles.some((f) => pathHolds(rootRelative(opts.root, p), f)));
+}
 function impactPathsOf(opts, project) {
   if (!opts.impact || !opts.paths?.length || project.wholeRepository) return void 0;
   return {
@@ -24928,13 +24940,19 @@ function impactPathsOf(opts, project) {
     targets: project.targets
   };
 }
+function impactSkip(scope) {
+  if (!scope || scope.units.length || scope.anchor) return void 0;
+  return "nothing within the paths to grade or to report on";
+}
 function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
-  if (!impact) return void 0;
-  return logger.time(
+  if (!impact) return { impact: void 0 };
+  const result = logger.time(
     "impact",
     () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt)
   );
+  const skipped = impactSkip(result.scope);
+  return skipped ? { impact: void 0, impactSkipped: skipped } : { impact: result };
 }
 function ruleRun(fields) {
   const { registry: registry2, severities, only } = fields;
@@ -25063,6 +25081,8 @@ function resultOf(opts, run2, r) {
     ...run2.contracts ? { contracts: run2.contracts } : {},
     ...r.unloaded.length ? { unloadedRules: r.unloaded } : {},
     ...run2.impact ? { impact: run2.impact } : {},
+    ...run2.impactSkipped ? { impactSkipped: run2.impactSkipped } : {},
+    ...r.removedPaths?.length ? { removedPaths: r.removedPaths } : {},
     ...opts.configFile && opts.configText !== void 0 ? { configSource: new SourceFile(opts.configFile, opts.configText) } : {},
     durationMs: r.durationMs
   };
@@ -25080,6 +25100,7 @@ function prepareRules(opts, logger, base, unloaded) {
   };
   const contracts = compareContracts(opts, index, scope, logger);
   const impact = impactOf(opts, index, { ...within2 ? { within: within2 } : {}, ignore: config2.ignore }, logger);
+  if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
   const run2 = ruleRun({
     ...base,
     severities,
@@ -25087,7 +25108,7 @@ function prepareRules(opts, logger, base, unloaded) {
     ruleLog,
     configFile: opts.configFile,
     contracts,
-    impact,
+    ...impact,
     generatedFiles
   });
   return { run: run2, scope };
@@ -25148,7 +25169,8 @@ function analyze(opts) {
     summary: summary2,
     suppressed,
     unloaded,
-    durationMs
+    durationMs,
+    removedPaths: removedPathsOf(opts, project)
   });
 }
 function toFinding(rule, severity, input2, registry2) {
@@ -27146,7 +27168,7 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
     () => impactSetup(root, loaded.config, inputs.config || void 0, loaded.base, inputs, logger)
   );
   if (impact.note) info(impact.note);
-  return log.group(`flowpact ${inputs.mode}: analyze`, async () => {
+  const result = await log.group(`flowpact ${inputs.mode}: analyze`, async () => {
     const registry2 = createRegistry();
     if (inputs.plugins) await loadPlugins(root, loaded.config, registry2, logger);
     if (extraPlugins.length)
@@ -27164,13 +27186,15 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
       ...impact.options ? { impact: impact.options } : {}
     });
   });
+  if (result.impactSkipped) info(`impact: skipped (${result.impactSkipped})`);
+  return result;
 }
 function badPaths(result, paths, where) {
-  const fromBaseline = result.impact?.scope?.fromBaseline ?? [];
-  const missing = (result.project.missingTargets ?? []).filter((p) => !fromBaseline.includes(p));
+  const removed = result.removedPaths ?? [];
+  const missing = (result.project.missingTargets ?? []).filter((p) => !removed.includes(p));
   if (missing.length) return `paths not found under ${where}: ${missing.join(", ")}`;
   const { targets, wholeRepository } = result.project;
-  if (paths.length && targets.size === 0 && !wholeRepository && !fromBaseline.length)
+  if (paths.length && targets.size === 0 && !wholeRepository && !removed.length)
     return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${paths.join(", ")}`;
   return void 0;
 }

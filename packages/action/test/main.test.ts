@@ -656,6 +656,40 @@ describe('impact mode', () => {
     expect(lint.outputs['exit-code']).toBe('2');
   });
 
+  it('reports the verdict within paths that hold nothing published, and skips paths that hold nothing at all', async () => {
+    const workspace = renamedRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    // On main, two CI workflows that are not published; the branch deletes one of them.
+    g('checkout', '-q', 'main');
+    const ci = 'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "true" }]\n';
+    writeFileSync(join(workspace, '.github/workflows/ci.yml'), ci);
+    writeFileSync(join(workspace, '.github/workflows/old-ci.yml'), ci);
+    g('add', '-A');
+    g('commit', '-q', '-m', 'ci');
+    g('checkout', '-q', 'change');
+    g('merge', '-q', '--no-edit', 'main');
+    g('rm', '-q', '.github/workflows/old-ci.yml');
+    g('commit', '-q', '-m', 'old ci gone');
+    const fresh = (paths: string) => {
+      Object.assign(state, { outputs: {}, annotations: [], infos: [], summary: '', failed: [] });
+      return action(workspace, { impact: 'on', 'base-ref': 'main', 'expected-impact': 'major', paths });
+    };
+
+    // Before: FP812 annotated the root action.yml, which this repository does not have.
+    const unpublished = await fresh('.github/workflows/ci.yml');
+    expect(unpublished.outputs['required-impact']).toBe('none');
+    expect(unpublished.annotations.map((a) => [String(a.props?.title).split(' ')[0], a.props?.file])).toEqual(
+      [['FP812', '.github/workflows/ci.yml']],
+    );
+
+    const removed = await fresh('.github/workflows/old-ci.yml');
+    expect(removed.failed).toEqual([]);
+    expect(removed.outputs['exit-code']).toBe('0');
+    expect(removed.outputs['required-impact']).toBe('');
+    expect(removed.annotations).toEqual([]);
+    expect(removed.infos).toContain('impact: skipped (nothing within the paths to grade or to report on)');
+  });
+
   it('opens the impact baseline group only when something is logged in it', async () => {
     const off = await action(renamedRepo(), { impact: 'off' });
     expect(off.groups).not.toContain('flowpact: impact baseline');
