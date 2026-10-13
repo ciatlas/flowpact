@@ -21627,6 +21627,10 @@ function chainRelated(chain) {
   }));
 }
 var quote = (s) => `"${escapeControl(s)}"`;
+var didYouMeanNote = (guess) => guess ? ` \u2014 did you mean ${quote(guess)}?` : "";
+function namesKey(segment) {
+  return !!segment && segment !== "*" && segment !== "?";
+}
 function listNames(names, max = 6) {
   if (names.length === 0) return "(none)";
   const shown = names.slice(0, max).join(", ");
@@ -21637,19 +21641,27 @@ function listNames(names, max = 6) {
 var fileStart2 = (file) => ({ file, line: 1, column: 1, endLine: 1, endColumn: 1 });
 function locFor(unit, path, fallback) {
   if (!unit) return fallback;
-  const [kind, name] = path.split(".");
-  if (unit.kind === "workflow") {
-    if (kind === "inputs" && name) return unit.call?.inputs[name]?.loc ?? unit.call?.loc ?? fallback;
-    if (kind === "dispatchInputs" && name)
-      return unit.dispatch?.inputs[name]?.loc ?? unit.dispatch?.loc ?? fallback;
-    if (kind === "secrets" && name) return unit.call?.secrets[name]?.loc ?? unit.call?.loc ?? fallback;
-    if (kind === "outputs" && name) return unit.call?.outputs[name]?.loc ?? unit.call?.loc ?? fallback;
-    if (kind === "calls" && name) return unit.jobs[name]?.uses?.loc ?? unit.jobs[name]?.loc ?? fallback;
-    return unit.call?.loc ?? unit.dispatch?.loc ?? fallback;
-  }
-  if (kind === "inputs" && name) return unit.inputs[name]?.loc ?? fallback;
-  if (kind === "outputs" && name) return unit.outputs[name]?.loc ?? fallback;
-  return fallback;
+  const [kind = "", name] = path.split(".");
+  const loc = unit.kind === "workflow" ? workflowLocFor(unit, kind, name) : actionLocFor(unit, kind, name);
+  return loc ?? fallback;
+}
+var WORKFLOW_ENTRY_LOCS = /* @__PURE__ */ new Map([
+  ["inputs", (wf, name) => wf.call?.inputs[name]?.loc ?? wf.call?.loc],
+  ["dispatchInputs", (wf, name) => wf.dispatch?.inputs[name]?.loc ?? wf.dispatch?.loc],
+  ["secrets", (wf, name) => wf.call?.secrets[name]?.loc ?? wf.call?.loc],
+  ["outputs", (wf, name) => wf.call?.outputs[name]?.loc ?? wf.call?.loc],
+  ["calls", (wf, name) => wf.jobs[name]?.uses?.loc ?? wf.jobs[name]?.loc]
+]);
+function workflowLocFor(wf, kind, name) {
+  const entryLoc = name ? WORKFLOW_ENTRY_LOCS.get(kind) : void 0;
+  if (name && entryLoc) return entryLoc(wf, name);
+  return wf.call?.loc ?? wf.dispatch?.loc;
+}
+function actionLocFor(action, kind, name) {
+  if (!name) return void 0;
+  if (kind === "inputs") return action.inputs[name]?.loc;
+  if (kind === "outputs") return action.outputs[name]?.loc;
+  return void 0;
 }
 function* entries(ctx, status) {
   for (const entry of ctx.contracts?.entries ?? []) {
@@ -21695,10 +21707,7 @@ var contractOutdated = defineRule({
       const changes = entry.changes.filter((c) => !c.breaking);
       if (changes.length === 0 && entry.changes.length > 0) continue;
       ctx.report({
-        message: `Contract ${entry.file} is outdated: ${changes.length ? listNames(
-          changes.map((c) => c.message),
-          4
-        ) : "formatting or ordering changed"}`,
+        message: `Contract ${entry.file} is outdated: ${outdatedSummary(changes)}`,
         loc: unit ? locFor(unit, changes[0]?.path ?? "", fileStart2(unit.file)) : fileStart2(entry.file),
         related: [{ loc: fileStart2(entry.file), message: "locked contract" }],
         ...entry.unit ? { symbol: entry.unit } : {}
@@ -21706,6 +21715,12 @@ var contractOutdated = defineRule({
     }
   }
 });
+function outdatedSummary(changes) {
+  return changes.length ? listNames(
+    changes.map((c) => c.message),
+    4
+  ) : "formatting or ordering changed";
+}
 var breakingInterfaceChange = defineRule({
   code: "FP803",
   name: "breaking-interface-change",
@@ -21831,34 +21846,46 @@ var undefinedEnvRef = defineRule({
     for (const wf of ctx.index.project.workflows.values()) {
       for (const site of wf.sites) {
         if (site.field === "workflow.env" || site.field === "input.default") continue;
-        const job = site.job ? wf.jobs[site.job] : void 0;
-        const step = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-        for (const seg of site.segments) {
-          for (const ref of seg.refs) {
-            const name = ref.path[0];
-            if (ref.context !== "env" || !name || name === "*" || name === "?") continue;
-            if (lookup(wf.env, name) || job && lookup(job.env, name) || step && lookup(step.env, name))
-              continue;
-            if (job) {
-              const earlier = site.step === void 0 ? job.steps : job.steps.slice(0, site.step);
-              if (earlier.some((s) => s.writesEnv.dynamic)) continue;
-              if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase())))
-                continue;
-              if (earlier.some((s) => s.uses && s.uses.kind !== "docker")) continue;
-            }
-            const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
-            ctx.report({
-              message: `env.${name} is not defined in this scope${hint ? ` \u2014 runner variables are not in the env context; use ${hint}` : ""}`,
-              loc: ref.loc,
-              symbol: sym.env(wf.path, site.job, name),
-              ...hint ? { fix: `Replace \`env.${name}\` with \`${hint}\`.` } : {}
-            });
-          }
-        }
+        checkEnvReads(ctx, wf, site);
       }
     }
   }
 });
+function siteScope(wf, site) {
+  const job = site.job ? wf.jobs[site.job] : void 0;
+  const step = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return { job, step };
+}
+function checkEnvReads(ctx, wf, site) {
+  const { job, step } = siteScope(wf, site);
+  for (const seg of site.segments) {
+    for (const ref of seg.refs) {
+      const name = ref.path[0];
+      if (ref.context !== "env" || !namesKey(name)) continue;
+      if (envEntry(wf, job, step, name) || maybeWrittenEarlier(job, site, name)) continue;
+      reportUndefinedEnv(ctx, wf, site, ref, name);
+    }
+  }
+}
+function envEntry(wf, job, step, name) {
+  return lookup(wf.env, name) || job && lookup(job.env, name) || step && lookup(step.env, name);
+}
+function maybeWrittenEarlier(job, site, name) {
+  if (!job) return false;
+  const earlier = site.step === void 0 ? job.steps : job.steps.slice(0, site.step);
+  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
+  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
+  return earlier.some((s) => s.uses && s.uses.kind !== "docker");
+}
+function reportUndefinedEnv(ctx, wf, site, ref, name) {
+  const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
+  ctx.report({
+    message: `env.${name} is not defined in this scope${hint ? ` \u2014 runner variables are not in the env context; use ${hint}` : ""}`,
+    loc: ref.loc,
+    symbol: sym.env(wf.path, site.job, name),
+    ...hint ? { fix: `Replace \`env.${name}\` with \`${hint}\`.` } : {}
+  });
+}
 var expressionParseError = defineRule({
   code: "FP502",
   name: "expression-parse-error",
@@ -21876,22 +21903,22 @@ var expressionParseError = defineRule({
   check(ctx) {
     for (const unit of ctx.index.units()) {
       for (const site of unit.sites) {
-        for (const seg of site.segments) {
-          if (!seg.expr.error) continue;
-          const loc = { ...seg.loc };
-          if (seg.loc.line === seg.loc.endLine) {
-            loc.column = seg.loc.column + seg.expr.error.offset;
-            loc.endColumn = Math.max(loc.column + 1, seg.loc.endColumn);
-          }
-          ctx.report({
-            message: `Invalid expression ${quote(seg.expr.source.length > 60 ? `${seg.expr.source.slice(0, 57)}...` : seg.expr.source)}: ${seg.expr.error.message}`,
-            loc
-          });
-        }
+        for (const seg of site.segments) if (seg.expr.error) reportParseError(ctx, seg, seg.expr.error);
       }
     }
   }
 });
+function reportParseError(ctx, seg, error3) {
+  const loc = { ...seg.loc };
+  if (seg.loc.line === seg.loc.endLine) {
+    loc.column = seg.loc.column + error3.offset;
+    loc.endColumn = Math.max(loc.column + 1, seg.loc.endColumn);
+  }
+  ctx.report({
+    message: `Invalid expression ${quote(seg.expr.source.length > 60 ? `${seg.expr.source.slice(0, 57)}...` : seg.expr.source)}: ${error3.message}`,
+    loc
+  });
+}
 var schemaViolation = defineRule({
   code: "FP503",
   name: "schema-violation",
@@ -21965,46 +21992,50 @@ jobs:
   },
   check(ctx) {
     for (const unit of ctx.index.units()) {
-      for (const e of unit.schemaErrors) {
-        if (e.kind !== "context") continue;
-        const name = /'([^']+)'/.exec(e.message)?.[1];
-        ctx.report({
-          message: `${name ? `\`${name}\`` : "This context"} is not available here \u2014 ${unit.kind === "workflow" ? "GitHub rejects the workflow" : "GitHub fails the step using the action"} ("${e.message}")`,
-          loc: refLocFor(unit.sites, e, name) ?? e.loc
-        });
-      }
-      for (const site of unit.sites) {
-        if (!site.isCondition || site.text.includes("${{")) continue;
-        const table = CONDITION_TABLES[`${unit.kind}:${site.field}`];
-        if (!table) continue;
-        const rejects = unit.kind === "workflow" ? "GitHub rejects the workflow" : "GitHub fails the step using the action";
-        for (const seg of site.segments) {
-          for (const ref of seg.refs) {
-            if (table.contexts.has(ref.context)) continue;
-            ctx.report({
-              message: `\`${ref.context}\` is not available in ${table.label} \u2014 ${rejects} ("Unrecognized named-value: '${ref.context}'")`,
-              loc: ref.loc
-            });
-          }
-          if (!table.functions) continue;
-          for (const fn of functionCalls(seg.expr.source)) {
-            const name = fn.name.toLowerCase();
-            if (STANDARD_FUNCTIONS.has(name) || table.functions.has(name)) continue;
-            ctx.report({
-              message: `\`${fn.name}()\` is not available in ${table.label} \u2014 ${rejects} ("Unrecognized function: '${fn.name}'")`,
-              loc: seg.expr.source.includes("\n") ? seg.loc : {
-                ...seg.loc,
-                column: seg.loc.column + fn.offset,
-                endLine: seg.loc.line,
-                endColumn: seg.loc.column + fn.offset + fn.name.length
-              }
-            });
-          }
-        }
-      }
+      for (const e of unit.schemaErrors) if (e.kind === "context") reportParserContextError(ctx, unit, e);
+      for (const site of unit.sites) checkBareCondition(ctx, unit, site);
     }
   }
 });
+var rejection = (unit) => unit.kind === "workflow" ? "GitHub rejects the workflow" : "GitHub fails the step using the action";
+function reportParserContextError(ctx, unit, e) {
+  const name = /'([^']+)'/.exec(e.message)?.[1];
+  ctx.report({
+    message: `${name ? `\`${name}\`` : "This context"} is not available here \u2014 ${rejection(unit)} ("${e.message}")`,
+    loc: refLocFor(unit.sites, e, name) ?? e.loc
+  });
+}
+function checkBareCondition(ctx, unit, site) {
+  if (!site.isCondition || site.text.includes("${{")) return;
+  const table = CONDITION_TABLES[`${unit.kind}:${site.field}`];
+  if (!table) return;
+  const rejects = rejection(unit);
+  for (const seg of site.segments) {
+    for (const ref of seg.refs) {
+      if (table.contexts.has(ref.context)) continue;
+      ctx.report({
+        message: `\`${ref.context}\` is not available in ${table.label} \u2014 ${rejects} ("Unrecognized named-value: '${ref.context}'")`,
+        loc: ref.loc
+      });
+    }
+    if (table.functions) checkConditionFunctions(ctx, seg, table.label, table.functions, rejects);
+  }
+}
+function checkConditionFunctions(ctx, seg, label, allowed, rejects) {
+  for (const fn of functionCalls(seg.expr.source)) {
+    const name = fn.name.toLowerCase();
+    if (STANDARD_FUNCTIONS.has(name) || allowed.has(name)) continue;
+    ctx.report({
+      message: `\`${fn.name}()\` is not available in ${label} \u2014 ${rejects} ("Unrecognized function: '${fn.name}'")`,
+      loc: seg.expr.source.includes("\n") ? seg.loc : {
+        ...seg.loc,
+        column: seg.loc.column + fn.offset,
+        endLine: seg.loc.line,
+        endColumn: seg.loc.column + fn.offset + fn.name.length
+      }
+    });
+  }
+}
 function functionCalls(source) {
   const blanked = source.replace(/'(?:[^']|'')*'/g, (m) => " ".repeat(m.length));
   return [...blanked.matchAll(/(?<![\w.-])([A-Za-z_]\w*)\s*\(/g)].map((m) => ({
@@ -22216,28 +22247,36 @@ var IMPACT_CODES = impactRules.map((r) => r.code);
 function eventInputReadsByRoot(index) {
   const out = /* @__PURE__ */ new Map();
   for (const root of index.project.workflows.values()) {
-    if (!root.dispatch) continue;
-    const names = /* @__PURE__ */ new Set();
-    const seen = /* @__PURE__ */ new Set();
-    const queue = [root];
-    while (queue.length) {
-      const unit = queue.shift();
-      if (seen.has(unit)) continue;
-      seen.add(unit);
-      for (const { ref } of refsOf(unit)) {
-        const [a, b, c] = ref.path;
-        if (ref.context === "github" && a === "event" && b === "inputs" && c) names.add(c.toLowerCase());
-      }
-      for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
-      for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
-    }
-    out.set(root.path, names);
+    if (root.dispatch) out.set(root.path, eventInputReadsFrom(index, root));
   }
   return out;
+}
+function eventInputReadsFrom(index, root) {
+  const names = /* @__PURE__ */ new Set();
+  const seen = /* @__PURE__ */ new Set();
+  const queue = [root];
+  while (queue.length) {
+    const unit = queue.shift();
+    if (seen.has(unit)) continue;
+    seen.add(unit);
+    addEventInputReads(unit, names);
+    for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
+    for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
+  }
+  return names;
+}
+function addEventInputReads(unit, names) {
+  for (const { ref } of refsOf(unit)) {
+    const [a, b, c] = ref.path;
+    if (ref.context === "github" && a === "event" && b === "inputs" && c) names.add(c.toLowerCase());
+  }
 }
 function declaredInputs(unit) {
   if (unit.kind === "action") return unit.inputs;
   return { ...unit.dispatch?.inputs ?? {}, ...unit.call?.inputs ?? {} };
+}
+function emptyWhenOmitted(input2) {
+  return !input2.required && !input2.hasDefault && input2.type !== "boolean" && input2.type !== "number";
 }
 var missingRequiredInput = defineRule({
   code: "FP101",
@@ -22264,36 +22303,38 @@ var missingRequiredInput = defineRule({
     }
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
-      const inputs = call.callee.call?.inputs ?? {};
-      for (const input2 of Object.values(inputs)) {
-        if (!input2.required || lookup(call.job.with, input2.name)) continue;
-        ctx.report({
-          message: `jobs.${call.job.id} calls ${call.callee.path} without required input ${quote(input2.name)}`,
-          loc: call.job.uses?.loc ?? call.job.loc,
-          symbol: sym.input(call.callee.path, input2.name),
-          related: [
-            ...chainRelated(chainTo(ctx.index, call.caller.path)),
-            { loc: input2.loc, message: `${quote(input2.name)} is declared required here` }
-          ],
-          fix: `Add \`${input2.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`
-        });
-      }
-    }
-    for (const use of ctx.index.actionUses) {
-      for (const input2 of Object.values(use.action.inputs)) {
-        if (!input2.required || input2.hasDefault || lookup(use.step.with, input2.name)) continue;
-        ctx.report({
-          message: `Step ${use.step.id ?? `#${use.step.index + 1}`} uses ${use.action.path} without required input ${quote(input2.name)} \u2014 GitHub will run it with an empty value`,
-          loc: use.step.uses?.loc ?? use.step.loc,
-          symbol: sym.input(use.action.path, input2.name),
-          related: [{ loc: input2.loc, message: `${quote(input2.name)} is declared required here` }],
-          fix: `Add \`${input2.name}: <value>\` under the step's \`with:\`.`
-        });
-      }
-    }
+    for (const call of ctx.index.callSites) reportMissingCallInputs(ctx, call);
+    for (const use of ctx.index.actionUses) reportMissingActionInputs(ctx, use);
   }
 });
+function reportMissingCallInputs(ctx, call) {
+  const inputs = call.callee.call?.inputs ?? {};
+  for (const input2 of Object.values(inputs)) {
+    if (!input2.required || lookup(call.job.with, input2.name)) continue;
+    ctx.report({
+      message: `jobs.${call.job.id} calls ${call.callee.path} without required input ${quote(input2.name)}`,
+      loc: call.job.uses?.loc ?? call.job.loc,
+      symbol: sym.input(call.callee.path, input2.name),
+      related: [
+        ...chainRelated(chainTo(ctx.index, call.caller.path)),
+        { loc: input2.loc, message: `${quote(input2.name)} is declared required here` }
+      ],
+      fix: `Add \`${input2.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`
+    });
+  }
+}
+function reportMissingActionInputs(ctx, use) {
+  for (const input2 of Object.values(use.action.inputs)) {
+    if (!input2.required || input2.hasDefault || lookup(use.step.with, input2.name)) continue;
+    ctx.report({
+      message: `Step ${use.step.id ?? `#${use.step.index + 1}`} uses ${use.action.path} without required input ${quote(input2.name)} \u2014 GitHub will run it with an empty value`,
+      loc: use.step.uses?.loc ?? use.step.loc,
+      symbol: sym.input(use.action.path, input2.name),
+      related: [{ loc: input2.loc, message: `${quote(input2.name)} is declared required here` }],
+      fix: `Add \`${input2.name}: <value>\` under the step's \`with:\`.`
+    });
+  }
+}
 var unknownInput = defineRule({
   code: "FP102",
   name: "unknown-input",
@@ -22317,7 +22358,7 @@ var unknownInput = defineRule({
         if (lookup(inputs, b.name)) continue;
         const guess = didYouMean(b.name, names);
         ctx.report({
-          message: `${target} has no input ${quote(b.name)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
+          message: `${target} has no input ${quote(b.name)}${didYouMeanNote(guess)}`,
           loc: b.loc,
           symbol: sym.input(target, b.name),
           related: declLoc ? [{ loc: declLoc, message: `declared inputs: ${listNames(names)}` }] : [],
@@ -22357,25 +22398,32 @@ var inputTypeMismatch = defineRule({
   },
   check(ctx) {
     for (const call of ctx.index.callSites) {
-      for (const b of Object.values(call.job.with)) {
-        const input2 = lookup(call.callee.call?.inputs ?? {}, b.name);
-        const expected = input2?.type;
-        if (!input2 || !expected || !["boolean", "number"].includes(expected)) continue;
-        const v = b.site ? evaluateTemplate(b.site.text, () => UNKNOWN) : { known: true, value: b.value, taint: [] };
-        if (!v.known) continue;
-        const actual = jsonKind(v.value);
-        if (actual === expected) continue;
-        ctx.report({
-          message: `Input ${quote(input2.name)} of ${call.callee.path} is a ${expected}, but jobs.${call.job.id} passes a ${actual} (${JSON.stringify(v.value)})`,
-          loc: b.valueLoc,
-          symbol: sym.input(call.callee.path, input2.name),
-          related: [{ loc: input2.loc, message: `declared as type: ${expected}` }],
-          fix: expected === "boolean" ? `Use an unquoted boolean: \`${b.name}: ${String(v.value).toLowerCase() === "true"}\`, or an expression that yields one.` : `Use an unquoted number for ${quote(b.name)}.`
-        });
-      }
+      for (const b of Object.values(call.job.with)) checkLiteralType(ctx, call, b);
     }
   }
 });
+function checkLiteralType(ctx, call, b) {
+  const input2 = lookup(call.callee.call?.inputs ?? {}, b.name);
+  const expected = input2?.type;
+  if (!input2 || !expected || !["boolean", "number"].includes(expected)) return;
+  const v = knownValue(b);
+  if (!v.known) return;
+  const actual = jsonKind(v.value);
+  if (actual === expected) return;
+  ctx.report({
+    message: `Input ${quote(input2.name)} of ${call.callee.path} is a ${expected}, but jobs.${call.job.id} passes a ${actual} (${JSON.stringify(v.value)})`,
+    loc: b.valueLoc,
+    symbol: sym.input(call.callee.path, input2.name),
+    related: [{ loc: input2.loc, message: `declared as type: ${expected}` }],
+    fix: literalTypeFix(expected, b.name, v.value)
+  });
+}
+function knownValue(b) {
+  return b.site ? evaluateTemplate(b.site.text, () => UNKNOWN) : { known: true, value: b.value, taint: [] };
+}
+function literalTypeFix(expected, name, value) {
+  return expected === "boolean" ? `Use an unquoted boolean: \`${name}: ${String(value).toLowerCase() === "true"}\`, or an expression that yields one.` : `Use an unquoted number for ${quote(name)}.`;
+}
 var unusedInput = defineRule({
   code: "FP104",
   name: "unused-input",
@@ -22404,18 +22452,21 @@ if: inputs.legacy-flag`
         const symbol = sym.input(unit.path, input2.name);
         if (ctx.index.usagesOf(symbol).length > 0) continue;
         if (dispatchReads.get(unit.path)?.has(input2.name.toLowerCase())) continue;
-        const passed = (unit.kind === "workflow" ? ctx.index.callersOf(unit.path).map((c) => lookup(c.job.with, input2.name)) : ctx.index.usersOf(unit.path).map((u) => lookup(u.step.with, input2.name))).filter((b) => b !== void 0);
-        const n = passed.length;
-        ctx.report({
-          message: `Input ${quote(input2.name)} of ${unit.path} is never read${n ? ` (yet ${n} caller${n > 1 ? "s pass" : " passes"} it)` : ""}`,
-          loc: input2.loc,
-          symbol,
-          related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: "passed here" }))
-        });
+        reportUnusedInput(ctx, unit, input2, symbol);
       }
     }
   }
 });
+function reportUnusedInput(ctx, unit, input2, symbol) {
+  const passed = (unit.kind === "workflow" ? ctx.index.callersOf(unit.path).map((c) => lookup(c.job.with, input2.name)) : ctx.index.usersOf(unit.path).map((u) => lookup(u.step.with, input2.name))).filter((b) => b !== void 0);
+  const n = passed.length;
+  ctx.report({
+    message: `Input ${quote(input2.name)} of ${unit.path} is never read${n ? ` (yet ${n} caller${n > 1 ? "s pass" : " passes"} it)` : ""}`,
+    loc: input2.loc,
+    symbol,
+    related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: "passed here" }))
+  });
+}
 function callersOf(index, unit) {
   if (unit.kind === "workflow")
     return index.callersOf(unit.path).map((c) => ({
@@ -22455,53 +22506,62 @@ if: inputs.variant != ''`
       const callers = callersOf(ctx.index, unit);
       const published = isPublished(unit, ctx.config.impact);
       const callersDecide = callers.length > 0 && !(unit.kind === "workflow" && unit.dispatch) && !published;
-      const flagged = [];
-      const passedBySite = /* @__PURE__ */ new Map();
-      for (const input2 of Object.values(declaredInputs(unit))) {
-        if (input2.required || input2.hasDefault || input2.type === "boolean" || input2.type === "number")
-          continue;
-        const inConditions = ctx.index.usagesOf(sym.input(unit.path, input2.name)).filter((u) => u.site.isCondition).map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
-        const handledSites = new Set(
-          inConditions.filter((x) => x.use === "compared" || x.use === "fallback").map((x) => x.u.site.id)
-        );
-        const usages = inConditions.filter((x) => (x.use === "truthiness" || x.use === "value") && !handledSites.has(x.u.site.id)).map((x) => x.u);
-        if (usages.length === 0) continue;
-        const omitting = callers.filter((c) => !lookup(c.with, input2.name));
-        if (callersDecide && omitting.length === 0) {
-          for (const usage of usages) addName(passedBySite, usage.site.id, input2.name);
-          continue;
-        }
-        for (const usage of usages) flagged.push({ input: input2, usage, omitting });
-      }
-      const flaggedBySite = /* @__PURE__ */ new Map();
-      for (const { input: input2, usage } of flagged) addName(flaggedBySite, usage.site.id, input2.name);
-      for (const { input: input2, usage, omitting } of flagged) {
-        const others = (flaggedBySite.get(usage.site.id) ?? []).filter((n) => n !== input2.name);
-        const passed = passedBySite.get(usage.site.id) ?? [];
-        const notes = [
-          ...others.length ? [
-            `so ${others.length > 1 ? "are" : "is"} ${others.map(quote).join(", ")}, read by the same condition`
-          ] : [],
-          ...passed.length ? [
-            `${passed.map(quote).join(", ")}, also read by this condition, ${passed.length > 1 ? "are" : "is"} passed by every caller`
-          ] : []
-        ];
-        ctx.report({
-          message: `Condition reads optional input ${quote(input2.name)}, which has no default and is '' when omitted` + (notes.length ? ` (${notes.join("; ")})` : ""),
-          loc: usage.ref.loc,
-          symbol: sym.input(unit.path, input2.name),
-          related: [
-            {
-              loc: input2.loc,
-              message: published && callers.length > 0 && omitting.length === 0 ? "declared optional without a default; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it" : "declared optional without a default"
-            },
-            ...omitting.slice(0, 3).map((c) => ({ loc: c.loc, message: `${c.label} omits it` }))
-          ]
-        });
-      }
+      const reads = optionalInputReads(ctx.index, unit, callers, callersDecide);
+      reportOptionalInputReads(ctx, unit, reads, published && callers.length > 0);
     }
   }
 });
+function optionalInputReads(index, unit, callers, callersDecide) {
+  const flagged = [];
+  const passedBySite = /* @__PURE__ */ new Map();
+  for (const input2 of Object.values(declaredInputs(unit))) {
+    if (!emptyWhenOmitted(input2)) continue;
+    const usages = decidingReads(index, unit, input2);
+    if (usages.length === 0) continue;
+    const omitting = callers.filter((c) => !lookup(c.with, input2.name));
+    if (callersDecide && omitting.length === 0) {
+      for (const usage of usages) addName(passedBySite, usage.site.id, input2.name);
+      continue;
+    }
+    for (const usage of usages) flagged.push({ input: input2, usage, omitting });
+  }
+  return { flagged, passedBySite };
+}
+function decidingReads(index, unit, input2) {
+  const inConditions = index.usagesOf(sym.input(unit.path, input2.name)).filter((u) => u.site.isCondition).map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
+  const handledSites = new Set(
+    inConditions.filter((x) => x.use === "compared" || x.use === "fallback").map((x) => x.u.site.id)
+  );
+  return inConditions.filter((x) => (x.use === "truthiness" || x.use === "value") && !handledSites.has(x.u.site.id)).map((x) => x.u);
+}
+function reportOptionalInputReads(ctx, unit, { flagged, passedBySite }, publishedWithCallers) {
+  const flaggedBySite = /* @__PURE__ */ new Map();
+  for (const { input: input2, usage } of flagged) addName(flaggedBySite, usage.site.id, input2.name);
+  for (const { input: input2, usage, omitting } of flagged) {
+    const others = (flaggedBySite.get(usage.site.id) ?? []).filter((n) => n !== input2.name);
+    const notes = conditionNotes(others, passedBySite.get(usage.site.id) ?? []);
+    ctx.report({
+      message: `Condition reads optional input ${quote(input2.name)}, which has no default and is '' when omitted` + (notes.length ? ` (${notes.join("; ")})` : ""),
+      loc: usage.ref.loc,
+      symbol: sym.input(unit.path, input2.name),
+      related: [
+        {
+          loc: input2.loc,
+          message: publishedWithCallers && omitting.length === 0 ? "declared optional without a default; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it" : "declared optional without a default"
+        },
+        ...omitting.slice(0, 3).map((c) => ({ loc: c.loc, message: `${c.label} omits it` }))
+      ]
+    });
+  }
+}
+function conditionNotes(others, passed) {
+  return [
+    ...others.length ? [`so ${others.length > 1 ? "are" : "is"} ${others.map(quote).join(", ")}, read by the same condition`] : [],
+    ...passed.length ? [
+      `${passed.map(quote).join(", ")}, also read by this condition, ${passed.length > 1 ? "are" : "is"} passed by every caller`
+    ] : []
+  ];
+}
 function addName(bySite, site, name) {
   const names = bySite.get(site) ?? [];
   if (!names.includes(name)) names.push(name);
@@ -22559,32 +22619,40 @@ jobs:
   check(ctx) {
     for (const call of ctx.index.callSites) {
       const outer = declaredInputs(call.caller);
-      for (const b of Object.values(call.job.with)) {
-        const target = lookup(call.callee.call?.inputs ?? {}, b.name);
-        if (!target?.required || !b.site) continue;
-        const v = evaluateTemplate(b.site.text, ({ context, path }) => {
-          if (context !== "inputs" || !path[0]) return void 0;
-          const src2 = lookup(outer, path[0]);
-          if (src2 && !src2.required && !src2.hasDefault && src2.type !== "boolean" && src2.type !== "number")
-            return { known: true, value: "", taint: [] };
-          return void 0;
-        });
-        if (!v.known || v.value !== "" && v.value !== null) continue;
-        const srcRef = b.site.segments.flatMap((s) => s.refs).find((r) => r.context === "inputs");
-        const src = srcRef?.path[0] ? lookup(outer, srcRef.path[0]) : void 0;
-        ctx.report({
-          message: `Required input ${quote(target.name)} of ${call.callee.path} is fed from optional input ${quote(src?.name ?? "?")} without a default`,
-          loc: srcRef?.loc ?? b.valueLoc,
-          symbol: sym.input(call.callee.path, target.name),
-          related: [
-            ...src ? [{ loc: src.loc, message: "optional, no default" }] : [],
-            { loc: target.loc, message: `required by ${call.callee.path}` }
-          ]
-        });
-      }
+      for (const b of Object.values(call.job.with)) checkForwarded(ctx, call, outer, b);
     }
   }
 });
+function checkForwarded(ctx, call, outer, b) {
+  const target = lookup(call.callee.call?.inputs ?? {}, b.name);
+  if (!target?.required || !b.site) return;
+  if (emptyWhenInputsOmitted(b.site, outer)) reportForwarded(ctx, call, outer, b, b.site, target);
+}
+function emptyWhenInputsOmitted(site, outer) {
+  const v = evaluateTemplate(site.text, omittedInputs(outer));
+  return v.known && (v.value === "" || v.value === null);
+}
+function reportForwarded(ctx, call, outer, b, site, target) {
+  const srcRef = site.segments.flatMap((s) => s.refs).find((r) => r.context === "inputs");
+  const src = srcRef?.path[0] ? lookup(outer, srcRef.path[0]) : void 0;
+  ctx.report({
+    message: `Required input ${quote(target.name)} of ${call.callee.path} is fed from optional input ${quote(src?.name ?? "?")} without a default`,
+    loc: srcRef?.loc ?? b.valueLoc,
+    symbol: sym.input(call.callee.path, target.name),
+    related: [
+      ...src ? [{ loc: src.loc, message: "optional, no default" }] : [],
+      { loc: target.loc, message: `required by ${call.callee.path}` }
+    ]
+  });
+}
+function omittedInputs(outer) {
+  return ({ context, path }) => {
+    if (context !== "inputs" || !path[0]) return void 0;
+    const src = lookup(outer, path[0]);
+    if (src && emptyWhenOmitted(src)) return { known: true, value: "", taint: [] };
+    return void 0;
+  };
+}
 var undefinedInputRef = defineRule({
   code: "FP108",
   name: "undefined-input-ref",
@@ -22603,28 +22671,30 @@ var undefinedInputRef = defineRule({
     for (const unit of ctx.index.units()) {
       const inputs = declaredInputs(unit);
       const names = Object.keys(inputs);
-      for (const site of unit.sites) {
-        if (site.field === "input.default") continue;
-        for (const seg of site.segments) {
-          for (const ref of seg.refs) {
-            let name;
-            if (ref.context === "inputs") name = ref.path[0];
-            else if (ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs" && unit.kind === "workflow" && unit.dispatch)
-              name = ref.path[2];
-            if (!name || name === "*" || name === "?" || lookup(inputs, name)) continue;
-            const guess = didYouMean(name, names);
-            ctx.report({
-              message: `${unit.path} has no input ${quote(name)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
-              loc: ref.loc,
-              symbol: sym.input(unit.path, name),
-              ...guess ? { fix: `Use \`inputs.${guess}\`.` } : {}
-            });
-          }
-        }
+      for (const { site, ref } of refsOf(unit)) {
+        if (site.field !== "input.default") checkInputRead(ctx, unit, inputs, names, ref);
       }
     }
   }
 });
+function checkInputRead(ctx, unit, inputs, names, ref) {
+  const name = inputReadName(unit, ref);
+  if (!namesKey(name) || lookup(inputs, name)) return;
+  const guess = didYouMean(name, names);
+  ctx.report({
+    message: `${unit.path} has no input ${quote(name)}${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: sym.input(unit.path, name),
+    ...guess ? { fix: `Use \`inputs.${guess}\`.` } : {}
+  });
+}
+function inputReadName(unit, ref) {
+  if (ref.context === "inputs") return ref.path[0];
+  const dispatched = unit.kind === "workflow" && unit.dispatch;
+  if (ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs" && dispatched)
+    return ref.path[2];
+  return void 0;
+}
 var inputRules = [
   missingRequiredInput,
   unknownInput,
@@ -22657,10 +22727,12 @@ function shellTestSegments(script, segments = findTemplateSegments(script)) {
     const nl = script.indexOf("\n", seg.end);
     const before = script.slice(lineStart, seg.start - 1);
     const after = script.slice(seg.end + 1, nl < 0 ? script.length : nl);
-    const operand = /(?:^|[\s(!])-[a-zA-Z]\s+$/.test(before) || /^\s+(?:==?|!=)\s/.test(after) || /\s(?:==?|!=)\s+$/.test(before);
-    if (operand && inShellTest(before, after)) out.add(i);
+    if (isTestOperand(before, after) && inShellTest(before, after)) out.add(i);
   }
   return out;
+}
+function isTestOperand(before, after) {
+  return /(?:^|[\s(!])-[a-zA-Z]\s+$/.test(before) || /^\s+(?:==?|!=)\s/.test(after) || /\s(?:==?|!=)\s+$/.test(before);
 }
 function unhandledReads(site, key) {
   const all = { text: site.text, tested: /* @__PURE__ */ new Set() };
@@ -22693,10 +22765,7 @@ function guardsOf(job, site) {
   ].filter((g) => g !== void 0 && g !== site);
 }
 function affectedCombos(site, exp, predicate, guards = [], onlyKey, text2 = site.text) {
-  const known2 = new Set(exp.keys.map((k) => k.toLowerCase()));
-  if (onlyKey !== void 0) {
-    for (const k of [...known2]) if (k !== onlyKey.toLowerCase()) known2.delete(k);
-  }
+  const known2 = trackedKeys(exp, onlyKey);
   const combos = [];
   const perKey = /* @__PURE__ */ new Map();
   for (const combo of exp.combos) {
@@ -22708,6 +22777,13 @@ function affectedCombos(site, exp, predicate, guards = [], onlyKey, text2 = site
     for (const key of new Set(missing.map((t) => t.key))) perKey.set(key, (perKey.get(key) ?? 0) + 1);
   }
   return { combos, keys: [...perKey.keys()], perKey };
+}
+function trackedKeys(exp, onlyKey) {
+  const known2 = new Set(exp.keys.map((k) => k.toLowerCase()));
+  if (onlyKey !== void 0) {
+    for (const k of [...known2]) if (k !== onlyKey.toLowerCase()) known2.delete(k);
+  }
+  return known2;
 }
 function firstMatrixRefLoc(site, keys, skip = /* @__PURE__ */ new Set()) {
   const lower = keys.map((k) => k.toLowerCase());
@@ -22748,6 +22824,9 @@ function dedupe(items) {
     seen.add(k);
     return true;
   });
+}
+function checkable(exp) {
+  return !exp.dynamic && exp.combos.length > 0 && exp.combos.length <= GITHUB_MATRIX_LIMIT;
 }
 function* matrixJobs(ctx) {
   for (const wf of ctx.index.project.workflows.values()) {
@@ -22805,60 +22884,67 @@ with:
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
-      if (exp.dynamic || exp.combos.length === 0 || exp.combos.length > GITHUB_MATRIX_LIMIT) continue;
-      const targets = [];
-      if (job.uses) {
-        const callee = ctx.index.calleeOf(job);
-        for (const b of Object.values(job.with)) {
-          const input2 = callee?.call ? lookup(callee.call.inputs, b.name) : void 0;
-          targets.push({
-            binding: b,
-            target: callee?.path ?? job.uses.raw,
-            ...callee ? { callee } : {},
-            ...input2 ? { input: input2, symbol: sym.input(callee.path, input2.name) } : {}
-          });
-        }
-      }
-      for (const step of job.steps) {
-        const action = ctx.index.actionOf(step);
-        for (const b of Object.values(step.with)) {
-          const input2 = action ? lookup(action.inputs, b.name) : void 0;
-          targets.push({
-            binding: b,
-            target: action?.path ?? step.uses?.raw ?? `step #${step.index + 1}`,
-            step,
-            ...action ? { callee: action } : {},
-            ...input2 ? { input: input2, symbol: sym.input(action.path, input2.name) } : {}
-          });
-        }
-      }
-      for (const t of targets) {
-        const site = t.binding.site;
-        if (!site || !hasMatrixRef(site)) continue;
-        const impact = emptyInputImpact(ctx.index, t.callee, t.input);
-        if (!impact) continue;
-        const { combos, keys, perKey } = affectedCombos(site, exp, isEmptyValue, guardsOf(job, site));
-        if (combos.length === 0) continue;
-        const keyList = keys.map((k) => `matrix.${k}`).join(", ");
-        const cause = keys.length === 1 ? `matrix.${keys[0]} is not defined there` : `not defined there: ${keys.map((k) => `matrix.${k} (${perKey.get(k)})`).join(", ")}`;
-        ctx.report({
-          message: `Input ${quote(t.binding.name)} for ${t.target} is empty in ${combos.length} of ${exp.combos.length} matrix combinations \u2014 ${cause}${impact.note}`,
-          loc: firstMatrixRefLoc(site, keys),
-          combos: combos.map((c) => comboLabel(c, exp.keys)),
-          symbol: t.symbol ?? `${wf.path}#jobs.${job.id}.with.${t.binding.name}`,
-          related: [
-            ...chainRelated(chainTo(ctx.index, wf.path)),
-            ...comboRelated(job, combos, keys),
-            ...t.input ? [{ loc: t.input.loc, message: `receives the empty value: input ${quote(t.binding.name)}` }] : [],
-            ...impact.related
-          ],
-          fix: `Set ${keys.map((k) => `\`${k}\``).join(", ")} in every combination, or use a fallback: \`\${{ ${keyList.split(", ")[0]} || '<default>' }}\`.`,
-          severity: impact.severity
-        });
-      }
+      if (!checkable(exp)) continue;
+      for (const t of withTargets(ctx, job)) checkWithTarget(ctx, { wf, job, exp }, t);
     }
   }
 });
+function withTargets(ctx, job) {
+  return [...callTargets(ctx, job), ...job.steps.flatMap((step) => stepTargets(ctx, step))];
+}
+function callTargets(ctx, job) {
+  const uses = job.uses;
+  if (!uses) return [];
+  const callee = ctx.index.calleeOf(job);
+  return Object.values(job.with).map((b) => {
+    const input2 = callee?.call ? lookup(callee.call.inputs, b.name) : void 0;
+    return {
+      binding: b,
+      target: callee?.path ?? uses.raw,
+      ...callee ? { callee } : {},
+      ...input2 ? { input: input2, symbol: sym.input(callee.path, input2.name) } : {}
+    };
+  });
+}
+function stepTargets(ctx, step) {
+  const action = ctx.index.actionOf(step);
+  return Object.values(step.with).map((b) => {
+    const input2 = action ? lookup(action.inputs, b.name) : void 0;
+    return {
+      binding: b,
+      target: action?.path ?? step.uses?.raw ?? `step #${step.index + 1}`,
+      step,
+      ...action ? { callee: action } : {},
+      ...input2 ? { input: input2, symbol: sym.input(action.path, input2.name) } : {}
+    };
+  });
+}
+function checkWithTarget(ctx, { wf, job, exp }, t) {
+  const site = t.binding.site;
+  if (!site || !hasMatrixRef(site)) return;
+  const impact = emptyInputImpact(ctx.index, t.callee, t.input);
+  if (!impact) return;
+  const { combos, keys, perKey } = affectedCombos(site, exp, isEmptyValue, guardsOf(job, site));
+  if (combos.length === 0) return;
+  const keyList = keys.map((k) => `matrix.${k}`).join(", ");
+  ctx.report({
+    message: `Input ${quote(t.binding.name)} for ${t.target} is empty in ${combos.length} of ${exp.combos.length} matrix combinations \u2014 ${missingKeys(keys, perKey)}${impact.note}`,
+    loc: firstMatrixRefLoc(site, keys),
+    combos: combos.map((c) => comboLabel(c, exp.keys)),
+    symbol: t.symbol ?? `${wf.path}#jobs.${job.id}.with.${t.binding.name}`,
+    related: [
+      ...chainRelated(chainTo(ctx.index, wf.path)),
+      ...comboRelated(job, combos, keys),
+      ...t.input ? [{ loc: t.input.loc, message: `receives the empty value: input ${quote(t.binding.name)}` }] : [],
+      ...impact.related
+    ],
+    fix: `Set ${keys.map((k) => `\`${k}\``).join(", ")} in every combination, or use a fallback: \`\${{ ${keyList.split(", ")[0]} || '<default>' }}\`.`,
+    severity: impact.severity
+  });
+}
+function missingKeys(keys, perKey) {
+  return keys.length === 1 ? `matrix.${keys[0]} is not defined there` : `not defined there: ${keys.map((k) => `matrix.${k} (${perKey.get(k)})`).join(", ")}`;
+}
 var SKIP_FIELDS = /* @__PURE__ */ new Set(["job.strategy"]);
 var WITH_FIELDS = /* @__PURE__ */ new Set(["job.with", "step.with"]);
 var matrixKeyMissingInCombo = defineRule({
@@ -22873,37 +22959,43 @@ var matrixKeyMissingInCombo = defineRule({
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
-      if (exp.dynamic || exp.combos.length === 0 || exp.combos.length > GITHUB_MATRIX_LIMIT) continue;
-      for (const site of wf.sites) {
-        if (site.job !== job.id || site.isCondition || SKIP_FIELDS.has(site.field) || !hasMatrixRef(site))
-          continue;
-        if (site.yamlPath.at(-1) === "continue-on-error") continue;
-        const predicate = WITH_FIELDS.has(site.field) ? (v) => !isEmptyValue(v) : () => true;
-        const read = /* @__PURE__ */ new Map();
-        for (const seg of site.segments)
-          for (const r of seg.refs)
-            if (r.context === "matrix" && r.path[0] && !read.has(r.path[0].toLowerCase()))
-              read.set(r.path[0].toLowerCase(), r.path[0]);
-        for (const key of read.values()) {
-          const unhandled = unhandledReads(site, key);
-          if (!unhandled) continue;
-          const guards = guardsOf(job, site);
-          const { combos } = affectedCombos(site, exp, predicate, guards, key, unhandled.text);
-          if (combos.length === 0) continue;
-          const all = WITH_FIELDS.has(site.field) ? affectedCombos(site, exp, () => true, guards, key).combos.length : combos.length;
-          const rest = all - combos.length;
-          ctx.report({
-            message: `matrix.${key} is undefined in ${all} of ${exp.combos.length} combinations of jobs.${job.id}${rest ? `; in ${rest} of them the whole input is empty (FP401)` : ""}`,
-            loc: firstMatrixRefLoc(site, [key], unhandled.tested),
-            combos: combos.map((c) => comboLabel(c, exp.keys)),
-            symbol: sym.matrix(wf.path, job.id, key),
-            related: comboRelated(job, combos, [key])
-          });
-        }
-      }
+      if (!checkable(exp)) continue;
+      for (const site of wf.sites) if (judgedValue(site, job)) checkMatrixKeys(ctx, { wf, job, exp }, site);
     }
   }
 });
+function judgedValue(site, job) {
+  if (site.job !== job.id || site.isCondition || SKIP_FIELDS.has(site.field) || !hasMatrixRef(site))
+    return false;
+  return site.yamlPath.at(-1) !== "continue-on-error";
+}
+function matrixKeysRead(site) {
+  const read = /* @__PURE__ */ new Map();
+  for (const seg of site.segments)
+    for (const r of seg.refs)
+      if (r.context === "matrix" && r.path[0] && !read.has(r.path[0].toLowerCase()))
+        read.set(r.path[0].toLowerCase(), r.path[0]);
+  return [...read.values()];
+}
+function checkMatrixKeys(ctx, { wf, job, exp }, site) {
+  const predicate = WITH_FIELDS.has(site.field) ? (v) => !isEmptyValue(v) : () => true;
+  for (const key of matrixKeysRead(site)) {
+    const unhandled = unhandledReads(site, key);
+    if (!unhandled) continue;
+    const guards = guardsOf(job, site);
+    const { combos } = affectedCombos(site, exp, predicate, guards, key, unhandled.text);
+    if (combos.length === 0) continue;
+    const all = WITH_FIELDS.has(site.field) ? affectedCombos(site, exp, () => true, guards, key).combos.length : combos.length;
+    const rest = all - combos.length;
+    ctx.report({
+      message: `matrix.${key} is undefined in ${all} of ${exp.combos.length} combinations of jobs.${job.id}${rest ? `; in ${rest} of them the whole input is empty (FP401)` : ""}`,
+      loc: firstMatrixRefLoc(site, [key], unhandled.tested),
+      combos: combos.map((c) => comboLabel(c, exp.keys)),
+      symbol: sym.matrix(wf.path, job.id, key),
+      related: comboRelated(job, combos, [key])
+    });
+  }
+}
 var dynamicMatrixUnverified = defineRule({
   code: "FP403",
   name: "dynamic-matrix-unverified",
@@ -22918,12 +23010,7 @@ var dynamicMatrixUnverified = defineRule({
     for (const { wf, job, exp } of matrixJobs(ctx)) {
       const m = job.matrix;
       if (exp.declared || !exp.dynamic && !m.includeDynamic) continue;
-      const keys = /* @__PURE__ */ new Set();
-      for (const site of wf.sites) {
-        if (site.job !== job.id) continue;
-        for (const seg of site.segments)
-          for (const r of seg.refs) if (r.context === "matrix" && r.path[0]) keys.add(r.path[0]);
-      }
+      const keys = matrixKeysReadIn(wf, job);
       if (keys.size === 0) continue;
       ctx.report({
         message: `jobs.${job.id} has a runtime-computed matrix; reads of ${[...keys].map((k) => `matrix.${k}`).join(", ")} cannot be verified`,
@@ -22933,6 +23020,15 @@ var dynamicMatrixUnverified = defineRule({
     }
   }
 });
+function matrixKeysReadIn(wf, job) {
+  const keys = /* @__PURE__ */ new Set();
+  for (const site of wf.sites) {
+    if (site.job !== job.id) continue;
+    for (const seg of site.segments)
+      for (const r of seg.refs) if (r.context === "matrix" && r.path[0]) keys.add(r.path[0]);
+  }
+  return keys;
+}
 var undefinedMatrixKey = defineRule({
   code: "FP404",
   name: "undefined-matrix-key",
@@ -22948,39 +23044,46 @@ var undefinedMatrixKey = defineRule({
       for (const site of wf.sites) {
         if (!site.job || site.field === "job.strategy") continue;
         const job = wf.jobs[site.job];
-        if (!job) continue;
-        const exp = job.matrix ? ctx.matrix(wf, job) : void 0;
-        if (exp && !exp.declared && (exp.dynamic || job.matrix?.includeDynamic)) continue;
-        const keys = new Set((exp?.keys ?? []).map((k) => k.toLowerCase()));
-        const reads = /* @__PURE__ */ new Map();
-        for (const seg of site.segments) {
-          for (const r of seg.refs) {
-            const k = r.path[0];
-            if (r.context !== "matrix" || !k || k === "*" || k === "?" || keys.has(k.toLowerCase())) continue;
-            reads.set(k.toLowerCase(), [...reads.get(k.toLowerCase()) ?? [], r]);
-          }
-        }
-        for (const refs of reads.values()) {
-          const k = refs[0].path[0];
-          const where = job.matrix ? `matrix.${k} is not defined in any combination of jobs.${job.id} (keys: ${exp.keys.join(", ") || "none"})` : `jobs.${job.id} has no matrix, so matrix.${k} is always empty`;
-          const related2 = job.matrix ? [{ loc: job.matrix.loc, message: "matrix defined here" }] : [];
-          if (onlyFallbacks(site, k, job, exp)) {
-            ctx.report({
-              message: `${where}; the fallback always applies`,
-              loc: refs[0].loc,
-              symbol: sym.matrix(wf.path, job.id, k),
-              related: related2,
-              severity: "info"
-            });
-            continue;
-          }
-          for (const r of refs)
-            ctx.report({ message: where, loc: r.loc, symbol: sym.matrix(wf.path, job.id, k), related: related2 });
-        }
+        if (job) checkUndefinedKeys(ctx, wf, job, site);
       }
     }
   }
 });
+function checkUndefinedKeys(ctx, wf, job, site) {
+  const exp = job.matrix ? ctx.matrix(wf, job) : void 0;
+  if (exp && !exp.declared && (exp.dynamic || job.matrix?.includeDynamic)) return;
+  for (const refs of undefinedKeyReads(site, exp).values())
+    reportUndefinedKey(ctx, { wf, job, exp }, site, refs);
+}
+function undefinedKeyReads(site, exp) {
+  const keys = new Set((exp?.keys ?? []).map((k) => k.toLowerCase()));
+  const reads = /* @__PURE__ */ new Map();
+  for (const seg of site.segments) {
+    for (const r of seg.refs) {
+      const k = r.path[0];
+      if (r.context !== "matrix" || !namesKey(k) || keys.has(k.toLowerCase())) continue;
+      reads.set(k.toLowerCase(), [...reads.get(k.toLowerCase()) ?? [], r]);
+    }
+  }
+  return reads;
+}
+function reportUndefinedKey(ctx, { wf, job, exp }, site, refs) {
+  const k = refs[0].path[0];
+  const where = job.matrix ? `matrix.${k} is not defined in any combination of jobs.${job.id} (keys: ${exp.keys.join(", ") || "none"})` : `jobs.${job.id} has no matrix, so matrix.${k} is always empty`;
+  const related2 = job.matrix ? [{ loc: job.matrix.loc, message: "matrix defined here" }] : [];
+  if (onlyFallbacks(site, k, job, exp)) {
+    ctx.report({
+      message: `${where}; the fallback always applies`,
+      loc: refs[0].loc,
+      symbol: sym.matrix(wf.path, job.id, k),
+      related: related2,
+      severity: "info"
+    });
+    return;
+  }
+  for (const r of refs)
+    ctx.report({ message: where, loc: r.loc, symbol: sym.matrix(wf.path, job.id, k), related: related2 });
+}
 function combosOf(exp) {
   if (exp && exp.combos.length > 0 && exp.combos.length <= GITHUB_MATRIX_LIMIT) return exp.combos;
   const values = Object.fromEntries((exp?.keys ?? []).map((k) => [k, { known: false }]));
@@ -22994,26 +23097,26 @@ function onlyFallbacks(site, key, job, exp) {
   const all = combosOf(exp);
   const live = all.filter((c) => !guards.some((g) => skippedIn(g, c)));
   const combos = live.length > 0 ? live : all;
-  if (site.isCondition && isWholeExpression(site)) {
-    const ast = site.segments[0].expr.ast;
-    if (!ast) return false;
-    const neverTrue = combos.every((c) => {
-      const resolve7 = matrixResolver(c);
-      return definitelyFalsy(ast, resolve7) && !definitelyFalsy(ast, unknownKey(resolve7, lower));
-    });
-    if (neverTrue) return false;
-  }
-  for (const seg of site.segments) {
-    const reads = seg.refs.filter((r) => r.context === "matrix" && r.path[0]?.toLowerCase() === lower);
-    if (reads.length === 0) continue;
-    const fallbacks = fallbacksOf(seg.expr);
-    for (const r of reads) {
-      const fallback = fallbacks.get(r.start);
-      if (!fallback) return false;
-      if (combos.some((c) => isEmptyValue(evaluate(fallback, matrixResolver(c))))) return false;
-    }
-  }
-  return true;
+  if (site.isCondition && isWholeExpression(site) && neverTrue(site, lower, combos)) return false;
+  return site.segments.every((seg) => readsFallBack(seg, lower, combos));
+}
+function neverTrue(site, lower, combos) {
+  const ast = site.segments[0].expr.ast;
+  if (!ast) return true;
+  return combos.every((c) => {
+    const resolve7 = matrixResolver(c);
+    return definitelyFalsy(ast, resolve7) && !definitelyFalsy(ast, unknownKey(resolve7, lower));
+  });
+}
+function readsFallBack(seg, lower, combos) {
+  const reads = seg.refs.filter((r) => r.context === "matrix" && r.path[0]?.toLowerCase() === lower);
+  if (reads.length === 0) return true;
+  const fallbacks = fallbacksOf(seg.expr);
+  return reads.every((r) => {
+    const fallback = fallbacks.get(r.start);
+    if (!fallback) return false;
+    return !combos.some((c) => isEmptyValue(evaluate(fallback, matrixResolver(c))));
+  });
 }
 var unusedMatrixShape = defineRule({
   code: "FP405",
@@ -23086,6 +23189,9 @@ function stepsInScope(unit, jobId) {
   if (unit.kind === "action") return unit.steps;
   return jobId ? unit.jobs[jobId]?.steps ?? [] : [];
 }
+function stepOutputSymbol(unit, site, id, output) {
+  return sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, id, output ?? "");
+}
 var undefinedOutputRef = defineRule({
   code: "FP301",
   name: "undefined-output-ref",
@@ -23109,82 +23215,90 @@ var undefinedOutputRef = defineRule({
   check(ctx) {
     for (const unit of ctx.index.units()) {
       for (const { site, ref } of refsOf(unit)) {
-        const [a, b, c] = ref.path;
-        if (!a || a === "*" || a === "?") continue;
-        if ((ref.context === "needs" || ref.context === "jobs") && unit.kind === "workflow") {
-          if (ref.context === "jobs" && site.field !== "workflow.output") continue;
-          if (b !== "outputs" || !c || c === "*" || c === "?") continue;
-          const job = lookup(unit.jobs, a);
-          if (!job) {
-            if (ref.context === "jobs") {
-              ctx.report({
-                message: `${unit.path} has no job ${quote(a)}`,
-                loc: ref.loc,
-                symbol: sym.job(unit.path, a)
-              });
-            }
-            continue;
-          }
-          if (job.uses && job.uses.kind !== "local-workflow") continue;
-          if (job.uses && !ctx.index.calleeOf(job)) continue;
-          const names = ctx.index.jobOutputNames(job);
-          if (names.some((n) => n.toLowerCase() === c.toLowerCase())) continue;
-          const guess = didYouMean(c, names);
-          const callee = ctx.index.calleeOf(job);
-          ctx.report({
-            message: `jobs.${job.id} has no output ${quote(c)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
-            loc: ref.loc,
-            symbol: sym.jobOutput(unit.path, job.id, c),
-            related: [
-              {
-                loc: callee?.call?.loc ?? job.loc,
-                message: `${callee ? `${callee.path} declares` : "declared"} outputs: ${listNames(names)}`
-              }
-            ]
-          });
-          continue;
-        }
-        if (ref.context === "steps") {
-          const steps2 = stepsInScope(unit, site.job);
-          const step = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
-          if (!step) {
-            const guess2 = didYouMean(
-              a,
-              steps2.flatMap((s) => s.id ? [s.id] : [])
-            );
-            ctx.report({
-              message: `No step with id ${quote(a)} in ${site.job ? `jobs.${site.job}` : unit.path}${guess2 ? ` \u2014 did you mean ${quote(guess2)}?` : ""}`,
-              loc: ref.loc,
-              symbol: sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, a, c ?? "")
-            });
-            continue;
-          }
-          if (site.step !== void 0 && step.index >= site.step) {
-            ctx.report({
-              message: `Step ${quote(a)} runs ${step.index === site.step ? "as" : "after"} this step, so its outputs are not available yet`,
-              loc: ref.loc,
-              symbol: sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, a, c ?? ""),
-              related: [{ loc: step.idLoc ?? step.loc, message: `step ${quote(a)} is defined here` }]
-            });
-            continue;
-          }
-          const action = ctx.index.actionOf(step);
-          if (b !== "outputs" || !c || c === "*" || c === "?" || !action) continue;
-          if (action.using !== "composite") continue;
-          if (lookup(action.outputs, c)) continue;
-          const names = Object.keys(action.outputs);
-          const guess = didYouMean(c, names);
-          ctx.report({
-            message: `${action.path} has no output ${quote(c)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
-            loc: ref.loc,
-            symbol: sym.output(action.path, c),
-            related: [{ loc: step.uses?.loc ?? step.loc, message: `declared outputs: ${listNames(names)}` }]
-          });
-        }
+        const a = ref.path[0];
+        if (!namesKey(a)) continue;
+        if ((ref.context === "needs" || ref.context === "jobs") && unit.kind === "workflow")
+          checkJobOutputRef(ctx, unit, site, ref, a);
+        else if (ref.context === "steps") checkStepOutputRef(ctx, unit, site, ref, a);
       }
     }
   }
 });
+function jobOutputRead(site, ref) {
+  if (ref.context === "jobs" && site.field !== "workflow.output") return void 0;
+  const output = ref.path[2];
+  return ref.path[1] === "outputs" && namesKey(output) ? output : void 0;
+}
+function jobOutputsDeclared(ctx, job, names) {
+  const callee = ctx.index.calleeOf(job);
+  return {
+    loc: callee?.call?.loc ?? job.loc,
+    message: `${callee ? `${callee.path} declares` : "declared"} outputs: ${listNames(names)}`
+  };
+}
+function checkJobOutputRef(ctx, wf, site, ref, a) {
+  const c = jobOutputRead(site, ref);
+  if (!c) return;
+  const job = lookup(wf.jobs, a);
+  if (!job) {
+    if (ref.context === "jobs") {
+      ctx.report({ message: `${wf.path} has no job ${quote(a)}`, loc: ref.loc, symbol: sym.job(wf.path, a) });
+    }
+    return;
+  }
+  if (job.uses && (job.uses.kind !== "local-workflow" || !ctx.index.calleeOf(job))) return;
+  const names = ctx.index.jobOutputNames(job);
+  if (names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
+  const guess = didYouMean(c, names);
+  ctx.report({
+    message: `jobs.${job.id} has no output ${quote(c)}${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: sym.jobOutput(wf.path, job.id, c),
+    related: [jobOutputsDeclared(ctx, job, names)]
+  });
+}
+function checkStepOutputRef(ctx, unit, site, ref, a) {
+  const c = ref.path[2];
+  const steps2 = stepsInScope(unit, site.job);
+  const step = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step) {
+    const guess = didYouMean(
+      a,
+      steps2.flatMap((s) => s.id ? [s.id] : [])
+    );
+    ctx.report({
+      message: `No step with id ${quote(a)} in ${site.job ? `jobs.${site.job}` : unit.path}${didYouMeanNote(guess)}`,
+      loc: ref.loc,
+      symbol: stepOutputSymbol(unit, site, a, c)
+    });
+    return;
+  }
+  if (site.step !== void 0 && step.index >= site.step) {
+    ctx.report({
+      message: `Step ${quote(a)} runs ${step.index === site.step ? "as" : "after"} this step, so its outputs are not available yet`,
+      loc: ref.loc,
+      symbol: stepOutputSymbol(unit, site, a, c),
+      related: [{ loc: step.idLoc ?? step.loc, message: `step ${quote(a)} is defined here` }]
+    });
+    return;
+  }
+  checkActionOutputRef(ctx, step, ref);
+}
+function checkActionOutputRef(ctx, step, ref) {
+  const [, b, c] = ref.path;
+  const action = ctx.index.actionOf(step);
+  if (b !== "outputs" || !namesKey(c) || !action) return;
+  if (action.using !== "composite") return;
+  if (lookup(action.outputs, c)) return;
+  const names = Object.keys(action.outputs);
+  const guess = didYouMean(c, names);
+  ctx.report({
+    message: `${action.path} has no output ${quote(c)}${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: sym.output(action.path, c),
+    related: [{ loc: step.uses?.loc ?? step.loc, message: `declared outputs: ${listNames(names)}` }]
+  });
+}
 var outputRefWithoutNeeds = defineRule({
   code: "FP302",
   name: "output-ref-without-needs",
@@ -23204,41 +23318,55 @@ var outputRefWithoutNeeds = defineRule({
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
-      const ancestors = /* @__PURE__ */ new Map();
-      const ancestorsOf = (id) => {
-        const known2 = ancestors.get(id);
-        if (known2) return known2;
-        const found = /* @__PURE__ */ new Set();
-        ancestors.set(id, found);
-        for (const n of wf.jobs[id]?.needs ?? []) {
-          const dep = lookup(wf.jobs, n.id);
-          if (!dep || found.has(dep.id.toLowerCase())) continue;
-          found.add(dep.id.toLowerCase());
-          for (const up of ancestorsOf(dep.id)) found.add(up);
-        }
-        return found;
-      };
+      const ancestorsOf = ancestorsIn(wf);
       for (const { site, ref } of refsOf(wf)) {
-        const a = ref.path[0];
-        if (ref.context !== "needs" || !site.job || !a || a === "*" || a === "?") continue;
-        const job = wf.jobs[site.job];
-        if (!job || job.needs.some((n) => n.id.toLowerCase() === a.toLowerCase())) continue;
-        const exists2 = lookup(wf.jobs, a);
-        const indirect = exists2 !== void 0 && ancestorsOf(job.id).has(exists2.id.toLowerCase());
-        if (indirect && site.field === "job.if") continue;
-        ctx.report({
-          message: !exists2 ? `jobs.${site.job} reads needs.${a}, but ${wf.path} has no job ${quote(a)}` : indirect ? `jobs.${site.job} reads needs.${a}, which is empty here: ${quote(a)} is not under needs, and only the job's \`if:\` sees jobs it depends on indirectly` : `jobs.${site.job} reads needs.${a} but does not list ${quote(a)} under needs`,
-          loc: ref.loc,
-          symbol: sym.job(wf.path, a),
-          related: [
-            { loc: job.needs[0]?.loc ?? job.loc, message: `needs: ${listNames(job.needs.map((n) => n.id))}` }
-          ],
-          ...exists2 ? { fix: `Add ${quote(a)} to jobs.${site.job}.needs.` } : {}
-        });
+        if (ref.context === "needs") checkNeedsRef(ctx, wf, site, ref, ancestorsOf);
       }
     }
   }
 });
+function ancestorsIn(wf) {
+  const ancestors = /* @__PURE__ */ new Map();
+  const ancestorsOf = (id) => {
+    const known2 = ancestors.get(id);
+    if (known2) return known2;
+    const found = /* @__PURE__ */ new Set();
+    ancestors.set(id, found);
+    for (const n of wf.jobs[id]?.needs ?? []) {
+      const dep = lookup(wf.jobs, n.id);
+      if (!dep || found.has(dep.id.toLowerCase())) continue;
+      found.add(dep.id.toLowerCase());
+      for (const up of ancestorsOf(dep.id)) found.add(up);
+    }
+    return found;
+  };
+  return ancestorsOf;
+}
+function checkNeedsRef(ctx, wf, site, ref, ancestorsOf) {
+  const a = ref.path[0];
+  if (!site.job || !namesKey(a)) return;
+  const job = wf.jobs[site.job];
+  if (!job || job.needs.some((n) => n.id.toLowerCase() === a.toLowerCase())) return;
+  const exists2 = lookup(wf.jobs, a);
+  const indirect = exists2 !== void 0 && ancestorsOf(job.id).has(exists2.id.toLowerCase());
+  if (indirect && site.field === "job.if") return;
+  ctx.report({
+    message: needsMessage(wf, site.job, a, exists2 !== void 0, indirect),
+    loc: ref.loc,
+    symbol: sym.job(wf.path, a),
+    related: [needsDeclared(job)],
+    ...exists2 ? { fix: `Add ${quote(a)} to jobs.${site.job}.needs.` } : {}
+  });
+}
+function needsMessage(wf, jobId, a, exists2, indirect) {
+  if (!exists2) return `jobs.${jobId} reads needs.${a}, but ${wf.path} has no job ${quote(a)}`;
+  if (indirect)
+    return `jobs.${jobId} reads needs.${a}, which is empty here: ${quote(a)} is not under needs, and only the job's \`if:\` sees jobs it depends on indirectly`;
+  return `jobs.${jobId} reads needs.${a} but does not list ${quote(a)} under needs`;
+}
+function needsDeclared(job) {
+  return { loc: job.needs[0]?.loc ?? job.loc, message: `needs: ${listNames(job.needs.map((n) => n.id))}` };
+}
 var unusedOutput = defineRule({
   code: "FP303",
   name: "unused-output",
@@ -23266,52 +23394,58 @@ deploy:
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
-      if (!readsContextDynamically(wf, "needs") && !readsContextDynamically(wf, "jobs")) {
-        for (const job of Object.values(wf.jobs)) {
-          for (const o of Object.values(job.outputs)) {
-            if (ctx.index.usagesOf(sym.jobOutput(wf.path, job.id, o.name)).length > 0) continue;
-            ctx.report({
-              message: `Output ${quote(o.name)} of jobs.${job.id} is never read`,
-              loc: o.loc,
-              symbol: sym.jobOutput(wf.path, job.id, o.name)
-            });
-          }
-        }
-      }
-      const callers = ctx.index.callersOf(wf.path);
-      if (!wf.call || callers.length === 0 || isPublished(wf, ctx.config.impact)) continue;
-      for (const o of Object.values(wf.call.outputs)) {
-        const read = callers.some(
-          (c) => ctx.index.usagesOf(sym.jobOutput(c.caller.path, c.job.id, o.name)).length > 0
-        );
-        if (read) continue;
-        ctx.report({
-          message: `Workflow output ${quote(o.name)} of ${wf.path} is not read by any of its ${callers.length} caller${callers.length > 1 ? "s" : ""}`,
-          loc: o.loc,
-          symbol: sym.output(wf.path, o.name),
-          // Without `impact.publish`, a workflow is internal here only because its name starts with `_`.
-          ...ctx.config.impact.publish ? { fix: publishedFix("workflow", wf.file, ctx.config.impact.publish) } : {}
-        });
-      }
+      if (!readsContextDynamically(wf, "needs") && !readsContextDynamically(wf, "jobs"))
+        reportUnusedJobOutputs(ctx, wf);
+      reportUnusedWorkflowOutputs(ctx, wf);
     }
-    for (const action of ctx.index.project.actions.values()) {
-      const users = ctx.index.usersOf(action.path);
-      if (users.length === 0 || isPublished(action, ctx.config.impact)) continue;
-      for (const o of Object.values(action.outputs)) {
-        const read = users.some(
-          (u) => u.step.id && ctx.index.usagesOf(sym.stepOutput(u.unit.path, u.job?.id, u.step.id, o.name)).length > 0
-        );
-        if (read) continue;
-        ctx.report({
-          message: `Output ${quote(o.name)} of ${action.path} is not read by any of its ${users.length} user${users.length > 1 ? "s" : ""}`,
-          loc: o.loc,
-          symbol: sym.output(action.path, o.name),
-          fix: publishedFix("action", action.file, ctx.config.impact.publish)
-        });
-      }
-    }
+    for (const action of ctx.index.project.actions.values()) reportUnusedActionOutputs(ctx, action);
   }
 });
+function reportUnusedJobOutputs(ctx, wf) {
+  for (const job of Object.values(wf.jobs)) {
+    for (const o of Object.values(job.outputs)) {
+      if (ctx.index.usagesOf(sym.jobOutput(wf.path, job.id, o.name)).length > 0) continue;
+      ctx.report({
+        message: `Output ${quote(o.name)} of jobs.${job.id} is never read`,
+        loc: o.loc,
+        symbol: sym.jobOutput(wf.path, job.id, o.name)
+      });
+    }
+  }
+}
+function reportUnusedWorkflowOutputs(ctx, wf) {
+  const callers = ctx.index.callersOf(wf.path);
+  if (!wf.call || callers.length === 0 || isPublished(wf, ctx.config.impact)) return;
+  for (const o of Object.values(wf.call.outputs)) {
+    const read = callers.some(
+      (c) => ctx.index.usagesOf(sym.jobOutput(c.caller.path, c.job.id, o.name)).length > 0
+    );
+    if (read) continue;
+    ctx.report({
+      message: `Workflow output ${quote(o.name)} of ${wf.path} is not read by any of its ${callers.length} caller${callers.length > 1 ? "s" : ""}`,
+      loc: o.loc,
+      symbol: sym.output(wf.path, o.name),
+      // Without `impact.publish`, a workflow is internal here only because its name starts with `_`.
+      ...ctx.config.impact.publish ? { fix: publishedFix("workflow", wf.file, ctx.config.impact.publish) } : {}
+    });
+  }
+}
+function reportUnusedActionOutputs(ctx, action) {
+  const users = ctx.index.usersOf(action.path);
+  if (users.length === 0 || isPublished(action, ctx.config.impact)) return;
+  for (const o of Object.values(action.outputs)) {
+    const read = users.some(
+      (u) => u.step.id && ctx.index.usagesOf(sym.stepOutput(u.unit.path, u.job?.id, u.step.id, o.name)).length > 0
+    );
+    if (read) continue;
+    ctx.report({
+      message: `Output ${quote(o.name)} of ${action.path} is not read by any of its ${users.length} user${users.length > 1 ? "s" : ""}`,
+      loc: o.loc,
+      symbol: sym.output(action.path, o.name),
+      fix: publishedFix("action", action.file, ctx.config.impact.publish)
+    });
+  }
+}
 var stepOutputNeverWritten = defineRule({
   code: "FP304",
   name: "step-output-never-written",
@@ -23335,25 +23469,31 @@ version: \${{ steps.meta.outputs.version }}`,
   check(ctx) {
     for (const unit of ctx.index.units()) {
       for (const { site, ref } of refsOf(unit)) {
-        const [a, b, c] = ref.path;
-        if (ref.context !== "steps" || b !== "outputs" || !a || !c || c === "*" || c === "?") continue;
-        const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
-        if (!step) continue;
-        const w = step.writesOutputs;
-        if (!w.mentions || w.dynamic) continue;
-        if (step.uses && !step.with.script) continue;
-        if (w.names.some((n) => n.toLowerCase() === c.toLowerCase())) continue;
-        const guess = didYouMean(c, w.names);
-        ctx.report({
-          message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
-          loc: ref.loc,
-          symbol: sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, a, c),
-          related: [{ loc: step.runLoc ?? step.loc, message: "outputs are written here" }]
-        });
+        if (ref.context === "steps") checkStepOutputWritten(ctx, unit, site, ref);
       }
     }
   }
 });
+function writesAreKnown(step) {
+  const w = step.writesOutputs;
+  if (!w.mentions || w.dynamic) return false;
+  return !(step.uses && !step.with.script);
+}
+function checkStepOutputWritten(ctx, unit, site, ref) {
+  const [a, b, c] = ref.path;
+  if (b !== "outputs" || !a || !namesKey(c)) return;
+  const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step || !writesAreKnown(step)) return;
+  const w = step.writesOutputs;
+  if (w.names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
+  const guess = didYouMean(c, w.names);
+  ctx.report({
+    message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: stepOutputSymbol(unit, site, a, c),
+    related: [{ loc: step.runLoc ?? step.loc, message: "outputs are written here" }]
+  });
+}
 var outputRules = [
   undefinedOutputRef,
   outputRefWithoutNeeds,
@@ -23387,15 +23527,17 @@ var overrideExpired = defineRule({
   check(ctx) {
     for (const u of ctx.overrides ?? []) {
       if (!u.expired || u.inactive) continue;
-      const owner = u.override.owner ? ` (owner ${u.override.owner})` : "";
-      ctx.report({
-        message: u.matched ? `Override for ${describe2(u.override)} expired on ${u.override.expires}${owner}; ${u.matched} finding${u.matched === 1 ? " is" : "s are"} reported again` : `Override for ${describe2(u.override)} expired on ${u.override.expires}${owner}; it matches no finding now`,
-        loc: configLoc(u.loc),
-        fix: u.matched ? `Fix the finding${u.matched === 1 ? "" : "s"} and delete the override, or extend \`expires\` with an updated reason ("${u.override.reason}").` : "Delete the override."
-      });
+      ctx.report({ message: expiredMessage(u), loc: configLoc(u.loc), fix: expiredFix(u) });
     }
   }
 });
+function expiredMessage(u) {
+  const owner = u.override.owner ? ` (owner ${u.override.owner})` : "";
+  return u.matched ? `Override for ${describe2(u.override)} expired on ${u.override.expires}${owner}; ${u.matched} finding${u.matched === 1 ? " is" : "s are"} reported again` : `Override for ${describe2(u.override)} expired on ${u.override.expires}${owner}; it matches no finding now`;
+}
+function expiredFix(u) {
+  return u.matched ? `Fix the finding${u.matched === 1 ? "" : "s"} and delete the override, or extend \`expires\` with an updated reason ("${u.override.reason}").` : "Delete the override.";
+}
 var overrideUnused = defineRule({
   code: "FP902",
   name: "override-unused",
@@ -23412,7 +23554,7 @@ var overrideUnused = defineRule({
       if (u.expired || u.inactive || u.matched > 0) continue;
       const n = u.skippedInGenerated ?? 0;
       ctx.report({
-        message: n ? `Override for ${describe2(u.override)} matches no finding: ${u.override.rule} is not reported in generated files, where its ${n} finding${n === 1 ? " is" : "s are"}` : `Override for ${describe2(u.override)} matches no finding`,
+        message: unusedMessage(u, n),
         loc: configLoc(u.loc),
         ...n ? {
           fix: "Delete the override: flowpact no longer reports this rule in generated files. If the file is written by hand, list it under `generated.exclude` instead."
@@ -23421,6 +23563,9 @@ var overrideUnused = defineRule({
     }
   }
 });
+function unusedMessage(u, n) {
+  return n ? `Override for ${describe2(u.override)} matches no finding: ${u.override.rule} is not reported in generated files, where its ${n} finding${n === 1 ? " is" : "s are"}` : `Override for ${describe2(u.override)} matches no finding`;
+}
 var overrideExpiringSoon = defineRule({
   code: "FP903",
   name: "override-expiring-soon",
@@ -23455,35 +23600,9 @@ var RuleRegistry = class {
   byCode = /* @__PURE__ */ new Map();
   byName = /* @__PURE__ */ new Map();
   register(rule, opts = {}) {
-    const m = CODE_PATTERN.exec(rule.code);
-    if (!m) {
-      throw new RuleRegistryError(
-        `Invalid rule code "${rule.code}": expected <PREFIX><category digit><2 digits>, e.g. FP401 or ACME101`
-      );
-    }
-    const [, prefix, cat] = m;
-    if (!NAME_PATTERN.test(rule.name))
-      throw new RuleRegistryError(`Invalid rule name "${rule.name}": use kebab-case`);
-    if (opts.builtin && prefix !== BUILTIN_PREFIX) {
-      throw new RuleRegistryError(`Built-in rule ${rule.code} must use the ${BUILTIN_PREFIX} prefix`);
-    }
-    if (!opts.builtin && prefix === BUILTIN_PREFIX) {
-      throw new RuleRegistryError(`Rule ${rule.code}: the ${prefix} prefix is reserved for built-in rules`);
-    }
-    if (!opts.builtin && !rule.docsUrl)
-      throw new RuleRegistryError(`Rule ${rule.code}: plugin rules must set docsUrl`);
-    if (rule.generatedFiles !== void 0 && rule.generatedFiles !== "report" && rule.generatedFiles !== "skip") {
-      throw new RuleRegistryError(
-        `Rule ${rule.code}: generatedFiles must be "report" or "skip", got ${JSON.stringify(rule.generatedFiles)}`
-      );
-    }
-    const expected = CATEGORIES[Number(cat)];
-    if (!expected) throw new RuleRegistryError(`Rule ${rule.code}: unknown category digit ${cat}`);
-    if (expected.id !== rule.category) {
-      throw new RuleRegistryError(
-        `Rule ${rule.code}: category digit ${cat} means "${expected.id}" but the rule declares "${rule.category}"`
-      );
-    }
+    const cat = checkCodeAndName(rule, opts);
+    checkGeneratedFiles(rule);
+    checkCategory(rule, cat);
     if (this.byCode.has(rule.code)) throw new RuleRegistryError(`Duplicate rule code ${rule.code}`);
     if (this.byName.has(rule.name)) throw new RuleRegistryError(`Duplicate rule name ${rule.name}`);
     this.byCode.set(rule.code, rule);
@@ -23501,6 +23620,42 @@ var RuleRegistry = class {
     return rule.docsUrl ?? ruleDocsUrl(rule.code);
   }
 };
+function checkCodeAndName(rule, opts) {
+  const m = CODE_PATTERN.exec(rule.code);
+  if (!m) {
+    throw new RuleRegistryError(
+      `Invalid rule code "${rule.code}": expected <PREFIX><category digit><2 digits>, e.g. FP401 or ACME101`
+    );
+  }
+  const [, prefix, cat] = m;
+  if (!NAME_PATTERN.test(rule.name))
+    throw new RuleRegistryError(`Invalid rule name "${rule.name}": use kebab-case`);
+  if (opts.builtin && prefix !== BUILTIN_PREFIX) {
+    throw new RuleRegistryError(`Built-in rule ${rule.code} must use the ${BUILTIN_PREFIX} prefix`);
+  }
+  if (!opts.builtin && prefix === BUILTIN_PREFIX) {
+    throw new RuleRegistryError(`Rule ${rule.code}: the ${prefix} prefix is reserved for built-in rules`);
+  }
+  if (!opts.builtin && !rule.docsUrl)
+    throw new RuleRegistryError(`Rule ${rule.code}: plugin rules must set docsUrl`);
+  return cat;
+}
+function checkGeneratedFiles(rule) {
+  if (rule.generatedFiles !== void 0 && rule.generatedFiles !== "report" && rule.generatedFiles !== "skip") {
+    throw new RuleRegistryError(
+      `Rule ${rule.code}: generatedFiles must be "report" or "skip", got ${JSON.stringify(rule.generatedFiles)}`
+    );
+  }
+}
+function checkCategory(rule, cat) {
+  const expected = CATEGORIES[Number(cat)];
+  if (!expected) throw new RuleRegistryError(`Rule ${rule.code}: unknown category digit ${cat}`);
+  if (expected.id !== rule.category) {
+    throw new RuleRegistryError(
+      `Rule ${rule.code}: category digit ${cat} means "${expected.id}" but the rule declares "${rule.category}"`
+    );
+  }
+}
 
 // ../lint/src/rules/secrets.ts
 var missingRequiredSecret = defineRule({
@@ -23527,19 +23682,22 @@ secrets:
       if (call.job.secretsInherit) continue;
       for (const s of Object.values(call.callee.call?.secrets ?? {})) {
         if (!s.required || lookup(call.job.secrets, s.name)) continue;
-        ctx.report({
-          message: `jobs.${call.job.id} calls ${call.callee.path} without required secret ${quote(s.name)}`,
-          loc: call.job.uses?.loc ?? call.job.loc,
-          symbol: sym.secret(call.callee.path, s.name),
-          related: [
-            ...chainRelated(chainTo(ctx.index, call.caller.path)),
-            { loc: s.loc, message: "declared required here" }
-          ]
-        });
+        reportMissingSecret(ctx, call, s);
       }
     }
   }
 });
+function reportMissingSecret(ctx, call, s) {
+  ctx.report({
+    message: `jobs.${call.job.id} calls ${call.callee.path} without required secret ${quote(s.name)}`,
+    loc: call.job.uses?.loc ?? call.job.loc,
+    symbol: sym.secret(call.callee.path, s.name),
+    related: [
+      ...chainRelated(chainTo(ctx.index, call.caller.path)),
+      { loc: s.loc, message: "declared required here" }
+    ]
+  });
+}
 var unknownSecret = defineRule({
   code: "FP202",
   name: "unknown-secret",
@@ -23654,39 +23812,51 @@ var undeclaredSecretRef = defineRule({
       if (strictCallers.length === 0) continue;
       const resolvers = new Map(strictCallers.map((c) => [c, callerInputsResolver(wf, c)]));
       for (const { site, ref } of refsOf(wf)) {
-        const name = ref.path[0];
-        if (ref.context !== "secrets" || !name || name === "*" || name === "?") continue;
-        if (BUILTIN_SECRETS.has(name.toLowerCase()) || lookup(wf.call.secrets, name)) continue;
+        const name = undeclaredSecretRead(wf.call.secrets, ref);
+        if (!name) continue;
         const guards = guardsOf2(wf, site);
         const reached = strictCallers.filter((c) => !guards.some((g) => isFalse(g, resolvers.get(c))));
-        if (reached.length === 0) continue;
-        ctx.report({
-          message: `${wf.path} reads secrets.${name}, which is not declared \u2014 it is empty when called from ${reached.length} caller${reached.length > 1 ? "s" : ""} without \`secrets: inherit\``,
-          loc: ref.loc,
-          symbol: sym.secret(wf.path, name),
-          related: reached.slice(0, 3).map((c) => ({
-            loc: c.job.uses?.loc ?? c.job.loc,
-            message: `${c.caller.path} \u203A jobs.${c.job.id} passes explicit secrets`
-          }))
-        });
+        if (reached.length > 0) reportUndeclaredSecret(ctx, wf, ref, name, reached);
       }
     }
   }
 });
+function undeclaredSecretRead(declared, ref) {
+  const name = ref.path[0];
+  if (ref.context !== "secrets" || !namesKey(name)) return void 0;
+  if (BUILTIN_SECRETS.has(name.toLowerCase()) || lookup(declared, name)) return void 0;
+  return name;
+}
+function reportUndeclaredSecret(ctx, wf, ref, name, reached) {
+  ctx.report({
+    message: `${wf.path} reads secrets.${name}, which is not declared \u2014 it is empty when called from ${reached.length} caller${reached.length > 1 ? "s" : ""} without \`secrets: inherit\``,
+    loc: ref.loc,
+    symbol: sym.secret(wf.path, name),
+    related: reached.slice(0, 3).map((c) => ({
+      loc: c.job.uses?.loc ?? c.job.loc,
+      message: `${c.caller.path} \u203A jobs.${c.job.id} passes explicit secrets`
+    }))
+  });
+}
 function callerInputsResolver(callee, call) {
   return ({ context, path }) => {
     if (context !== "inputs") return void 0;
     if (path.length !== 1 || !path[0]) return UNKNOWN;
     const decl = lookup(callee.call?.inputs ?? {}, path[0]);
-    if (!decl) return UNKNOWN;
-    const b = lookup(call.job.with, decl.name);
-    if (b) return b.site ? evaluateTemplate(b.site.text, () => void 0) : known(b.value);
-    if (decl.hasDefault) {
-      const d = decl.default ?? null;
-      return typeof d === "string" && d.includes("${{") ? UNKNOWN : known(d);
-    }
-    return known(decl.type === "boolean" ? false : decl.type === "number" ? 0 : "");
+    return decl ? callerInputValue(decl, call) : UNKNOWN;
   };
+}
+function callerInputValue(decl, call) {
+  const b = lookup(call.job.with, decl.name);
+  if (b) return b.site ? evaluateTemplate(b.site.text, () => void 0) : known(b.value);
+  return omittedInputValue(decl);
+}
+function omittedInputValue(decl) {
+  if (decl.hasDefault) {
+    const d = decl.default ?? null;
+    return typeof d === "string" && d.includes("${{") ? UNKNOWN : known(d);
+  }
+  return known(decl.type === "boolean" ? false : decl.type === "number" ? 0 : "");
 }
 function guardsOf2(wf, site) {
   const job = site.job !== void 0 ? wf.jobs[site.job] : void 0;
@@ -23723,31 +23893,12 @@ var callCycle = defineRule({
     const byCaller = callsByCaller(ctx.index.callSites);
     const components = callComponents([...ctx.index.project.workflows.keys()], byCaller);
     for (const component of components) {
-      const members2 = new Set(component);
       const start = [...component].sort()[0];
       const selfLoop = (byCaller.get(start) ?? []).find((c) => c.callee.path === start);
       if (component.length === 1 && !selfLoop) continue;
-      const via = /* @__PURE__ */ new Map();
-      const queue = [start];
-      let closing = selfLoop;
-      while (queue.length && !closing) {
-        const v = queue.shift();
-        for (const call of byCaller.get(v) ?? []) {
-          const w = call.callee.path;
-          if (!members2.has(w)) continue;
-          if (w === start) {
-            closing = call;
-            break;
-          }
-          if (!via.has(w)) {
-            via.set(w, call);
-            queue.push(w);
-          }
-        }
-      }
-      if (!closing) continue;
-      const cycle = [closing];
-      for (let v = closing.caller.path; v !== start; v = via.get(v).caller.path) cycle.unshift(via.get(v));
+      const cycle = shortestCycle(start, new Set(component), byCaller, selfLoop);
+      if (!cycle) continue;
+      const closing = cycle.at(-1);
       ctx.report({
         message: `Call cycle: ${[...cycle.map((c) => c.caller.path), start].join(" \u2192 ")}`,
         loc: closing.job.uses?.loc ?? closing.job.loc,
@@ -23757,6 +23908,30 @@ var callCycle = defineRule({
     }
   }
 });
+function shortestCycle(start, members2, byCaller, selfLoop) {
+  const via = /* @__PURE__ */ new Map();
+  const queue = [start];
+  let closing = selfLoop;
+  while (queue.length && !closing) {
+    closing = visitCalls(queue.shift(), { start, members: members2, byCaller, via, queue });
+  }
+  if (!closing) return void 0;
+  const cycle = [closing];
+  for (let v = closing.caller.path; v !== start; v = via.get(v).caller.path) cycle.unshift(via.get(v));
+  return cycle;
+}
+function visitCalls(v, { start, members: members2, byCaller, via, queue }) {
+  for (const call of byCaller.get(v) ?? []) {
+    const w = call.callee.path;
+    if (!members2.has(w)) continue;
+    if (w === start) return call;
+    if (!via.has(w)) {
+      via.set(w, call);
+      queue.push(w);
+    }
+  }
+  return void 0;
+}
 function callsByCaller(calls) {
   const out = /* @__PURE__ */ new Map();
   for (const c of calls) {
@@ -23815,57 +23990,11 @@ var nestingDepth = defineRule({
     const limit = ctx.config.limits.nestingDepth;
     const byCaller = callsByCaller(ctx.index.callSites);
     const components = callComponents([...ctx.index.project.workflows.keys()], byCaller);
-    const componentOf = /* @__PURE__ */ new Map();
-    components.forEach((c, i) => {
-      for (const path of c) componentOf.set(path, i);
-    });
-    const internal = (c) => componentOf.get(c.caller.path) === componentOf.get(c.callee.path);
-    const entry = /* @__PURE__ */ new Map();
-    const reach = /* @__PURE__ */ new Map();
-    for (let i = components.length - 1; i >= 0; i--) {
-      const members2 = components[i];
-      for (const v of members2) {
-        let best = { depth: 1 };
-        for (const c of ctx.index.callersOf(v)) {
-          if (internal(c)) continue;
-          const d = (reach.get(c.caller.path)?.depth ?? 1) + 1;
-          if (d > best.depth) best = { depth: d, call: c };
-        }
-        entry.set(v, best);
-      }
-      for (const u of [...members2].sort()) {
-        const paths = /* @__PURE__ */ new Map([[u, []]]);
-        const queue = [u];
-        while (queue.length) {
-          const v = queue.shift();
-          for (const c of byCaller.get(v) ?? []) {
-            const w = c.callee.path;
-            if (!internal(c) || paths.has(w)) continue;
-            paths.set(w, [...paths.get(v), c]);
-            queue.push(w);
-          }
-        }
-        const start = entry.get(u).depth;
-        for (const [w, path] of paths) {
-          const d = start + path.length;
-          if (d > (reach.get(w)?.depth ?? 0)) reach.set(w, { depth: d, from: u, path });
-        }
-      }
-    }
-    const depthOf = (path) => reach.get(path)?.depth ?? 1;
-    const chainTo2 = (path) => {
-      const r = reach.get(path);
-      if (!r) return [];
-      const via = entry.get(r.from)?.call;
-      return [...via ? [...chainTo2(via.caller.path), via] : [], ...r.path];
-    };
+    const internal = internalCalls(components);
+    const depths = chainDepths(ctx.index, components, byCaller, internal);
     for (const call of ctx.index.callSites) {
-      if (depthOf(call.caller.path) !== limit) continue;
-      let chain;
-      if (!internal(call)) chain = [...chainTo2(call.caller.path), call];
-      else if (reach.get(call.callee.path)?.path.at(-1) === call && depthOf(call.callee.path) === limit + 1)
-        chain = chainTo2(call.callee.path);
-      else continue;
+      const chain = chainCrossingAt(call, limit, depths, internal);
+      if (!chain) continue;
       ctx.report({
         message: `Call chain is ${chain.length + 1} workflows deep (limit ${limit}): ${[chain[0].caller.path, ...chain.map((c) => c.callee.path)].join(" \u2192 ")}`,
         loc: call.job.uses?.loc ?? call.job.loc,
@@ -23875,6 +24004,66 @@ var nestingDepth = defineRule({
     }
   }
 });
+function internalCalls(components) {
+  const componentOf = /* @__PURE__ */ new Map();
+  components.forEach((c, i) => {
+    for (const path of c) componentOf.set(path, i);
+  });
+  return (c) => componentOf.get(c.caller.path) === componentOf.get(c.callee.path);
+}
+function chainDepths(index, components, byCaller, internal) {
+  const depths = { entry: /* @__PURE__ */ new Map(), reach: /* @__PURE__ */ new Map() };
+  for (let i = components.length - 1; i >= 0; i--) {
+    const members2 = components[i];
+    for (const v of members2) depths.entry.set(v, deepestEntry(index, v, depths, internal));
+    for (const u of [...members2].sort()) {
+      const start = depths.entry.get(u).depth;
+      for (const [w, path] of shortestPathsFrom(u, byCaller, internal)) {
+        const d = start + path.length;
+        if (d > (depths.reach.get(w)?.depth ?? 0)) depths.reach.set(w, { depth: d, from: u, path });
+      }
+    }
+  }
+  return depths;
+}
+function deepestEntry(index, v, depths, internal) {
+  let best = { depth: 1 };
+  for (const c of index.callersOf(v)) {
+    if (internal(c)) continue;
+    const d = (depths.reach.get(c.caller.path)?.depth ?? 1) + 1;
+    if (d > best.depth) best = { depth: d, call: c };
+  }
+  return best;
+}
+function shortestPathsFrom(u, byCaller, internal) {
+  const paths = /* @__PURE__ */ new Map([[u, []]]);
+  const queue = [u];
+  while (queue.length) {
+    const v = queue.shift();
+    for (const c of byCaller.get(v) ?? []) {
+      const w = c.callee.path;
+      if (!internal(c) || paths.has(w)) continue;
+      paths.set(w, [...paths.get(v), c]);
+      queue.push(w);
+    }
+  }
+  return paths;
+}
+var depthOf = (depths, path) => depths.reach.get(path)?.depth ?? 1;
+function longestChainTo(depths, path) {
+  const r = depths.reach.get(path);
+  if (!r) return [];
+  const via = depths.entry.get(r.from)?.call;
+  return [...via ? [...longestChainTo(depths, via.caller.path), via] : [], ...r.path];
+}
+function chainCrossingAt(call, limit, depths, internal) {
+  if (depthOf(depths, call.caller.path) !== limit) return void 0;
+  if (!internal(call)) return [...longestChainTo(depths, call.caller.path), call];
+  const last = depths.reach.get(call.callee.path)?.path.at(-1);
+  if (last === call && depthOf(depths, call.callee.path) === limit + 1)
+    return longestChainTo(depths, call.callee.path);
+  return void 0;
+}
 var remoteUnverified = defineRule({
   code: "FP603",
   name: "remote-unverified",
@@ -23911,13 +24100,7 @@ var needsWithoutData = defineRule({
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
-      const readsByJob = /* @__PURE__ */ new Map();
-      for (const { site, ref } of refsOf(wf)) {
-        if (ref.context !== "needs" || !site.job || !ref.path[0]) continue;
-        const set = readsByJob.get(site.job) ?? /* @__PURE__ */ new Set();
-        set.add(ref.path[0].toLowerCase());
-        readsByJob.set(site.job, set);
-      }
+      const readsByJob = needsReadsByJob(wf);
       for (const job of Object.values(wf.jobs)) {
         const reads = readsByJob.get(job.id) ?? /* @__PURE__ */ new Set();
         if (reads.has("*") || reads.has("?")) continue;
@@ -23933,6 +24116,16 @@ var needsWithoutData = defineRule({
     }
   }
 });
+function needsReadsByJob(wf) {
+  const readsByJob = /* @__PURE__ */ new Map();
+  for (const { site, ref } of refsOf(wf)) {
+    if (ref.context !== "needs" || !site.job || !ref.path[0]) continue;
+    const set = readsByJob.get(site.job) ?? /* @__PURE__ */ new Set();
+    set.add(ref.path[0].toLowerCase());
+    readsByJob.set(site.job, set);
+  }
+  return readsByJob;
+}
 var largeInterface = defineRule({
   code: "FP605",
   name: "large-interface",
@@ -23979,49 +24172,66 @@ var missingLocalTarget = defineRule({
     }
   },
   check(ctx) {
-    for (const m of ctx.index.project.invalidTargets ?? []) {
-      const target = m.uses.target ?? m.uses.raw;
-      ctx.report({
-        message: m.reason === "self-ref" ? `${quote(m.uses.raw.trim())} has an @ref, which GitHub rejects: \`$/\` always runs this repository at the running commit` : `${quote(target)} is not a reusable workflow: they must be .yml/.yaml files directly in .github/workflows`,
-        loc: m.uses.loc,
-        symbol: target,
-        ...m.reason === "self-ref" ? {
-          fix: `Write \`$/${target}\` without @${m.uses.selfRef}, or reference another commit as owner/repo/path@ref.`
-        } : {}
-      });
-    }
-    for (const m of ctx.index.project.missing) {
-      const target = m.target ?? m.uses.target ?? m.uses.raw;
-      const related2 = [];
-      const checkedOut = (c) => related2.push({ loc: c.loc, message: `checks this repository out at ${quote(c.path)}` });
-      let where = "";
-      let fix;
-      if (m.checkout) {
-        where = ` (${m.uses.raw.trim()} is in the checkout of this repository at ${quote(m.checkout.path)})`;
-        checkedOut(m.checkout);
-      } else if (m.elsewhere) {
-        const first = m.elsewhere[0];
-        where = first ? ` (this repository is checked out at ${listNames(m.elsewhere.map((c) => quote(c.path)))}, not at the workspace root)` : " (no step checks this repository out at the workspace root)";
-        m.elsewhere.forEach(checkedOut);
-        fix = first ? `A step\u2019s ./path is relative to the workspace, where this repository is at ${quote(first.path)}: a path in it starts with ./${first.path}/. Or use $/${target}, which always means this repository.` : `A step\u2019s ./path is relative to the workspace, and no step puts this repository at its root: check it out there first (actions/checkout without path:), or use $/${target}, which always means this repository.`;
-      }
-      let when = "";
-      const caller = m.via?.[0];
-      if (caller) {
-        when = ` when ${m.from} runs in ${caller.job !== void 0 ? `job ${quote(caller.job)} of ` : ""}${caller.from}`;
-        for (const v of m.via ?? []) related2.push({ loc: v.loc, message: `uses ${v.action} here` });
-      }
-      const what = `${m.uses.kind === "local-workflow" ? "Workflow" : "Action"} ${quote(target)}`;
-      ctx.report({
-        message: `${what} ${m.inRepository ? "is not in the workspace" : "does not exist"}${when}${where}`,
-        loc: m.uses.loc,
-        symbol: target,
-        ...related2.length ? { related: related2 } : {},
-        ...fix !== void 0 ? { fix } : {}
-      });
-    }
+    for (const m of ctx.index.project.invalidTargets ?? []) reportInvalidTarget(ctx, m);
+    for (const m of ctx.index.project.missing) reportMissingTarget(ctx, m);
   }
 });
+function reportInvalidTarget(ctx, m) {
+  const target = m.uses.target ?? m.uses.raw;
+  ctx.report({
+    message: m.reason === "self-ref" ? `${quote(m.uses.raw.trim())} has an @ref, which GitHub rejects: \`$/\` always runs this repository at the running commit` : `${quote(target)} is not a reusable workflow: they must be .yml/.yaml files directly in .github/workflows`,
+    loc: m.uses.loc,
+    symbol: target,
+    ...m.reason === "self-ref" ? {
+      fix: `Write \`$/${target}\` without @${m.uses.selfRef}, or reference another commit as owner/repo/path@ref.`
+    } : {}
+  });
+}
+function reportMissingTarget(ctx, m) {
+  const target = m.target ?? m.uses.target ?? m.uses.raw;
+  const related2 = [];
+  const { where, fix } = checkoutNote(m, target, related2);
+  const when = callerNote(m, related2);
+  const what = `${m.uses.kind === "local-workflow" ? "Workflow" : "Action"} ${quote(target)}`;
+  ctx.report({
+    message: `${what} ${m.inRepository ? "is not in the workspace" : "does not exist"}${when}${where}`,
+    loc: m.uses.loc,
+    symbol: target,
+    ...related2.length ? { related: related2 } : {},
+    ...fix !== void 0 ? { fix } : {}
+  });
+}
+function checkoutNote(m, target, related2) {
+  const checkedOut = (c) => related2.push({ loc: c.loc, message: `checks this repository out at ${quote(c.path)}` });
+  if (m.checkout) {
+    checkedOut(m.checkout);
+    return {
+      where: ` (${m.uses.raw.trim()} is in the checkout of this repository at ${quote(m.checkout.path)})`
+    };
+  }
+  if (!m.elsewhere) return { where: "" };
+  m.elsewhere.forEach(checkedOut);
+  return elsewhereNote(m.elsewhere, target);
+}
+function elsewhereNote(elsewhere, target) {
+  const first = elsewhere[0];
+  if (!first) {
+    return {
+      where: " (no step checks this repository out at the workspace root)",
+      fix: `A step\u2019s ./path is relative to the workspace, and no step puts this repository at its root: check it out there first (actions/checkout without path:), or use $/${target}, which always means this repository.`
+    };
+  }
+  return {
+    where: ` (this repository is checked out at ${listNames(elsewhere.map((c) => quote(c.path)))}, not at the workspace root)`,
+    fix: `A step\u2019s ./path is relative to the workspace, where this repository is at ${quote(first.path)}: a path in it starts with ./${first.path}/. Or use $/${target}, which always means this repository.`
+  };
+}
+function callerNote(m, related2) {
+  const caller = m.via?.[0];
+  if (!caller) return "";
+  for (const v of m.via ?? []) related2.push({ loc: v.loc, message: `uses ${v.action} here` });
+  return ` when ${m.from} runs in ${caller.job !== void 0 ? `job ${quote(caller.job)} of ` : ""}${caller.from}`;
+}
 var workspaceUnverified = defineRule({
   code: "FP610",
   name: "workspace-unverified",
@@ -24042,36 +24252,9 @@ var workspaceUnverified = defineRule({
   },
   check(ctx) {
     for (const u of ctx.index.project.unverified ?? []) {
-      const path = quote(u.uses.raw.trim());
-      const related2 = [];
-      let message;
-      switch (u.reason) {
-        case "other-repository":
-          message = `${path} is in the checkout of ${u.checkout?.repository} at ${quote(u.checkout?.path ?? ".")}; its interface is not verified`;
-          break;
-        case "outside-workspace":
-          message = `${path} points outside the workspace, so it only exists at runtime; it is not verified`;
-          break;
-        case "created-at-runtime":
-          message = `${path} is not in this repository; an earlier step writes there (\`${u.writer?.command}\`), so it is not verified`;
-          break;
-        case "other-ref":
-          message = `${path} is not in this repository\u2019s working tree, but may be at ${quote(u.checkout?.ref ?? "")}, the ref checked out at ${quote(u.checkout?.path ?? ".")}; it is not verified`;
-          break;
-        default:
-          message = u.checkout ? `${path} is not in this repository and may be in the checkout at ${quote(u.checkout.path)}, a path computed at runtime; it is not verified` : `${path} is not in this repository, and no checkout of this repository covers it; it is not verified`;
-      }
-      if (u.checkout) {
-        const what = u.checkout.repository ?? (u.checkout.ref !== void 0 ? `ref ${quote(u.checkout.ref)} of this repository` : "this repository");
-        related2.push({ loc: u.checkout.loc, message: `checks out ${what} at ${quote(u.checkout.path)}` });
-      }
-      if (u.writer)
-        related2.push({
-          loc: u.writer.loc,
-          message: `\`${u.writer.command}\` here writes to ${quote(u.writer.path)}`
-        });
+      const related2 = unverifiedRelated(u);
       ctx.report({
-        message,
+        message: unverifiedMessage(u, quote(u.uses.raw.trim())),
         loc: u.uses.loc,
         symbol: u.uses.raw.trim(),
         ...related2.length ? { related: related2 } : {}
@@ -24079,6 +24262,33 @@ var workspaceUnverified = defineRule({
     }
   }
 });
+var UNVERIFIED_MESSAGES = {
+  "other-repository": (u, path) => `${path} is in the checkout of ${u.checkout?.repository} at ${quote(u.checkout?.path ?? ".")}; its interface is not verified`,
+  "outside-workspace": (_u, path) => `${path} points outside the workspace, so it only exists at runtime; it is not verified`,
+  "created-at-runtime": (u, path) => `${path} is not in this repository; an earlier step writes there (\`${u.writer?.command}\`), so it is not verified`,
+  "other-ref": (u, path) => `${path} is not in this repository\u2019s working tree, but may be at ${quote(u.checkout?.ref ?? "")}, the ref checked out at ${quote(u.checkout?.path ?? ".")}; it is not verified`,
+  "not-checked-out": notCheckedOutMessage
+};
+function unverifiedMessage(u, path) {
+  const message = Object.hasOwn(UNVERIFIED_MESSAGES, u.reason) ? UNVERIFIED_MESSAGES[u.reason] : void 0;
+  return message ? message(u, path) : notCheckedOutMessage(u, path);
+}
+function notCheckedOutMessage(u, path) {
+  return u.checkout ? `${path} is not in this repository and may be in the checkout at ${quote(u.checkout.path)}, a path computed at runtime; it is not verified` : `${path} is not in this repository, and no checkout of this repository covers it; it is not verified`;
+}
+function unverifiedRelated(u) {
+  const related2 = [];
+  if (u.checkout) {
+    const what = u.checkout.repository ?? (u.checkout.ref !== void 0 ? `ref ${quote(u.checkout.ref)} of this repository` : "this repository");
+    related2.push({ loc: u.checkout.loc, message: `checks out ${what} at ${quote(u.checkout.path)}` });
+  }
+  if (u.writer)
+    related2.push({
+      loc: u.writer.loc,
+      message: `\`${u.writer.command}\` here writes to ${quote(u.writer.path)}`
+    });
+  return related2;
+}
 var unreferencedReusableWorkflow = defineRule({
   code: "FP607",
   name: "unreferenced-reusable-workflow",
