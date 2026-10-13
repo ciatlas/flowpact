@@ -24,19 +24,25 @@ import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, didYouMeanNote, listNames, namesKey, quote, useInCondition } from './util';
 
 /**
- * For every workflow with `workflow_dispatch`: input names read as `github.event.inputs.<name>` in the workflows and
- * actions it calls. In a called workflow or an action, `github.event` is the triggering (top-level) workflow's event.
+ * For every workflow with `workflow_dispatch`: its inputs read through `github.event.inputs` in it and in the workflows
+ * and actions it calls. In a called workflow or an action, `github.event` is the triggering (top-level) workflow's
+ * event: "the event payload in the called workflow is the same event payload from the calling workflow" (GitHub's docs).
  */
 function eventInputReadsByRoot(index: ProjectIndex): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
   for (const root of index.project.workflows.values()) {
-    if (root.dispatch) out.set(root.path, eventInputReadsFrom(index, root));
+    if (!root.dispatch) continue;
+    const every = Object.values(root.dispatch.inputs).map((input) => input.name.toLowerCase());
+    out.set(root.path, eventInputReadsFrom(index, root, every));
   }
   return out;
 }
 
-/** The names read as `github.event.inputs.<name>` (lowercased) in `root` and every workflow and action it reaches. */
-function eventInputReadsFrom(index: ProjectIndex, root: UnitDecl): Set<string> {
+/**
+ * The dispatch inputs (lowercased) read through `github.event.inputs` in `root` and every workflow and action it
+ * reaches: `every` input of `root` for a read that names none.
+ */
+function eventInputReadsFrom(index: ProjectIndex, root: UnitDecl, every: string[]): Set<string> {
   const names = new Set<string>();
   const seen = new Set<UnitDecl>();
   const queue: UnitDecl[] = [root];
@@ -44,19 +50,35 @@ function eventInputReadsFrom(index: ProjectIndex, root: UnitDecl): Set<string> {
     const unit = queue.shift()!;
     if (seen.has(unit)) continue;
     seen.add(unit);
-    addEventInputReads(unit, names);
+    addEventInputReads(unit, names, every);
     for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
     for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
   }
   return names;
 }
 
-/** Adds the names a unit reads as `github.event.inputs.<name>`, lowercased. */
-function addEventInputReads(unit: UnitDecl, names: Set<string>): void {
-  for (const { ref } of refsOf(unit)) {
-    const [a, b, c] = ref.path;
-    if (ref.context === 'github' && a === 'event' && b === 'inputs' && c) names.add(c.toLowerCase());
+/** Adds the dispatch inputs a unit reads through `github.event.inputs`, lowercased (see `eventInputsRead`). */
+function addEventInputReads(unit: UnitDecl, names: Set<string>, every: string[]): void {
+  for (const { ref } of refsOf(unit)) for (const name of eventInputsRead(ref, every)) names.add(name);
+}
+
+/**
+ * The dispatch inputs (lowercased) a reference reads through `github.event.inputs`: the one it names
+ * (`github.event.inputs.target`), none (`github.event_name`), or `every` one when it reads them without naming one. It
+ * does when it stops at an object that holds them (`toJSON(github)`, `toJSON(github.event)`,
+ * `toJSON(github.event.inputs)`), or has a `*` filter or a computed key that may stand for `event`, `inputs` or the
+ * input (`github.event.inputs.*`, `github.event.inputs[matrix.key]`, `github[matrix.key].inputs`). GitHub looks
+ * properties up regardless of case.
+ */
+function eventInputsRead(ref: LocatedRef, every: string[]): string[] {
+  if (ref.context !== 'github') return [];
+  for (const [i, key] of ['event', 'inputs'].entries()) {
+    const segment = ref.path[i];
+    if (segment === undefined) return every;
+    if (namesKey(segment) && segment.toLowerCase() !== key) return [];
   }
+  const name = ref.path[2];
+  return namesKey(name) ? [name.toLowerCase()] : every;
 }
 
 function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {

@@ -165,6 +165,149 @@ describe('FP104 unused-input', () => {
     });
     expect(byCode(r, 'FP104')[0]?.symbol).toBe('.github/actions/a#inputs.unused');
   });
+
+  describe('github.event.inputs read as a whole by what a dispatched workflow runs (#126)', () => {
+    // A called workflow or an action gets the `github` context of the run, so its `github.event` is the event of the
+    // dispatched workflow, whose `inputs` hold that workflow's dispatch inputs. A read that names none reads them all.
+    const root = yaml`
+      on:
+        workflow_dispatch:
+          inputs:
+            target: { type: string }
+            level: { type: string }
+      jobs:
+        call:
+          uses: ./.github/workflows/callee.yml
+    `;
+    const callee = (read: string) => yaml`
+      on: { workflow_call: }
+      jobs:
+        a:
+          runs-on: ubuntu-latest
+          steps:
+            - run: echo "${read}"
+    `;
+    const fp104 = (files: Record<string, string>) => byCode(lint(files), 'FP104').map((f) => f.message);
+    const unread = (name: string, file = 'root.yml', note = '') =>
+      `Input "${name}" of ${WF}/${file} is never read${note}`;
+
+    it('counts the issue’s toJSON(github.event.inputs) in a called workflow as a read of both inputs', () => {
+      const files = {
+        [`${WF}/root.yml`]: root,
+        [`${WF}/callee.yml`]: callee('${{ toJSON(github.event.inputs) }}'),
+      };
+      expect(fp104(files)).toEqual([]);
+    });
+
+    it.each([
+      ['a * filter', '${{ toJSON(github.event.inputs.*) }}'],
+      ['a computed key', '${{ github.event.inputs[env.KEY] }}'],
+      ['the whole event', '${{ toJSON(github.event) }}'],
+      ['the whole github context', '${{ toJSON(github) }}'],
+      [
+        'a filter or computed key that may stand for event or inputs',
+        '${{ toJSON(github.*) }} ${{ github.event[env.K] }}',
+      ],
+      ['a computed key that may stand for event', '${{ toJSON(github[env.K].inputs) }}'],
+      ['a mixed-case path', '${{ toJSON(github.Event.Inputs) }}'],
+    ])('counts %s in a called workflow as a read of every dispatch input', (_, read) => {
+      expect(fp104({ [`${WF}/root.yml`]: root, [`${WF}/callee.yml`]: callee(read) })).toEqual([]);
+    });
+
+    const steps = (step: string) =>
+      root.replace(
+        'call:\n    uses: ./.github/workflows/callee.yml',
+        `j:\n    runs-on: x\n    steps:\n      - ${step}`,
+      );
+    const action = yaml`
+      runs:
+        using: composite
+        steps:
+          - run: echo '\${{ toJSON(github.event.inputs) }}'
+            shell: bash
+    `;
+    const middle = yaml`
+      on: workflow_call
+      jobs:
+        m:
+          uses: ./.github/workflows/leaf.yml
+    `;
+    it.each([
+      [
+        'a local action the dispatched workflow uses',
+        { [`${WF}/root.yml`]: steps('uses: ./.github/actions/a'), '.github/actions/a/action.yml': action },
+      ],
+      ['the dispatched workflow itself', { [`${WF}/root.yml`]: steps("run: echo '${{ toJSON(github) }}'") }],
+      [
+        'a workflow two calls down',
+        {
+          [`${WF}/root.yml`]: root,
+          [`${WF}/callee.yml`]: middle,
+          [`${WF}/leaf.yml`]: callee('${{ toJSON(github.event) }}'),
+        },
+      ],
+    ])('counts a whole read in %s', (_, files) => {
+      expect(fp104(files)).toEqual([]);
+    });
+
+    it('still counts a named read as a read of that input only', () => {
+      const named = {
+        [`${WF}/root.yml`]: root,
+        [`${WF}/callee.yml`]: callee('${{ github.event.inputs.target }}'),
+      };
+      expect(fp104(named)).toEqual([unread('level')]);
+      // `github.event.inputs.TARGET.x`, `github.event.pull_request` and `github.event_name` read no other input.
+      const others = callee(
+        '${{ github.event.inputs.TARGET.x }} ${{ github.event.pull_request }} ${{ github.event_name }}',
+      );
+      expect(fp104({ [`${WF}/root.yml`]: root, [`${WF}/callee.yml`]: others })).toEqual([unread('level')]);
+    });
+
+    const whole = callee('${{ toJSON(github.event.inputs) }}');
+
+    it('counts the dispatch inputs only, not the workflow_call inputs of a workflow that is also called', () => {
+      // Dispatched, root.yml's github.event.inputs holds target and level; called, it is the caller's event.
+      const both = root.replace(
+        'on:\n',
+        'on:\n  workflow_call:\n    inputs:\n      only: { type: string, required: false }\n',
+      );
+      expect(fp104({ [`${WF}/root.yml`]: both, [`${WF}/callee.yml`]: whole })).toEqual([unread('only')]);
+    });
+
+    it('leaves the inputs of workflows that do not run the reader when dispatched', () => {
+      // Another dispatched workflow that does not run the reader, and one that cannot be dispatched, keep theirs.
+      const other = yaml`
+        on:
+          workflow_dispatch:
+            inputs:
+              other: { type: string }
+        jobs:
+          j:
+            runs-on: x
+            steps:
+              - run: echo hi
+      `;
+      const lib = yaml`
+        on:
+          workflow_call:
+            inputs:
+              a: { type: string, required: false }
+        jobs:
+          call:
+            uses: ./.github/workflows/callee.yml
+      `;
+      const push = 'on: push\njobs:\n  c:\n    uses: ./.github/workflows/lib.yml\n    with:\n      a: x\n';
+      expect(
+        fp104({
+          [`${WF}/root.yml`]: root,
+          [`${WF}/callee.yml`]: whole,
+          [`${WF}/other.yml`]: other,
+          [`${WF}/lib.yml`]: lib,
+          [`${WF}/push.yml`]: push,
+        }),
+      ).toEqual([unread('a', 'lib.yml', ' (yet 1 caller passes it)'), unread('other', 'other.yml')]);
+    });
+  });
 });
 
 describe('FP105 optional-input-no-default-in-condition', () => {
