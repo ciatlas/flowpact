@@ -67,7 +67,8 @@ export async function runGenerate(
   const all = logger.time('plan contracts', () => planContracts(result.index, nodeFileSystem(root)));
   // With paths: their contracts, and the contracts that list them as a consumer (what `check` with the same paths
   // compares); other contracts, orphans included, are left alone.
-  const plan = result.project.targets.size > 0 ? scopePlan(all, contractsInScope(result.index)) : all;
+  const plan =
+    result.project.targets.size > 0 ? scopePlan(all, contractsInScope(result.index, { root, paths })) : all;
   const out = options.out ? resolve(process.cwd(), options.out) : undefined;
   // Every target is checked before anything is written, so a refusal leaves the repository as it was.
   const dryRun = bool('dryRun', options.dryRun) ?? false;

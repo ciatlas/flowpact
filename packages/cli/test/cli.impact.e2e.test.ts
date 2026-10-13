@@ -615,3 +615,43 @@ describe('flowpact impact with paths the change removed', () => {
     expect(r.stderr).toContain('impact: skipped (nothing within the paths to grade or to report on)');
   });
 });
+
+describe('check with paths and the contracts of what the change removed', () => {
+  const CONFIG = '.github/flowpact/flowpact.config.yml';
+  const action = (name: string) =>
+    `name: ${name}\ndescription: action ${name}\ninputs:\n  token: { description: t, required: false }\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "\${{ inputs.token }}"\n`;
+
+  it('reports the orphaned contract of a removed unit within the paths', async () => {
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["actions/*"]\n',
+        'actions/keep/action.yml': action('keep'),
+        'actions/old/action.yml': action('old'),
+      },
+      { 'notes.txt': 'old goes\n' },
+    );
+    // Lock the contracts on the branch, then remove the old action and leave its contract behind.
+    expect((await flowpact(root, ['generate'])).exitCode).toBe(0);
+    git(root, 'add', '-A');
+    git(root, 'commit', '-qm', 'contracts');
+    git(root, 'rm', '-rq', 'actions/old');
+    git(root, 'commit', '-qm', 'remove old');
+    const codes = async (args: string[]) => {
+      const r = await flowpact(root, [...args, '--base', 'main', '--expect', 'major', '--format', 'json']);
+      return JSON.parse(r.stdout).findings.map(
+        (f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`,
+      );
+    };
+    const orphan = 'FP804@.github/flowpact/contracts/actions/actions__old.contract.yml';
+    // Before: FP804 only without paths; the removed unit's own path left its contract out of scope.
+    for (const paths of [['actions/old'], ['actions/old/action.yml'], ['actions']])
+      expect(await codes(['check', '--impact', ...paths])).toContain(orphan);
+    expect(await codes(['check', 'actions'])).toContain(orphan);
+    expect(await codes(['check', '--impact'])).toContain(orphan);
+    // Outside the paths, it is not in scope.
+    expect(await codes(['check', '--impact', 'actions/keep'])).not.toContain(orphan);
+    // generate with the same paths deletes it.
+    const dry = await flowpact(root, ['generate', 'actions', '--dry-run']);
+    expect(dry.stdout).toContain('actions__old.contract.yml');
+  });
+});

@@ -31,6 +31,12 @@ in impact mode, and only warned about where impact mode is skipped (`merge_group
 
 `flowpact graph` takes paths as well, and then draws only those workflows and actions and what they call.
 
+### Orphaned contracts within the paths
+
+`flowpact check <paths>` reports the orphaned contract (`FP804`) of a workflow or action that no longer exists when
+its path lies within the paths, and `flowpact generate <paths>` deletes it; 0.14 left it to runs without paths. A
+`check` job with paths may now fail on such a contract: run `flowpact generate` to delete it.
+
 ### Impact mode leaves ignored units out
 
 A published workflow or action whose file `ignore` matches is no longer graded. 0.14 graded it but dropped its

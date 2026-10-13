@@ -27,6 +27,7 @@ import {
   type ContractPlan,
   type ContractPlanEntry,
   contractsInScope,
+  pathHolds,
   planContracts,
   scopePlan,
 } from './contracts';
@@ -38,7 +39,6 @@ import {
   type ImpactPolicy,
   type ImpactResult,
   type ImpactScope,
-  pathHolds,
 } from './impact';
 import { createRegistry, IMPACT_CODES } from './rules/index';
 import { CODE_PATTERN, type RuleRegistry } from './rules/registry';
@@ -730,7 +730,7 @@ function prepareRules(
   const within = impactPathsOf(opts, index.project);
   const scope: ReportScope = {
     narrowed: Boolean(opts.paths?.length) && !index.project.wholeRepository,
-    contractInScope: contractsInScope(index),
+    contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] }),
   };
   const contracts = compareContracts(opts, index, scope, logger);
   const impact = impactOf(opts, index, { ...(within ? { within } : {}), ignore: config.ignore }, logger);

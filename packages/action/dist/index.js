@@ -21490,10 +21490,16 @@ function entryConsumers(e) {
   }
   return [...out];
 }
-function contractsInScope(index) {
+var pathHolds = (path, file) => file === path || file.startsWith(`${path}/`);
+var unitOfPath = (path) => /(^|\/)action\.ya?ml$/i.test(path) ? path.replace(/\/?action\.ya?ml$/i, "") || "." : path;
+function contractsInScope(index, given = { root: ".", paths: [] }) {
   const { targets } = index.project;
   const targeted = (unit) => targets.has(index.unit(unit)?.file ?? unit);
-  return (e) => e.unit !== void 0 && targeted(e.unit) || entryConsumers(e).some(targeted);
+  const paths = given.paths.map(
+    (p) => unitOfPath(relative3(given.root, resolve3(given.root, p)).split(sep).join("/"))
+  );
+  const gone = (unit) => !index.unit(unit) && paths.some((p) => pathHolds(p, unit));
+  return (e) => e.unit !== void 0 && (targeted(e.unit) || gone(e.unit)) || entryConsumers(e).some(targeted);
 }
 function scopePlan(plan, keep) {
   const entries2 = plan.entries.filter(keep);
@@ -21879,7 +21885,6 @@ function impactVerdict(changes, input2, policy) {
     ok: !under && !conflict
   };
 }
-var pathHolds = (path, file) => file === path || file.startsWith(`${path}/`);
 function unitsLookedAt(base, head, { within: within2, ignore = [] }) {
   if (!within2 && !ignore.length) return void 0;
   const covered = (file) => !within2 || within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
@@ -25096,7 +25101,7 @@ function prepareRules(opts, logger, base, unloaded) {
   const within2 = impactPathsOf(opts, index.project);
   const scope = {
     narrowed: Boolean(opts.paths?.length) && !index.project.wholeRepository,
-    contractInScope: contractsInScope(index)
+    contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] })
   };
   const contracts = compareContracts(opts, index, scope, logger);
   const impact = impactOf(opts, index, { ...within2 ? { within: within2 } : {}, ignore: config2.ignore }, logger);

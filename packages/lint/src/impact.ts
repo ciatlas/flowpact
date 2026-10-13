@@ -15,7 +15,7 @@ import {
   type WorkflowDecl,
   workflowChecks,
 } from '@ciatlas/core';
-import { buildContract, diffContracts } from './contracts';
+import { buildContract, diffContracts, pathHolds } from './contracts';
 
 export const IMPACT_LEVELS = ['none', 'patch', 'minor', 'major'] as const;
 export type ImpactLevel = (typeof IMPACT_LEVELS)[number];
@@ -639,9 +639,6 @@ export interface ImpactScope {
    */
   anchor?: string;
 }
-
-/** Whether `file` is the file `path` names, or lies in the directory it names (both relative to the root). */
-export const pathHolds = (path: string, file: string) => file === path || file.startsWith(`${path}/`);
 
 /** What impact mode looks at: every unit, or with paths those within them; never one whose file is ignored. */
 export interface ImpactLookAt {

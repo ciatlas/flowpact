@@ -149,7 +149,8 @@ until the contracts are regenerated.
 
 With `paths`, the comparison covers the contracts of those workflows and actions, and the contracts that list them as
 a consumer: a caller that stops passing an input or reading an output changes its callee's contract, so that drift
-is reported too.
+is reported too. The orphaned contract of a workflow or action that no longer exists is covered when its path lies
+within the paths, such as `actions/` for a removed `actions/old` (with `--impact`, the removed path itself counts).
 
 | Option | Description |
 | --- | --- |
@@ -168,7 +169,7 @@ flowpact generate [paths…] [--dry-run] [--patch <file>] [--out <dir>]
 
 | Option | Description |
 | --- | --- |
-| `[paths…]` | Workflow or action files or directories: write only their contracts, and the contracts that list them as a consumer (what `flowpact check` with the same paths compares). Other contracts, orphaned ones included, are left alone. |
+| `[paths…]` | Workflow or action files or directories: write only their contracts and the contracts that list them as a consumer, and delete the orphaned contracts of removed units within them (what `flowpact check` with the same paths compares). Other contracts are left alone. |
 | `--dry-run` | Print the table of changes and a colored unified diff; write nothing. |
 | `--patch <file>` | Write the changes as a `git apply`-able patch instead of applying them. |
 | `--out <dir>` | Write all contracts (changed or not) under `<dir>`, keeping their relative paths, instead of the repository. Nothing is deleted. |

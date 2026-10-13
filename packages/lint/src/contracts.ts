@@ -936,15 +936,31 @@ export function entryConsumers(e: ContractPlanEntry): string[] {
   return [...out];
 }
 
+/** Whether `file` is the file `path` names, or lies in the directory it names (both relative to the root). */
+export const pathHolds = (path: string, file: string) => file === path || file.startsWith(`${path}/`);
+
+/** The unit a path names: an action's directory for its metadata file (`.` for the root's), else the path itself. */
+const unitOfPath = (path: string) =>
+  /(^|\/)action\.ya?ml$/i.test(path) ? path.replace(/\/?action\.ya?ml$/i, '') || '.' : path;
+
 /**
  * With paths (`flowpact check <paths>`, `flowpact generate <paths>`): the contracts of the targeted workflows and
  * actions, and the contracts they appear in as a consumer, since what a caller passes or reads is locked in its
- * callee's contract.
+ * callee's contract; and the orphaned contracts of the units gone from the working tree whose paths lie within the
+ * paths given, such as a workflow or action the change removed.
  */
-export function contractsInScope(index: ProjectIndex): (e: ContractPlanEntry) => boolean {
+export function contractsInScope(
+  index: ProjectIndex,
+  given: { root: string; paths: string[] } = { root: '.', paths: [] },
+): (e: ContractPlanEntry) => boolean {
   const { targets } = index.project;
   const targeted = (unit: string) => targets.has(index.unit(unit)?.file ?? unit);
-  return (e) => (e.unit !== undefined && targeted(e.unit)) || entryConsumers(e).some(targeted);
+  const paths = given.paths.map((p) =>
+    unitOfPath(relative(given.root, resolve(given.root, p)).split(sep).join('/')),
+  );
+  const gone = (unit: string) => !index.unit(unit) && paths.some((p) => pathHolds(p, unit));
+  return (e) =>
+    (e.unit !== undefined && (targeted(e.unit) || gone(e.unit))) || entryConsumers(e).some(targeted);
 }
 
 /** The part of a plan that concerns `keep`: drift, counts and the patch then only cover those units. */
