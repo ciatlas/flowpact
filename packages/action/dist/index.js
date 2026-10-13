@@ -11277,7 +11277,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11835,7 +11835,7 @@ function evaluateTemplate(text2, resolve7) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11846,7 +11846,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12048,7 +12048,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12156,8 +12156,8 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
     const given = inputs === "consumer" ? { known: false } : lookup(inputs, name);
     const empty = input2.type === "boolean" ? false : input2.type === "number" ? 0 : "";
     const value = input2.hasDefault ? input2.default : empty;
-    const computed = typeof value === "string" && value.includes("${{");
-    values[name] = given ?? (computed ? { known: false } : { known: true, value });
+    const computed2 = typeof value === "string" && value.includes("${{");
+    values[name] = given ?? (computed2 ? { known: false } : { known: true, value });
   }
   const out = [];
   for (const job of Object.values(wf.jobs)) {
@@ -12189,11 +12189,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12260,7 +12260,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12396,7 +12396,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12409,7 +12409,32 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/graph.ts
+var computed = (s) => s === void 0 || s === "*" || s === "?";
+function wholeReads(reads) {
+  return [...new Set(reads.map((r) => r.symbol))].map((symbol) => ({ symbol, whole: true }));
+}
+var declaredNames = (decls) => Object.values(decls ?? {}).map((d) => d.name);
+function inputNames(unit) {
+  if (unit.kind === "action") return declaredNames(unit.inputs);
+  return [...declaredNames(unit.call?.inputs), ...dispatchInputNames(unit)];
+}
+function dispatchInputNames(unit) {
+  return unit.kind === "workflow" ? declaredNames(unit.dispatch?.inputs) : [];
+}
+function jobAt(unit, site) {
+  return unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
+}
+function pickOutputs(names, [, b, c]) {
+  if (computed(b)) return names;
+  if (b.toLowerCase() !== "outputs") return [];
+  if (computed(c)) return names;
+  return names.filter((n) => n.toLowerCase() === c.toLowerCase());
+}
+function matrixKeys(job) {
+  const m = job?.matrix;
+  return m ? [...m.dims.map((d) => d.name), ...m.include.flatMap((inc) => Object.keys(inc.keyLocs))] : [];
+}
 var sym = {
   input: (unit, name) => `${unit}#inputs.${name}`,
   secret: (unit, name) => `${unit}#secrets.${name}`,
@@ -12441,7 +12466,6 @@ var ProjectIndex = class {
   units() {
     return [...this.project.workflows.values(), ...this.project.actions.values()];
   }
-  // fallow-ignore-next-line unused-class-member -- API; tests reach it via load()
   unit(path) {
     return this.project.workflows.get(path) ?? this.project.actions.get(path);
   }
@@ -12741,58 +12765,124 @@ var ProjectIndex = class {
   }
   /**
    * Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
-   * of outputs reads each of them: `toJSON(needs.build.outputs)`, `needs.build`, `steps.meta.outputs`,
-   * `needs.build.outputs[matrix.key]`, `toJSON(needs)` (every job the reading job needs), or `toJSON(steps)` (every
-   * step that ran before the reading step).
+   * or indexes it with a computed key reads each member it may stand for:
+   * - outputs: `toJSON(needs.build.outputs)`, `needs.build`, `steps.meta.outputs`, `needs.build.outputs[matrix.key]`,
+   *   `toJSON(needs)` (every job the reading job needs) or `toJSON(steps)` (every step that ran before the reading
+   *   step);
+   * - `toJSON(inputs)` or `inputs[inputs.which]`: every input the unit declares (`github.event.inputs`: every
+   *   `workflow_dispatch` input);
+   * - `toJSON(matrix)` or `matrix[inputs.key]`: every key of the job's matrix;
+   * - `toJSON(secrets)` or `secrets[inputs.name]`: every secret the workflow declares under `workflow_call`;
+   * - `toJSON(env)` or `env[inputs.name]`: every env variable in scope, a step's own read through their values.
+   *
+   * Variables are set in the repository's settings, not in its files, so a whole `vars` reads nothing. See
+   * `Usage.whole`.
    */
   readsOf(unit, site, ref) {
+    return this.reads(unit, site, ref).map((r) => r.symbol);
+  }
+  reads(unit, site, ref) {
     const one = this.resolveRef(unit, site, ref);
-    if (one) return [one];
-    const [a, b, c] = ref.path;
-    const computed = (s) => s === void 0 || s === "*" || s === "?";
-    if (ref.context === "env" && !computed(a) && site.field !== "step.env") {
-      const own2 = lookup(this.stepOf(unit, site)?.env ?? {}, a)?.site;
-      return own2 ? own2.segments.flatMap((s) => s.refs.flatMap((r) => this.readsOf(unit, own2, r))) : [];
+    if (one) return [{ symbol: one, whole: false }];
+    const members2 = this.memberRefs(unit, site, ref);
+    if (members2) return wholeReads(members2.flatMap((m) => this.reads(unit, site, m)));
+    if (ref.context === "env") return this.ownEnvReads(unit, site, ref);
+    return this.outputReads(unit, site, ref).map((symbol) => ({ symbol, whole: true }));
+  }
+  /** A step's own env value is not a symbol: a read of it reads what the value reads (from the outer env). */
+  ownEnvReads(unit, site, ref) {
+    const [a] = ref.path;
+    if (computed(a) || site.field === "step.env") return [];
+    const own2 = lookup(this.stepOf(unit, site)?.env ?? {}, a)?.site;
+    return own2 ? own2.segments.flatMap((s) => s.refs.flatMap((r) => this.reads(unit, own2, r))) : [];
+  }
+  /**
+   * A whole object or computed key of `inputs`, `matrix`, `secrets`, `env` or `github.event.inputs` as one reference per
+   * member, each naming it (`toJSON(inputs)` → `inputs.a`, `inputs.b`, …), so each resolves the way the name written
+   * out does. `undefined` for any other reference.
+   */
+  memberRefs(unit, site, ref) {
+    const event = ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs";
+    const at = event ? 2 : 0;
+    if (!computed(ref.path[at])) return void 0;
+    const members2 = event ? dispatchInputNames(unit) : this.memberNames(unit, site, ref.context);
+    return members2?.map((name) => ({
+      ...ref,
+      path: [...ref.path.slice(0, at), name, ...ref.path.slice(at + 1)]
+    }));
+  }
+  /** The names a whole `inputs`, `matrix`, `secrets` or `env` holds at `site`; `undefined` for other contexts. */
+  memberNames(unit, site, context) {
+    switch (context) {
+      case "inputs":
+        return inputNames(unit);
+      case "matrix":
+        return matrixKeys(jobAt(unit, site));
+      case "secrets":
+        return unit.kind === "workflow" ? declaredNames(unit.call?.secrets) : [];
+      case "env":
+        return this.envNames(unit, site);
+      default:
+        return void 0;
     }
-    const pick2 = (names) => {
-      if (computed(b)) return names;
-      if (b.toLowerCase() !== "outputs") return [];
-      if (computed(c)) return names;
-      return names.filter((n) => n.toLowerCase() === c.toLowerCase());
-    };
+  }
+  /** The env variables in scope at a site: the step's own, the job's and the workflow's. */
+  envNames(unit, site) {
+    const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+    const workflow2 = unit.kind === "workflow" ? unit.env : void 0;
+    return [
+      ...declaredNames(step?.env),
+      ...declaredNames(jobAt(unit, site)?.env),
+      ...declaredNames(workflow2)
+    ];
+  }
+  /**
+   * The job and step outputs a `needs`, `jobs` or `steps` reference reads when it names no single output: every output
+   * of a whole object or computed key, or the one named output of every job or step a computed key may stand for.
+   */
+  outputReads(unit, site, ref) {
     switch (ref.context) {
       case "needs":
       case "jobs": {
         if (unit.kind !== "workflow") return [];
         if (ref.context === "jobs" && site.field !== "workflow.output") return [];
-        let jobs2;
-        if (!computed(a)) {
-          const job = lookup(unit.jobs, a);
-          jobs2 = job ? [job] : [];
-        } else if (ref.context === "jobs") {
-          jobs2 = Object.values(unit.jobs);
-        } else {
-          const reader = site.job ? unit.jobs[site.job] : void 0;
-          jobs2 = (reader?.needs ?? []).flatMap((n) => lookup(unit.jobs, n.id) ?? []);
-        }
-        return jobs2.flatMap(
-          (job) => pick2(this.jobOutputNames(job)).map((n) => sym.jobOutput(unit.path, job.id, n))
+        return this.jobsRead(unit, site, ref).flatMap(
+          (job) => pickOutputs(this.jobOutputNames(job), ref.path).map((n) => sym.jobOutput(unit.path, job.id, n))
         );
       }
-      case "steps": {
-        const steps2 = unit.kind === "action" ? unit.steps : site.job ? unit.jobs[site.job]?.steps ?? [] : [];
-        const named = computed(a) ? steps2.filter((s) => site.step === void 0 || s.index < site.step) : steps2.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
-        return named.flatMap((step) => {
-          const action = this.actionOf(step);
-          if (!step.id || !action) return [];
-          return pick2(Object.keys(action.outputs)).map(
-            (n) => sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, step.id, n)
-          );
-        });
-      }
+      case "steps":
+        return this.stepOutputReads(unit, site, ref);
       default:
         return [];
     }
+  }
+  /** The jobs a `needs` or `jobs` reference reads: the one it names, or each one a computed key may stand for. */
+  jobsRead(wf, site, ref) {
+    const [a] = ref.path;
+    if (!computed(a)) {
+      const job = lookup(wf.jobs, a);
+      return job ? [job] : [];
+    }
+    if (ref.context === "jobs") return Object.values(wf.jobs);
+    const reader = site.job ? wf.jobs[site.job] : void 0;
+    return (reader?.needs ?? []).flatMap((n) => lookup(wf.jobs, n.id) ?? []);
+  }
+  /**
+   * The step outputs a `steps` reference reads: of the step it names, or of each step a computed key may stand for
+   * (from a step, only the steps before it), every output or the one it names (see `pickOutputs`).
+   */
+  stepOutputReads(unit, site, ref) {
+    const [a] = ref.path;
+    const steps2 = unit.kind === "action" ? unit.steps : jobAt(unit, site)?.steps ?? [];
+    const named = computed(a) ? steps2.filter((s) => site.step === void 0 || s.index < site.step) : steps2.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
+    const job = unit.kind === "workflow" ? site.job : void 0;
+    return named.flatMap((step) => {
+      const action = this.actionOf(step);
+      if (!step.id || !action) return [];
+      return pickOutputs(Object.keys(action.outputs), ref.path).map(
+        (n) => sym.stepOutput(unit.path, job, step.id, n)
+      );
+    });
   }
   /** Output names of a job: its own `outputs:`, or the callee's workflow outputs for a reusable call. */
   jobOutputNames(job) {
@@ -12846,11 +12936,12 @@ var ProjectIndex = class {
     if (sink) this.define(sink, { unit, site });
     for (const seg of site.segments) {
       for (const ref of seg.refs) {
-        for (const symbol of this.readsOf(unit, site, ref)) this.addUsage(unit, site, ref, symbol, sink);
+        for (const read of this.reads(unit, site, ref)) this.addUsage(unit, site, ref, read, sink);
       }
     }
   }
-  addUsage(unit, site, ref, symbol, sink) {
+  addUsage(unit, site, ref, read, sink) {
+    const { symbol } = read;
     if (!this.nodes.has(symbol)) {
       this.node({
         id: symbol,
@@ -12859,7 +12950,13 @@ var ProjectIndex = class {
         unit: unit.path
       });
     }
-    const usage = { symbol, site, ref, ...sink ? { sink } : {} };
+    const usage = {
+      symbol,
+      site,
+      ref,
+      ...sink ? { sink } : {},
+      ...read.whole ? { whole: true } : {}
+    };
     const list = this.usages.get(symbol);
     if (list) list.push(usage);
     else this.usages.set(symbol, [usage]);
@@ -12867,7 +12964,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -12894,7 +12991,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -12948,7 +13045,7 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { posix as posix2 } from "path";
 function createParseContext(repository) {
@@ -13063,42 +13160,9 @@ function collectSites(unit, kind, ownerPath, ctx, root) {
 }
 function buildSite(unit, node, text2, c, p, ownerPath, ctx) {
   const { source } = unit;
-  const [start, end] = node.range ?? [0, 0];
-  const raw = source.text.slice(start, end);
-  const segments = [];
-  let cursor = 0;
-  const locateSegment = (absInner, expr) => {
-    cursor = Math.max(cursor, absInner - start);
-    const refs = expr.refs.map((r) => {
-      const refText = expr.source.slice(r.start, r.end);
-      const found = refText ? raw.indexOf(refText, cursor) : -1;
-      if (found >= 0) {
-        cursor = found + refText.length;
-        return { ...r, loc: source.loc(start + found, start + found + refText.length) };
-      }
-      return { ...r, loc: source.loc(absInner + r.start, absInner + r.end) };
-    });
-    return { expr, loc: source.loc(absInner, absInner + expr.source.length), refs };
-  };
+  const scalar = rawScalar(source, node);
   const templated = findTemplateSegments(text2);
-  const wholeIsTemplate = templated.length === 1 && text2.trim() === text2.slice(templated[0].start, templated[0].end);
-  if (c.cond && !wholeIsTemplate && templated.length === 0) {
-    const inner = text2.trim();
-    const expr = parseExpression(inner);
-    const idx = raw.indexOf(inner.slice(0, Math.min(inner.length, 40)));
-    segments.push(locateSegment(start + Math.max(0, idx), expr));
-  } else {
-    let searchFrom = 0;
-    for (const seg of templated) {
-      const idx = raw.indexOf("${{", searchFrom);
-      const absOpen = idx >= 0 ? start + idx : start;
-      if (idx >= 0) searchFrom = idx + 3;
-      const lead = seg.innerStart - seg.start;
-      const rawAfter = idx >= 0 ? raw.slice(idx + 3) : "";
-      const leadRaw = idx >= 0 ? 3 + (rawAfter.length - rawAfter.trimStart().length) : lead;
-      segments.push(locateSegment(absOpen + leadRaw, seg.expr));
-    }
-  }
+  const segments = c.cond && templated.length === 0 ? [conditionSegment(scalar, text2)] : templateSegments(scalar, templated);
   return {
     id: ctx.nextSiteId(),
     file: source.path,
@@ -13109,10 +13173,111 @@ function buildSite(unit, node, text2, c, p, ownerPath, ctx) {
     ...c.key !== void 0 ? { key: c.key } : {},
     yamlPath: p,
     text: text2,
-    loc: source.loc(start, end),
+    loc: source.loc(scalar.start, scalar.start + scalar.raw.length),
     isCondition: c.cond,
     segments
   };
+}
+function rawScalar(source, node) {
+  const [start, end] = node.range ?? [0, 0];
+  const raw = source.text.slice(start, end);
+  return {
+    source,
+    start,
+    raw,
+    quote: node.type === "QUOTE_SINGLE" ? "''" : "'",
+    escapes: node.type === "QUOTE_DOUBLE",
+    open: valueStart(node.type, raw)
+  };
+}
+function valueStart(type, raw) {
+  if (type === "QUOTE_SINGLE" || type === "QUOTE_DOUBLE") return 1;
+  if (type === "BLOCK_LITERAL" || type === "BLOCK_FOLDED") return raw.indexOf("\n") + 1;
+  return 0;
+}
+function conditionSegment(s, text2) {
+  return locateExpression(s, skipSpace(s, s.open), parseExpression(text2.trim()), false).segment;
+}
+function templateSegments(s, templated) {
+  let searchFrom = s.open;
+  return templated.map((seg) => {
+    const open2 = s.raw.indexOf("${{", searchFrom);
+    if (open2 < 0) return locateExpression(s, seg.innerStart - seg.start, seg.expr, true).segment;
+    const located = locateExpression(s, skipSpace(s, open2 + 3), seg.expr, true);
+    searchFrom = located.end;
+    return located.segment;
+  });
+}
+function skipSpace(s, i) {
+  let at = i;
+  for (let n = spaceLength(s, at); n > 0; n = spaceLength(s, at)) at += n;
+  return at;
+}
+function spaceLength(s, at) {
+  if (/\s/.test(s.raw[at] ?? "")) return 1;
+  const esc2 = s.escapes ? ESCAPE_AT_START.exec(s.raw.slice(at, at + 10)) : null;
+  return esc2 && escapesSpace(esc2) ? esc2[0].length : 0;
+}
+var ESCAPE_AT_START = /^\\(?:x([\dA-Fa-f]{2})|u([\dA-Fa-f]{4})|U([\dA-Fa-f]{8})|([\s\S]))/;
+var SPACE_ESCAPES = /* @__PURE__ */ new Set(["t", "	", "n", "v", "f", "r", " ", "_", "L", "P", "\n", "\r"]);
+function escapesSpace(esc2) {
+  if (esc2[4] !== void 0) return SPACE_ESCAPES.has(esc2[4]);
+  const code = escapedCode(esc2);
+  return code < 65536 && /\s/.test(String.fromCharCode(code));
+}
+var escapedCode = (esc2) => Number.parseInt(esc2[1] ?? esc2[2] ?? esc2[3] ?? "0", 16);
+function locateExpression(s, from, expr, closes) {
+  const scan = scanExpression(s.raw, from, s.quote, closes);
+  const at = s.start + from;
+  let cursor = from;
+  const refs = expr.refs.map((r) => {
+    const written = expr.source.slice(r.start, r.end).replaceAll("'", s.quote);
+    const found = written ? indexOutside(s, written, cursor, scan) : -1;
+    if (found < 0) return { ...r, loc: s.source.loc(at + r.start, at + r.end) };
+    cursor = found + written.length;
+    return { ...r, loc: s.source.loc(s.start + found, s.start + cursor) };
+  });
+  return { segment: { expr, loc: s.source.loc(at, at + expr.source.length), refs }, end: scan.end };
+}
+function scanExpression(raw, from, quote2, closes) {
+  const strings = [];
+  let i = from;
+  while (i < raw.length) {
+    if (raw.startsWith(quote2, i)) {
+      const end = stringEnd(raw, i + quote2.length, quote2);
+      strings.push([i, end]);
+      i = end;
+    } else if (closes && raw.startsWith("}}", i)) {
+      return { end: i, strings };
+    } else {
+      i++;
+    }
+  }
+  return { end: raw.length, strings };
+}
+function stringEnd(raw, i, quote2) {
+  let at = raw.indexOf(quote2, i);
+  while (at >= 0 && raw.startsWith(quote2, at + quote2.length)) at = raw.indexOf(quote2, at + 2 * quote2.length);
+  return at < 0 ? raw.length : at + quote2.length;
+}
+function indexOutside(s, text2, from, scan) {
+  let at = s.raw.indexOf(text2, from);
+  while (at >= 0 && at + text2.length <= scan.end) {
+    const inString = scan.strings.find(([start, end]) => at >= start && at < end);
+    if (!inString && !continuesName(s, at)) return at;
+    at = s.raw.indexOf(text2, inString ? inString[1] : at + 1);
+  }
+  return -1;
+}
+var NAME_CHAR = /[\w.-]/;
+var ESCAPE_AT_END = /(?:^|[^\\])(?:\\\\)*\\(?:[0abtnvfreN_LP]|x([\dA-Fa-f]{2})|u([\dA-Fa-f]{4})|U([\dA-Fa-f]{8}))$/;
+function continuesName(s, at) {
+  const escaped2 = s.escapes ? ESCAPE_AT_END.exec(s.raw.slice(Math.max(0, at - 16), at)) : null;
+  return escaped2 ? escapesNameChar(escaped2) : NAME_CHAR.test(s.raw[at - 1] ?? "");
+}
+function escapesNameChar(hex) {
+  const code = escapedCode(hex);
+  return code < 128 && NAME_CHAR.test(String.fromCharCode(code));
 }
 function bindings(unit, node, base) {
   const out = {};
@@ -13129,12 +13294,11 @@ function bindings(unit, node, base) {
   }
   return out;
 }
-function inputDecls(unit, node) {
+function inputDecls(unit, node, base) {
   const out = {};
   for (const pair of pairs(node)) {
     const name = String(pair.key.value);
     const def = pair.value;
-    const defaultPair = getPair(def, "default");
     const type = str(get(def, "type"));
     const description = str(get(def, "description"));
     const opts = get(def, "options");
@@ -13142,14 +13306,23 @@ function inputDecls(unit, node) {
       name,
       ...type ? { type } : {},
       required: toJs(get(def, "required")) === true,
-      hasDefault: defaultPair !== void 0 && toJs(defaultPair.value) !== null,
-      ...defaultPair ? { default: toJs(defaultPair.value) } : {},
+      ...defaultOf(unit, getPair(def, "default"), [...base, name, "default"]),
       ...description ? { description } : {},
       ...(0, import_yaml2.isSeq)(opts) ? { options: toJs(opts).map(String) } : {},
       loc: nodeLoc(unit.source, pair.key)
     };
   }
   return out;
+}
+function defaultOf(unit, pair, path) {
+  if (!pair) return { hasDefault: false };
+  const site = unit.siteByPath.get(pathKey(path));
+  return {
+    hasDefault: toJs(pair.value) !== null,
+    default: toJs(pair.value),
+    defaultLoc: nodeLoc(unit.source, pair.value ?? pair.key),
+    ...site ? { defaultSite: site } : {}
+  };
 }
 function secretDecls(unit, node) {
   const out = {};
@@ -13377,55 +13550,62 @@ function matrixEntries(unit, node, base) {
 function matrix(unit, strategy, base) {
   const pair = getPair(strategy, "matrix");
   if (!pair) return void 0;
-  const node = pair.value;
   const loc = nodeLoc(unit.source, pair.key);
   const mp = [...base, "matrix"];
-  if ((0, import_yaml2.isScalar)(node)) {
-    const site = unit.siteByPath.get(pathKey(mp));
-    return {
-      loc,
-      dynamic: true,
-      ...site ? { dynamicSite: site } : {},
-      dims: [],
-      include: [],
-      exclude: [],
-      includeDynamic: true,
-      excludeDynamic: true
-    };
-  }
+  if ((0, import_yaml2.isScalar)(pair.value)) return dynamicMatrix(unit, loc, mp);
   const dims = [];
-  let include = [];
-  let exclude = [];
-  let includeDynamic = false;
-  let excludeDynamic = false;
-  for (const p of pairs(node)) {
+  let include = NO_FILTER;
+  let exclude = NO_FILTER;
+  for (const p of pairs(pair.value)) {
     const k = String(p.key.value);
-    if (k === "include") {
-      if ((0, import_yaml2.isScalar)(p.value)) includeDynamic = true;
-      else include = matrixEntries(unit, p.value, [...mp, "include"]);
-      continue;
-    }
-    if (k === "exclude") {
-      if ((0, import_yaml2.isScalar)(p.value)) excludeDynamic = true;
-      else exclude = matrixEntries(unit, p.value, [...mp, "exclude"]);
-      continue;
-    }
-    if ((0, import_yaml2.isSeq)(p.value)) {
-      const unknownIndexes = [];
-      p.value.items.forEach((_, i) => {
-        if (unit.siteByPath.has(pathKey([...mp, k, i]))) unknownIndexes.push(i);
-      });
-      dims.push({
-        name: k,
-        loc: nodeLoc(unit.source, p.key),
-        values: toJs(p.value),
-        unknownIndexes
-      });
-    } else {
-      dims.push({ name: k, loc: nodeLoc(unit.source, p.key), values: null, unknownIndexes: [] });
-    }
+    if (k === "include") include = matrixFilter(unit, p.value, [...mp, k]);
+    else if (k === "exclude") exclude = matrixFilter(unit, p.value, [...mp, k]);
+    else dims.push(matrixDim(unit, p, [...mp, k]));
   }
-  return { loc, dynamic: false, dims, include, exclude, includeDynamic, excludeDynamic };
+  return {
+    loc,
+    dynamic: false,
+    dims,
+    include: include.entries,
+    exclude: exclude.entries,
+    includeDynamic: include.dynamic,
+    excludeDynamic: exclude.dynamic
+  };
+}
+function dynamicMatrix(unit, loc, path) {
+  const site = unit.siteByPath.get(pathKey(path));
+  return {
+    loc,
+    dynamic: true,
+    ...site ? { dynamicSite: site } : {},
+    dims: [],
+    include: [],
+    exclude: [],
+    includeDynamic: true,
+    excludeDynamic: true
+  };
+}
+var NO_FILTER = { entries: [], dynamic: false };
+function matrixFilter(unit, node, path) {
+  if ((0, import_yaml2.isScalar)(node)) return { entries: [], dynamic: true };
+  const items = (0, import_yaml2.isSeq)(node) ? node.items : [];
+  const expression = (i) => unit.siteByPath.has(pathKey([...path, i]));
+  return {
+    entries: matrixEntries(unit, node, path).filter((_, i) => !expression(i)),
+    dynamic: items.some((_, i) => expression(i))
+  };
+}
+function matrixDim(unit, p, path) {
+  const name = String(p.key.value);
+  const loc = nodeLoc(unit.source, p.key);
+  if (!(0, import_yaml2.isSeq)(p.value)) return { name, loc, values: null, unknownIndexes: [] };
+  const expression = (i) => unit.siteByPath.has(pathKey([...path, i]));
+  return {
+    name,
+    loc,
+    values: toJs(p.value),
+    unknownIndexes: p.value.items.map((_, i) => i).filter(expression)
+  };
 }
 function jobs(unit, node, ctx) {
   const out = {};
@@ -13587,13 +13767,13 @@ function parseWorkflowFile(path, text2, ctx) {
   const dispatchPair = getPair(on, "workflow_dispatch");
   const call = triggers.includes("workflow_call") ? {
     loc: nodeLoc(unit.source, callPair?.key ?? on),
-    inputs: inputDecls(unit, get(callPair?.value, "inputs")),
+    inputs: inputDecls(unit, get(callPair?.value, "inputs"), ["on", "workflow_call", "inputs"]),
     secrets: secretDecls(unit, get(callPair?.value, "secrets")),
     outputs: outputDecls(unit, get(callPair?.value, "outputs"), ["on", "workflow_call", "outputs"], true)
   } : void 0;
   const dispatch = triggers.includes("workflow_dispatch") ? {
     loc: nodeLoc(unit.source, dispatchPair?.key ?? on),
-    inputs: inputDecls(unit, get(dispatchPair?.value, "inputs"))
+    inputs: inputDecls(unit, get(dispatchPair?.value, "inputs"), ["on", "workflow_dispatch", "inputs"])
   } : void 0;
   const name = str(get(root, "name"));
   const workflowPermissions = permissions(get(root, "permissions"));
@@ -13633,13 +13813,13 @@ function parseActionFile(dir, file, text2, ctx) {
     schemaErrors: [],
     ...generated ? { generated } : {},
     ...using ? { using } : {},
-    inputs: inputDecls(unit, get(root, "inputs")),
+    inputs: inputDecls(unit, get(root, "inputs"), ["inputs"]),
     outputs: outputDecls(unit, get(root, "outputs"), ["outputs"], true),
     steps: steps(unit, get(runs, "steps"), ["runs", "steps"], "action", ctx)
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/project.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
@@ -16204,10 +16384,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml4 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16280,7 +16460,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -16569,7 +16749,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/script-writes.ts
 import { posix as posix3 } from "path";
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
@@ -16840,7 +17020,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17092,7 +17272,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
@@ -17349,7 +17529,7 @@ function loadProject(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
@@ -17408,6 +17588,9 @@ function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
   }
   return out;
 }
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/trace.ts
+var CONTEXT_FUNCTION_NAMES = new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLowerCase()));
 
 // ../lint/src/analyze.ts
 import { createHash } from "crypto";
@@ -22635,7 +22818,7 @@ function optionalInputReads(index, unit, callers, callersDecide) {
   return { flagged, passedBySite };
 }
 function decidingReads(index, unit, input2) {
-  const inConditions = index.usagesOf(sym.input(unit.path, input2.name)).filter((u) => u.site.isCondition).map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
+  const inConditions = index.usagesOf(sym.input(unit.path, input2.name)).filter((u) => u.site.isCondition && !u.whole).map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
   const handledSites = new Set(
     inConditions.filter((x) => x.use === "compared" || x.use === "fallback").map((x) => x.u.site.id)
   );
@@ -22690,9 +22873,10 @@ var passthroughDropped = defineRule({
       for (const b of Object.values(call.job.with)) {
         const input2 = lookup(call.callee.call?.inputs ?? {}, b.name);
         if (!input2) continue;
-        if (ctx.index.usagesOf(sym.input(call.callee.path, input2.name)).length > 0) continue;
+        const reads = ctx.index.usagesOf(sym.input(call.callee.path, input2.name));
+        if (reads.some((u) => !isEventInputs(u.ref))) continue;
         ctx.report({
-          message: `jobs.${call.job.id} passes ${quote(b.name)} to ${call.callee.path}, which never reads it`,
+          message: `jobs.${call.job.id} passes ${quote(b.name)} to ${call.callee.path}, which ${reads.length > 0 ? "reads it only through github.event.inputs, the caller\u2019s event when it is called" : "never reads it"}`,
           loc: b.loc,
           symbol: sym.input(call.callee.path, input2.name),
           related: [{ loc: input2.loc, message: "declared here, never read" }]
@@ -22701,6 +22885,9 @@ var passthroughDropped = defineRule({
     }
   }
 });
+function isEventInputs(ref) {
+  return ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs";
+}
 var optionalForwardedToRequired = defineRule({
   code: "FP107",
   name: "optional-forwarded-to-required",
@@ -22950,7 +23137,7 @@ function emptyInputImpact(index, callee, input2) {
     const shown = typeof value === "string" ? quote(value) : JSON.stringify(value);
     return { severity: "warning", related: [], note: `, which replaces the input's default ${shown}` };
   }
-  const condition = index.usagesOf(sym.input(callee.path, input2.name)).find((u) => u.site.isCondition && useInCondition(u.site, u.ref) !== "fallback");
+  const condition = index.usagesOf(sym.input(callee.path, input2.name)).find((u) => u.site.isCondition && !u.whole && useInCondition(u.site, u.ref) !== "fallback");
   if (!condition) return void 0;
   return {
     severity: "error",
