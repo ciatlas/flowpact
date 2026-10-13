@@ -111,6 +111,42 @@ describe('FP301 undefined-output-ref', () => {
     });
     expect(byCode(r, 'FP301')).toEqual([]);
   });
+
+  describe('outputs written in any case', () => {
+    // GitHub looks context properties up ignoring case (`@actions/expressions` lower-cases its Dictionary keys, the
+    // runner's DictionaryContextData compares them with OrdinalIgnoreCase): needs.build.Outputs is needs.build.outputs.
+    it.each(['outputs', 'Outputs', 'OUTPUTS'])('checks needs.<job>.%s.<name>', (outputs) => {
+      const r = lint({
+        [`${WF}/p.yml`]: pipeline(
+          `echo \${{ needs.build.${outputs}.versoin }} \${{ needs.call.${outputs}.uri }} \${{ needs.build.${outputs}.version }}`,
+        ),
+        [`${WF}/lib.yml`]: lib,
+      });
+      expect(byCode(r, 'FP301').map((f) => f.message)).toEqual([
+        'jobs.build has no output "versoin" — did you mean "version"?',
+        'jobs.call has no output "uri" — did you mean "url"?',
+      ]);
+    });
+
+    it.each(['outputs', 'Outputs'])('checks jobs.<job>.%s.<name> in a workflow output', (outputs) => {
+      const r = lint({
+        [`${WF}/lib.yml`]: lib.replace(
+          'dead:\n        value: ${{ jobs.j.outputs.url }}',
+          `dead:\n        value: \${{ jobs.j.${outputs}.nope }}`,
+        ),
+      });
+      expect(byCode(r, 'FP301').map((f) => f.message)).toEqual(['jobs.j has no output "nope"']);
+    });
+
+    it.each(['outputs', 'Outputs'])('checks steps.<id>.%s.<name> of a local action', (outputs) => {
+      const r = lint({
+        [`${WF}/w.yml`]: `on: push\njobs:\n  j:\n    runs-on: x\n    steps:\n      - id: a\n        uses: ./.github/actions/a\n      - run: echo \${{ steps.a.${outputs}.missing }} \${{ steps.a.${outputs}.present }}\n`,
+        '.github/actions/a/action.yml':
+          'outputs:\n  present:\n    value: x\nruns:\n  using: composite\n  steps: []\n',
+      });
+      expect(byCode(r, 'FP301').map((f) => f.message)).toEqual(['.github/actions/a has no output "missing"']);
+    });
+  });
 });
 
 describe('FP302 output-ref-without-needs', () => {
@@ -549,4 +585,21 @@ ${script
   it('does not judge other actions that take a script, since they may set outputs of their own', () => {
     expect(byCode(lint(scripted("core.setOutput('other', 1);", 'acme/run-js@v1')), 'FP304')).toEqual([]);
   });
+
+  it.each(['outputs', 'Outputs', 'OUTPUTS'])(
+    'checks steps.<id>.%s.<name>, as GitHub ignores case',
+    (outputs) => {
+      const read = (name: string) =>
+        lint({
+          [`${WF}/w.yml`]: pipeline('x').replace(
+            'steps.meta.outputs.version',
+            `steps.meta.${outputs}.${name}`,
+          ),
+        });
+      expect(byCode(read('ver'), 'FP304').map((f) => f.message)).toEqual([
+        'Step "meta" never writes output "ver" (it writes version) — did you mean "version"?',
+      ]);
+      expect(byCode(read('version'), 'FP304')).toEqual([]);
+    },
+  );
 });
