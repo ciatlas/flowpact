@@ -25,7 +25,7 @@ import {
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
-import { checkNotEmpty, checkTargets } from './targets';
+import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
 import { renderOptions, type TextOptions } from './text';
 
 export type ReportCommand = 'lint' | 'check' | 'impact';
@@ -93,18 +93,27 @@ export interface ReportHooks {
    * report on. Returning true stops there, and `runReport` returns undefined.
    */
   impactSkipped?(reason: string): boolean;
-  /** The analysis ran, before its paths are checked; `notes` are impact mode's notes about its baseline. */
+  /**
+   * The analysis ran, before its paths are checked; `notes` are impact mode's notes about its baseline, and about the
+   * paths it does not refuse though the working tree lacks them.
+   */
   analyzed?(notes: string[]): void;
+  /**
+   * Where else a path the working tree lacks may be meant (the CLI: relative to the working directory). Impact mode
+   * takes it from there when the baseline has a workflow or action within it there and not under the root.
+   */
+  elsewhere?(path: string): string | undefined;
 }
 
 /** The baseline and the declaration for impact mode; read from the pull request when running in GitHub Actions. */
-function setupImpact(session: Session, flags: ImpactFlags): PreparedImpact {
+function setupImpact(session: Session, flags: ImpactFlags, paths: string[]): PreparedImpact {
   const { root, loaded, logger } = session;
   return attempt(() =>
     prepareImpact(
       root,
       loaded.config,
       {
+        ...(paths.length ? { paths } : {}),
         ...(flags.base ? { base: flags.base } : {}),
         ...(flags.expect ? { expect: flags.expect } : {}),
         ...(flags.title !== undefined ? { title: flags.title } : {}),
@@ -126,16 +135,39 @@ function impactFor(
   session: Session,
   command: ReportCommand,
   options: ReportOptions,
-  expect: ImpactLevel | undefined,
-  labels: string[] | undefined,
+  declared: { expect: ImpactLevel | undefined; labels: string[] | undefined },
+  paths: string[],
 ): PreparedImpact | undefined {
   if (command !== 'impact' && !bool('impact', options.impact)) return undefined;
-  return setupImpact(session, {
-    ...(options.base !== undefined ? { base: options.base } : {}),
-    ...(expect ? { expect } : {}),
-    ...(options.title !== undefined ? { title: options.title } : {}),
-    ...(labels ? { labels } : {}),
-  });
+  const { expect, labels } = declared;
+  return setupImpact(
+    session,
+    {
+      ...(options.base !== undefined ? { base: options.base } : {}),
+      ...(expect ? { expect } : {}),
+      ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(labels ? { labels } : {}),
+    },
+    paths,
+  );
+}
+
+/**
+ * The paths the working tree lacks that are not refused, and a note about them: in impact mode, what the change
+ * removed; when impact mode was asked for but skipped, every such path, since without a baseline a path the change
+ * removed cannot be told from a mistake.
+ */
+function unrefused(
+  result: AnalysisResult,
+  impact: PreparedImpact | undefined,
+): { paths: string[]; note?: string } {
+  if (!impact || !('skip' in impact)) return { paths: result.removedPaths ?? [] };
+  const missing = result.project.missingTargets ?? [];
+  if (!missing.length) return { paths: [] };
+  return {
+    paths: missing,
+    note: `impact: paths not found, not refused while impact mode is skipped (the change may have removed them): ${missing.join(', ')}`,
+  };
 }
 
 /** The rules to run: as `--only` says; impact mode alone runs the impact rules. */
@@ -162,6 +194,31 @@ function commandOptions(
   };
 }
 
+/** The options `runReport` checks before it runs: paths, rules, labels, the declared impact and the clock. */
+function reportInputs(options: ReportOptions) {
+  if (options.now !== undefined && !(options.now instanceof Date)) throw usage('now must be a Date');
+  return {
+    given: stringList('paths', options.paths) ?? [],
+    only: stringList('only', options.only),
+    labels: stringList('labels', options.labels),
+    expect: oneOf('expect', options.expect, IMPACT_LEVELS),
+  };
+}
+
+/** Notes that impact mode is skipped; true when a hook stops the run there. */
+function skipped(reason: string, notes: string[], hooks: ReportHooks): boolean {
+  notes.push(`impact: skipped (${reason})`);
+  return hooks.impactSkipped?.(reason) === true;
+}
+
+/** Impact mode's notes once the analysis ran: about its baseline, and about the paths it does not refuse. */
+function analyzedNotes(impact: PreparedImpact | undefined, note: string | undefined): string[] {
+  return [
+    ...(impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : []),
+    ...(note ? [note] : []),
+  ];
+}
+
 /** Runs `lint`, `check` or `impact`; undefined only when a hook stopped it. */
 export async function runReport(
   session: Session,
@@ -169,29 +226,26 @@ export async function runReport(
   options: ReportOptions = {},
   hooks: ReportHooks = {},
 ): Promise<Analysis | undefined> {
-  const paths = stringList('paths', options.paths) ?? [];
-  const only = stringList('only', options.only);
-  const labels = stringList('labels', options.labels);
-  const expect = oneOf('expect', options.expect, IMPACT_LEVELS);
-  if (options.now !== undefined && !(options.now instanceof Date)) throw usage('now must be a Date');
+  const { given, only, labels, expect } = reportInputs(options);
   const { root } = session;
   const notes: string[] = [];
-  const impact = impactFor(session, command, options, expect, labels);
-  if (impact && 'skip' in impact) {
-    notes.push(`impact: skipped (${impact.skip})`);
-    if (hooks.impactSkipped?.(impact.skip)) return undefined;
-  }
+  const impact = impactFor(session, command, options, { expect, labels }, given);
+  if (impact && 'skip' in impact && skipped(impact.skip, notes, hooks)) return undefined;
+  const paths = removedElsewhere(
+    given,
+    impact && 'options' in impact ? impact.options.base : undefined,
+    root,
+    hooks.elsewhere,
+  );
   const result = await analyzeSession(session, commandOptions(command, options, paths, only, impact));
-  const baseline = impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : [];
-  notes.push(...baseline);
-  hooks.analyzed?.(baseline);
   // In impact mode, a path the change removed (one that names a workflow or action of the baseline) is not missing.
-  checkTargets(result.project, paths, root, result.removedPaths);
+  const accepted = unrefused(result, impact);
+  const analyzed = analyzedNotes(impact, accepted.note);
+  notes.push(...analyzed);
+  hooks.analyzed?.(analyzed);
+  checkTargets(result.project, paths, root, accepted.paths);
   if (command !== 'impact') checkNotEmpty(result.summary, root);
-  if (result.impactSkipped) {
-    notes.push(`impact: skipped (${result.impactSkipped})`);
-    if (hooks.impactSkipped?.(result.impactSkipped)) return undefined;
-  }
+  if (result.impactSkipped && skipped(result.impactSkipped, notes, hooks)) return undefined;
   return analysisOf(result, notes);
 }
 

@@ -531,3 +531,87 @@ describe('flowpact impact with paths: where the verdict is reported', () => {
     expect(report.findings.map((f: { code: string }) => f.code)).toEqual(['FP810']);
   });
 });
+
+describe('flowpact impact with paths the change removed', () => {
+  const CONFIG = '.github/flowpact/flowpact.config.yml';
+  const action = (name: string) =>
+    `name: ${name}\ndescription: action ${name}\ninputs:\n  token: { description: t, required: false }\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "\${{ inputs.token }}"\n`;
+  /** Published actions a and b on main (under `sub`); the branch removes b. */
+  const removedB = (sub = '') => {
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a'),
+        'b/action.yml': action('b'),
+      },
+      { 'notes.txt': 'b goes\n' },
+      sub,
+    );
+    git(root, 'rm', '-rq', 'b');
+    git(root, 'commit', '-qm', 'remove b');
+    return root;
+  };
+
+  it('does not refuse a removed path when impact mode is skipped, and reports nothing about it', async () => {
+    const root = removedB();
+    // Before: exit 2, "Path not found", in the merge queue after the pull request passed.
+    const merge = await flowpact(root, ['lint', '--impact', 'b', '--base', 'main', '--format', 'json'], {
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: 'merge_group',
+    });
+    expect(merge.exitCode).toBe(0);
+    expect(merge.stderr).toContain('impact: skipped (merge_group');
+    expect(merge.stderr).toContain(
+      'impact: paths not found, not refused while impact mode is skipped (the change may have removed them): b',
+    );
+    const report = JSON.parse(merge.stdout);
+    expect(report.impact).toBeUndefined();
+    expect(report.findings).toEqual([]);
+    // Skipped because the baseline is the checked-out commit: the same, beside an existing path.
+    const same = await flowpact(root, ['lint', '--impact', 'b', 'a', '--base', 'HEAD']);
+    expect(same.exitCode).toBe(0);
+    expect(same.stderr).toContain('not refused while impact mode is skipped');
+    // Without impact mode, still refused.
+    expect((await flowpact(root, ['lint', 'b'])).exitCode).toBe(2);
+  });
+
+  it('takes a removed path relative to the working directory, as an existing one, with --root', async () => {
+    const root = removedB('sub');
+    const top = dirname(root);
+    const r = await flowpact(top, [
+      'impact',
+      '--root',
+      'sub',
+      'sub/b',
+      '--base',
+      'main',
+      '--expect',
+      'patch',
+    ]);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toContain('action b was removed or moved');
+    // Relative to --root, as before.
+    expect(
+      (await flowpact(top, ['impact', '--root', 'sub', 'b', '--base', 'main', '--expect', 'patch'])).exitCode,
+    ).toBe(1);
+    // And a path that is nowhere is still refused.
+    const nowhere = await flowpact(top, ['impact', '--root', 'sub', 'sub/c', '--base', 'main']);
+    expect(nowhere.exitCode).toBe(2);
+  });
+
+  it('knows a removed action that nothing used and nothing published', async () => {
+    const root = repo(
+      {
+        'tools/x/action.yml': action('x'),
+        '.github/workflows/ci.yml':
+          'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "true" }]\n',
+      },
+      { 'notes.txt': 'x goes\n' },
+    );
+    git(root, 'rm', '-rq', 'tools');
+    git(root, 'commit', '-qm', 'remove x');
+    const r = await flowpact(root, ['lint', '--impact', 'tools/x', '--base', 'main', '--expect', 'patch']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stderr).toContain('impact: skipped (nothing within the paths to grade or to report on)');
+  });
+});

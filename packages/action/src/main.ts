@@ -325,6 +325,7 @@ function impactRequest(
 ): ImpactRequest {
   const { configPath, baseConfig } = configs;
   return {
+    ...(inputs.paths.length ? { paths: inputs.paths } : {}),
     ...(base ? { base } : {}),
     ...(inputs.expectedImpact ? { expect: inputs.expectedImpact } : {}),
     ...(event ? { event } : {}),
@@ -734,23 +735,37 @@ async function analyzeRoot(
 }
 
 /**
- * Why the paths give nothing to report on: some do not exist, or none names a workflow or action. In impact mode, a
- * path that names a workflow or action of the baseline stands for what the change removed, so it is neither.
+ * The paths the working tree lacks that do not fail the step. In impact mode, a path that names a workflow or action
+ * of the baseline stands for what the change removed. When impact mode was asked for but skipped (on merge_group or
+ * push, or `impact: auto` off pull requests), there is no baseline to tell a removed path from a mistake, so a missing
+ * path is a warning: the pull request's run, which has the baseline, refuses a mistake.
  */
-function badPaths(result: AnalysisResult, paths: string[], where: string): string | undefined {
-  const removed = result.removedPaths ?? [];
+function unrefused(result: AnalysisResult, inputs: Inputs, where: string): string[] {
+  const skipped = inputs.impact !== 'off' && !result.impact && !result.impactSkipped;
+  if (!skipped) return result.removedPaths ?? [];
+  const missing = result.project.missingTargets ?? [];
+  if (missing.length)
+    core.warning(
+      `paths not found under ${where}: ${missing.join(', ')}. Not refused while impact mode is skipped, as the change may have removed them.`,
+    );
+  return missing;
+}
+
+/** Why the paths give nothing to report on: some do not exist, or none names a workflow or action. */
+function badPaths(result: AnalysisResult, inputs: Inputs, where: string): string | undefined {
+  const removed = unrefused(result, inputs, where);
   const missing = (result.project.missingTargets ?? []).filter((p) => !removed.includes(p));
   if (missing.length) return `paths not found under ${where}: ${missing.join(', ')}`;
   const { targets, wholeRepository } = result.project;
-  if (paths.length && targets.size === 0 && !wholeRepository && !removed.length)
-    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${paths.join(', ')}`;
+  if (inputs.paths.length && targets.size === 0 && !wholeRepository && !removed.length)
+    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${inputs.paths.join(', ')}`;
   return undefined;
 }
 
 /** Why the step fails without a report: paths that do not exist or name no workflow or action, or no workflows at all. */
 function nothingAnalyzed(result: AnalysisResult, inputs: Inputs, prefix: string): string | undefined {
   const where = prefix || '.';
-  const paths = badPaths(result, inputs.paths, where);
+  const paths = badPaths(result, inputs, where);
   if (paths) return paths;
   if (result.summary.workflows === 0 && result.summary.actions === 0)
     return `No workflows found under ${where}/.github/workflows. Set working-directory to the repository that holds them.`;

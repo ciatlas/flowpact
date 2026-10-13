@@ -6,6 +6,7 @@ import { type FailOn, runReport as runAnalysis } from '../lib/report';
 import {
   commonArgs,
   createContext,
+  cwdPath,
   displayPath,
   guard,
   pathArgs,
@@ -257,6 +258,7 @@ export async function runReportCommand(
     analyzed: (notes) => {
       for (const note of notes) ctx.stderr(note);
     },
+    elsewhere: (path) => cwdPath(path, ctx.root),
   });
   if (!analysis) return 0;
   writeReports(analysis, ctx, args, files);

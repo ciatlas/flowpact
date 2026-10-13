@@ -690,6 +690,46 @@ describe('impact mode', () => {
     expect(removed.infos).toContain('impact: skipped (nothing within the paths to grade or to report on)');
   });
 
+  it('does not fail on a path the change removed when impact mode is skipped', async () => {
+    const workspace = renamedRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    g('checkout', '-q', 'main');
+    writeFileSync(
+      join(workspace, '.github/workflows/gone.yml'),
+      'on: workflow_call\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "true" }]\n',
+    );
+    g('add', '-A');
+    g('commit', '-q', '-m', 'gone');
+    g('checkout', '-q', 'change');
+    g('merge', '-q', '--no-edit', 'main');
+    g('rm', '-q', '.github/workflows/gone.yml');
+    g('commit', '-q', '-m', 'remove gone');
+    const fresh = (event: string, given: Record<string, string>) => {
+      Object.assign(state, { outputs: {}, annotations: [], infos: [], summary: '', failed: [] });
+      process.env.GITHUB_EVENT_NAME = event;
+      return action(workspace, { paths: '.github/workflows/gone.yml', ...given });
+    };
+
+    // Before: "paths not found" failed the step in the merge queue and on push, after the pull request passed.
+    for (const [event, given] of [
+      ['merge_group', { impact: 'auto', 'base-ref': 'main' }],
+      ['merge_group', { impact: 'on', 'base-ref': 'main' }],
+      ['push', { impact: 'auto' }],
+    ] as const) {
+      const s = await fresh(event, given);
+      expect(s.failed).toEqual([]);
+      expect(s.outputs['exit-code']).toBe('0');
+      expect(s.annotations.map((a) => [a.level, a.message])).toEqual([
+        [
+          'warning',
+          'paths not found under .: .github/workflows/gone.yml. Not refused while impact mode is skipped, as the change may have removed them.',
+        ],
+      ]);
+    }
+    // Without impact mode, still a failure.
+    expect((await fresh('push', {})).failed[0]).toContain('paths not found');
+  });
+
   it('opens the impact baseline group only when something is logged in it', async () => {
     const off = await action(renamedRepo(), { impact: 'off' });
     expect(off.groups).not.toContain('flowpact: impact baseline');

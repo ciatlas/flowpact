@@ -48,6 +48,11 @@ export interface ImpactRequest {
   baseConfigFile?: string;
   /** Called with refs (commits, `refs/tags/…`) the clone lacks, so a shallow checkout can fetch them. */
   fetch?: (refs: string[]) => void;
+  /**
+   * The paths the run is given: the baseline loads the workflows and actions within them too, so a path naming one
+   * the change removed is known even when nothing used it.
+   */
+  paths?: string[];
 }
 
 export interface GitHubEventPayload {
@@ -392,6 +397,7 @@ export function prepareImpact(
     validateSchema: false,
     only: [],
     ...(req.repository ? { repository: req.repository } : {}),
+    ...(req.paths?.length ? { paths: req.paths } : {}),
   });
   return {
     options: {

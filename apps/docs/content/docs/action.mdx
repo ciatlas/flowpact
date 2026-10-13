@@ -105,7 +105,7 @@ All inputs are optional.
 | Input | Default | Description |
 | --- | --- | --- |
 | `mode` | `lint` | `lint` analyzes workflows and local actions. `check` also compares them with the locked contracts in `.github/flowpact/`. |
-| `paths` | `''` | Workflow or action files or directories to report on, separated by spaces or newlines, relative to working-directory. Empty reports on everything. With `impact`, only the published workflows and actions within them are graded, so the impact verdict is about those alone ([Only some units](/docs/impact-mode#only-some-units)). |
+| `paths` | `''` | Workflow or action files or directories to report on, separated by spaces or newlines, relative to working-directory. Empty reports on everything. With `impact`, only the published workflows and actions within them are graded, so the impact verdict is about those alone; prefer directories, so a removed or renamed one stays within them ([Only some units](/docs/impact-mode#only-some-units)). |
 | `working-directory` | `.` | Directory holding the `.github` folder to analyze, relative to the workspace. |
 | `config` | `''` | Path to the flowpact config file, relative to working-directory. Empty uses `.github/flowpact/flowpact.config.yml` when it exists. |
 | `fail-on` | `error` | Fail the step when findings at this level exist: `error`, `warning` or `never`. |

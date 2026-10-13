@@ -11,7 +11,7 @@ inputs:
     required: false
     default: 'lint'
   paths:
-    description: 'Workflow or action files or directories to report on, separated by spaces or newlines, relative to working-directory. Empty reports on everything. With impact, only the published workflows and actions within them are graded, so the impact verdict is about those alone.'
+    description: 'Workflow or action files or directories to report on, separated by spaces or newlines, relative to working-directory. Empty reports on everything. With impact, only the published workflows and actions within them are graded, so the impact verdict is about those alone; prefer directories, so a removed or renamed one stays within them.'
     required: false
     default: ''
   working-directory:

@@ -1,5 +1,7 @@
-import { isAbsolute, relative } from 'node:path';
-import type { Project } from '@ciatlas/core';
+import { existsSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
+import type { Project, ProjectIndex } from '@ciatlas/core';
+import { pathHolds } from '@flowpact/lint';
 import { usage } from './errors';
 
 /** Shows paths relative to the working directory when they are inside it. */
@@ -41,3 +43,26 @@ export const protectedTrees = (root: string): string[] => [
   root,
   ...(process.env.GITHUB_WORKSPACE ? [process.env.GITHUB_WORKSPACE] : []),
 ];
+
+/**
+ * Impact mode's paths: one the working tree lacks is taken from where `elsewhere` says (the CLI: relative to the
+ * working directory, when --root is elsewhere) when the baseline has a workflow or action within it there and none
+ * within it under the root. A removed path then counts wherever it was given from, as an existing one does.
+ */
+export function removedElsewhere(
+  paths: string[],
+  base: ProjectIndex | undefined,
+  root: string,
+  elsewhere: ((path: string) => string | undefined) | undefined,
+): string[] {
+  if (!base || !elsewhere) return paths;
+  const files = base.units().map((u) => u.file);
+  const holds = (p: string) => {
+    const rel = relative(root, resolve(root, p)).split('\\').join('/');
+    return files.some((f) => pathHolds(rel, f));
+  };
+  return paths.map((p) => {
+    const there = elsewhere(p);
+    return there && !existsSync(resolve(root, p)) && !holds(p) && holds(there) ? there : p;
+  });
+}

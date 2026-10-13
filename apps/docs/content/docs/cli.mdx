@@ -355,7 +355,8 @@ and `flowpact check --impact` add the verdict to everything else they report. Op
 
 With paths (workflow or action files, or directories), impact mode grades only the published workflows and actions
 within them, and the verdict is about those alone: the paths narrow the gate, so a change to a published unit
-outside them is not checked. A path the pull request removed counts when the baseline has a workflow or action there.
+outside them is not checked. A path the pull request removed counts when the baseline has a workflow or action there,
+whether it is given relative to `--root` or to the working directory.
 The same holds for `lint --impact` and `check --impact` with paths. See [Impact mode](/docs/impact-mode#only-some-units).
 
 ## `flowpact explain`

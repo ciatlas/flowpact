@@ -378,3 +378,13 @@ export function pathArgs(positionals: string[], command: string, root: string): 
         : resolve(process.cwd(), p),
     );
 }
+
+/**
+ * Where a path that exists nowhere would be relative to the working directory, when that differs from --root: impact
+ * mode takes a path the change removed from there when the baseline had it there.
+ */
+export function cwdPath(path: string, root: string): string | undefined {
+  if (isAbsolute(path)) return undefined;
+  const there = resolve(process.cwd(), path);
+  return there === resolve(root, path) ? undefined : there;
+}

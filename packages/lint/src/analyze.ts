@@ -391,12 +391,12 @@ function selectRules(
   return { severities, only: only?.map((o) => registry.get(o)!.code) };
 }
 
-/**
- * What paths narrow the report to. Without impact mode, they narrow it when they name workflows or actions (paths that
- * name none are refused). In impact mode, they narrow it too when they only cover what the baseline had: the
- * workflows and actions the change removed.
- */
+/** What paths narrow the report to. */
 interface ReportScope {
+  /**
+   * Whether paths narrow it: any paths but the whole repository, even when they name no workflow or action of the
+   * working tree (callers refuse such paths, except in impact mode where they name what the change removed).
+   */
   narrowed: boolean;
   /** Whether a contract is in scope (with paths: of a target, or listing one as a consumer). */
   contractInScope: (e: ContractPlanEntry) => boolean;
@@ -729,7 +729,7 @@ function prepareRules(
   for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
   const within = impactPathsOf(opts, index.project);
   const scope: ReportScope = {
-    narrowed: index.project.targets.size > 0 || within !== undefined,
+    narrowed: Boolean(opts.paths?.length) && !index.project.wholeRepository,
     contractInScope: contractsInScope(index),
   };
   const contracts = compareContracts(opts, index, scope, logger);

@@ -568,6 +568,25 @@ describe('paths narrow impact mode', () => {
     expect(removed.impact?.verdict.required).toBe('major');
   });
 
+  it('reports on nothing else when every path is one the working tree lacks', () => {
+    // Impact mode skipped (no baseline here): the paths still narrow the report, to nothing, instead of widening it to
+    // the whole repository, where c has a finding (an empty `inputs:`).
+    const fs = memoryFileSystem({ ...changed, 'c/action.yml': action('c', 'inputs:\n') });
+    const lint = (paths?: string[]) =>
+      analyze({
+        root: '/v',
+        fs,
+        config,
+        validateSchema: false,
+        repository: 'a/b',
+        ...(paths ? { paths } : {}),
+      });
+    expect(lint().findings.length).toBeGreaterThan(0);
+    const gone = lint(['gone']);
+    expect(gone.project.missingTargets).toEqual(['gone']);
+    expect(gone.findings).toEqual([]);
+  });
+
   it('grades only the given units in impactChanges', () => {
     const all = impactChanges(index(base, publish), index(changed, publish), { publish });
     expect(all.map((c) => c.unit)).toEqual(['b']);

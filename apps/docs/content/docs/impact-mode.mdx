@@ -74,6 +74,14 @@ graded.
   unit is released on its own, such as one job per action in a repository of several actions.
 - A unit is within a path when its file is that file or lies in that directory, in the working tree or in the
   baseline. A path the pull request removed (`actions/old`) grades that removal, as a major change.
+- A removed or renamed unit is graded only when its old path, or a directory holding it, is among the paths. After a
+  move from `actions/old` to `actions/new`, `flowpact impact actions/new` grades only the new unit (minor), not the
+  removal (major): give both paths, or their parent `actions/`. Prefer directory paths, above all in the action's
+  `paths` input: a pull request that deletes a unit and drops its path from the input is never graded for the removal.
+- When impact mode is skipped (`merge_group`, a push without a commit before it, `impact: auto` outside pull
+  requests), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks is a
+  warning there, not an error. The pull request's run, which has the baseline, still refuses a path that never
+  existed.
 - Units within the paths that are not published (an internal workflow, an action `impact.publish` does not list) are not
   graded. With no published unit there, the required impact is `none`.
 - Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths: a

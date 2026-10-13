@@ -25095,7 +25095,7 @@ function prepareRules(opts, logger, base, unloaded) {
   for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
   const within2 = impactPathsOf(opts, index.project);
   const scope = {
-    narrowed: index.project.targets.size > 0 || within2 !== void 0,
+    narrowed: Boolean(opts.paths?.length) && !index.project.wholeRepository,
     contractInScope: contractsInScope(index)
   };
   const contracts = compareContracts(opts, index, scope, logger);
@@ -25538,7 +25538,8 @@ function prepareImpact(root, headConfig, req, logger) {
     config: baseConfig ?? defaultConfig(),
     validateSchema: false,
     only: [],
-    ...req.repository ? { repository: req.repository } : {}
+    ...req.repository ? { repository: req.repository } : {},
+    ...req.paths?.length ? { paths: req.paths } : {}
   });
   return {
     options: {
@@ -26901,6 +26902,7 @@ function baselineRef(root, baseRef) {
 function impactRequest(root, base, event, configs, inputs, logger) {
   const { configPath, baseConfig } = configs;
   return {
+    ...inputs.paths.length ? { paths: inputs.paths } : {},
     ...base ? { base } : {},
     ...inputs.expectedImpact ? { expect: inputs.expectedImpact } : {},
     ...event ? { event } : {},
@@ -27189,18 +27191,28 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
   if (result.impactSkipped) info(`impact: skipped (${result.impactSkipped})`);
   return result;
 }
-function badPaths(result, paths, where) {
-  const removed = result.removedPaths ?? [];
+function unrefused(result, inputs, where) {
+  const skipped = inputs.impact !== "off" && !result.impact && !result.impactSkipped;
+  if (!skipped) return result.removedPaths ?? [];
+  const missing = result.project.missingTargets ?? [];
+  if (missing.length)
+    warning(
+      `paths not found under ${where}: ${missing.join(", ")}. Not refused while impact mode is skipped, as the change may have removed them.`
+    );
+  return missing;
+}
+function badPaths(result, inputs, where) {
+  const removed = unrefused(result, inputs, where);
   const missing = (result.project.missingTargets ?? []).filter((p) => !removed.includes(p));
   if (missing.length) return `paths not found under ${where}: ${missing.join(", ")}`;
   const { targets, wholeRepository } = result.project;
-  if (paths.length && targets.size === 0 && !wholeRepository && !removed.length)
-    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${paths.join(", ")}`;
+  if (inputs.paths.length && targets.size === 0 && !wholeRepository && !removed.length)
+    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${inputs.paths.join(", ")}`;
   return void 0;
 }
 function nothingAnalyzed(result, inputs, prefix) {
   const where = prefix || ".";
-  const paths = badPaths(result, inputs.paths, where);
+  const paths = badPaths(result, inputs, where);
   if (paths) return paths;
   if (result.summary.workflows === 0 && result.summary.actions === 0)
     return `No workflows found under ${where}/.github/workflows. Set working-directory to the repository that holds them.`;
