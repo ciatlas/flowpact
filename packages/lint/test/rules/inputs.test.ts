@@ -204,10 +204,9 @@ describe('FP104 unused-input', () => {
       ['a computed key', '${{ github.event.inputs[env.KEY] }}'],
       ['the whole event', '${{ toJSON(github.event) }}'],
       ['the whole github context', '${{ toJSON(github) }}'],
-      [
-        'a filter or computed key that may stand for event or inputs',
-        '${{ toJSON(github.*) }} ${{ github.event[env.K] }}',
-      ],
+      ['a * filter that may stand for event', '${{ toJSON(github.*) }}'],
+      ['a * filter that may stand for inputs', '${{ toJSON(github.event.*) }}'],
+      ['a computed key that may stand for inputs', '${{ github.event[env.K] }}'],
       ['a computed key that may stand for event', '${{ toJSON(github[env.K].inputs) }}'],
       ['a mixed-case path', '${{ toJSON(github.Event.Inputs) }}'],
     ])('counts %s in a called workflow as a read of every dispatch input', (_, read) => {
