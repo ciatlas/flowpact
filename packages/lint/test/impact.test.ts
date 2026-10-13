@@ -696,6 +696,24 @@ describe('ignore leaves units out of impact mode', () => {
     ]);
   });
 
+  it('runs with paths that hold only ignored published units, on a file within them that ignore leaves in', () => {
+    // impact: on and the CLI: nothing is graded, the required impact is none, and the declaration is still checked.
+    const conflict = { title: 'fix: x', labels: ['semver:major'] };
+    const r = run(['b/**'], conflict, ['b', `${WF}/ci.yml`], undefined, { [`${WF}/ci.yml`]: ci });
+    expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: false });
+    expect(r.impact?.scope).toEqual({ paths: ['b', `${WF}/ci.yml`], units: [] });
+    expect(r.impact?.narrowed).toEqual({ anchor: `${WF}/ci.yml`, ignored: ['b'] });
+    expect(located(r)).toEqual([`FP811@${WF}/ci.yml`, `FP812@${WF}/ci.yml`]);
+    // With no such file within the paths, it is skipped, and says that ignore left everything there out. Before:
+    // "nothing within the paths to grade or to report on", which did not name ignore although b is there.
+    const only = run(['b/**'], conflict, ['b'], undefined, { [`${WF}/ci.yml`]: ci });
+    expect(only.impact).toBeUndefined();
+    expect(only.impactSkipped).toBe(
+      'every workflow and action within the paths is ignored: nothing to grade or to report on',
+    );
+    expect(only.findings).toEqual([]);
+  });
+
   it('skips impact mode when ignore leaves out every workflow and action', () => {
     // Before: FP811 and FP812 on the root action.yml, which this repository does not have.
     const r = run(['**'], { title: 'fix: x', labels: ['semver:major'] });

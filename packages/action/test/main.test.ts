@@ -911,6 +911,18 @@ describe('impact mode', () => {
       'impact: skipped (every published workflow or action within the paths is ignored; see ignore)',
     );
     expect(within.annotations).toEqual([]);
+    // impact: on with those paths runs where a file within them is left in, and is skipped where none is.
+    const beside = await fresh({ impact: 'on', paths: 'b .github/workflows/ci.yml' });
+    expect(beside.outputs['required-impact']).toBe('none');
+    expect(beside.annotations.map((a) => [String(a.props?.title).split(' ')[0], a.props?.file])).toEqual([
+      ['FP812', '.github/workflows/ci.yml'],
+    ]);
+    const only = await fresh({ impact: 'on', paths: 'b' });
+    expect(only.infos).toContain(
+      'impact: skipped (every workflow and action within the paths is ignored: nothing to grade or to report on)',
+    );
+    expect(only.outputs['required-impact']).toBe('');
+    expect(only.annotations).toEqual([]);
   });
 
   it('runs impact: auto on a pull request that takes the published units out of ignore, and fails it like 0.14', async () => {

@@ -101,14 +101,16 @@ graded.
 - When `ignore` leaves out every published unit (within the paths), nothing is graded. `impact: auto` then skips the
   run, as in a repository that publishes nothing: `impact: the baseline's and the pull request's ignore leave out
   every published workflow and action (…); see ignore`, or with paths `impact: skipped (every published workflow or
-  action within the paths is ignored; see ignore)`. `impact: on` and the CLI still run: the required impact is `none`, and the declaration is still checked,
-  so a label that declares more than the title is still `FP811`.
+  action within the paths is ignored; see ignore)`. `impact: on` and the CLI still run wherever there is a file to
+  report on (see the next point): the required impact is `none`, and the declaration is still checked, so a label
+  that declares more than the title is still `FP811`.
 - Findings about the declaration that no change points at (`FP811`–`FP813`) go on a file impact mode looks at: the
-  first published file graded, else the first workflow or action file that is not ignored (within the paths, when
-  there are paths). When there is neither (say, the paths hold only an unpublished workflow the change removed, or
-  `ignore` matches every workflow and action), there is nothing to grade or to report on, and impact mode is skipped:
-  `impact: skipped (nothing within the paths to grade or to report on)`, or without paths `impact: skipped (every
-  workflow and action is ignored: nothing to grade or to report on)`.
+  first published file graded, else the first workflow or action file that `ignore` does not leave out (within the
+  paths, when there are paths). When there is neither, there is nothing to grade or to report on, and impact mode is
+  skipped, saying why: `impact: skipped (every workflow and action within the paths is ignored: nothing to grade or to
+  report on)` when `ignore` leaves out every workflow and action the paths hold, `impact: skipped (nothing within the
+  paths to grade or to report on)` when they hold only what the change removed (say, an unpublished workflow), or
+  without paths `impact: skipped (every workflow and action is ignored: nothing to grade or to report on)`.
 - The reports say so: the terminal and Markdown reports add `only within <paths>: graded <units>`, and the JSON
   report's `impact.scope` lists the `paths` and the `units` graded.
 

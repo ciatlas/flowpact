@@ -877,4 +877,24 @@ describe('ignore that leaves out every published unit', () => {
       'impact: skipped (every workflow and action is ignored: nothing to grade or to report on)',
     );
   });
+
+  it('runs with paths that hold only ignored published units when a file within them is left in', async () => {
+    const root = ignored('*/action.yml');
+    // The paths hold b, which ignore leaves out, and the CI workflow: the verdict goes on the workflow.
+    const r = await flowpact(root, ['impact', 'b', CI, ...declared, '--format', 'json']);
+    expect(r.exitCode).toBe(1);
+    const report = JSON.parse(r.stdout);
+    expect(report.impact).toMatchObject({ required: 'none', ok: false });
+    expect(
+      report.findings.map((f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`),
+    ).toEqual([`FP811@${CI}`, `FP812@${CI}`]);
+    // Only b: nothing within the paths is left to report on, and the skip says it was ignore. Before: "nothing within
+    // the paths to grade or to report on".
+    const only = await flowpact(root, ['impact', 'b', ...declared]);
+    expect(only.exitCode).toBe(0);
+    expect(only.stdout).toBe('');
+    expect(only.stderr).toContain(
+      'impact: skipped (every workflow and action within the paths is ignored: nothing to grade or to report on)',
+    );
+  });
 });

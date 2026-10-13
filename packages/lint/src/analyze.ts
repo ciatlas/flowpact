@@ -465,32 +465,50 @@ function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | un
 /**
  * Why impact mode does not run with these paths: nothing published within them when it runs only then (`impact:
  * auto`), or nothing to grade or to report on, i.e. nothing published and no workflow or action of the working tree
- * within them that `ignore` does not leave out (say, only what the change removed).
+ * within them that `ignore` does not leave out: `ignored` when `ignore` left out what is there, else the paths hold
+ * only what the change removed.
  */
 function pathsSkip(
   scope: ImpactScope,
   narrowed: ImpactNarrowed,
   onlyIfPublished: boolean | undefined,
+  ignored: boolean,
 ): string | undefined {
   if (scope.units.length) return undefined;
   if (onlyIfPublished)
     return narrowed.ignored.length
       ? 'every published workflow or action within the paths is ignored; see ignore'
       : 'no published workflow or action within the paths; see impact.publish';
-  return narrowed.anchor ? undefined : 'nothing within the paths to grade or to report on';
+  if (narrowed.anchor) return undefined;
+  return ignored
+    ? 'every workflow and action within the paths is ignored: nothing to grade or to report on'
+    : 'nothing within the paths to grade or to report on';
 }
 
 /**
  * Why impact mode does not run: with paths, see `pathsSkip`; without, `ignore` leaves out every workflow and action, so
- * nothing is graded and there is no file to report on.
+ * nothing is graded and there is no file to report on. `targets` counts the workflow and action files the paths name.
  */
-function impactSkip(impact: ImpactResult, onlyIfPublished: boolean | undefined): string | undefined {
+function impactSkip(
+  impact: ImpactResult,
+  onlyIfPublished: boolean | undefined,
+  targets: number,
+): string | undefined {
   const { scope, narrowed } = impact;
   if (!narrowed) return undefined;
-  if (scope) return pathsSkip(scope, narrowed, onlyIfPublished);
+  // Without an anchor, every file the paths name is one that ignore leaves out.
+  if (scope) return pathsSkip(scope, narrowed, onlyIfPublished, narrowed.ignored.length > 0 || targets > 0);
   if (impact.publishedFiles.length || narrowed.anchor) return undefined;
   return 'every workflow and action is ignored: nothing to grade or to report on';
 }
+
+/** Notes about how impact mode graded: the published units the pull request adds to `ignore`, graded until merged. */
+const gradingNotes = (impact: ImpactResult): string[] =>
+  impact.ignoreAdded
+    ? [
+        `this pull request changes what ignore leaves out of impact mode (${impact.ignoreAdded.join(', ')}); that applies after it is merged`,
+      ]
+    : [];
 
 /**
  * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
@@ -502,14 +520,19 @@ function impactOf(
   index: ProjectIndex,
   lookAt: ImpactLookAt,
   logger: Logger,
-): Pick<RuleRun, 'impact' | 'impactSkipped'> {
+): Pick<RuleRun, 'impact' | 'impactSkipped' | 'impactNotes'> {
   const impact = opts.impact;
   if (!impact) return { impact: undefined };
   const result = logger.time('impact', () =>
     computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt),
   );
-  const skipped = impactSkip(result, impact.onlyIfPublished);
-  return skipped ? { impact: undefined, impactSkipped: skipped } : { impact: result };
+  const skipped = impactSkip(result, impact.onlyIfPublished, index.project.targets.size);
+  // The notes hold whether impact mode runs or not.
+  const notes = gradingNotes(result);
+  return {
+    ...(skipped ? { impact: undefined, impactSkipped: skipped } : { impact: result }),
+    ...(notes.length ? { impactNotes: notes } : {}),
+  };
 }
 
 /** What running the rules of one analysis needs. */
@@ -527,6 +550,8 @@ interface RuleRun {
   impact: ImpactResult | undefined;
   /** Why impact mode did not run although it was set up. */
   impactSkipped?: string;
+  /** Notes about how impact mode graded, whether it ran or not. */
+  impactNotes?: string[];
   /** Generated files, whose internals rules with `generatedFiles: 'skip'` stay quiet about. */
   generatedFiles: Map<string, string>;
   /** Whether a rule runs in this analysis (`ctx.runs`). */
@@ -720,17 +745,10 @@ function impactFieldsOf(
   run: RuleRun,
   removedPaths: string[] | undefined,
 ): Pick<AnalysisResult, 'impact' | 'impactSkipped' | 'impactNotes' | 'removedPaths'> {
-  const edited = run.impact?.ignoreAdded;
   return {
     ...(run.impact ? { impact: run.impact } : {}),
     ...(run.impactSkipped ? { impactSkipped: run.impactSkipped } : {}),
-    ...(edited
-      ? {
-          impactNotes: [
-            `this pull request changes what ignore leaves out of impact mode (${edited.join(', ')}); that applies after it is merged`,
-          ],
-        }
-      : {}),
+    ...(run.impactNotes ? { impactNotes: run.impactNotes } : {}),
     ...(removedPaths?.length ? { removedPaths } : {}),
   };
 }

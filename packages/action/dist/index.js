@@ -24970,19 +24970,23 @@ function impactPathsOf(opts, project) {
     targets: project.targets
   };
 }
-function pathsSkip(scope, narrowed, onlyIfPublished) {
+function pathsSkip(scope, narrowed, onlyIfPublished, ignored) {
   if (scope.units.length) return void 0;
   if (onlyIfPublished)
     return narrowed.ignored.length ? "every published workflow or action within the paths is ignored; see ignore" : "no published workflow or action within the paths; see impact.publish";
-  return narrowed.anchor ? void 0 : "nothing within the paths to grade or to report on";
+  if (narrowed.anchor) return void 0;
+  return ignored ? "every workflow and action within the paths is ignored: nothing to grade or to report on" : "nothing within the paths to grade or to report on";
 }
-function impactSkip(impact, onlyIfPublished) {
+function impactSkip(impact, onlyIfPublished, targets) {
   const { scope, narrowed } = impact;
   if (!narrowed) return void 0;
-  if (scope) return pathsSkip(scope, narrowed, onlyIfPublished);
+  if (scope) return pathsSkip(scope, narrowed, onlyIfPublished, narrowed.ignored.length > 0 || targets > 0);
   if (impact.publishedFiles.length || narrowed.anchor) return void 0;
   return "every workflow and action is ignored: nothing to grade or to report on";
 }
+var gradingNotes = (impact) => impact.ignoreAdded ? [
+  `this pull request changes what ignore leaves out of impact mode (${impact.ignoreAdded.join(", ")}); that applies after it is merged`
+] : [];
 function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
   if (!impact) return { impact: void 0 };
@@ -24990,8 +24994,12 @@ function impactOf(opts, index, lookAt, logger) {
     "impact",
     () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt)
   );
-  const skipped = impactSkip(result, impact.onlyIfPublished);
-  return skipped ? { impact: void 0, impactSkipped: skipped } : { impact: result };
+  const skipped = impactSkip(result, impact.onlyIfPublished, index.project.targets.size);
+  const notes = gradingNotes(result);
+  return {
+    ...skipped ? { impact: void 0, impactSkipped: skipped } : { impact: result },
+    ...notes.length ? { impactNotes: notes } : {}
+  };
 }
 function ruleRun(fields) {
   const { registry: registry2, severities, only } = fields;
@@ -25105,15 +25113,10 @@ function metaOf(opts, repository) {
   };
 }
 function impactFieldsOf(run2, removedPaths) {
-  const edited = run2.impact?.ignoreAdded;
   return {
     ...run2.impact ? { impact: run2.impact } : {},
     ...run2.impactSkipped ? { impactSkipped: run2.impactSkipped } : {},
-    ...edited ? {
-      impactNotes: [
-        `this pull request changes what ignore leaves out of impact mode (${edited.join(", ")}); that applies after it is merged`
-      ]
-    } : {},
+    ...run2.impactNotes ? { impactNotes: run2.impactNotes } : {},
     ...removedPaths?.length ? { removedPaths } : {}
   };
 }
