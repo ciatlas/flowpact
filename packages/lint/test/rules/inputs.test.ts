@@ -263,14 +263,39 @@ describe('FP104 unused-input', () => {
     });
 
     const whole = callee('${{ toJSON(github.event.inputs) }}');
+    // Dispatched, root.yml's github.event.inputs holds target and level; called, it is the caller's event.
+    const both = root.replace(
+      'on:\n',
+      'on:\n  workflow_call:\n    inputs:\n      only: { type: string, required: false }\n',
+    );
 
     it('counts the dispatch inputs only, not the workflow_call inputs of a workflow that is also called', () => {
-      // Dispatched, root.yml's github.event.inputs holds target and level; called, it is the caller's event.
-      const both = root.replace(
-        'on:\n',
-        'on:\n  workflow_call:\n    inputs:\n      only: { type: string, required: false }\n',
-      );
       expect(fp104({ [`${WF}/root.yml`]: both, [`${WF}/callee.yml`]: whole })).toEqual([unread('only')]);
+    });
+
+    // A named read counts only an input that the dispatched workflow's event holds. These read in a called workflow:
+    // in the dispatched workflow itself, core resolves github.event.inputs.<name> to its input of that name, whichever
+    // trigger declares it.
+    const noInputs = yaml`
+      on:
+        workflow_dispatch:
+        workflow_call:
+          inputs:
+            x: { type: string, required: false }
+      jobs:
+        call:
+          uses: ./.github/workflows/callee.yml
+    `;
+    it.each([
+      [
+        'a workflow_call input of the dispatched workflow',
+        both,
+        '${{ github.event.inputs.only }} ${{ github.event.inputs.target }} ${{ github.event.inputs.level }}',
+        'only',
+      ],
+      ['an input of a workflow dispatched without inputs', noInputs, '${{ github.event.inputs.x }}', 'x'],
+    ])('does not count a named read of %s in a called workflow', (_, wf, read, name) => {
+      expect(fp104({ [`${WF}/root.yml`]: wf, [`${WF}/callee.yml`]: callee(read) })).toEqual([unread(name)]);
     });
 
     it('leaves the inputs of workflows that do not run the reader when dispatched', () => {

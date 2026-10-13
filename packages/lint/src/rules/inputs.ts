@@ -67,8 +67,9 @@ function addEventInputReads(unit: UnitDecl, names: Set<string>, every: string[])
  * (`github.event.inputs.target`), none (`github.event_name`), or `every` one when it reads them without naming one. It
  * does when it stops at an object that holds them (`toJSON(github)`, `toJSON(github.event)`,
  * `toJSON(github.event.inputs)`), or has a `*` filter or a computed key that may stand for `event`, `inputs` or the
- * input (`github.event.inputs.*`, `github.event.inputs[matrix.key]`, `github[matrix.key].inputs`). GitHub looks
- * properties up regardless of case.
+ * input (`github.event.inputs.*`, `github.event.inputs[matrix.key]`, `github[matrix.key].inputs`). A name that is not
+ * in `every` reads none: the dispatched workflow's event holds no such input, even when the workflow declares it for
+ * `workflow_call`. GitHub looks properties up regardless of case.
  */
 function eventInputsRead(ref: LocatedRef, every: string[]): string[] {
   if (ref.context !== 'github') return [];
@@ -78,7 +79,9 @@ function eventInputsRead(ref: LocatedRef, every: string[]): string[] {
     if (namesKey(segment) && segment.toLowerCase() !== key) return [];
   }
   const name = ref.path[2];
-  return namesKey(name) ? [name.toLowerCase()] : every;
+  if (!namesKey(name)) return every;
+  const input = name.toLowerCase();
+  return every.includes(input) ? [input] : [];
 }
 
 function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {
