@@ -6,6 +6,51 @@ description: What changes between flowpact releases, and what to do when you mov
 flowpact is before 1.0: a minor release (0.7 → 0.8) can change what is reported. Each section below lists what to do
 when you move to that release.
 
+## 0.13 → 0.14
+
+0.14 reads more of what workflows write: a read of a whole object or through a computed key (`toJSON(inputs)`,
+`matrix[inputs.key]`, `secrets.*`), an input's `default:` where a caller omits the input, and `github.event.inputs`
+in a workflow that can be called, which holds the caller's event there. A few findings change with it.
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.14`.
+- **CLI:** `npx flowpact@0.14`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Regenerate your contracts
+
+A call to a reusable workflow whose matrix has an `include` or `exclude` item that is an expression
+(`- ${{ fromJSON(inputs.extra) }}`) now records its matrix as `exact: false`, since that item is only known at runtime;
+with such an `exclude` item it also records the combinations it knows, where 0.13 recorded none. If you lock
+contracts, `flowpact check` reports [FP802](/docs/rules/fp802) for such a call until you run `flowpact generate` and
+commit the result.
+
+### New and changed findings
+
+- **[FP404](/docs/rules/fp404)** no longer reports a matrix key as missing from every combination when an `exclude`
+  item is an expression: such an item removed every combination before.
+- **[FP403](/docs/rules/fp403)** (info) now notes a matrix whose `include` has an item that is an expression: the keys
+  it adds are only known at runtime.
+- **[FP104](/docs/rules/fp104) and [FP203](/docs/rules/fp203)** no longer report an input or a secret that is read
+  through a `*` filter (`inputs.*`, `github.event.inputs.*`, `secrets.*`), nor [FP106](/docs/rules/fp106) a value
+  passed to an input that the callee reads through `inputs.*`.
+- **[FP106](/docs/rules/fp106)** now reports a value that a caller passes to a workflow which reads the input only
+  through `github.event.inputs`: when the workflow is called, that is the caller's event, not the value passed.
+- **Locations:** a finding placed at the start of a bare `if:` written as a block scalar (`if: |`) or a quoted scalar,
+  such as [FP505](/docs/rules/fp505) for `hashFiles()` in a job's `if:`, now points at the expression rather than at
+  the `|` or the quote, and a reference whose text also appears earlier inside a string literal is located at the
+  reference. Code scanning may close and reopen those alerts once.
+
+### `flowpact trace` and custom rules
+
+- `flowpact trace --up` also ends at an omitted input's `default:`, follows a whole read to each member, and shows a
+  `github.event.inputs` read in a workflow that can be called as the dispatch input `(when dispatched)` next to the
+  caller's event. The tree now prints each branch's note, such as `(exposed to the caller)`. See
+  [`flowpact trace`](/docs/cli#flowpact-trace).
+- In [custom rules](/docs/custom-rules), `usagesOf` now includes whole and computed reads of `inputs`, `matrix`,
+  `secrets` and `env`, marked `whole`. A rule about how one specific input or key is read should skip them.
+
 ## 0.11 → 0.12
 
 flowpact moved to the [ciatlas](https://github.com/ciatlas) organization: the repository is now `ciatlas/flowpact` and

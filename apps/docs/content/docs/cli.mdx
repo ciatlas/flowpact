@@ -238,14 +238,15 @@ tree says what it ends at:
 | Leaf | The value comes from |
 | --- | --- |
 | `literal` | a plain value: what a caller or a step passes, an env variable's or output's own value, or the input's `default:` when a caller or step omits the input |
-| `omitted` | nothing: a caller or step does not pass the input (the `default:` GitHub then uses, if any, is listed after the callers) |
+| `omitted` | nothing: a caller or step does not pass the input (the `default:` GitHub then uses, if any, is listed too) |
 | `value`, `missing`, `dynamic` | a matrix key: its value in each combination, a combination that does not define it, or a matrix computed at runtime |
 | `context` | a context flowpact does not follow: `github.event.pull_request.title`, `runner.os`, `needs.<job>.result`, `steps.<id>.outcome`, or an `env` variable set at runtime (`$GITHUB_ENV`). A value read from the step's own `env:` is followed to what that entry reads. |
 | `invalid` | an expression that does not parse ([`FP502`](/docs/rules/fp502) reports it), or, in an input's `default:`, a context or function GitHub does not allow there |
 | `expression` | an expression that reads no context, such as `format('v{0}', 1)` |
 
-When a caller or step omits an input, its `default:` is the value there, so the trace also ends at the default, after
-the callers: a `literal` for a plain default, or what an expression default reads, at
+When a caller or step omits an input, its `default:` is the value there, so the trace also ends at the default (its
+leaves come after the callers' leaves; the symbols it reads are `◀` branches, which come first): a `literal` for a
+plain default, or what an expression default reads, at
 `<action> › inputs.<name>.default` (`<workflow> › on.workflow_call.inputs.<name>.default` in a reusable workflow).
 GitHub evaluates a default with a few contexts only:
 
