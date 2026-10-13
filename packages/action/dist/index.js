@@ -25578,19 +25578,19 @@ function submoduleHolding(entries2, path) {
   }
   return void 0;
 }
-var realTop = (root) => realpathSync3(gitTopLevel(root));
+var realTop = (root) => realpathSync3.native(gitTopLevel(root));
 function baseConfigOfRepository(root, req) {
   const file = req.baseConfig ? req.baseConfigFile : void 0;
   const top = file ? gitTopLevel(root) : void 0;
   if (!file || top === void 0 || !pathInside(top, file)) return void 0;
-  const path = relative5(realTop(root), realpathSync3(file)).split(sep2).join("/");
+  const path = relative5(realTop(root), realpathSync3.native(file)).split(sep2).join("/");
   const entries2 = entriesAlong(realTop(root), "HEAD", path);
   if (!entries2 || entries2.has(path) || submoduleHolding(entries2, path)) return path;
   return void 0;
 }
 function isCheckout2(dir) {
   const top = existsSync5(dir) ? gitTopLevel(dir) : void 0;
-  return top !== void 0 && realpathSync3(top) === realpathSync3(dir);
+  return top !== void 0 && realpathSync3.native(top) === realpathSync3.native(dir);
 }
 function hasCommit(dir, commit) {
   try {

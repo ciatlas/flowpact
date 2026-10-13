@@ -1,6 +1,6 @@
 /** `flowpact impact` and `--impact` on real git repositories (base commit, pull request head, release tags). */
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -903,6 +903,35 @@ describe('ignore and impact mode', () => {
     expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'none', ok: true, ignored: ['b'] });
     expect(r.stderr).not.toContain('changes what ignore leaves out');
     expect(r.stderr).not.toContain('a file of this repository');
+  });
+
+  it('takes a tracked base config written in another case for the tracked file, where the file system ignores case', async (ctx) => {
+    // On macOS and Windows `.GITHUB/ORG-BASE.yml` opens `.github/org-base.yml`; read as written, git did not track it,
+    // so the pull request's own ignore edit counted on the baseline's side too and b was left out of grading.
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        '.github/org-base.yml': 'rules: {}\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      { '.github/org-base.yml': 'ignore: ["b/**"]\n', 'b/action.yml': action('b', false) },
+    );
+    if (!existsSync(join(root, '.GITHUB/ORG-BASE.yml'))) ctx.skip();
+    const r = await flowpact(root, [
+      'impact',
+      '--base',
+      'main',
+      '--title',
+      'fix: x',
+      '--base-config',
+      '.GITHUB/ORG-BASE.yml',
+      '--format',
+      'json',
+    ]);
+    expect(r.exitCode).toBe(1);
+    expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+    expect(r.stderr).toContain('changes what ignore leaves out');
   });
 
   describe('a base config within a submodule', () => {

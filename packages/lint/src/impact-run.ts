@@ -369,8 +369,11 @@ function submoduleHolding(entries: TreeEntries, path: string): { path: string; c
   return undefined;
 }
 
-/** The real top directory of the git work tree `root` is in. */
-const realTop = (root: string) => realpathSync(gitTopLevel(root)!);
+/**
+ * The real top directory of the git work tree `root` is in. `.native` gives the case the file system stores, so a path
+ * written in another case on a case-insensitive file system still names the file git tracks.
+ */
+const realTop = (root: string) => realpathSync.native(gitTopLevel(root)!);
 
 /**
  * The base config's path in the repository when the pull request's commits can change it: a file of the checked-out
@@ -381,7 +384,7 @@ function baseConfigOfRepository(root: string, req: ImpactRequest): string | unde
   const file = req.baseConfig ? req.baseConfigFile : undefined;
   const top = file ? gitTopLevel(root) : undefined;
   if (!file || top === undefined || !pathInside(top, file)) return undefined;
-  const path = relative(realTop(root), realpathSync(file)).split(sep).join('/');
+  const path = relative(realTop(root), realpathSync.native(file)).split(sep).join('/');
   const entries = entriesAlong(realTop(root), 'HEAD', path);
   // Without a commit to tell, it is the pull request's own.
   if (!entries || entries.has(path) || submoduleHolding(entries, path)) return path;
@@ -391,7 +394,7 @@ function baseConfigOfRepository(root: string, req: ImpactRequest): string | unde
 /** Whether `dir` is the top of a git work tree of its own (a submodule that is checked out). */
 function isCheckout(dir: string): boolean {
   const top = existsSync(dir) ? gitTopLevel(dir) : undefined;
-  return top !== undefined && realpathSync(top) === realpathSync(dir);
+  return top !== undefined && realpathSync.native(top) === realpathSync.native(dir);
 }
 
 function hasCommit(dir: string, commit: string): boolean {
