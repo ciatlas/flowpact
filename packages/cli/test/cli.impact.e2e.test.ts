@@ -765,6 +765,55 @@ describe('ignore and impact mode', () => {
       expect(r.stderr).not.toContain('ignore leaves out');
     }
   });
+
+  it("reads the baseline's version of a base config of the repository for the baseline's ignore", async () => {
+    const BASE = '.github/org-base.yml';
+    const base = (ignore: string) => ({
+      [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+      [BASE]: ignore,
+      'a/action.yml': action('a', true),
+      'b/action.yml': action('b', true),
+    });
+    const impact = (root: string, baseConfig: string) =>
+      flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x', '--base-config', baseConfig]);
+    // main's base config ignores b; the pull request breaks b and leaves every config alone.
+    const untouched = repo(base('ignore: ["b/**"]\n'), { 'b/action.yml': action('b', false) });
+    const r = await impact(untouched, join(untouched, BASE));
+    // Before: "this pull request changes what ignore leaves out of impact mode (b)" and FP810 (exit 1); 0.14 exit 0.
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).not.toContain('FP810');
+    expect(r.stderr).not.toContain('changes what ignore leaves out');
+    // A base config outside the repository counts for both sides.
+    const outside = join(mkdtempSync(join(tmpdir(), 'flowpact-impact-base-')), 'org-base.yml');
+    writeFileSync(outside, 'ignore: ["b/**"]\n');
+    const o = await impact(repo(base('rules: {}\n'), { 'b/action.yml': action('b', false) }), outside);
+    expect(o.exitCode).toBe(0);
+    expect(o.stderr).not.toContain('changes what ignore leaves out');
+    // The pull request's own edit to the base config adds b to ignore only once it is merged.
+    const edited = repo(base('rules: {}\n'), {
+      [BASE]: 'ignore: ["b/**"]\n',
+      'b/action.yml': action('b', false),
+    });
+    const e = await impact(edited, join(edited, BASE));
+    expect(e.exitCode).toBe(1);
+    expect(e.stdout).toContain('FP810');
+    expect(e.stderr).toContain(
+      'impact: this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
+    );
+    // So does one the baseline lacks, or has in a form flowpact refuses: its ignore does not count there.
+    const { [BASE]: _, ...withoutBase } = base('');
+    const created = repo(withoutBase, { [BASE]: 'ignore: ["b/**"]\n', 'b/action.yml': action('b', false) });
+    expect((await impact(created, join(created, BASE))).exitCode).toBe(1);
+    const invalid = repo(base('ignore: ["b/**"]\nplugins: [x.mjs]\n'), {
+      [BASE]: 'ignore: ["b/**"]\n',
+      'b/action.yml': action('b', false),
+    });
+    const i = await impact(invalid, join(invalid, BASE));
+    expect(i.exitCode).toBe(1);
+    expect(i.stderr).toContain(
+      `impact: the baseline's ${BASE} is invalid (Invalid base config in ${BASE}); impact mode reads no ignore from it`,
+    );
+  });
 });
 
 describe('ignore that leaves out every published unit', () => {

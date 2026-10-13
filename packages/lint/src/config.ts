@@ -226,7 +226,12 @@ export function mergeConfig(base: unknown, repo: unknown): unknown {
 export function loadBaseConfig(file: string): Record<string, unknown> {
   const full = isAbsolute(file) ? file : resolve(process.cwd(), file);
   if (!existsSync(full)) throw new ConfigError(`Base config file not found: ${file}`, file);
-  const data = readYaml(readFileSync(full, 'utf8'), file).data ?? {};
+  return parseBaseConfig(readFileSync(full, 'utf8'), file);
+}
+
+/** A base config's text, validated on its own as `loadBaseConfig` does; `file` names it in errors. */
+export function parseBaseConfig(text: string, file: string): Record<string, unknown> {
+  const data = readYaml(text, file).data ?? {};
   if (!isPlainObject(data))
     throw new ConfigError(`Invalid base config in ${file}`, file, ['(root): expected a map']);
   const repositoryOnly = [

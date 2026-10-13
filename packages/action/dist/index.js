@@ -4237,10 +4237,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep4, value } = collItem;
+        const { start, key, sep: sep5, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep4?.[0],
+          next: key ?? sep5?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4254,7 +4254,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep4) {
+          if (!keyProps.anchor && !keyProps.tag && !sep5) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4278,7 +4278,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep4 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep5 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4294,7 +4294,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep4, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep5, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4385,7 +4385,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep4 = "";
+        let sep5 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4399,13 +4399,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep4 + cb;
-              sep4 = "";
+                comment += sep5 + cb;
+              sep5 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep4 += source;
+                sep5 += source;
               hasSpace = true;
               break;
             default:
@@ -4448,18 +4448,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep4, value } = collItem;
+        const { start, key, sep: sep5, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep4?.[0],
+          next: key ?? sep5?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep4 && !value) {
+          if (!props.anchor && !props.tag && !sep5 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4513,8 +4513,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap5 && !sep4 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep4, null, props, onError);
+        if (!isMap5 && !sep5 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep5, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4526,7 +4526,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep4 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep5 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4537,8 +4537,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap5 && !props.found && ctx.options.strict) {
-              if (sep4)
-                for (const st of sep4) {
+              if (sep5)
+                for (const st of sep5) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4555,7 +4555,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep4, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep5, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4735,7 +4735,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep4 = "";
+      let sep5 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4752,24 +4752,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep4 + indent.slice(trimIndent) + content;
-          sep4 = "\n";
+          value += sep5 + indent.slice(trimIndent) + content;
+          sep5 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep4 === " ")
-            sep4 = "\n";
-          else if (!prevMoreIndented && sep4 === "\n")
-            sep4 = "\n\n";
-          value += sep4 + indent.slice(trimIndent) + content;
-          sep4 = "\n";
+          if (sep5 === " ")
+            sep5 = "\n";
+          else if (!prevMoreIndented && sep5 === "\n")
+            sep5 = "\n\n";
+          value += sep5 + indent.slice(trimIndent) + content;
+          sep5 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep4 === "\n")
+          if (sep5 === "\n")
             value += "\n";
           else
-            sep4 = "\n";
+            sep5 = "\n";
         } else {
-          value += sep4 + content;
-          sep4 = " ";
+          value += sep5 + content;
+          sep5 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4952,25 +4952,25 @@ var require_resolve_flow_scalar = __commonJS({
         trimBoth = /^[ \t]+|[ \t]+$/g;
       }
       let res = match[1].replace(trimEnd, "");
-      let sep4 = " ";
+      let sep5 = " ";
       let pos = line.lastIndex;
       while (match = line.exec(source)) {
         const lm = match[1].replace(trimBoth, "");
         if (lm === "") {
-          if (sep4 === "\n")
-            res += sep4;
+          if (sep5 === "\n")
+            res += sep5;
           else
-            sep4 = "\n";
+            sep5 = "\n";
         } else {
-          res += sep4 + lm;
-          sep4 = " ";
+          res += sep5 + lm;
+          sep5 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep4 + (match?.[1] ?? "");
+      return res + sep5 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5780,14 +5780,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep4, value }) {
+    function stringifyItem({ start, key, sep: sep5, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep4)
-        for (const st of sep4)
+      if (sep5)
+        for (const st of sep5)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6954,18 +6954,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep4;
+          let sep5;
           if (scalar.end) {
-            sep4 = scalar.end;
-            sep4.push(this.sourceToken);
+            sep5 = scalar.end;
+            sep5.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep4 = [this.sourceToken];
+            sep5 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep4 }]
+            items: [{ start, key: scalar, sep: sep5 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -7118,15 +7118,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep4 = it.sep;
-                  sep4.push(this.sourceToken);
+                  const sep5 = it.sep;
+                  sep5.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep4 }]
+                    items: [{ start: start2, key, sep: sep5 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -7320,13 +7320,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep4 = fc.end.splice(1, fc.end.length);
-            sep4.push(this.sourceToken);
+            const sep5 = fc.end.splice(1, fc.end.length);
+            sep5.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep4 }]
+              items: [{ start, key: fc, sep: sep5 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -8683,7 +8683,7 @@ var require_cronstrue = __commonJS({
 import { execFileSync as execFileSync2 } from "child_process";
 import { mkdirSync as mkdirSync2, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname3, isAbsolute as isAbsolute6, join as join6, relative as relative7, resolve as resolve7, sep as sep3 } from "path";
+import { dirname as dirname3, isAbsolute as isAbsolute6, join as join6, relative as relative7, resolve as resolve7, sep as sep4 } from "path";
 import { fileURLToPath } from "url";
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -11674,8 +11674,8 @@ function evalCall(e, resolve8) {
       );
     case "join": {
       const arr = vals[0] ?? null;
-      const sep4 = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
-      return known(Array.isArray(arr) ? arr.map(toStr).join(sep4) : toStr(arr), taint);
+      const sep5 = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
+      return known(Array.isArray(arr) ? arr.map(toStr).join(sep5) : toStr(arr), taint);
     }
     case "tojson":
       return known(JSON.stringify(vals[0] ?? null, null, 2), taint);
@@ -20291,7 +20291,10 @@ function mergeConfig(base, repo) {
 function loadBaseConfig(file) {
   const full = isAbsolute2(file) ? file : resolve2(process.cwd(), file);
   if (!existsSync3(full)) throw new ConfigError(`Base config file not found: ${file}`, file);
-  const data = readYaml(readFileSync2(full, "utf8"), file).data ?? {};
+  return parseBaseConfig(readFileSync2(full, "utf8"), file);
+}
+function parseBaseConfig(text2, file) {
+  const data = readYaml(text2, file).data ?? {};
   if (!isPlainObject2(data))
     throw new ConfigError(`Invalid base config in ${file}`, file, ["(root): expected a map"]);
   const repositoryOnly = [
@@ -25146,10 +25149,10 @@ function prepareRules(opts, logger, base, unloaded) {
     contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] })
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  const baselineIgnore = opts.impact?.ignore;
+  const baselineIgnore2 = opts.impact?.ignore;
   const lookAt = {
     ...within2 ? { within: within2 } : {},
-    ...baselineIgnore ? { ignore: { baseline: baselineIgnore, head: config2.ignore } } : {}
+    ...baselineIgnore2 ? { ignore: { baseline: baselineIgnore2, head: config2.ignore } } : {}
   };
   const impact = impactOf(opts, index, lookAt, logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
@@ -25355,8 +25358,8 @@ function exitCodeFor(summary2, failOn) {
 }
 
 // ../lint/src/impact-run.ts
-import { readFileSync as readFileSync3 } from "fs";
-import { join as join5, relative as relative5 } from "path";
+import { readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
+import { join as join5, relative as relative5, sep as sep2 } from "path";
 var ImpactSetupError = class extends Error {
 };
 function githubEvent(env = process.env) {
@@ -25537,7 +25540,26 @@ function baseConfigInRepository(root, req) {
   const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : void 0;
   return top !== void 0 && pathInside(top, req.baseConfigFile);
 }
-function baselinePolicy(root, fs3, req, headConfig, notes) {
+function baseConfigAt(root, commit, file, notes) {
+  const top = realpathSync3(gitTopLevel(root));
+  const path = relative5(top, realpathSync3(file)).split(sep2).join("/");
+  const text2 = baselineFiles(top, commit).read(path);
+  if (text2 === void 0) return void 0;
+  try {
+    return parseConfig(parseBaseConfig(text2, path), path);
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    notes.push(`the baseline's ${path} is invalid (${err.message}); impact mode reads no ignore from it`);
+    return void 0;
+  }
+}
+function baselineIgnore(root, commit, repositoryBaseConfig, config2, notes) {
+  const own2 = (config2 ?? defaultConfig()).ignore;
+  if (!repositoryBaseConfig) return own2;
+  const base = baseConfigAt(root, commit, repositoryBaseConfig, notes);
+  return base ? [.../* @__PURE__ */ new Set([...base.ignore, ...own2])] : own2;
+}
+function baselinePolicy(root, baseline, req, headConfig, notes) {
   const configPath = req.configPath ? relative5(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
   const baseInRepository = baseConfigInRepository(root, req);
   if (baseInRepository) {
@@ -25545,12 +25567,24 @@ function baselinePolicy(root, fs3, req, headConfig, notes) {
       "the base config is a file of this repository, so the baseline's impact settings leave it out"
     );
   }
-  const config2 = baselineConfig(fs3, configPath, baseInRepository ? void 0 : req.baseConfig, notes);
+  const config2 = baselineConfig(
+    baseline.fs,
+    configPath,
+    baseInRepository ? void 0 : req.baseConfig,
+    notes
+  );
   const policy = { ...(config2 ?? defaultConfig()).impact };
   if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
     notes.push("this pull request changes impact settings; they apply after it is merged");
   }
-  return { config: config2, policy };
+  const ignore = baselineIgnore(
+    root,
+    baseline.commit,
+    baseInRepository ? req.baseConfigFile : void 0,
+    config2,
+    notes
+  );
+  return { config: config2, policy, ignore };
 }
 function titleAndLabels(req) {
   const pr = req.event?.payload?.pull_request;
@@ -25582,7 +25616,7 @@ function prepareImpact(root, headConfig, req, logger) {
   const { kind, ref: baseRef, commit, release } = baseline;
   if (headCommit(root) === commit) return { skip: `the baseline ${baseRef} is the checked-out commit` };
   const fs3 = baselineFiles(root, commit);
-  const { config: baseConfig, policy } = baselinePolicy(root, fs3, req, headConfig, notes);
+  const { config: baseConfig, policy, ignore } = baselinePolicy(root, { fs: fs3, commit }, req, headConfig, notes);
   logger?.debug("impact baseline", { ref: baseRef, commit, kind });
   const config2 = baseConfig ?? defaultConfig();
   const base = analyze({
@@ -25604,7 +25638,7 @@ function prepareImpact(root, headConfig, req, logger) {
       publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ignore: config2.ignore
+      ignore
     },
     notes
   };
@@ -26509,7 +26543,7 @@ var import_yaml7 = __toESM(require_dist(), 1);
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
 import { readFileSync as readFileSync4, statSync as statSync2 } from "fs";
-import { isAbsolute as isAbsolute5, relative as relative6, resolve as resolve6, sep as sep2 } from "path";
+import { isAbsolute as isAbsolute5, relative as relative6, resolve as resolve6, sep as sep3 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
 var SERVICE = "github.actions.results.api.v1.ArtifactService";
@@ -26759,9 +26793,9 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
   const root = resolve6(rootDirectory);
   const entries2 = files.map((file) => {
     const path = relative6(root, resolve6(file));
-    if (!path || path === ".." || path.startsWith(`..${sep2}`) || isAbsolute5(path))
+    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute5(path))
       throw new Error(`${file} is not inside the artifact's root directory ${root}`);
-    const entry = path.split(sep2).join("/");
+    const entry = path.split(sep3).join("/");
     if (BAD_PATH.test(entry))
       throw new Error(`The path ${entry} contains one of " : < > | * ? or a line break`);
     const data = readFileSync4(file);
@@ -27062,7 +27096,7 @@ function actionsSink(runnerDebug, groups) {
     }
   };
 }
-var toPosix2 = (p) => p.split(sep3).join("/");
+var toPosix2 = (p) => p.split(sep4).join("/");
 var plural2 = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function annotate(f, prefix) {
   const { level, message, ...props } = githubAnnotation(f, { pathPrefix: prefix });

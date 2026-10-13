@@ -3,8 +3,8 @@
  * (the pull request's base, the commit before a push, or the last release for a release pull request) analysed from
  * git, and the policy from the baseline's config.
  */
-import { readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync, realpathSync } from 'node:fs';
+import { join, relative, sep } from 'node:path';
 import {
   type FileSystem,
   type GitError,
@@ -20,6 +20,7 @@ import {
   ConfigError,
   defaultConfig,
   type FlowpactConfig,
+  parseBaseConfig,
   parseConfig,
   parseConfigText,
 } from './config';
@@ -43,7 +44,8 @@ export interface ImpactRequest {
   baseConfig?: Record<string, unknown>;
   /**
    * Where the base config was read from. A file inside the repository is the pull request's own version of it, so the
-   * baseline's impact settings leave it out: a pull request cannot relax its own check through it.
+   * baseline's impact settings leave it out: a pull request cannot relax its own check through it. For the baseline's
+   * `ignore`, its version in the baseline is read from git.
    */
   baseConfigFile?: string;
   /** Called with refs (commits, `refs/tags/…`) the clone lacks, so a shallow checkout can fetch them. */
@@ -314,14 +316,55 @@ function baseConfigInRepository(root: string, req: ImpactRequest): boolean {
   return top !== undefined && pathInside(top, req.baseConfigFile!);
 }
 
-/** The baseline's config, and the impact policy it sets. */
+/**
+ * The baseline's version of a base config of the repository; undefined when the baseline lacks it, or has an invalid
+ * one (noted), whose `ignore` then does not count.
+ */
+function baseConfigAt(
+  root: string,
+  commit: string,
+  file: string,
+  notes: string[],
+): FlowpactConfig | undefined {
+  const top = realpathSync(gitTopLevel(root)!);
+  const path = relative(top, realpathSync(file)).split(sep).join('/');
+  const text = baselineFiles(top, commit).read(path);
+  if (text === undefined) return undefined;
+  try {
+    return parseConfig(parseBaseConfig(text, path), path);
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    notes.push(`the baseline's ${path} is invalid (${err.message}); impact mode reads no ignore from it`);
+    return undefined;
+  }
+}
+
+/**
+ * The baseline's `ignore`, which impact mode pairs with the pull request's own: its config's, on top of the base
+ * config's. A base config outside the repository is the same on both sides; one of the repository counts as the
+ * baseline has it, so a base config the pull request leaves alone ignores the same on both sides.
+ */
+function baselineIgnore(
+  root: string,
+  commit: string,
+  repositoryBaseConfig: string | undefined,
+  config: FlowpactConfig | undefined,
+  notes: string[],
+): readonly string[] {
+  const own = (config ?? defaultConfig()).ignore;
+  if (!repositoryBaseConfig) return own;
+  const base = baseConfigAt(root, commit, repositoryBaseConfig, notes);
+  return base ? [...new Set([...base.ignore, ...own])] : own;
+}
+
+/** The baseline's config, the impact policy it sets, and its `ignore`. */
 function baselinePolicy(
   root: string,
-  fs: FileSystem,
+  baseline: { fs: FileSystem; commit: string },
   req: ImpactRequest,
   headConfig: FlowpactConfig,
   notes: string[],
-): { config: FlowpactConfig | undefined; policy: ImpactPolicy } {
+): { config: FlowpactConfig | undefined; policy: ImpactPolicy; ignore: readonly string[] } {
   const configPath = req.configPath
     ? relative(root, join(root, req.configPath)).split('\\').join('/')
     : undefined;
@@ -331,13 +374,25 @@ function baselinePolicy(
       "the base config is a file of this repository, so the baseline's impact settings leave it out",
     );
   }
-  const config = baselineConfig(fs, configPath, baseInRepository ? undefined : req.baseConfig, notes);
+  const config = baselineConfig(
+    baseline.fs,
+    configPath,
+    baseInRepository ? undefined : req.baseConfig,
+    notes,
+  );
   // Policy comes from the baseline (or the defaults), never from the pull request, so it cannot relax its own check.
   const policy: ImpactPolicy = { ...(config ?? defaultConfig()).impact };
   if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
     notes.push('this pull request changes impact settings; they apply after it is merged');
   }
-  return { config, policy };
+  const ignore = baselineIgnore(
+    root,
+    baseline.commit,
+    baseInRepository ? req.baseConfigFile : undefined,
+    config,
+    notes,
+  );
+  return { config, policy, ignore };
 }
 
 /** The pull request's title and labels: given in the request, else read from the pull request event. */
@@ -387,7 +442,7 @@ export function prepareImpact(
   if (headCommit(root) === commit) return { skip: `the baseline ${baseRef} is the checked-out commit` };
 
   const fs = baselineFiles(root, commit);
-  const { config: baseConfig, policy } = baselinePolicy(root, fs, req, headConfig, notes);
+  const { config: baseConfig, policy, ignore } = baselinePolicy(root, { fs, commit }, req, headConfig, notes);
   logger?.debug('impact baseline', { ref: baseRef, commit, kind });
   const config = baseConfig ?? defaultConfig();
   // No rules run on the baseline (only: []), so its rule settings cannot fail it.
@@ -413,7 +468,7 @@ export function prepareImpact(
         .map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ignore: config.ignore,
+      ignore,
     },
     notes,
   };

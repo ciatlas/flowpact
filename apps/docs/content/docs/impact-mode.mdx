@@ -225,7 +225,10 @@ read from both sides: it leaves out only the published units that both the basel
 match, so an edit to it can neither take a unit out of the check nor slip a change through ([Only some
 units](#only-some-units)). A
 [base config](/docs/configuration#base-config) applies under the baseline's config too. When the baseline has no config,
-or an invalid one, the base config's settings apply, or the defaults without one.
+or an invalid one, the base config's settings apply, or the defaults without one. A base config that is a file of the
+repository is the pull request's own version of it, so the baseline's impact settings leave it out; its `ignore` counts
+on the baseline's side as the baseline has it (read from git), so a base config the pull request leaves alone ignores
+the same on both sides.
 
 ## How check names are formed
 
