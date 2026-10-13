@@ -152,6 +152,109 @@ describe('renderTrace', () => {
     expect(out).toContain('in b.yml \\x1b[0m');
   });
 
+  it('prints the note on how a value got there in parentheses after the via text, dimmed and escaped', () => {
+    const loc = { file: 'b.yml', line: 3, column: 9, endLine: 3, endColumn: 12 };
+    const node = (note: string): TraceNode => ({
+      symbol: 'a.yml#inputs.x',
+      label: 'inputs.x',
+      kind: 'input',
+      unit: 'a.yml',
+      children: [
+        {
+          symbol: 'b.yml#inputs.y',
+          label: 'inputs.y',
+          kind: 'input',
+          via: { loc, text: '${{ github.event.inputs.y }}', note },
+          children: [],
+          leaves: [],
+        },
+      ],
+      leaves: [],
+    });
+    expect(renderTrace(node('when dispatched'), 'up', plain)).toContain(
+      '    via ${{ github.event.inputs.y }} (when dispatched)  @ b.yml:3:9',
+    );
+    const colored = renderTrace(node('when dispatched'), 'up', { ...plain, color: true });
+    expect(colored).toContain('\u001b[2mvia ${{ github.event.inputs.y }} (when dispatched)\u001b[22m');
+    const hostile = renderTrace(node('jobs.\u001b[31mx'), 'up', plain);
+    expect(hostile).not.toContain('\u001b');
+    expect(hostile).toContain('(jobs.\\x1b[31mx)  @ b.yml:3:9');
+  });
+
+  it('notes a dispatch input, the default an input falls back to, a workflow output and secrets: inherit', () => {
+    const files = {
+      '.github/workflows/top.yml': `on: push
+jobs:
+  mid:
+    uses: ./.github/workflows/mid.yml
+    secrets:
+      TOKEN: \${{ secrets.DEPLOY }}
+  after:
+    needs: mid
+    runs-on: x
+    steps:
+      - run: echo "\${{ needs.mid.outputs.url }}"
+`,
+      '.github/workflows/mid.yml': `on:
+  workflow_call:
+    inputs:
+      base: { type: string, default: main }
+      target: { type: string, default: "\${{ inputs.base }}" }
+    secrets:
+      TOKEN: { required: true }
+    outputs:
+      url: { value: "\${{ jobs.leaf.outputs.url }}" }
+  workflow_dispatch:
+    inputs:
+      target: { type: string }
+jobs:
+  leaf:
+    uses: ./.github/workflows/leaf.yml
+    secrets: inherit
+  show:
+    runs-on: x
+    outputs:
+      mode: \${{ github.event.inputs.target }}
+    steps:
+      - run: echo "\${{ inputs.target }}"
+`,
+      '.github/workflows/leaf.yml': `on:
+  workflow_call:
+    secrets:
+      TOKEN: { required: true }
+    outputs:
+      url: { value: "\${{ jobs.j.outputs.url }}" }
+jobs:
+  j:
+    runs-on: x
+    outputs:
+      url: \${{ steps.s.outputs.url }}
+    steps:
+      - id: s
+        run: echo "url=\${{ secrets.TOKEN }}" >> "$GITHUB_OUTPUT"
+`,
+    };
+    const r = analyze({ root: '/virtual/repo', fs: memoryFileSystem(files), validateSchema: false });
+    const viaLines = (symbol: string, direction: 'down' | 'up') =>
+      renderTrace(trace(r.index, symbol, { direction }), direction, plain)
+        .split('\n')
+        .filter((l) => l.includes('via '))
+        .map((l) => l.replace(/^[│ ]+/, ''));
+    const MID = '.github/workflows/mid.yml';
+    expect(viaLines(sym.jobOutput(MID, 'show', 'mode'), 'up')).toEqual([
+      `via \${{ github.event.inputs.target }} (when dispatched)  @ ${MID}:20:17`,
+    ]);
+    expect(viaLines(sym.input(MID, 'target'), 'up')).toEqual([
+      `via \${{ inputs.base }} (the default of inputs.target)  @ ${MID}:5:45`,
+    ]);
+    expect(viaLines(sym.output(MID, 'url'), 'down')).toEqual([
+      `via workflow output (exposed to the caller)  @ ${MID}:9:7`,
+    ]);
+    expect(viaLines(sym.secret(MID, 'TOKEN'), 'down')).toEqual([
+      `via secrets: inherit (jobs.leaf)  @ ${MID}:16:5`,
+    ]);
+  });
+
   it('says when nothing reads a symbol', () => {
     const r = result('deep-nesting');
     expect(

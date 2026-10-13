@@ -31,6 +31,14 @@ function nodeLabel(t: Theme, n: TraceNode): string {
   return `${unit}${c[color](c.bold(label))}${loc} ${c.dim(`(${n.kind})`)}${stop}`;
 }
 
+/**
+ * How the value got to a node: the expression or mechanism, and the note that qualifies it, in parentheses (`when
+ * dispatched`, `the default of inputs.<name>`, `exposed to the caller`, the job of a `secrets: inherit`).
+ */
+function viaText(via: NonNullable<TraceNode['via']>): string {
+  return `via ${safe(via.text)}${via.note ? ` (${safe(via.note)})` : ''}`;
+}
+
 /** Renders a trace as an indented tree. */
 export function renderTrace(root: TraceNode, direction: TraceDirection, opts: RenderOptions): string {
   const t = createTheme(opts);
@@ -58,7 +66,7 @@ export function renderTrace(root: TraceNode, direction: TraceDirection, opts: Re
         out.push(`${prefix}${branch}${c.cyan(arrow)}${nodeLabel(t, item.node)}`);
         if (item.node.via) {
           out.push(
-            `${nextPrefix}${c.dim(`via ${safe(item.node.via.text)}`)}${c.dim(`  @ ${formatLoc(item.node.via.loc)}`)}`,
+            `${nextPrefix}${c.dim(viaText(item.node.via))}${c.dim(`  @ ${formatLoc(item.node.via.loc)}`)}`,
           );
         }
         walk(item.node, nextPrefix);

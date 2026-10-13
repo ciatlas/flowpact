@@ -256,3 +256,74 @@ jobs:
     );
   });
 });
+
+describe('hoverMarkdown: notes on how a value gets there', () => {
+  const deploy = '.github/workflows/deploy.yml';
+  const repo: Record<string, string> = {
+    [deploy]: `on:
+  workflow_call:
+    inputs:
+      region: { type: string, default: eu }
+      environment: { type: string, default: "\${{ inputs.region }}-staging" }
+    outputs:
+      url: { value: "\${{ jobs.deploy.outputs.url }}" }
+  workflow_dispatch:
+    inputs:
+      environment: { type: string }
+jobs:
+  deploy:
+    runs-on: x
+    env:
+      TARGET: \${{ github.event.inputs.environment }}
+    outputs:
+      url: \${{ steps.ship.outputs.url }}
+    steps:
+      - id: ship
+        run: echo "url=\${{ env.TARGET }}\${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+`,
+    '.github/workflows/release.yml': `on: push
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+  after:
+    needs: deploy
+    runs-on: x
+    steps:
+      - run: echo "\${{ needs.deploy.outputs.url }}"
+`,
+  };
+  const at = new SymbolLocator(
+    analyze({
+      root: '/virtual/repo',
+      fs: memoryFileSystem(repo),
+      config: parseConfig({}),
+      validateSchema: false,
+      repository: 'acme/repo',
+    }).index,
+  );
+  /** Hover text at the nth occurrence of `needle` in the deploy workflow (moved right by `offset`). */
+  const hoverAt = (needle: string, offset = 0, nth = 0) => {
+    const text = repo[deploy]!;
+    let i = -1;
+    for (let n = 0; n <= nth; n++) i = text.indexOf(needle, i + 1);
+    const lines = text.slice(0, i + offset).split('\n');
+    const occurrence = at.at(deploy, lines.length, lines.at(-1)!.length + 1);
+    if (!occurrence) throw new Error(`no symbol at ${needle}`);
+    return hoverMarkdown(at, occurrence);
+  };
+
+  it('marks a source read through github.event.inputs as one that holds only when dispatched', () => {
+    expect(hoverAt('env.TARGET', 4)).toContain(
+      '**From** `deploy.yml#inputs.environment` (when dispatched) · context `github.event.inputs.environment` in `deploy.yml › jobs.deploy`',
+    );
+  });
+
+  it('names the default a source is read in, and the caller an output is exposed to', () => {
+    expect(hoverAt('environment:', 0, 0)).toContain(
+      '**From** `deploy.yml#inputs.region` (the default of inputs\\.environment)',
+    );
+    expect(hoverAt('url:', 0, 0)).toContain(
+      '**To** `release.yml#jobs.deploy.outputs.url` (exposed to the caller)',
+    );
+  });
+});

@@ -360,10 +360,17 @@ function undeclared(index: ProjectIndex, kind: string, symbol: string, node: Gra
  */
 const SHOWN_VALUES = new Set(['literal', 'value', 'context', 'expression', 'invalid']);
 
+/**
+ * A source or destination symbol, with the note that qualifies how the value gets there, in parentheses: `when
+ * dispatched`, `the default of inputs.<name>`, `exposed to the caller`, or the job of a `secrets: inherit`.
+ */
+const flowSymbol = (child: TraceNode) =>
+  `${code(short(child.symbol))}${child.via?.note ? ` (${text(child.via.note)})` : ''}`;
+
 /** The direct sources or destinations of a value on one line: `a` · `b` · `c` +2. */
 function flowLine(root: TraceNode): string {
   const entries: string[] = [];
-  for (const child of root.children) entries.push(code(short(child.symbol)));
+  for (const child of root.children) entries.push(flowSymbol(child));
   for (const leaf of root.leaves) {
     const value = SHOWN_VALUES.has(leaf.role) ? ` ${code(leaf.text)}` : '';
     entries.push(`${leaf.role}${value} in ${code(short(leaf.where))}`);

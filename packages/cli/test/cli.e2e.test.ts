@@ -294,6 +294,76 @@ describe('flowpact trace', () => {
     ]);
   });
 
+  it('traces up to the default an omitted input falls back to', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-default-'));
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    mkdirSync(join(root, '.github/actions/setup'), { recursive: true });
+    writeFileSync(
+      join(root, '.github/actions/setup/action.yml'),
+      'name: setup\ndescription: Installs the tools\ninputs:\n  token: { description: Token, default: "${{ github.token }}" }\nruns:\n  using: composite\n  steps:\n    - run: gh release download\n      shell: bash\n      env:\n        GH_TOKEN: ${{ inputs.token }}\n',
+    );
+    writeFileSync(
+      join(root, '.github/workflows/ci.yml'),
+      'on: push\njobs:\n  build:\n    runs-on: x\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./.github/actions/setup\n',
+    );
+    const up = await flowpact(['trace', 'setup:token', '--up', '--root', root, '-q']);
+    expect(up.exitCode).toBe(0);
+    expect(up.stdout).toContain(
+      'omitted in .github/workflows/ci.yml › jobs.build › steps[1]  .github/workflows/ci.yml:7:15',
+    );
+    expect(up.stdout).toContain(
+      '└── context in .github/actions/setup › inputs.token.default  .github/actions/setup/action.yml:4:46\n    github.token',
+    );
+    const json = await flowpact(['trace', 'setup:token', '--up', '--root', root, '-q', '--format', 'json']);
+    expect(JSON.parse(json.stdout).traces[0].leaves).toEqual([
+      expect.objectContaining({ role: 'omitted', where: '.github/workflows/ci.yml › jobs.build › steps[1]' }),
+      {
+        role: 'context',
+        where: '.github/actions/setup › inputs.token.default',
+        loc: expect.objectContaining({ file: '.github/actions/setup/action.yml', line: 4, column: 46 }),
+        text: 'github.token',
+      },
+    ]);
+  });
+
+  it('marks a workflow input read through github.event.inputs as a source only when dispatched', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-dispatched-'));
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    writeFileSync(
+      join(root, '.github/workflows/deploy.yml'),
+      'on:\n  workflow_call:\n    inputs:\n      environment: { type: string, required: true }\n  workflow_dispatch:\n    inputs:\n      environment: { type: string, required: true }\njobs:\n  deploy:\n    runs-on: x\n    env:\n      TARGET: ${{ github.event.inputs.environment }}\n    steps:\n      - run: ./deploy.sh "$TARGET"\n',
+    );
+    writeFileSync(
+      join(root, '.github/workflows/release.yml'),
+      'on: push\njobs:\n  deploy:\n    uses: ./.github/workflows/deploy.yml\n    with:\n      environment: production\n',
+    );
+    const query = 'deploy.yml#jobs.deploy.env.TARGET';
+    const up = await flowpact(['trace', query, '--up', '--root', root, '-q']);
+    expect(up.exitCode).toBe(0);
+    expect(up.stdout).toContain(
+      '│   via ${{ github.event.inputs.environment }} (when dispatched)  @ .github/workflows/deploy.yml:12:19',
+    );
+    expect(up.stdout).toContain('context in .github/workflows/deploy.yml › jobs.deploy');
+    // The caller's `with:` value never reaches github.event.inputs: it is not listed.
+    expect(up.stdout).not.toContain('production');
+    const json = await flowpact(['trace', query, '--up', '--root', root, '-q', '--format', 'json']);
+    const [t] = JSON.parse(json.stdout).traces;
+    expect(t.children).toEqual([
+      expect.objectContaining({
+        symbol: '.github/workflows/deploy.yml#inputs.environment',
+        via: expect.objectContaining({
+          text: '${{ github.event.inputs.environment }}',
+          note: 'when dispatched',
+        }),
+        children: [],
+        leaves: [],
+      }),
+    ]);
+    expect(t.leaves).toEqual([
+      expect.objectContaining({ role: 'context', text: 'github.event.inputs.environment' }),
+    ]);
+  });
+
   it('lists the whole interface for a bare workflow and supports JSON', async () => {
     const r = await flowpact([
       'trace',
