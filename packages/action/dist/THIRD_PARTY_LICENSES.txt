@@ -1,4 +1,4 @@
-The flowpact GitHub Action (flowpact-action 0.13.0) bundles the code of the following 17 third-party packages.
+The flowpact GitHub Action (flowpact-action 0.14.0) bundles the code of the following 17 third-party packages.
 
 --------------------------------------------------------------------------------
 @actions/core 3.0.1 (MIT)
