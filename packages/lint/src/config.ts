@@ -255,6 +255,20 @@ export function loadBaseConfig(file: string): Record<string, unknown> {
 export function loadConfig(root: string, explicit?: string, opts: { base?: string } = {}): LoadedConfig {
   const base = opts.base !== undefined ? loadBaseConfig(opts.base) : undefined;
   const withBase = base ? { base: { file: opts.base!, data: base } } : {};
+  const found = findConfigFile(root, explicit);
+  if (!found) return { config: base ? parseConfig(base, opts.base) : defaultConfig(), ...withBase };
+  const text = readFileSync(found.full, 'utf8');
+  return { ...parseConfigText(text, found.rel, base), file: found.rel, text, ...withBase };
+}
+
+/**
+ * The config file: `explicit` (relative to the working directory), which must exist, else the first default location
+ * that exists. `rel` is its path relative to the root.
+ */
+function findConfigFile(
+  root: string,
+  explicit: string | undefined,
+): { full: string; rel: string } | undefined {
   const candidates = explicit ? [explicit] : CONFIG_FILES.map((f) => join(root, CONFIG_DIR, f));
   for (const abs of candidates) {
     const full = explicit && !abs.startsWith('/') ? join(process.cwd(), abs) : abs;
@@ -267,10 +281,9 @@ export function loadConfig(root: string, explicit?: string, opts: { base?: strin
     if (!explicit && !insideRepository(root, full)) {
       throw new ConfigError(`${rel} links outside the repository; flowpact does not read it`, rel);
     }
-    const text = readFileSync(full, 'utf8');
-    return { ...parseConfigText(text, rel, base), file: rel, text, ...withBase };
+    return { full, rel };
   }
-  return { config: base ? parseConfig(base, opts.base) : defaultConfig(), ...withBase };
+  return undefined;
 }
 
 function readYaml(text: string, file: string) {

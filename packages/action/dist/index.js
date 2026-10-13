@@ -20089,6 +20089,12 @@ function loadBaseConfig(file) {
 function loadConfig(root, explicit, opts = {}) {
   const base = opts.base !== void 0 ? loadBaseConfig(opts.base) : void 0;
   const withBase = base ? { base: { file: opts.base, data: base } } : {};
+  const found = findConfigFile(root, explicit);
+  if (!found) return { config: base ? parseConfig(base, opts.base) : defaultConfig(), ...withBase };
+  const text2 = readFileSync2(found.full, "utf8");
+  return { ...parseConfigText(text2, found.rel, base), file: found.rel, text: text2, ...withBase };
+}
+function findConfigFile(root, explicit) {
   const candidates = explicit ? [explicit] : CONFIG_FILES.map((f) => join3(root, CONFIG_DIR, f));
   for (const abs of candidates) {
     const full = explicit && !abs.startsWith("/") ? join3(process.cwd(), abs) : abs;
@@ -20100,10 +20106,9 @@ function loadConfig(root, explicit, opts = {}) {
     if (!explicit && !insideRepository(root, full)) {
       throw new ConfigError(`${rel} links outside the repository; flowpact does not read it`, rel);
     }
-    const text2 = readFileSync2(full, "utf8");
-    return { ...parseConfigText(text2, rel, base), file: rel, text: text2, ...withBase };
+    return { full, rel };
   }
-  return { config: base ? parseConfig(base, opts.base) : defaultConfig(), ...withBase };
+  return void 0;
 }
 function readYaml(text2, file) {
   const lineCounter = new import_yaml5.LineCounter();
@@ -20716,20 +20721,31 @@ function inputContract(i) {
   };
 }
 var stepRef = (s) => s.id ?? `#${s.index + 1}`;
-function workflowInterface(wf) {
+function inputsContract(decls) {
   const inputs = {};
-  for (const i of Object.values(wf.call?.inputs ?? {})) inputs[i.name] = inputContract(i);
-  const dispatchInputs = {};
-  for (const i of Object.values(wf.dispatch?.inputs ?? {})) dispatchInputs[i.name] = inputContract(i);
+  for (const i of Object.values(decls ?? {})) inputs[i.name] = inputContract(i);
+  return inputs;
+}
+function secretsContract(decls) {
   const secrets = {};
-  for (const s of Object.values(wf.call?.secrets ?? {})) secrets[s.name] = { required: s.required };
+  for (const s of Object.values(decls ?? {})) secrets[s.name] = { required: s.required };
+  return secrets;
+}
+function outputsContract(decls) {
   const outputs = {};
-  for (const o of Object.values(wf.call?.outputs ?? {})) {
+  for (const o of Object.values(decls ?? {})) {
     outputs[o.name] = {
       ...o.description ? { description: o.description } : {},
       ...o.value !== void 0 ? { value: typeof o.value === "string" ? o.value : JSON.stringify(o.value) } : {}
     };
   }
+  return outputs;
+}
+function workflowInterface(wf) {
+  const inputs = inputsContract(wf.call?.inputs);
+  const dispatchInputs = inputsContract(wf.dispatch?.inputs);
+  const secrets = secretsContract(wf.call?.secrets);
+  const outputs = outputsContract(wf.call?.outputs);
   return {
     inputs: sortedRecord(inputs),
     ...Object.keys(dispatchInputs).length ? { dispatchInputs: sortedRecord(dispatchInputs) } : {},
@@ -20738,17 +20754,13 @@ function workflowInterface(wf) {
   };
 }
 function actionInterface(a) {
-  const inputs = {};
-  for (const i of Object.values(a.inputs)) inputs[i.name] = inputContract(i);
-  const outputs = {};
-  for (const o of Object.values(a.outputs)) {
-    outputs[o.name] = {
-      ...o.description ? { description: o.description } : {},
-      ...o.value !== void 0 ? { value: typeof o.value === "string" ? o.value : JSON.stringify(o.value) } : {}
-    };
-  }
-  return { inputs: sortedRecord(inputs), outputs: sortedRecord(outputs) };
+  return {
+    inputs: sortedRecord(inputsContract(a.inputs)),
+    outputs: sortedRecord(outputsContract(a.outputs))
+  };
 }
+var consumerKey = (c) => `${c.from}#${c.job ?? ""}#${c.step ?? ""}`;
+var byConsumer = (a, b) => byCodePoint(consumerKey(a), consumerKey(b));
 function consumersOf(index, unit) {
   const out = [];
   if (unit.kind === "workflow") {
@@ -20777,32 +20789,42 @@ function consumersOf(index, unit) {
       });
     }
   }
-  return out.sort(
-    (a, b) => byCodePoint(`${a.from}#${a.job ?? ""}#${a.step ?? ""}`, `${b.from}#${b.job ?? ""}#${b.step ?? ""}`)
-  );
+  return out.sort(byConsumer);
+}
+var bindingTexts = (bindings2) => Object.fromEntries(Object.values(bindings2).map((b) => [b.name, bindingText(b)]));
+function callSecrets(job) {
+  if (job.secretsInherit) return { secrets: "inherit" };
+  const secrets = bindingTexts(job.secrets);
+  return Object.keys(secrets).length ? { secrets: sortedRecord(secrets) } : {};
+}
+function callMatrix(job) {
+  if (!job.matrix) return {};
+  const exp = expandMatrix(job.matrix);
+  if (exp.dynamic) return { matrix: { combinations: 0, keys: [], exact: false } };
+  return { matrix: { combinations: exp.combos.length, keys: [...exp.keys].sort(), exact: exp.exact } };
+}
+function callContract(job, uses) {
+  const matrix2 = callMatrix(job);
+  const withs = bindingTexts(job.with);
+  const secrets = callSecrets(job);
+  return {
+    job: job.id,
+    uses: uses.target ?? uses.raw,
+    ...Object.keys(withs).length ? { with: sortedRecord(withs) } : {},
+    ...secrets,
+    ...job.needs.length ? { needs: job.needs.map((n) => n.id).sort() } : {},
+    ...matrix2
+  };
 }
 function callsOf(wf) {
   const calls = [];
-  for (const job of Object.values(wf.jobs)) {
-    if (!job.uses) continue;
-    const exp = job.matrix ? expandMatrix(job.matrix) : void 0;
-    const withs = Object.fromEntries(Object.values(job.with).map((b) => [b.name, bindingText(b)]));
-    const secrets = job.secretsInherit ? "inherit" : Object.fromEntries(Object.values(job.secrets).map((b) => [b.name, bindingText(b)]));
-    calls.push({
-      job: job.id,
-      uses: job.uses.target ?? job.uses.raw,
-      ...Object.keys(withs).length ? { with: sortedRecord(withs) } : {},
-      ...secrets === "inherit" || Object.keys(secrets).length ? { secrets: secrets === "inherit" ? secrets : sortedRecord(secrets) } : {},
-      ...job.needs.length ? { needs: job.needs.map((n) => n.id).sort() } : {},
-      ...exp && !exp.dynamic ? { matrix: { combinations: exp.combos.length, keys: [...exp.keys].sort(), exact: exp.exact } } : exp?.dynamic ? { matrix: { combinations: 0, keys: [], exact: false } } : {}
-    });
-  }
+  for (const job of Object.values(wf.jobs)) if (job.uses) calls.push(callContract(job, job.uses));
   return calls.sort((a, b) => byCodePoint(a.job, b.job));
 }
 function usesOf(index, unit) {
   const uses = [];
   for (const u of index.actionUses.filter((x) => x.unit === unit)) {
-    const withs = Object.fromEntries(Object.values(u.step.with).map((b) => [b.name, bindingText(b)]));
+    const withs = bindingTexts(u.step.with);
     uses.push({
       ...u.job ? { job: u.job.id } : {},
       step: stepRef(u.step),
@@ -20846,43 +20868,42 @@ function contractFileFor(unit, taken = /* @__PURE__ */ new Set(), dir = CONTRACT
   return fileOf(base);
 }
 var same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+function diffInput(change, old, cur, mustPass) {
+  const oldType = old.type ?? "string";
+  const curType = cur.type ?? "string";
+  if (oldType !== curType) change(true, `changed type from ${oldType} to ${curType}`);
+  diffRequired(change, old, cur, mustPass);
+  if (!same(old.default, cur.default)) {
+    change(
+      false,
+      `default changed from ${JSON.stringify(old.default ?? null)} to ${JSON.stringify(cur.default ?? null)}`
+    );
+  }
+  if (!same(old.options, cur.options)) diffOptions(change, old.options, cur.options);
+  if (old.description !== cur.description) change(false, "description changed");
+}
+function diffRequired(change, old, cur, mustPass) {
+  const oldNeeds = mustPass(old);
+  const curNeeds = mustPass(cur);
+  if (!oldNeeds && curNeeds) change(true, "must now be passed by every caller");
+  else if (old.required !== cur.required) change(false, `is now ${cur.required ? "required" : "optional"}`);
+}
+function diffOptions(change, old, cur) {
+  const removed = (old ?? []).filter((o) => !(cur ?? []).includes(o));
+  change(removed.length > 0, `options changed${removed.length ? ` (removed: ${removed.join(", ")})` : ""}`);
+}
 function diffInputs(add, key, label, before, after, opts) {
   for (const [name, old] of Object.entries(before)) {
     const path = `${key}.${name}`;
     const cur = after[name];
-    if (!cur) {
-      add(true, path, `${label} "${name}" was removed \u2014 callers that pass it will fail`);
-      continue;
-    }
-    if ((old.type ?? "string") !== (cur.type ?? "string")) {
-      add(
-        true,
-        path,
-        `${label} "${name}" changed type from ${old.type ?? "string"} to ${cur.type ?? "string"}`
+    if (!cur) add(true, path, `${label} "${name}" was removed \u2014 callers that pass it will fail`);
+    else
+      diffInput(
+        (breaking, what) => add(breaking, path, `${label} "${name}" ${what}`),
+        old,
+        cur,
+        opts.mustPass
       );
-    }
-    const oldNeeds = opts.mustPass(old);
-    const curNeeds = opts.mustPass(cur);
-    if (!oldNeeds && curNeeds) add(true, path, `${label} "${name}" must now be passed by every caller`);
-    else if (old.required !== cur.required) {
-      add(false, path, `${label} "${name}" is now ${cur.required ? "required" : "optional"}`);
-    }
-    if (!same(old.default, cur.default)) {
-      add(
-        false,
-        path,
-        `${label} "${name}" default changed from ${JSON.stringify(old.default ?? null)} to ${JSON.stringify(cur.default ?? null)}`
-      );
-    }
-    if (!same(old.options, cur.options)) {
-      const removed = (old.options ?? []).filter((o) => !(cur.options ?? []).includes(o));
-      add(
-        removed.length > 0,
-        path,
-        `${label} "${name}" options changed${removed.length ? ` (removed: ${removed.join(", ")})` : ""}`
-      );
-    }
-    if (old.description !== cur.description) add(false, path, `${label} "${name}" description changed`);
   }
   for (const [name, cur] of Object.entries(after)) {
     if (before[name]) continue;
@@ -20894,6 +20915,100 @@ function diffInputs(add, key, label, before, after, opts) {
     );
   }
 }
+function diffSecrets(add, before, after) {
+  for (const [name, old] of Object.entries(before)) {
+    const cur = after[name];
+    if (!cur) add(true, `secrets.${name}`, `secret "${name}" was removed \u2014 callers that pass it will fail`);
+    else if (!old.required && cur.required) add(true, `secrets.${name}`, `secret "${name}" is now required`);
+    else if (old.required && !cur.required) add(false, `secrets.${name}`, `secret "${name}" is now optional`);
+  }
+}
+function addedSecrets(add, before, after, wasCallable) {
+  for (const [name, cur] of Object.entries(after)) {
+    if (!before[name])
+      add(
+        cur.required && wasCallable,
+        `secrets.${name}`,
+        `secret "${name}" was added${cur.required ? " as required" : ""}`
+      );
+  }
+}
+function diffOutputs(add, before, after) {
+  for (const [name, old] of Object.entries(before)) {
+    const cur = after[name];
+    if (!cur)
+      add(true, `outputs.${name}`, `output "${name}" was removed \u2014 consumers reading it get an empty value`);
+    else if (!same(old, cur)) add(false, `outputs.${name}`, `output "${name}" changed`);
+  }
+  for (const name of Object.keys(after)) {
+    if (!before[name]) add(false, `outputs.${name}`, `output "${name}" was added`);
+  }
+}
+function diffTriggers(add, before, after) {
+  const lost = (before ?? []).filter((t) => !(after ?? []).includes(t));
+  add(
+    lost.includes("workflow_call"),
+    "triggers",
+    `triggers changed from [${(before ?? []).join(", ")}] to [${(after ?? []).join(", ")}]`
+  );
+}
+function diffIdentity(add, before, after, wasCallable) {
+  if (before.path !== after.path) {
+    add(
+      wasCallable,
+      "path",
+      `path changed from ${before.path} to ${after.path}${wasCallable ? " \u2014 callers referencing the old path will fail" : ""}`
+    );
+  }
+  if (!same(before.triggers, after.triggers)) diffTriggers(add, before.triggers, after.triggers);
+  if (before.name !== after.name)
+    add(false, "name", `name changed from "${before.name ?? ""}" to "${after.name ?? ""}"`);
+}
+function passedDetails(details, old, cur) {
+  for (const k of /* @__PURE__ */ new Set([...Object.keys(old ?? {}), ...Object.keys(cur ?? {})])) {
+    const o = old?.[k];
+    const n = cur?.[k];
+    if (o !== n)
+      details.push(
+        o === void 0 ? `passes ${k}` : n === void 0 ? `stopped passing ${k}` : `changed ${k}`
+      );
+  }
+}
+function callDetails(old, cur) {
+  const details = [];
+  if (old.uses !== cur.uses) details.push(`now calls ${cur.uses}`);
+  passedDetails(details, old.with, cur.with);
+  if (!same(old.secrets, cur.secrets)) details.push("secrets changed");
+  if (!same(old.matrix, cur.matrix)) details.push("matrix changed");
+  if (!same(old.needs, cur.needs)) details.push("needs changed");
+  return details;
+}
+var callsByJob = (calls) => new Map((calls ?? []).map((c) => [c.job, c]));
+function diffCalls(add, before, after) {
+  const bc = callsByJob(before);
+  const ac = callsByJob(after);
+  for (const [job, old] of bc) {
+    const cur = ac.get(job);
+    if (!cur) add(false, `calls.${job}`, `jobs.${job} no longer calls ${old.uses}`);
+    else if (!same(old, cur))
+      add(false, `calls.${job}`, `jobs.${job}: ${callDetails(old, cur).join(", ") || "call changed"}`);
+  }
+  for (const [job, cur] of ac)
+    if (!bc.has(job)) add(false, `calls.${job}`, `jobs.${job} now calls ${cur.uses}`);
+}
+function diffUsage(add, before, after) {
+  if (!same(before.uses, after.uses)) add(false, "uses", "local action usage changed");
+  if (same(before.consumers, after.consumers)) return;
+  const bk = new Set(before.consumers.map(consumerKey));
+  const ak = new Set(after.consumers.map(consumerKey));
+  const added = [...ak].filter((k) => !bk.has(k)).length;
+  const removed = [...bk].filter((k) => !ak.has(k)).length;
+  add(
+    false,
+    "consumers",
+    added || removed ? `consumers changed (+${added} / -${removed})` : "what consumers pass or read changed"
+  );
+}
 function diffContracts(before, after) {
   const changes = [];
   const add = (breaking, path, message) => changes.push({ breaking, path, message });
@@ -20901,7 +21016,7 @@ function diffContracts(before, after) {
   const ai = after.interface;
   const isWorkflow = before.kind === "workflow";
   const wasCallable = !isWorkflow || (before.triggers ?? []).includes("workflow_call");
-  diffInputs(add, "inputs", isWorkflow ? "input" : "input", bi.inputs, ai.inputs, {
+  diffInputs(add, "inputs", "input", bi.inputs, ai.inputs, {
     // GitHub requires a `required` workflow_call input from every caller, even when it has a default.
     mustPass: (i) => isWorkflow ? i.required : i.required && i.default === void 0,
     additionsBreak: wasCallable
@@ -20912,84 +21027,12 @@ function diffContracts(before, after) {
   });
   const bs = bi.secrets ?? {};
   const as = ai.secrets ?? {};
-  for (const [name, old] of Object.entries(bs)) {
-    const cur = as[name];
-    if (!cur) add(true, `secrets.${name}`, `secret "${name}" was removed \u2014 callers that pass it will fail`);
-    else if (!old.required && cur.required) add(true, `secrets.${name}`, `secret "${name}" is now required`);
-    else if (old.required && !cur.required) add(false, `secrets.${name}`, `secret "${name}" is now optional`);
-  }
-  for (const [name, cur] of Object.entries(as)) {
-    if (!bs[name])
-      add(
-        cur.required && wasCallable,
-        `secrets.${name}`,
-        `secret "${name}" was added${cur.required ? " as required" : ""}`
-      );
-  }
-  for (const [name, old] of Object.entries(bi.outputs)) {
-    const cur = ai.outputs[name];
-    if (!cur)
-      add(true, `outputs.${name}`, `output "${name}" was removed \u2014 consumers reading it get an empty value`);
-    else if (!same(old, cur)) add(false, `outputs.${name}`, `output "${name}" changed`);
-  }
-  for (const name of Object.keys(ai.outputs)) {
-    if (!bi.outputs[name]) add(false, `outputs.${name}`, `output "${name}" was added`);
-  }
-  if (before.path !== after.path) {
-    add(
-      wasCallable,
-      "path",
-      `path changed from ${before.path} to ${after.path}${wasCallable ? " \u2014 callers referencing the old path will fail" : ""}`
-    );
-  }
-  if (!same(before.triggers, after.triggers)) {
-    const lost = (before.triggers ?? []).filter((t) => !(after.triggers ?? []).includes(t));
-    add(
-      lost.includes("workflow_call"),
-      "triggers",
-      `triggers changed from [${(before.triggers ?? []).join(", ")}] to [${(after.triggers ?? []).join(", ")}]`
-    );
-  }
-  if (before.name !== after.name)
-    add(false, "name", `name changed from "${before.name ?? ""}" to "${after.name ?? ""}"`);
-  const byJob = (calls) => new Map((calls ?? []).map((c) => [c.job, c]));
-  const bc = byJob(before.calls);
-  const ac = byJob(after.calls);
-  for (const [job, old] of bc) {
-    const cur = ac.get(job);
-    if (!cur) add(false, `calls.${job}`, `jobs.${job} no longer calls ${old.uses}`);
-    else if (!same(old, cur)) {
-      const details = [];
-      if (old.uses !== cur.uses) details.push(`now calls ${cur.uses}`);
-      for (const k of /* @__PURE__ */ new Set([...Object.keys(old.with ?? {}), ...Object.keys(cur.with ?? {})])) {
-        const o = old.with?.[k];
-        const n = cur.with?.[k];
-        if (o !== n)
-          details.push(
-            o === void 0 ? `passes ${k}` : n === void 0 ? `stopped passing ${k}` : `changed ${k}`
-          );
-      }
-      if (!same(old.secrets, cur.secrets)) details.push("secrets changed");
-      if (!same(old.matrix, cur.matrix)) details.push("matrix changed");
-      if (!same(old.needs, cur.needs)) details.push("needs changed");
-      add(false, `calls.${job}`, `jobs.${job}: ${details.join(", ") || "call changed"}`);
-    }
-  }
-  for (const [job, cur] of ac)
-    if (!bc.has(job)) add(false, `calls.${job}`, `jobs.${job} now calls ${cur.uses}`);
-  if (!same(before.uses, after.uses)) add(false, "uses", "local action usage changed");
-  if (!same(before.consumers, after.consumers)) {
-    const key = (c) => `${c.from}#${c.job ?? ""}#${c.step ?? ""}`;
-    const bk = new Set(before.consumers.map(key));
-    const ak = new Set(after.consumers.map(key));
-    const added = [...ak].filter((k) => !bk.has(k)).length;
-    const removed = [...bk].filter((k) => !ak.has(k)).length;
-    add(
-      false,
-      "consumers",
-      added || removed ? `consumers changed (+${added} / -${removed})` : "what consumers pass or read changed"
-    );
-  }
+  diffSecrets(add, bs, as);
+  addedSecrets(add, bs, as, wasCallable);
+  diffOutputs(add, bi.outputs, ai.outputs);
+  diffIdentity(add, before, after, wasCallable);
+  diffCalls(add, before.calls, after.calls);
+  diffUsage(add, before, after);
   return changes;
 }
 function readContracts(fs3) {
@@ -21012,11 +21055,7 @@ function readContracts(fs3) {
   }
   return out;
 }
-function planContracts(index, fs3) {
-  const dir = CONTRACTS_DIR;
-  const existing = readContracts(fs3);
-  const entries2 = [];
-  const units = index.units().sort((a, b) => byCodePoint(a.path, b.path));
+function expectedFiles(existing, units, dir) {
   const lockedFile = /* @__PURE__ */ new Map();
   for (const [file, prev] of existing) {
     const c = prev.contract;
@@ -21030,6 +21069,53 @@ function planContracts(index, fs3) {
     taken.add(file);
     expected.set(file, unit);
   }
+  return expected;
+}
+var withBrokenConsumers = (current, locked, broken) => [...current.filter((c) => !broken.has(c.from)), ...locked.filter((c) => broken.has(c.from))].sort(
+  byConsumer
+);
+function regeneratedEntry(index, file, unit, prev, broken) {
+  const contract = buildContract(index, unit);
+  if (broken.size && prev?.contract)
+    contract.consumers = withBrokenConsumers(contract.consumers, prev.contract.consumers, broken);
+  const after = serializeContract(contract);
+  if (!prev) return { file, status: "create", unit: unit.path, after, changes: [] };
+  if (normalizeContractText(prev.text) === after)
+    return { file, status: "unchanged", unit: unit.path, before: prev.text, after, changes: [] };
+  return {
+    file,
+    status: "update",
+    unit: unit.path,
+    before: prev.text,
+    after,
+    changes: prev.contract ? diffContracts(prev.contract, contract) : [],
+    ...prev.error ? { invalid: prev.error } : {}
+  };
+}
+var orphanEntry = (file, prev) => ({
+  file,
+  status: "delete",
+  ...prev.contract ? { unit: prev.contract.path } : {},
+  before: prev.text,
+  changes: [],
+  ...prev.error ? { invalid: prev.error } : {}
+});
+function planOf(entries2, skipped) {
+  const counts = { create: 0, update: 0, delete: 0, unchanged: 0 };
+  for (const e of entries2) counts[e.status]++;
+  return {
+    entries: entries2,
+    skipped,
+    drift: entries2.some((e) => e.status !== "unchanged"),
+    counts,
+    breaking: entries2.reduce((n, e) => n + e.changes.filter((c) => c.breaking).length, 0)
+  };
+}
+function planContracts(index, fs3) {
+  const existing = readContracts(fs3);
+  const entries2 = [];
+  const units = index.units().sort((a, b) => byCodePoint(a.path, b.path));
+  const expected = expectedFiles(existing, units, CONTRACTS_DIR);
   const skipped = [];
   const broken = new Set(units.filter((u) => u.parseErrors.length > 0).map((u) => u.path));
   for (const [file, unit] of expected) {
@@ -21049,55 +21135,11 @@ function planContracts(index, fs3) {
       }
       continue;
     }
-    const contract = buildContract(index, unit);
-    if (broken.size && prev?.contract) {
-      contract.consumers = [
-        ...contract.consumers.filter((c) => !broken.has(c.from)),
-        ...prev.contract.consumers.filter((c) => broken.has(c.from))
-      ].sort(
-        (a, b) => byCodePoint(`${a.from}#${a.job ?? ""}#${a.step ?? ""}`, `${b.from}#${b.job ?? ""}#${b.step ?? ""}`)
-      );
-    }
-    const after = serializeContract(contract);
-    if (!prev) {
-      entries2.push({ file, status: "create", unit: unit.path, after, changes: [] });
-      continue;
-    }
-    if (normalizeContractText(prev.text) === after) {
-      entries2.push({ file, status: "unchanged", unit: unit.path, before: prev.text, after, changes: [] });
-      continue;
-    }
-    entries2.push({
-      file,
-      status: "update",
-      unit: unit.path,
-      before: prev.text,
-      after,
-      changes: prev.contract ? diffContracts(prev.contract, contract) : [],
-      ...prev.error ? { invalid: prev.error } : {}
-    });
+    entries2.push(regeneratedEntry(index, file, unit, prev, broken));
   }
-  for (const [file, prev] of existing) {
-    if (expected.has(file)) continue;
-    entries2.push({
-      file,
-      status: "delete",
-      ...prev.contract ? { unit: prev.contract.path } : {},
-      before: prev.text,
-      changes: [],
-      ...prev.error ? { invalid: prev.error } : {}
-    });
-  }
+  for (const [file, prev] of existing) if (!expected.has(file)) entries2.push(orphanEntry(file, prev));
   entries2.sort((a, b) => byCodePoint(a.file, b.file));
-  const counts = { create: 0, update: 0, delete: 0, unchanged: 0 };
-  for (const e of entries2) counts[e.status]++;
-  return {
-    entries: entries2,
-    skipped,
-    drift: entries2.some((e) => e.status !== "unchanged"),
-    counts,
-    breaking: entries2.reduce((n, e) => n + e.changes.filter((c) => c.breaking).length, 0)
-  };
+  return planOf(entries2, skipped);
 }
 function contractPatch(plan) {
   const parts = [];
@@ -21181,35 +21223,35 @@ function assertSafeWritePath(abs, trees) {
       );
   }
 }
+function assertSafeContractPaths(root, plan) {
+  const unsafe = plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter(
+    (f) => isSymlink(join4(root, f)) || !insideRepository(root, join4(root, f)) || followsLinkIn(realpathNearest(root), join4(root, f))
+  );
+  if (unsafe.length)
+    throw new UnsafePathError(
+      `Not writing contracts: ${unsafe.join(", ")} ${unsafe.length === 1 ? "is a symlink, goes through one, or links" : "are symlinks, go through one, or link"} outside the repository`
+    );
+}
+function applyEntry(e, base, outDir) {
+  const abs = join4(base, e.file);
+  if (e.status === "delete") {
+    if (outDir || !existsSync4(abs)) return false;
+    rmSync(abs);
+    return true;
+  }
+  if (e.status === "unchanged" && !outDir) return false;
+  mkdirSync(dirname2(abs), { recursive: true });
+  writeFileSync(abs, e.after ?? "");
+  return true;
+}
 function writeContracts(root, plan, outDir, trees = [root]) {
   const written = [];
   const base = outDir ?? root;
   if (outDir) {
     for (const e of plan.entries) if (e.status !== "delete") assertSafeWritePath(join4(outDir, e.file), trees);
   }
-  if (!outDir) {
-    const unsafe = plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter(
-      (f) => isSymlink(join4(root, f)) || !insideRepository(root, join4(root, f)) || followsLinkIn(realpathNearest(root), join4(root, f))
-    );
-    if (unsafe.length)
-      throw new UnsafePathError(
-        `Not writing contracts: ${unsafe.join(", ")} ${unsafe.length === 1 ? "is a symlink, goes through one, or links" : "are symlinks, go through one, or link"} outside the repository`
-      );
-  }
-  for (const e of plan.entries) {
-    const abs = join4(base, e.file);
-    if (e.status === "delete") {
-      if (!outDir && existsSync4(abs)) {
-        rmSync(abs);
-        written.push(e.file);
-      }
-      continue;
-    }
-    if (e.status === "unchanged" && !outDir) continue;
-    mkdirSync(dirname2(abs), { recursive: true });
-    writeFileSync(abs, e.after ?? "");
-    written.push(e.file);
-  }
+  if (!outDir) assertSafeContractPaths(root, plan);
+  for (const e of plan.entries) if (applyEntry(e, base, outDir)) written.push(e.file);
   return written;
 }
 function entryConsumers(e) {
@@ -21231,15 +21273,10 @@ function contractsInScope(index) {
 }
 function scopePlan(plan, keep) {
   const entries2 = plan.entries.filter(keep);
-  const counts = { create: 0, update: 0, delete: 0, unchanged: 0 };
-  for (const e of entries2) counts[e.status]++;
-  return {
-    entries: entries2,
-    skipped: plan.skipped.filter((u) => entries2.some((e) => e.unit === u)),
-    drift: entries2.some((e) => e.status !== "unchanged"),
-    counts,
-    breaking: entries2.reduce((n, e) => n + e.changes.filter((c) => c.breaking).length, 0)
-  };
+  return planOf(
+    entries2,
+    plan.skipped.filter((u) => entries2.some((e) => e.unit === u))
+  );
 }
 
 // ../lint/src/impact.ts
@@ -21267,67 +21304,77 @@ function jobChecks(index, wf) {
   return out;
 }
 var quoteName = (n) => `"\u2026 / ${n}"`;
+function goneJob(d, bj, file) {
+  const gone = bj.names.filter((n) => !d.headNames.has(n.name));
+  if (!gone.length) return;
+  d.add(
+    "major",
+    true,
+    `${bj.names.length > 1 ? `checks ${quoteName(bj.stem)}` : `check ${quoteName(bj.names[0].name)}`} no longer reported; consumers that require ${bj.names.length > 1 ? "them" : "it"} wait forever`,
+    fileStart(file)
+  );
+}
+function compareJob(d, bj, hj) {
+  if (bj.stem !== hj.stem) {
+    d.add(
+      "major",
+      true,
+      `check ${quoteName(bj.stem)} is now ${quoteName(hj.stem)}; consumers that require the old name wait forever`,
+      d.jobLoc(hj.chain)
+    );
+    return;
+  }
+  const removed = bj.names.filter((n) => n.certain && !d.headNames.has(n.name));
+  const added = hj.names.filter((n) => n.certain && !d.baseNames.has(n.name));
+  for (const n of removed)
+    d.add(
+      "major",
+      true,
+      `check ${quoteName(n.name)} no longer reported; consumers that require it wait forever`,
+      d.jobLoc(hj.chain)
+    );
+  for (const n of added) d.add("minor", true, `new check ${quoteName(n.name)}`, d.jobLoc(hj.chain));
+  const unsure = bj.names.some((n) => !n.certain) || hj.names.some((n) => !n.certain);
+  if (unsure && JSON.stringify(bj.names.map((n) => n.name)) !== JSON.stringify(hj.names.map((n) => n.name)))
+    d.add("major", false, `checks ${quoteName(bj.stem)} may report different names`, d.jobLoc(hj.chain));
+}
+function newJob(d, hj) {
+  const fresh = hj.names.filter((n) => !d.baseNames.has(n.name));
+  if (fresh.length)
+    d.add(
+      "minor",
+      true,
+      `new check${hj.names.length > 1 ? "s" : ""} ${quoteName(hj.names.length > 1 ? hj.stem : hj.names[0].name)}`,
+      d.jobLoc(hj.chain)
+    );
+}
 function checkNameChanges(base, head, b, h) {
   const before = jobChecks(base, b);
   const after = jobChecks(head, h);
-  const jobLoc = (chain) => {
-    const id = chain.split(" > ")[0];
-    const job = h.jobs[id];
-    return job?.nameLoc ?? job?.loc ?? fileStart(h.file);
-  };
   const out = [];
-  const add = (level, certain, message, loc) => out.push({ unit: h.path, kind: "check-name", level, certain, message, loc });
-  const headNames = new Set([...after.values()].flatMap((j) => j.names.map((n) => n.name)));
-  const baseNames = new Set([...before.values()].flatMap((j) => j.names.map((n) => n.name)));
+  const d = {
+    headNames: new Set([...after.values()].flatMap((j) => j.names.map((n) => n.name))),
+    baseNames: new Set([...before.values()].flatMap((j) => j.names.map((n) => n.name))),
+    add: (level, certain, message, loc) => out.push({ unit: h.path, kind: "check-name", level, certain, message, loc }),
+    jobLoc: (chain) => {
+      const id = chain.split(" > ")[0];
+      const job = h.jobs[id];
+      return job?.nameLoc ?? job?.loc ?? fileStart(h.file);
+    }
+  };
   const matchedHead = /* @__PURE__ */ new Set();
   for (const bj of before.values()) {
-    let hj = after.get(bj.chain);
-    if (!hj) hj = [...after.values()].find((x) => !before.has(x.chain) && x.stem === bj.stem);
+    const hj = after.get(bj.chain) ?? [...after.values()].find((x) => !before.has(x.chain) && x.stem === bj.stem);
     if (!hj) {
-      const gone = bj.names.filter((n) => !headNames.has(n.name));
-      if (gone.length)
-        add(
-          "major",
-          true,
-          `${bj.names.length > 1 ? `checks ${quoteName(bj.stem)}` : `check ${quoteName(bj.names[0].name)}`} no longer reported; consumers that require ${bj.names.length > 1 ? "them" : "it"} wait forever`,
-          fileStart(h.file)
-        );
+      goneJob(d, bj, h.file);
       continue;
     }
     matchedHead.add(hj.chain);
-    if (bj.stem !== hj.stem) {
-      add(
-        "major",
-        true,
-        `check ${quoteName(bj.stem)} is now ${quoteName(hj.stem)}; consumers that require the old name wait forever`,
-        jobLoc(hj.chain)
-      );
-      continue;
-    }
-    const removed = bj.names.filter((n) => n.certain && !headNames.has(n.name));
-    const added = hj.names.filter((n) => n.certain && !baseNames.has(n.name));
-    for (const n of removed)
-      add(
-        "major",
-        true,
-        `check ${quoteName(n.name)} no longer reported; consumers that require it wait forever`,
-        jobLoc(hj.chain)
-      );
-    for (const n of added) add("minor", true, `new check ${quoteName(n.name)}`, jobLoc(hj.chain));
-    const unsure = bj.names.some((n) => !n.certain) || hj.names.some((n) => !n.certain);
-    if (unsure && JSON.stringify(bj.names.map((n) => n.name)) !== JSON.stringify(hj.names.map((n) => n.name)))
-      add("major", false, `checks ${quoteName(bj.stem)} may report different names`, jobLoc(hj.chain));
+    compareJob(d, bj, hj);
   }
   for (const hj of after.values()) {
     if (matchedHead.has(hj.chain) || before.has(hj.chain)) continue;
-    const fresh = hj.names.filter((n) => !baseNames.has(n.name));
-    if (fresh.length)
-      add(
-        "minor",
-        true,
-        `new check${hj.names.length > 1 ? "s" : ""} ${quoteName(hj.names.length > 1 ? hj.stem : hj.names[0].name)}`,
-        jobLoc(hj.chain)
-      );
+    newJob(d, hj);
   }
   return out;
 }
@@ -21344,8 +21391,13 @@ function interfaceLoc(h, path) {
   const dot = path.indexOf(".");
   const kind = path.slice(0, dot);
   const name = path.slice(dot + 1);
-  const decls = h.kind === "workflow" ? kind === "inputs" || kind === "secrets" || kind === "outputs" ? h.call?.[kind] : void 0 : kind === "inputs" || kind === "outputs" ? h[kind] : void 0;
+  const decls = interfaceDecls(h, kind);
   return (dot > 0 && decls && Object.hasOwn(decls, name) ? decls[name]?.loc : void 0) ?? fileStart(h.file);
+}
+function interfaceDecls(h, kind) {
+  if (h.kind === "workflow")
+    return kind === "inputs" || kind === "secrets" || kind === "outputs" ? h.call?.[kind] : void 0;
+  return kind === "inputs" || kind === "outputs" ? h[kind] : void 0;
 }
 function interfaceChanges(base, head, b, h) {
   const out = [];
@@ -21463,63 +21515,55 @@ function runtimeChanges(b, h) {
   ];
 }
 var describeUnit = (u) => u.kind === "workflow" ? `reusable workflow ${u.path}` : `action ${u.path}`;
-function impactChanges(base, head, policy, headExists = () => false) {
-  const out = [];
-  const baseUnits = new Map(base.units().map((u) => [u.path, u]));
-  const headUnits = new Map(head.units().map((u) => [u.path, u]));
-  for (const [path, b] of baseUnits) {
-    if (!isPublished(b, policy)) continue;
-    const h = headUnits.get(path);
-    if (!h || h.kind !== b.kind) {
-      if (!h && headExists(b.file)) continue;
-      out.push({
-        unit: path,
-        kind: "unit",
-        level: "major",
-        certain: true,
-        message: `${describeUnit(b)} was removed or moved; consumers that reference it fail`,
-        loc: fileStart(b.file)
-      });
-      continue;
-    }
-    if (!isPublished(h, policy)) {
-      out.push({
-        unit: path,
-        kind: "unit",
-        level: "major",
-        certain: true,
-        message: h.kind === "workflow" ? `${path} can no longer be called (no workflow_call)` : `${path} is no longer published`,
-        loc: fileStart(h.file)
-      });
-      continue;
-    }
-    if (h.parseErrors.length) {
-      out.push({
-        unit: path,
-        kind: "unit",
-        level: "major",
-        certain: !b.parseErrors.length,
-        message: `${describeUnit(h)} has YAML errors (${h.parseErrors[0].message}); consumers' runs fail`,
-        loc: h.parseErrors[0].loc
-      });
-      continue;
-    }
-    if (b.parseErrors.length) {
-      out.push({
-        unit: path,
-        kind: "unit",
-        level: "patch",
-        certain: false,
-        message: `${describeUnit(h)} could not be compared: the baseline has YAML errors`,
-        loc: fileStart(h.file)
-      });
-      continue;
-    }
-    out.push(...interfaceChanges(base, head, b, h), ...usesChanges(b, h));
-    if (b.kind === "workflow" && h.kind === "workflow")
-      out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
-    if (b.kind === "action" && h.kind === "action") out.push(...runtimeChanges(b, h));
+var removedUnit = (path, b) => ({
+  unit: path,
+  kind: "unit",
+  level: "major",
+  certain: true,
+  message: `${describeUnit(b)} was removed or moved; consumers that reference it fail`,
+  loc: fileStart(b.file)
+});
+function blockingChange(path, b, h, policy) {
+  if (!isPublished(h, policy)) {
+    return {
+      unit: path,
+      kind: "unit",
+      level: "major",
+      certain: true,
+      message: h.kind === "workflow" ? `${path} can no longer be called (no workflow_call)` : `${path} is no longer published`,
+      loc: fileStart(h.file)
+    };
   }
+  if (h.parseErrors.length) {
+    return {
+      unit: path,
+      kind: "unit",
+      level: "major",
+      certain: !b.parseErrors.length,
+      message: `${describeUnit(h)} has YAML errors (${h.parseErrors[0].message}); consumers' runs fail`,
+      loc: h.parseErrors[0].loc
+    };
+  }
+  if (b.parseErrors.length) {
+    return {
+      unit: path,
+      kind: "unit",
+      level: "patch",
+      certain: false,
+      message: `${describeUnit(h)} could not be compared: the baseline has YAML errors`,
+      loc: fileStart(h.file)
+    };
+  }
+  return void 0;
+}
+function comparedChanges(base, head, b, h) {
+  const out = [...interfaceChanges(base, head, b, h), ...usesChanges(b, h)];
+  if (b.kind === "workflow" && h.kind === "workflow")
+    out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
+  if (b.kind === "action" && h.kind === "action") out.push(...runtimeChanges(b, h));
+  return out;
+}
+function newUnits(out, baseUnits, headUnits, policy) {
   for (const [path, h] of headUnits) {
     if (!isPublished(h, policy)) continue;
     const b = baseUnits.get(path);
@@ -21533,6 +21577,24 @@ function impactChanges(base, head, policy, headExists = () => false) {
       loc: fileStart(h.file)
     });
   }
+}
+function impactChanges(base, head, policy, headExists = () => false) {
+  const out = [];
+  const baseUnits = new Map(base.units().map((u) => [u.path, u]));
+  const headUnits = new Map(head.units().map((u) => [u.path, u]));
+  for (const [path, b] of baseUnits) {
+    if (!isPublished(b, policy)) continue;
+    const h = headUnits.get(path);
+    if (!h || h.kind !== b.kind) {
+      if (!h && headExists(b.file)) continue;
+      out.push(removedUnit(path, b));
+      continue;
+    }
+    const blocking = blockingChange(path, b, h, policy);
+    if (blocking) out.push(blocking);
+    else out.push(...comparedChanges(base, head, b, h));
+  }
+  newUnits(out, baseUnits, headUnits, policy);
   return out;
 }
 function levelFromTitle(title, types) {
@@ -21555,8 +21617,7 @@ function levelFromVersions(previous, next, bumps) {
   return "none";
 }
 var countedChanges = (changes, policy) => changes.filter((c) => c.certain || policy.uncertain === "fail");
-function impactVerdict(changes, input2, policy) {
-  const required2 = maxLevel(countedChanges(changes, policy).map((c) => c.level));
+function declaredSources(input2, policy) {
   const sources = [];
   if (input2.explicit) sources.push({ kind: "explicit", value: input2.explicit, level: input2.explicit });
   if (input2.release) {
@@ -21570,7 +21631,13 @@ function impactVerdict(changes, input2, policy) {
     const level = levelFromLabels(input2.labels, policy.labels);
     if (level) sources.push({ kind: "labels", value: input2.labels.join(", "), level });
   }
-  const authority = input2.explicit ? "explicit" : input2.release ? "version" : policy.declaredBy ?? "title";
+  return sources;
+}
+var authorityOf = (input2, policy) => input2.explicit ? "explicit" : input2.release ? "version" : policy.declaredBy ?? "title";
+function impactVerdict(changes, input2, policy) {
+  const required2 = maxLevel(countedChanges(changes, policy).map((c) => c.level));
+  const sources = declaredSources(input2, policy);
+  const authority = authorityOf(input2, policy);
   const declared = sources.find((s) => s.kind === authority);
   const advisory = sources.filter((s) => s !== declared);
   const conflict = declared ? advisory.find((s) => levelRank(s.level) > levelRank(declared.level)) : void 0;
@@ -24202,16 +24269,32 @@ function createRegistry() {
 
 // ../lint/src/analyze.ts
 var compact = (s) => s.toLowerCase().replace(/[-_\s]/g, "");
+function nearest(candidates, distance, max) {
+  let best;
+  for (const rule of candidates) {
+    const d = distance(rule);
+    if (d <= max && (!best || d < best.d)) best = { rule, d };
+  }
+  return best?.rule;
+}
+function keyPrefixOf(k) {
+  const asCode = CODE_PATTERN.exec(k.toUpperCase());
+  return asCode && asCode[2] !== "0" ? asCode[1] : /^([a-z][a-z0-9]{1,9}?)\d/.exec(k)?.[1]?.toUpperCase();
+}
+function nameTypo(names, key, k) {
+  const spelled = key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase().replace(/[_\s]+/g, "-");
+  const undashed = !/[-_\s]/.test(key) && !/[a-z0-9][A-Z]/.test(key);
+  return names.find((n) => compact(n) === k) ?? nearest(
+    names,
+    (n) => Math.min(
+      typoDistance(spelled, n),
+      undashed ? typoDistance(k, compact(n)) + 1 : Number.POSITIVE_INFINITY
+    ),
+    2
+  );
+}
 function typoOf(registry2, key) {
   const k = compact(key);
-  const nearest = (candidates, distance, max) => {
-    let best;
-    for (const rule2 of candidates) {
-      const d = distance(rule2);
-      if (d <= max && (!best || d < best.d)) best = { rule: rule2, d };
-    }
-    return best?.rule;
-  };
   const rules = registry2.all();
   const codes = rules.map((r) => r.code);
   const fromCode = (c) => typoDistance(k, c.toLowerCase());
@@ -24226,24 +24309,17 @@ function typoOf(registry2, key) {
   );
   if (k.startsWith("fp") && builtin) return { typo: true, rule: builtin };
   const prefix = (code2) => CODE_PATTERN.exec(code2.toUpperCase())?.[1];
-  const asCode = CODE_PATTERN.exec(k.toUpperCase());
-  const keyPrefix = asCode && asCode[2] !== "0" ? asCode[1] : /^([a-z][a-z0-9]{1,9}?)\d/.exec(k)?.[1]?.toUpperCase();
+  const keyPrefix = keyPrefixOf(k);
   const code = nearest(
     codes.filter((c) => keyPrefix !== void 0 && prefix(c) === keyPrefix),
     fromCode,
     1
   );
   if (code) return { typo: true, rule: code };
-  const names = rules.map((r) => r.name);
-  const spelled = key.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase().replace(/[_\s]+/g, "-");
-  const undashed = !/[-_\s]/.test(key) && !/[a-z0-9][A-Z]/.test(key);
-  const rule = names.find((n) => compact(n) === k) ?? nearest(
-    names,
-    (n) => Math.min(
-      typoDistance(spelled, n),
-      undashed ? typoDistance(k, compact(n)) + 1 : Number.POSITIVE_INFINITY
-    ),
-    2
+  const rule = nameTypo(
+    rules.map((r) => r.name),
+    key,
+    k
   );
   return rule ? { typo: true, rule } : { typo: false };
 }
@@ -24278,54 +24354,49 @@ function fingerprint(code, symbol, file, message) {
   const normalized = message.replace(/\d+/g, "#");
   return createHash("sha1").update(`${code}|${symbol ?? ""}|${file}|${normalized}`).digest("hex").slice(0, 16);
 }
-function analyze(opts) {
-  const started = performance.now();
-  const logger = opts.logger ?? silentLogger;
+function effectiveConfig(opts) {
   const configured = opts.config ?? defaultConfig();
-  const config2 = opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
-  const publishPatterns = [
+  return opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
+}
+function publishPatternsOf(config2, opts) {
+  return [
     .../* @__PURE__ */ new Set([
       ...config2.impact.publish ?? [],
       ...opts.impact?.policy.publish ?? [],
       ...opts.impact?.publishedFiles ?? []
     ])
   ];
-  const registry2 = opts.registry ?? createRegistry();
-  const repository = opts.repository ?? config2.repository ?? detectRepository(opts.root);
-  logger.debug("config resolved", {
-    file: opts.configFile ?? "(defaults)",
-    repository: repository ?? "(unknown)",
-    rules: Object.keys(config2.rules).length
-  });
-  const project = logger.time(
+}
+function loadUnits(opts, logger, publish, repository) {
+  return logger.time(
     "load project",
     () => loadProject({
       root: opts.root,
       ...opts.fs ? { fs: opts.fs } : {},
       ...opts.paths ? { paths: opts.paths } : {},
-      ...publishPatterns.length ? { publish: publishPatterns } : {},
+      ...publish.length ? { publish } : {},
       ...repository ? { repository } : {},
       validateSchema: opts.validateSchema ?? true,
       logger
     })
   );
-  const index = logger.time("build graph", () => new ProjectIndex(project));
-  logger.info(
-    `graph built: ${index.nodes.size} symbols, ${index.edges.length} edges, ${index.callSites.length} reusable calls`
-  );
-  const matrixCache = /* @__PURE__ */ new Map();
+}
+function expandJobMatrix(config2, unit, job) {
+  const shape = config2.matrixShapes[`${unit.path}#${job.id}`];
+  if (shape && (job.matrix?.dynamic || job.matrix?.includeDynamic)) {
+    const staticKeys = expandMatrix(job.matrix).keys;
+    return declaredMatrix([.../* @__PURE__ */ new Set([...staticKeys, ...shape.keys])]);
+  }
+  return expandMatrix(job.matrix);
+}
+function expandMatrices(project, config2, logger) {
+  const cache = /* @__PURE__ */ new Map();
   let combinations = 0;
   const matrix2 = (unit, job) => {
-    let exp = matrixCache.get(job);
+    let exp = cache.get(job);
     if (!exp) {
-      const shape = config2.matrixShapes[`${unit.path}#${job.id}`];
-      if (shape && (job.matrix?.dynamic || job.matrix?.includeDynamic)) {
-        const staticKeys = expandMatrix(job.matrix).keys;
-        exp = declaredMatrix([.../* @__PURE__ */ new Set([...staticKeys, ...shape.keys])]);
-      } else {
-        exp = expandMatrix(job.matrix);
-      }
-      matrixCache.set(job, exp);
+      exp = expandJobMatrix(config2, unit, job);
+      cache.set(job, exp);
       combinations += exp.combos.length;
       logger.debug(`matrix expanded: ${unit.path} \u203A jobs.${job.id}`, {
         combinations: exp.combos.length,
@@ -24338,9 +24409,11 @@ function analyze(opts) {
   };
   for (const wf of project.workflows.values())
     for (const job of Object.values(wf.jobs)) if (job.matrix) matrix2(wf, job);
-  const unloaded = [];
+  return { matrix: matrix2, combinations: () => combinations };
+}
+function selectRules(registry2, config2, only, unloaded) {
   const severities = resolveSeverities(registry2, config2, { unloaded });
-  const unknownOnly = (opts.only ?? []).filter((o) => !registry2.get(o));
+  const unknownOnly = (only ?? []).filter((o) => !registry2.get(o));
   if (unknownOnly.length) {
     const names = registry2.all().flatMap((r) => [r.code, r.name]);
     throw new ConfigError(
@@ -24352,161 +24425,239 @@ function analyze(opts) {
       })
     );
   }
-  const only = opts.only?.map((o) => registry2.get(o).code);
-  const ruleLog = logger.child("rules");
-  const generatedFiles = generatedFilesOf(project, config2);
-  for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
-  const skipped = [];
-  const contractInScope = contractsInScope(index);
-  let contracts;
-  if (opts.checkContracts) {
-    contracts = logger.time(
-      "compare contracts",
-      () => planContracts(index, opts.fs ?? nodeFileSystem(opts.root))
-    );
-    if (project.targets.size > 0) contracts = scopePlan(contracts, contractInScope);
-    logger.info(
-      `contracts: ${contracts.counts.unchanged} unchanged, ${contracts.counts.update} outdated, ${contracts.counts.create} missing, ${contracts.counts.delete} orphaned`,
-      { breaking: contracts.breaking }
-    );
-  }
-  const impact = opts.impact ? logger.time(
+  return { severities, only: only?.map((o) => registry2.get(o).code) };
+}
+function compareContracts(opts, index, contractInScope, logger) {
+  if (!opts.checkContracts) return void 0;
+  let contracts = logger.time(
+    "compare contracts",
+    () => planContracts(index, opts.fs ?? nodeFileSystem(opts.root))
+  );
+  if (index.project.targets.size > 0) contracts = scopePlan(contracts, contractInScope);
+  logger.info(
+    `contracts: ${contracts.counts.unchanged} unchanged, ${contracts.counts.update} outdated, ${contracts.counts.create} missing, ${contracts.counts.delete} orphaned`,
+    { breaking: contracts.breaking }
+  );
+  return contracts;
+}
+function impactOf(opts, index, logger) {
+  const impact = opts.impact;
+  if (!impact) return void 0;
+  return logger.time(
     "impact",
-    () => computeImpact(
-      opts.impact.base,
-      index,
-      opts.impact.baseline,
-      opts.impact.declared,
-      opts.impact.policy
-    )
-  ) : void 0;
+    () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy)
+  );
+}
+function ruleRun(fields) {
+  const { registry: registry2, severities, only } = fields;
   const runs = (code) => {
     const rule = registry2.get(code);
     if (!rule) return false;
     return (severities.get(rule.code) ?? rule.defaultSeverity) !== "off" && (!only || only.includes(rule.code));
   };
-  const runRules = (phase, extra) => {
-    const out = [];
-    for (const rule of registry2.all()) {
-      if ((rule.phase ?? "main") !== phase) continue;
-      const severity = severities.get(rule.code) ?? rule.defaultSeverity;
-      if (severity === "off" || only && !only.includes(rule.code)) {
-        ruleLog.trace(`${rule.code} ${rule.name} skipped`, { severity });
-        continue;
-      }
-      const before = out.length;
-      const ctx = {
-        index,
-        config: config2,
-        logger: ruleLog.child(rule.code),
-        matrix: matrix2,
-        runs,
-        ...opts.configFile ? { configFile: opts.configFile } : {},
-        ...contracts ? { contracts } : {},
-        ...impact ? { impact } : {},
-        ...extra,
-        report: (input2) => {
-          const finding = toFinding(rule, severity, input2, registry2);
-          if (rule.generatedFiles === "skip" && generatedFiles.has(input2.loc.file)) skipped.push(finding);
-          else out.push(finding);
-        }
-      };
-      const t0 = performance.now();
-      try {
-        rule.check(ctx);
-      } catch (err) {
-        ruleLog.error(`${rule.code} ${rule.name} crashed: ${err.message}`, {
-          stack: err.stack
-        });
-        throw err;
-      }
-      ruleLog.debug(`${rule.code} ${rule.name}`, {
-        findings: out.length - before,
-        ms: Math.round((performance.now() - t0) * 100) / 100
-      });
+  return { ...fields, runs, skipped: [] };
+}
+function ruleContext(run2, rule, severity, out, extra) {
+  return {
+    index: run2.index,
+    config: run2.config,
+    logger: run2.ruleLog.child(rule.code),
+    matrix: run2.matrix,
+    runs: run2.runs,
+    ...run2.configFile ? { configFile: run2.configFile } : {},
+    ...run2.contracts ? { contracts: run2.contracts } : {},
+    ...run2.impact ? { impact: run2.impact } : {},
+    ...extra,
+    report: (input2) => {
+      const finding = toFinding(rule, severity, input2, run2.registry);
+      if (rule.generatedFiles === "skip" && run2.generatedFiles.has(input2.loc.file)) run2.skipped.push(finding);
+      else out.push(finding);
     }
-    return out;
   };
-  const findings = dedupe2(runRules("main", {}));
+}
+function checkRule(run2, rule, ctx, out) {
+  const before = out.length;
+  const t0 = performance.now();
+  try {
+    rule.check(ctx);
+  } catch (err) {
+    run2.ruleLog.error(`${rule.code} ${rule.name} crashed: ${err.message}`, {
+      stack: err.stack
+    });
+    throw err;
+  }
+  run2.ruleLog.debug(`${rule.code} ${rule.name}`, {
+    findings: out.length - before,
+    ms: Math.round((performance.now() - t0) * 100) / 100
+  });
+}
+function runRules(run2, phase, extra) {
+  const out = [];
+  for (const rule of run2.registry.all()) {
+    if ((rule.phase ?? "main") !== phase) continue;
+    const severity = run2.severities.get(rule.code) ?? rule.defaultSeverity;
+    if (severity === "off" || run2.only && !run2.only.includes(rule.code)) {
+      run2.ruleLog.trace(`${rule.code} ${rule.name} skipped`, { severity });
+      continue;
+    }
+    checkRule(run2, rule, ruleContext(run2, rule, severity, out, extra), out);
+  }
+  return out;
+}
+function notRunIn(rule, opts) {
+  if (!rule) return true;
+  return IMPACT_CODES.includes(rule.code) ? !opts.impact : rule.category === "contracts" && !opts.checkContracts;
+}
+function countSkipped(u, code, skipped) {
+  const n = skipped.filter((f) => overrideMatches(u.override, code, f)).length;
+  if (n) u.skippedInGenerated = n;
+}
+function judgeOverride(u, run2, opts) {
+  const code = run2.registry.get(u.override.rule)?.code ?? "";
+  const severity = run2.severities.get(code);
+  const rule = run2.registry.get(code);
+  const notRun = notRunIn(rule, opts);
+  if (severity === "off" || run2.only && !run2.only.includes(code) || notRun) u.inactive = true;
+  if (!u.matched && rule) countSkipped(u, rule.code, run2.skipped);
+}
+function scopeOf(index, config2, contracts, contractInScope) {
+  const { targets } = index.project;
+  const scopedEntries = (contracts?.entries ?? []).filter(contractInScope);
+  const contractFilesInScope = new Set(scopedEntries.map((e) => e.file));
+  const contractUnitsInScope = new Set(
+    scopedEntries.flatMap((e) => e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])
+  );
+  return (f) => (targets.size === 0 || targets.has(f.loc.file) || contractFilesInScope.has(f.loc.file) || f.category === "contracts" && contractUnitsInScope.has(f.loc.file)) && !config2.ignore.some((p) => matchesPattern(f.loc.file, p));
+}
+function logFiltered(logger, config2, f) {
+  if (f.skippedInScope.length > 0) {
+    logger.info(
+      `skipped ${f.skippedInScope.length} finding(s) about the internals of ${new Set(f.skippedInScope.map((s) => s.loc.file)).size} generated file(s)`
+    );
+  }
+  if (f.accepted.length + f.suppressed.length !== f.findings.length) {
+    logger.debug(
+      `filtered ${f.findings.length - f.accepted.length - f.suppressed.length} finding(s) by targets/ignore`
+    );
+  }
+  if (config2.overrides.length) {
+    logger.info(
+      `overrides: ${f.suppressed.length} finding(s) suppressed by ${f.usage.filter((u) => u.matched && !u.expired).length} override(s)`,
+      {
+        expired: f.usage.filter((u) => u.expired).length,
+        unused: f.usage.filter((u) => !u.matched && !u.expired && !u.inactive).length
+      }
+    );
+  }
+}
+var byReportOrder = (a, b) => compareLoc(a.loc, b.loc) || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.code.localeCompare(b.code);
+function metaOf(opts, repository) {
+  return {
+    ...toolMeta(),
+    root: opts.root,
+    ...opts.configFile ? { configFile: opts.configFile } : {},
+    ...repository ? { repository } : {}
+  };
+}
+function resultOf(opts, run2, r) {
+  return {
+    meta: metaOf(opts, r.repository),
+    project: r.project,
+    index: run2.index,
+    findings: r.findings,
+    summary: r.summary,
+    rules: run2.registry.all().map((x) => ({
+      code: x.code,
+      name: x.name,
+      severity: run2.severities.get(x.code) ?? x.defaultSeverity
+    })),
+    suppressed: r.suppressed,
+    ...run2.contracts ? { contracts: run2.contracts } : {},
+    ...r.unloaded.length ? { unloadedRules: r.unloaded } : {},
+    ...run2.impact ? { impact: run2.impact } : {},
+    ...opts.configFile && opts.configText !== void 0 ? { configSource: new SourceFile(opts.configFile, opts.configText) } : {},
+    durationMs: r.durationMs
+  };
+}
+function prepareRules(opts, logger, base, unloaded) {
+  const { registry: registry2, index, config: config2 } = base;
+  const { severities, only } = selectRules(registry2, config2, opts.only, unloaded);
+  const ruleLog = logger.child("rules");
+  const generatedFiles = generatedFilesOf(index.project, config2);
+  for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
+  const contractInScope = contractsInScope(index);
+  const contracts = compareContracts(opts, index, contractInScope, logger);
+  const impact = impactOf(opts, index, logger);
+  const run2 = ruleRun({
+    ...base,
+    severities,
+    only,
+    ruleLog,
+    configFile: opts.configFile,
+    contracts,
+    impact,
+    generatedFiles
+  });
+  return { run: run2, contractInScope };
+}
+function runPhases(run2, opts, logger, contractInScope, unloaded) {
+  const { config: config2 } = run2;
+  const findings = dedupe2(runRules(run2, "main", {}));
   const applied = applyOverrides(
     findings,
     config2,
-    registry2,
+    run2.registry,
     opts.overrideLocs ?? [],
     opts.now ?? /* @__PURE__ */ new Date(),
     { unloaded }
   );
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join("; ")}`);
-  for (const u of applied.usage) {
-    const code = registry2.get(u.override.rule)?.code ?? "";
-    const severity = severities.get(code);
-    const rule = registry2.get(code);
-    const notRun = !rule || (IMPACT_CODES.includes(rule.code) ? !opts.impact : rule.category === "contracts" && !opts.checkContracts);
-    if (severity === "off" || only && !only.includes(code) || notRun) u.inactive = true;
-    if (!u.matched && rule) {
-      const n = skipped.filter((f) => overrideMatches(u.override, rule.code, f)).length;
-      if (n) u.skippedInGenerated = n;
-    }
-  }
-  const scopedEntries = (contracts?.entries ?? []).filter(contractInScope);
-  const contractFilesInScope = new Set(scopedEntries.map((e) => e.file));
-  const contractUnitsInScope = new Set(
-    scopedEntries.flatMap((e) => e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])
-  );
-  const inScope = (f) => (project.targets.size === 0 || project.targets.has(f.loc.file) || contractFilesInScope.has(f.loc.file) || f.category === "contracts" && contractUnitsInScope.has(f.loc.file)) && !config2.ignore.some((p) => matchesPattern(f.loc.file, p));
+  for (const u of applied.usage) judgeOverride(u, run2, opts);
+  const inScope = scopeOf(run2.index, config2, run2.contracts, contractInScope);
   const accepted = applied.kept.filter(inScope);
   const suppressed = applied.suppressed.filter(inScope);
-  const skippedInScope = dedupe2(skipped).filter(inScope);
-  if (skippedInScope.length > 0) {
-    logger.info(
-      `skipped ${skippedInScope.length} finding(s) about the internals of ${new Set(skippedInScope.map((f) => f.loc.file)).size} generated file(s)`
-    );
-  }
-  const usage = applied.usage;
-  if (accepted.length + suppressed.length !== findings.length) {
-    logger.debug(
-      `filtered ${findings.length - accepted.length - suppressed.length} finding(s) by targets/ignore`
-    );
-  }
-  if (config2.overrides.length) {
-    logger.info(
-      `overrides: ${suppressed.length} finding(s) suppressed by ${usage.filter((u) => u.matched && !u.expired).length} override(s)`,
-      {
-        expired: usage.filter((u) => u.expired).length,
-        unused: usage.filter((u) => !u.matched && !u.expired && !u.inactive).length
-      }
-    );
-  }
-  const post = runRules("post", { overrides: usage });
-  const kept = dedupe2([...accepted, ...post]).sort(
-    (a, b) => compareLoc(a.loc, b.loc) || SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || a.code.localeCompare(b.code)
+  const skippedInScope = dedupe2(run2.skipped).filter(inScope);
+  logFiltered(logger, config2, { findings, accepted, suppressed, skippedInScope, usage: applied.usage });
+  const post = runRules(run2, "post", { overrides: applied.usage });
+  return { kept: dedupe2([...accepted, ...post]).sort(byReportOrder), suppressed, skippedInScope };
+}
+function analyze(opts) {
+  const started = performance.now();
+  const logger = opts.logger ?? silentLogger;
+  const config2 = effectiveConfig(opts);
+  const publishPatterns = publishPatternsOf(config2, opts);
+  const registry2 = opts.registry ?? createRegistry();
+  const repository = opts.repository ?? config2.repository ?? detectRepository(opts.root);
+  logger.debug("config resolved", {
+    file: opts.configFile ?? "(defaults)",
+    repository: repository ?? "(unknown)",
+    rules: Object.keys(config2.rules).length
+  });
+  const project = loadUnits(opts, logger, publishPatterns, repository);
+  const index = logger.time("build graph", () => new ProjectIndex(project));
+  logger.info(
+    `graph built: ${index.nodes.size} symbols, ${index.edges.length} edges, ${index.callSites.length} reusable calls`
   );
-  const summary2 = summarize(project, index, kept, combinations, suppressed.length, skippedInScope.length);
+  const { matrix: matrix2, combinations } = expandMatrices(project, config2, logger);
+  const unloaded = [];
+  const { run: run2, contractInScope } = prepareRules(opts, logger, { registry: registry2, index, config: config2, matrix: matrix2 }, unloaded);
+  const { kept, suppressed, skippedInScope } = runPhases(run2, opts, logger, contractInScope, unloaded);
+  const summary2 = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
   const durationMs = Math.round(performance.now() - started);
   logger.info(
     `analysis finished: ${summary2.errors} error(s), ${summary2.warnings} warning(s), ${summary2.infos} info`,
     { ms: durationMs }
   );
-  return {
-    meta: {
-      ...toolMeta(),
-      root: opts.root,
-      ...opts.configFile ? { configFile: opts.configFile } : {},
-      ...repository ? { repository } : {}
-    },
+  return resultOf(opts, run2, {
+    repository,
     project,
-    index,
     findings: kept,
     summary: summary2,
-    rules: registry2.all().map((r) => ({ code: r.code, name: r.name, severity: severities.get(r.code) ?? r.defaultSeverity })),
     suppressed,
-    ...contracts ? { contracts } : {},
-    ...unloaded.length ? { unloadedRules: unloaded } : {},
-    ...impact ? { impact } : {},
-    ...opts.configFile && opts.configText !== void 0 ? { configSource: new SourceFile(opts.configFile, opts.configText) } : {},
+    unloaded,
     durationMs
-  };
+  });
 }
 function toFinding(rule, severity, input2, registry2) {
   const requested = input2.severity;
@@ -24739,6 +24890,116 @@ function defaultBase(root) {
   throw new ImpactSetupError("No baseline: pass --base <ref> (for example --base origin/main).");
 }
 var ZERO_SHA = /^0+$/;
+function pushBase(event) {
+  if (event?.name !== "push") return void 0;
+  const before = event.payload?.before;
+  if (before && !ZERO_SHA.test(before)) return before;
+  return { skip: "push without a previous commit (new branch or tag)" };
+}
+function requestedBase(root, req) {
+  if (req.base) return req.base;
+  const sha = req.event?.payload?.pull_request?.base?.sha;
+  if (sha) return sha;
+  return pushBase(req.event) ?? defaultBase(root);
+}
+function releaseTag(root, previous, settings, req) {
+  const tags = [
+    ...settings.component ? [`${settings.component}-v${previous}`, `${settings.component}-${previous}`] : [],
+    settings.includeV ? `v${previous}` : previous,
+    settings.includeV ? previous : `v${previous}`
+  ];
+  const found = () => tags.find((t) => {
+    try {
+      resolveCommit(root, `refs/tags/${t}`);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  let tag = found();
+  if (!tag && req.fetch) {
+    req.fetch(tags.map((t) => `+refs/tags/${t}:refs/tags/${t}`));
+    tag = found();
+  }
+  if (!tag)
+    throw new ImpactSetupError(
+      `No release tag for ${previous} (tried ${tags.join(", ")}); fetch tags first.`
+    );
+  return tag;
+}
+function lastRelease(root, commit, req) {
+  const previous = versionOf(gitFileSystem(root, commit));
+  const next = versionOf(workingTree(root));
+  if (!previous || !next || previous === next) return void 0;
+  const settings = releaseSettings(workingTree(root));
+  const tag = releaseTag(root, previous, settings, req);
+  return {
+    tag,
+    release: {
+      previous,
+      version: next,
+      bumpMinorPreMajor: settings.bumpMinorPreMajor,
+      bumpPatchForMinorPreMajor: settings.bumpPatchForMinorPreMajor
+    }
+  };
+}
+function baselineOf(root, ref, req, pr, notes) {
+  const commit = commitOf(root, ref, req.fetch);
+  const last = isReleasePullRequest(pr.title, pr.labels) ? lastRelease(root, commit, req) : void 0;
+  if (!last) return { kind: "ref", ref, commit };
+  const tagCommit = commitOf(root, `refs/tags/${last.tag}`, void 0);
+  notes.push(
+    `release pull request: ${last.release.previous} \u2192 ${last.release.version}, compared with ${last.tag}`
+  );
+  return { kind: "release", ref: last.tag, commit: tagCommit, release: last.release };
+}
+function headCommit(root) {
+  try {
+    return resolveCommit(root, "HEAD");
+  } catch {
+    return void 0;
+  }
+}
+function baselineFiles(root, commit) {
+  try {
+    return gitFileSystem(root, commit);
+  } catch (err) {
+    throw new ImpactSetupError(err.message);
+  }
+}
+function baseConfigInRepository(root, req) {
+  const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : void 0;
+  return top !== void 0 && pathInside(top, req.baseConfigFile);
+}
+function baselinePolicy(root, fs3, req, headConfig, notes) {
+  const configPath = req.configPath ? relative4(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
+  const baseInRepository = baseConfigInRepository(root, req);
+  if (baseInRepository) {
+    notes.push(
+      "the base config is a file of this repository, so the baseline's impact settings leave it out"
+    );
+  }
+  const config2 = baselineConfig(fs3, configPath, baseInRepository ? void 0 : req.baseConfig, notes);
+  const policy = { ...(config2 ?? defaultConfig()).impact };
+  if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
+    notes.push("this pull request changes impact settings; they apply after it is merged");
+  }
+  return { config: config2, policy };
+}
+function titleAndLabels(req) {
+  const pr = req.event?.payload?.pull_request;
+  const title = req.title ?? pr?.title;
+  const labels = req.labels ?? (pr?.labels ?? []).map((l) => l.name ?? "").filter(Boolean);
+  return { title, labels };
+}
+function declaredOf(req, title, labels, release) {
+  return {
+    ...req.expect ? { explicit: req.expect } : {},
+    ...title !== void 0 && !release ? { title } : {},
+    ...labels.length ? { labels } : {},
+    ...release ? { release } : {}
+  };
+}
 function prepareImpact(root, headConfig, req, logger) {
   const eventName = req.event?.name;
   if (eventName === "merge_group") return { skip: "merge_group: impact was checked on the pull request" };
@@ -24747,86 +25008,15 @@ function prepareImpact(root, headConfig, req, logger) {
       "pull_request_target runs on the default branch, so it would compare the default branch with itself. Run impact mode on pull_request (or pass a base and check out the pull request head)."
     );
   }
-  const payload = req.event?.payload;
-  const pr = payload?.pull_request;
-  const title = req.title ?? pr?.title;
-  const labels = req.labels ?? (pr?.labels ?? []).map((l) => l.name ?? "").filter(Boolean);
+  const { title, labels } = titleAndLabels(req);
   const notes = [];
-  let baseRef;
-  if (req.base) baseRef = req.base;
-  else if (pr?.base?.sha) baseRef = pr.base.sha;
-  else if (eventName === "push" && payload?.before && !ZERO_SHA.test(payload.before))
-    baseRef = payload.before;
-  else if (eventName === "push") return { skip: "push without a previous commit (new branch or tag)" };
-  else baseRef = defaultBase(root);
-  let kind = "ref";
-  let release;
-  let commit = commitOf(root, baseRef, req.fetch);
-  if (isReleasePullRequest(title, labels)) {
-    const previous = versionOf(gitFileSystem(root, commit));
-    const next = versionOf(workingTree(root));
-    if (previous && next && previous !== next) {
-      const settings = releaseSettings(workingTree(root));
-      const tags = [
-        ...settings.component ? [`${settings.component}-v${previous}`, `${settings.component}-${previous}`] : [],
-        settings.includeV ? `v${previous}` : previous,
-        settings.includeV ? previous : `v${previous}`
-      ];
-      const found = () => tags.find((t) => {
-        try {
-          resolveCommit(root, `refs/tags/${t}`);
-          return true;
-        } catch {
-          return false;
-        }
-      });
-      let tag = found();
-      if (!tag && req.fetch) {
-        req.fetch(tags.map((t) => `+refs/tags/${t}:refs/tags/${t}`));
-        tag = found();
-      }
-      if (!tag)
-        throw new ImpactSetupError(
-          `No release tag for ${previous} (tried ${tags.join(", ")}); fetch tags first.`
-        );
-      release = {
-        previous,
-        version: next,
-        bumpMinorPreMajor: settings.bumpMinorPreMajor,
-        bumpPatchForMinorPreMajor: settings.bumpPatchForMinorPreMajor
-      };
-      baseRef = tag;
-      kind = "release";
-      commit = commitOf(root, `refs/tags/${tag}`, void 0);
-      notes.push(`release pull request: ${previous} \u2192 ${next}, compared with ${tag}`);
-    }
-  }
-  let head;
-  try {
-    head = resolveCommit(root, "HEAD");
-  } catch {
-    head = void 0;
-  }
-  if (head === commit) return { skip: `the baseline ${baseRef} is the checked-out commit` };
-  let fs3;
-  try {
-    fs3 = gitFileSystem(root, commit);
-  } catch (err) {
-    throw new ImpactSetupError(err.message);
-  }
-  const configPath = req.configPath ? relative4(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
-  const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : void 0;
-  const baseInRepository = top !== void 0 && pathInside(top, req.baseConfigFile);
-  if (baseInRepository) {
-    notes.push(
-      "the base config is a file of this repository, so the baseline's impact settings leave it out"
-    );
-  }
-  const baseConfig = baselineConfig(fs3, configPath, baseInRepository ? void 0 : req.baseConfig, notes);
-  const policy = { ...(baseConfig ?? defaultConfig()).impact };
-  if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
-    notes.push("this pull request changes impact settings; they apply after it is merged");
-  }
+  const requested = requestedBase(root, req);
+  if (typeof requested !== "string") return requested;
+  const baseline = baselineOf(root, requested, req, { title, labels }, notes);
+  const { kind, ref: baseRef, commit, release } = baseline;
+  if (headCommit(root) === commit) return { skip: `the baseline ${baseRef} is the checked-out commit` };
+  const fs3 = baselineFiles(root, commit);
+  const { config: baseConfig, policy } = baselinePolicy(root, fs3, req, headConfig, notes);
   logger?.debug("impact baseline", { ref: baseRef, commit, kind });
   const base = analyze({
     root,
@@ -24840,12 +25030,7 @@ function prepareImpact(root, headConfig, req, logger) {
     options: {
       base: base.index,
       baseline: { kind, ref: baseRef, commit },
-      declared: {
-        ...req.expect ? { explicit: req.expect } : {},
-        ...title !== void 0 && !release ? { title } : {},
-        ...labels.length ? { labels } : {},
-        ...release ? { release } : {}
-      },
+      declared: declaredOf(req, title, labels, release),
       policy,
       // Load the head's copies of what the baseline published, so a unit that still exists is compared, not "removed".
       publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file)
