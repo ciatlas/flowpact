@@ -21921,6 +21921,9 @@ var didYouMeanNote = (guess) => guess ? ` \u2014 did you mean ${quote(guess)}?` 
 function namesKey(segment) {
   return !!segment && segment !== "*" && segment !== "?";
 }
+function isProperty(segment, name) {
+  return segment?.toLowerCase() === name;
+}
 function listNames(names, max = 6) {
   if (names.length === 0) return "(none)";
   const shown = names.slice(0, max).join(", ");
@@ -22897,7 +22900,7 @@ var passthroughDropped = defineRule({
   }
 });
 function isEventInputs(ref) {
-  return ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs";
+  return ref.context === "github" && isProperty(ref.path[0], "event") && isProperty(ref.path[1], "inputs");
 }
 var optionalForwardedToRequired = defineRule({
   code: "FP107",
@@ -22996,9 +22999,7 @@ function checkInputRead(ctx, unit, inputs, names, ref) {
 function inputReadName(unit, ref) {
   if (ref.context === "inputs") return ref.path[0];
   const dispatched = unit.kind === "workflow" && unit.dispatch;
-  if (ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs" && dispatched)
-    return ref.path[2];
-  return void 0;
+  return dispatched && isEventInputs(ref) ? ref.path[2] : void 0;
 }
 var inputRules = [
   missingRequiredInput,
@@ -23532,7 +23533,7 @@ var undefinedOutputRef = defineRule({
 function jobOutputRead(site, ref) {
   if (ref.context === "jobs" && site.field !== "workflow.output") return void 0;
   const output = ref.path[2];
-  return ref.path[1] === "outputs" && namesKey(output) ? output : void 0;
+  return isProperty(ref.path[1], "outputs") && namesKey(output) ? output : void 0;
 }
 function jobOutputsDeclared(ctx, job, names) {
   const callee = ctx.index.calleeOf(job);
@@ -23592,7 +23593,7 @@ function checkStepOutputRef(ctx, unit, site, ref, a) {
 function checkActionOutputRef(ctx, step, ref) {
   const [, b, c] = ref.path;
   const action = ctx.index.actionOf(step);
-  if (b !== "outputs" || !namesKey(c) || !action) return;
+  if (!isProperty(b, "outputs") || !namesKey(c) || !action) return;
   if (action.using !== "composite") return;
   if (lookup(action.outputs, c)) return;
   const names = Object.keys(action.outputs);
@@ -23786,7 +23787,7 @@ function writesAreKnown(step) {
 }
 function checkStepOutputWritten(ctx, unit, site, ref) {
   const [a, b, c] = ref.path;
-  if (b !== "outputs" || !a || !namesKey(c)) return;
+  if (!isProperty(b, "outputs") || !a || !namesKey(c)) return;
   const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
   if (!step || !writesAreKnown(step)) return;
   const w = step.writesOutputs;
