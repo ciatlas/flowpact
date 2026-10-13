@@ -13,6 +13,7 @@ import {
   known,
   type LocatedRef,
   lookup,
+  needsSecret,
   readsContextDynamically,
   refsOf,
   type SecretDecl,
@@ -111,21 +112,22 @@ const unusedSecret = defineRule({
     summary: 'A `workflow_call` secret is declared but never read.',
     why: 'Every caller must still wire the secret, widening its exposure for nothing.',
     fix: 'Remove the declaration and the callers’ `secrets:` bindings, or use the secret where intended.',
+    scope:
+      'A secret counts as read when the workflow reads it by name or reads the whole `secrets` context ' +
+      '(`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), or hands every secret through `secrets: inherit` to a ' +
+      'callee that reads it by name or reads every secret it gets, itself or further down. An expression that does ' +
+      'not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not ' +
+      'reusable), may read any secret, so they count as reading every secret.',
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
       if (!wf.call) continue;
       if (readsContextDynamically(wf, 'secrets')) continue;
+      // Also forwarded implicitly through `secrets: inherit` to callees that read it, or may read any secret.
+      const needed = secretsNeededBy(ctx.index, wf);
       for (const s of Object.values(wf.call.secrets)) {
         if (ctx.index.usagesOf(sym.secret(wf.path, s.name)).length > 0) continue;
-        // Forwarded implicitly to a callee through `secrets: inherit`.
-        const inherited = Object.values(wf.jobs).some((j) => {
-          const callee = j.secretsInherit ? ctx.index.calleeOf(j) : undefined;
-          return callee
-            ? [...secretsNeededBy(ctx.index, callee)].some((n) => n.toLowerCase() === s.name.toLowerCase())
-            : false;
-        });
-        if (inherited) continue;
+        if (needsSecret(needed, s.name)) continue;
         ctx.report({
           message: `Secret ${quote(s.name)} of ${wf.path} is never read`,
           loc: s.loc,
@@ -149,6 +151,11 @@ const secretsInherit = defineRule({
       'Inherit makes the secret flow invisible: nobody can tell from the caller which secrets reach which job, and every ' +
       'nested workflow gets all of them.',
     fix: 'Replace `secrets: inherit` with an explicit `secrets:` mapping of the secrets listed in the message.',
+    scope:
+      'Not reported when the callee, or a callee it hands every secret to, reads the whole `secrets` context ' +
+      '(`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), has an expression that does not parse, or hands every ' +
+      'secret on to a workflow flowpact cannot read (a remote workflow, or a local one that is missing or not ' +
+      'reusable): it then reads, or may read, every secret the caller has, which no explicit mapping can list.',
     examples: {
       bad: `uses: ./.github/workflows/deploy.yml
 secrets: inherit`,
@@ -160,7 +167,9 @@ secrets:
   check(ctx) {
     for (const call of ctx.index.callSites) {
       if (!call.job.secretsInherit) continue;
-      const needed = [...secretsNeededBy(ctx.index, call.callee)].sort();
+      const reads = secretsNeededBy(ctx.index, call.callee);
+      if (reads.all) continue;
+      const needed = [...reads.names].sort();
       ctx.report({
         message: `jobs.${call.job.id} inherits all secrets; ${call.callee.path} and its callees read ${needed.length ? listNames(needed, 10) : 'none'}`,
         loc: call.job.secretsLoc ?? call.job.loc,

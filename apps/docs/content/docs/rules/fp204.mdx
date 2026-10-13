@@ -19,7 +19,7 @@ Replace `secrets: inherit` with an explicit `secrets:` mapping of the secrets li
 
 ## Scope
 
-Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
+Not reported when the callee, or a callee it hands every secret to, reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), has an expression that does not parse, or hands every secret on to a workflow flowpact cannot read (a remote workflow, or a local one that is missing or not reusable): it then reads, or may read, every secret the caller has, which no explicit mapping can list. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
 
 ## Example
 
