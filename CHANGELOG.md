@@ -4,6 +4,20 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.14.0](https://github.com/ciatlas/flowpact/compare/v0.13.0...v0.14.0) (2026-10-13)
+
+
+### Features
+
+* **trace:** follow input defaults, whole-object reads and github.event.inputs in workflows that can be called, and print each branch's note; some findings and contracts change, see https://ciatlas.github.io/flowpact/docs/upgrading ([#125](https://github.com/ciatlas/flowpact/issues/125)) ([4166c00](https://github.com/ciatlas/flowpact/commit/4166c00fe3f1e3c8e0c28486fbde8c7aa4a7dc5a))
+
+
+### Bug Fixes
+
+* **lint:** locate a finding at the expression in a bare if: written as a block or quoted scalar ([#125](https://github.com/ciatlas/flowpact/issues/125)) ([4166c00](https://github.com/ciatlas/flowpact/commit/4166c00fe3f1e3c8e0c28486fbde8c7aa4a7dc5a))
+* **lint:** no FP104 or FP203 for a read through a `*` filter, and no false FP404 for a matrix exclude item that is an expression ([#125](https://github.com/ciatlas/flowpact/issues/125)) ([4166c00](https://github.com/ciatlas/flowpact/commit/4166c00fe3f1e3c8e0c28486fbde8c7aa4a7dc5a))
+* **lint:** report a value a called workflow reads only through github.event.inputs (FP106) ([#125](https://github.com/ciatlas/flowpact/issues/125)) ([4166c00](https://github.com/ciatlas/flowpact/commit/4166c00fe3f1e3c8e0c28486fbde8c7aa4a7dc5a))
+
 ## [0.13.0](https://github.com/ciatlas/flowpact/compare/v0.12.3...v0.13.0) (2026-10-13)
 
 
