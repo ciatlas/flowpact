@@ -77,6 +77,7 @@ reserves the `FP` prefix for built-in rules, and requires third-party rules to b
 - `ctx.index.units()`, `project.workflows`, `project.actions` — the IR with exact locations;
 - `callSites`, `callersOf(path)`, `actionUses`, `usersOf(path)` — who calls whom;
 - `usagesOf(symbol)` — every place a symbol is read, with the location of the reference and where the value flows next;
+  a read of the whole object (`toJSON(inputs)`, `matrix[inputs.key]`) is a usage of each member, marked `whole`;
 - `ctx.matrix(unit, job)` — the expanded matrix (combinations, keys, exactness);
 - `ctx.config` — the resolved configuration;
 - `ctx.contracts` — the contract comparison (only in `flowpact check`).

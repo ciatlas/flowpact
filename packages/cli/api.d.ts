@@ -413,16 +413,44 @@ export interface TraceNode {
   kind: SymbolKind;
   unit?: string;
   loc?: Loc;
-  /** How the value got here from the parent node. */
+  /**
+   * How the value got here from the parent node: the expression (`text`) at `loc`, or `workflow output` or
+   * `secrets: inherit`. `note` qualifies it:
+   * - `when dispatched`: upstream, a workflow input read through `github.event.inputs` in a workflow that can also be
+   *   called. The input holds the value only when the workflow is dispatched (a called workflow gets its caller's
+   *   event), so it is not traced further up; a `context` leaf stands for the called case;
+   * - `the default of inputs.<name>`: upstream, an input or variable that the default of `inputs.<name>` reads;
+   * - `exposed to the caller`: downstream, an output of a reusable workflow or action that becomes the output of the
+   *   job or step that uses it;
+   * - `jobs.<id>`: the job whose `secrets: inherit` passes the secret on.
+   */
   via?: { loc: Loc; text: string; note?: string };
+  /**
+   * Downstream, the symbols the value flows to; upstream, the symbols it is computed from. A whole or computed read
+   * (`toJSON(inputs)`, `matrix[inputs.key]`, `secrets[inputs.name]`, `toJSON(env)`) reads every member the files
+   * declare: one child each.
+   */
   children: TraceNode[];
   /**
    * Downstream, where the value is used, e.g. `run script` or `condition`. Upstream, where it comes from when that is
-   * not another symbol: `literal` (a plain value: passed by a caller or a step, or an env variable's or output's own
-   * value), `omitted` (a caller or step does not pass the input), `value`, `missing` or `dynamic` (a matrix key's
-   * combinations), `context` (read from a context flowpact does not follow, such as `github.event.pull_request.title`;
-   * `text` is the reference as written), `invalid` (an expression that does not parse) or `expression` (an expression
-   * that reads no context).
+   * not another symbol: `literal` (a plain value: passed by a caller or a step, an env variable's or output's own
+   * value, or an input's default), `omitted` (a caller or step does not pass the input), `value`, `missing` or
+   * `dynamic` (a matrix key's combinations), `context` (read from a context flowpact does not follow, such as
+   * `github.event.pull_request.title`; `github.event.inputs.<name>` in a workflow that can be called, which then holds
+   * the caller's event; or a whole object that may hold members the files do not declare, such as `toJSON(secrets)`,
+   * `toJSON(env)` or an action's `toJSON(inputs)`, next to the members it reads; `text` is the reference as written),
+   * `invalid` (an expression that does not parse, or, in an input's default, a reference to a context or a call to a
+   * function GitHub does not allow there; `text` is then the reference, or the function's name and `()`) or
+   * `expression` (an expression that reads no context). When a caller or step omits an input whose default GitHub uses
+   * (not a required `workflow_call` input's), the trace also ends at the default, after the callers, with `where`
+   * ending in `inputs.<name>.default`. A `workflow_call` default's reads of the workflow's own `workflow_call` inputs
+   * (by name, or every one of them through a whole `inputs` such as `toJSON(inputs)`) and of `vars` by name are
+   * `children` with `via.note` `the default of inputs.<name>`. Its other references are `context` leaves: an input
+   * only `workflow_dispatch` declares, or none does (empty when the workflow is called), a whole or computed `vars`
+   * (`vars.*`, `toJSON(vars)`), and `github` (the caller's, including `github.event.inputs`). An action default's
+   * `github`, `strategy`, `matrix`, `job` and `runner` are `context` leaves, and a default that only calls
+   * `hashFiles()` is an `expression` leaf. Any other context in a default, a status function, or `hashFiles()` in a
+   * `workflow_call` default is `invalid`.
    */
   leaves: { role: string; where: string; loc: Loc; text: string }[];
   /** Why the branch stops early; `seen`: it is shown elsewhere in the same trace. */
@@ -734,6 +762,10 @@ export interface InputDecl {
   required: boolean;
   hasDefault: boolean;
   default?: JsonValue;
+  /** Where the `default:` value is written. */
+  defaultLoc?: Loc;
+  /** The `default:` value's expression, when it has one (`${{ github.token }}`). */
+  defaultSite?: ExprSite;
   description?: string;
   options?: string[];
   loc: Loc;
@@ -867,6 +899,13 @@ export interface Usage {
   ref: { context: string; path: string[]; dynamic: boolean; loc: Loc };
   /** The symbol the value flows on to, such as a called workflow's input. */
   sink?: string;
+  /**
+   * Set when the reference does not name the symbol: it reads a whole object (`toJSON(inputs)`, `needs.build.outputs`,
+   * `toJSON(env)`) or indexes one with a computed key (`matrix[inputs.key]`, `secrets[inputs.name]`), and so reads every
+   * member, this one among them. Such a read counts as a read of each member, but does not single one out: a rule
+   * about how one input is read, such as how a condition treats it when it is empty, skips it.
+   */
+  whole?: true;
 }
 
 export interface ProjectIndex {
@@ -879,7 +918,10 @@ export interface ProjectIndex {
   unit(path: string): UnitDecl | undefined;
   callersOf(workflowPath: string): CallSite[];
   usersOf(actionPath: string): ActionUse[];
-  /** Every place the symbol is read, e.g. `.github/workflows/ci.yml#inputs.config`. */
+  /**
+   * Every place the symbol is read, e.g. `.github/workflows/ci.yml#inputs.config`, including reads of the whole object
+   * it is a member of (see `Usage.whole`).
+   */
   usagesOf(symbol: string): Usage[];
 }
 
