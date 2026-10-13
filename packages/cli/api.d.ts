@@ -411,6 +411,11 @@ export interface CallGraph {
     /** The called workflow has no `on.workflow_call`. */
     notReusable?: boolean;
   }[];
+  /**
+   * With `paths`: the workflows and actions they name, where the graph starts. The tree starts from them even when
+   * something in the graph calls them, as in a cycle.
+   */
+  roots?: string[];
 }
 
 export type SymbolKind =

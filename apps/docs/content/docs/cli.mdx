@@ -189,8 +189,8 @@ flowpact graph [paths…] [--format tree|mermaid|dot|json]
 ```
 
 With paths (workflow or action files, or directories), the graph starts from those workflows and actions and shows
-only what they call and use, all the way down; every format draws the same part. Without, it shows the whole
-repository.
+only what they call and use, all the way down; every format draws the same part, and the JSON lists them as `roots`.
+The tree starts at them even when one is in a cycle. Without paths, it shows the whole repository.
 
 | Format | Output |
 | --- | --- |

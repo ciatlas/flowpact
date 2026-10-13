@@ -133,7 +133,7 @@ const { summary, why, fix, docsUrl } = await explain('FP401');
 ```
 
 - `graph({ paths })`: `nodes` (workflows, actions, remote workflows, missing targets) and `edges`, who calls whom `via`
-  which job or step; with `paths`, only those workflows and actions and what they call and use.
+  which job or step; with `paths`, only those workflows and actions (`roots`) and what they call and use.
 - `trace({ symbol, up, depth })`: one tree per matching symbol, as in [`flowpact trace`](/docs/cli#flowpact-trace);
   for a workflow or action without inputs, secrets or outputs, `traces` is empty and `unit` names it.
 - `rules()`: each rule's `code`, `name`, `category`, `defaultSeverity`, `severity` after the config, `summary` and

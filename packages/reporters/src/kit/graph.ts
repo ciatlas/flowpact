@@ -42,6 +42,11 @@ export interface CallGraphEdge {
 export interface CallGraph {
   nodes: CallGraphNode[];
   edges: CallGraphEdge[];
+  /**
+   * The part of the graph that starts from some nodes (`reachableGraph`): those nodes, in node order. The tree starts
+   * from them even when something in the graph calls them, as in a cycle.
+   */
+  roots?: string[];
 }
 
 const KIND_ORDER: Record<CallGraphNodeKind, number> = {
@@ -204,7 +209,7 @@ export function buildCallGraph(index: ProjectIndex): CallGraph {
 
 /**
  * The part of the graph `roots` reach: those nodes, what they call and use (and what that calls and uses, all the way
- * down), and the edges between them. Ordering is kept.
+ * down), and the edges between them, with the roots it starts from. Ordering is kept.
  */
 export function reachableGraph(graph: CallGraph, roots: Iterable<string>): CallGraph {
   const outgoing = new Map<string, string[]>();
@@ -216,9 +221,11 @@ export function reachableGraph(graph: CallGraph, roots: Iterable<string>): CallG
     reached.add(id);
     queue.push(...(outgoing.get(id) ?? []));
   }
+  const given = new Set(roots);
   return {
     nodes: graph.nodes.filter((n) => reached.has(n.id)),
     edges: graph.edges.filter((e) => reached.has(e.from)),
+    roots: graph.nodes.filter((n) => given.has(n.id)).map((n) => n.id),
   };
 }
 
@@ -351,7 +358,10 @@ function treeLabel(t: Theme, raw: CallGraphNode, root: boolean): string {
   }
 }
 
-/** Renders the call graph as a tree from its entry points (nodes nothing calls). */
+/**
+ * Renders the call graph as a tree from its entry points: the nodes nothing calls, then the graph's roots (a root in a
+ * cycle is called, yet the tree starts from it).
+ */
 export function renderGraphTree(graph: CallGraph, opts: RenderOptions): string {
   const t = createTheme(opts);
   const { c } = t;
@@ -389,8 +399,9 @@ export function renderGraphTree(graph: CallGraph, opts: RenderOptions): string {
     });
   };
 
-  const roots = graph.nodes.filter((n) => !called.has(n.id));
-  for (const n of [...roots, ...graph.nodes]) {
+  const entries = graph.nodes.filter((n) => !called.has(n.id));
+  const roots = (graph.roots ?? []).flatMap((id) => byId.get(id) ?? []);
+  for (const n of [...entries, ...roots, ...graph.nodes]) {
     if (expanded.has(n.id)) continue;
     if (out.length) out.push('');
     out.push(treeLabel(t, n, true));

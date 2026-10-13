@@ -84,16 +84,14 @@ describe('reachableGraph', () => {
       '.github/workflows/build.yml -> .github/workflows/package.yml',
       '.github/workflows/package.yml -> .github/workflows/publish.yml',
     ]);
+    expect(fromBuild.roots).toEqual(['.github/workflows/build.yml']);
     expect(reachableGraph(deep, ['.github/workflows/publish.yml'])).toEqual({
       nodes: [deep.nodes.find((n) => n.id === '.github/workflows/publish.yml')],
       edges: [],
+      roots: ['.github/workflows/publish.yml'],
     });
-    expect(
-      reachableGraph(
-        deep,
-        deep.nodes.map((n) => n.id),
-      ),
-    ).toEqual(deep);
+    const ids = deep.nodes.map((n) => n.id);
+    expect(reachableGraph(deep, [...ids].reverse())).toEqual({ ...deep, roots: ids });
 
     const cycles = graphOf('cycles');
     const fromC = reachableGraph(cycles, ['.github/workflows/c.yml']);
@@ -102,7 +100,20 @@ describe('reachableGraph', () => {
       '.github/workflows/b.yml -> .github/workflows/c.yml',
       '.github/workflows/c.yml -> .github/workflows/b.yml',
     ]);
-    expect(reachableGraph(cycles, ['.github/workflows/main.yml'])).toEqual(cycles);
+    expect(reachableGraph(cycles, ['.github/workflows/main.yml'])).toEqual({
+      ...cycles,
+      roots: ['.github/workflows/main.yml'],
+    });
+  });
+
+  it('starts the tree at a given workflow even when it is in a cycle', () => {
+    // Before: C and B call each other, so neither was an entry point and the tree started at B, the first node.
+    const tree = renderGraphTree(reachableGraph(graphOf('cycles'), ['.github/workflows/c.yml']), plain);
+    expect(tree.split('\n')).toEqual([
+      'C (.github/workflows/c.yml) · on: workflow_call',
+      '└── jobs.back → B (.github/workflows/b.yml)',
+      '    └── jobs.next → C (.github/workflows/c.yml) ↻ cycle',
+    ]);
   });
 });
 

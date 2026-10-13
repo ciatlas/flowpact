@@ -107,6 +107,7 @@ describe('flowpact graph', () => {
         },
       ],
       edges: [],
+      roots: ['.github/workflows/publish.yml'],
     });
     // Several paths, a directory, and the whole repository.
     const two = JSON.parse(
@@ -117,7 +118,9 @@ describe('flowpact graph', () => {
       '.github/workflows/publish.yml',
     ]);
     const whole = (await run('json')).stdout;
-    expect((await run('json', '.github/workflows')).stdout).toBe(whole);
+    const directory = JSON.parse((await run('json', '.github/workflows')).stdout);
+    expect(directory.roots).toEqual(directory.nodes.map((n: { id: string }) => n.id));
+    expect(JSON.stringify({ nodes: directory.nodes, edges: directory.edges }, null, 2)).toBe(whole.trimEnd());
     expect((await run('json', '.')).stdout).toBe(whole);
     const actions = JSON.parse(
       (
@@ -133,6 +136,11 @@ describe('flowpact graph', () => {
       ).stdout,
     );
     expect(actions.nodes.map((n: { id: string }) => n.id)).toEqual(['.github/actions/install-tools']);
+  });
+
+  it('starts the tree at a given workflow in a cycle', async () => {
+    const tree = await flowpact(['graph', '--root', fixture('cycles'), '-q', '.github/workflows/c.yml']);
+    expect(tree.stdout.split('\n')[0]).toBe('C (.github/workflows/c.yml) · on: workflow_call');
   });
 
   it('refuses graph paths that do not exist', async () => {
