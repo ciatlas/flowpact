@@ -2,7 +2,7 @@ import location from './location.json' with { type: 'json' };
 
 /** Tool identity. `VERSION` is asserted against package.json by a test so it cannot drift. */
 export const TOOL_NAME = 'flowpact';
-export const VERSION = '0.14.1'; // x-release-please-version
+export const VERSION = '0.15.0'; // x-release-please-version
 
 /** Versions of every on-disk / on-wire format flowpact reads or writes. Bump on breaking changes. */
 export const SCHEMA_VERSIONS = {

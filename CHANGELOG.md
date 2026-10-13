@@ -4,6 +4,25 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.15.0](https://github.com/ciatlas/flowpact/compare/v0.14.1...v0.15.0) (2026-10-13)
+
+
+### Features
+
+* **graph:** flowpact graph &lt;paths&gt; draws the given workflows and actions and what they call ([#134](https://github.com/ciatlas/flowpact/issues/134)) ([a4223ac](https://github.com/ciatlas/flowpact/commit/a4223ac3e4fd777fde97a977059735ac17b768a0))
+* **impact:** flowpact impact &lt;paths&gt;, lint/check --impact &lt;paths&gt; and the action's paths grade only the published workflows and actions within the paths, and say so in the report ([#134](https://github.com/ciatlas/flowpact/issues/134)) ([a4223ac](https://github.com/ciatlas/flowpact/commit/a4223ac3e4fd777fde97a977059735ac17b768a0))
+
+
+### Bug Fixes
+
+* **check:** check and generate with paths report and remove a removed unit's orphaned contract ([#134](https://github.com/ciatlas/flowpact/issues/134)) ([a4223ac](https://github.com/ciatlas/flowpact/commit/a4223ac3e4fd777fde97a977059735ac17b768a0))
+* **impact:** a run with paths or ignore no longer passes silently when a published unit it does not report on needs a higher impact; verdict and findings always agree ([#134](https://github.com/ciatlas/flowpact/issues/134)) ([a4223ac](https://github.com/ciatlas/flowpact/commit/a4223ac3e4fd777fde97a977059735ac17b768a0))
+* **impact:** ignore leaves a published unit out of impact mode only when both the baseline's and the pull request's config ignore it ([#134](https://github.com/ciatlas/flowpact/issues/134)) ([a4223ac](https://github.com/ciatlas/flowpact/commit/a4223ac3e4fd777fde97a977059735ac17b768a0))
+* **lint:** locate a reference after a string literal that spans lines, and a computed index inside another reference ([#131](https://github.com/ciatlas/flowpact/issues/131)) ([b288f87](https://github.com/ciatlas/flowpact/commit/b288f878429b1d90f15f345e4aa1dd67c7cf7b56))
+* **rules:** FP203 and FP204 count a whole secrets read, or a callee whose reads are unknown, behind secrets: inherit, and no longer suggest removing it ([#131](https://github.com/ciatlas/flowpact/issues/131)) ([b288f87](https://github.com/ciatlas/flowpact/commit/b288f878429b1d90f15f345e4aa1dd67c7cf7b56))
+* **rules:** match github.event.inputs and outputs in any case, as GitHub does ([#133](https://github.com/ciatlas/flowpact/issues/133)) ([c0a052b](https://github.com/ciatlas/flowpact/commit/c0a052bf58638854a9aacf5dc1918a9a51415d37))
+* **trace:** label an action's output edge 'action output' ([#131](https://github.com/ciatlas/flowpact/issues/131)) ([b288f87](https://github.com/ciatlas/flowpact/commit/b288f878429b1d90f15f345e4aa1dd67c7cf7b56))
+
 ## [0.14.1](https://github.com/ciatlas/flowpact/compare/v0.14.0...v0.14.1) (2026-10-13)
 
 
