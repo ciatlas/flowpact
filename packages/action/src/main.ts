@@ -11,6 +11,7 @@ import {
   type LogRecord,
   type LogSink,
   loadProject,
+  matchesPattern,
   neutralizeWorkflowCommands,
   resolveCommit,
   resolveLogLevel,
@@ -352,24 +353,29 @@ function prepareInputImpact(
 }
 
 /**
- * Why `impact: auto` stops when nothing is published, without paths. Decided on both sides: a pull request that
- * deletes or unpublishes the only published unit is still checked.
+ * Why `impact: auto` stops when nothing published is graded, without paths: nothing is published, or the baseline's
+ * `ignore` leaves out every published unit. Decided on both sides: a pull request that deletes or unpublishes the only
+ * published unit is still checked.
  */
 function nothingPublishedNote(
   root: string,
   logger: Logger,
   options: NonNullable<AnalyzeOptions['impact']>,
 ): string | undefined {
-  if (options.publishedFiles?.length !== 0) return undefined;
-  const { policy } = options;
+  const { policy, publishedFiles, ignore = [] } = options;
+  const graded = (file: string) => !ignore.some((p) => matchesPattern(file, p));
+  if (!publishedFiles || publishedFiles.some(graded)) return undefined;
   const project = loadProject({
     root,
     logger,
     ...(policy.publish ? { publish: policy.publish } : {}),
   });
   const units = [...project.workflows.values(), ...project.actions.values()];
-  if (units.some((u) => isPublished(u, policy))) return undefined;
-  return 'impact: no published workflows or actions (see impact.publish)';
+  const published = units.filter((u) => isPublished(u, policy));
+  if (published.some((u) => graded(u.file))) return undefined;
+  return publishedFiles.length || published.length
+    ? 'impact: every published workflow and action is ignored (see ignore)'
+    : 'impact: no published workflows or actions (see impact.publish)';
 }
 
 /**

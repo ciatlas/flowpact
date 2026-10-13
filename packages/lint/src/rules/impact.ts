@@ -14,13 +14,13 @@ const related = (changes: ImpactChange[]): RelatedLocation[] =>
   changes.slice(0, 20).map((c) => ({ loc: c.loc, message: `${c.level}: ${c.message}` }));
 
 /**
- * Where a verdict is reported: its first driving change, else any change, else (with paths) a file within them, else
- * the first published file graded.
+ * Where a verdict is reported: its first driving change, else any change, else (when paths or `ignore` leave out units)
+ * a file impact mode looks at, else the first published file graded.
  */
 const verdictLoc = (impact: ImpactResult, changes: ImpactChange[]): Loc =>
   changes[0]?.loc ??
   impact.changes[0]?.loc ?? {
-    file: impact.scope?.anchor ?? impact.publishedFiles[0] ?? 'action.yml',
+    file: impact.narrowed?.anchor ?? impact.publishedFiles[0] ?? 'action.yml',
     line: 1,
     column: 1,
     endLine: 1,

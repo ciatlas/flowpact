@@ -75,7 +75,8 @@ const analysis = await check({ paths: ['.github/workflows/deploy.yml'], only: ['
 | `now` | `FLOWPACT_NOW` | The current time, a `Date`, for the expiry of [overrides](/docs/configuration#overrides). |
 
 Impact mode compares with the baseline commit, which must be in the clone: check out with `fetch-depth: 0`. On
-`merge_group` it is skipped (`notes` says so), and `impact()` then reports nothing.
+`merge_group` it is skipped (`notes` says so), and so it is when there is nothing to grade or to report on; `impact()`
+then reports nothing.
 
 ### Analysis
 

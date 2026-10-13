@@ -843,6 +843,56 @@ describe('impact mode', () => {
     );
   });
 
+  it('treats every published unit ignored like nothing published, and reports the verdict on a file ignore leaves in', async () => {
+    const workspace = mkdtempSync(join(temp, 'ignored-'));
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    g('config', 'commit.gpgsign', 'false');
+    const actionYml = (input: string) =>
+      `name: a\ndescription: d\ninputs:\n${input}runs:\n  using: composite\n  steps: [{ shell: bash, run: "true" }]\n`;
+    const files: Record<string, string> = {
+      '.github/flowpact/flowpact.config.yml':
+        'ignore: ["*/action.yml"]\nimpact:\n  publish: ["*/action.yml"]\n',
+      'a/action.yml': actionYml('  token: { description: t, required: false }\n'),
+      'b/action.yml': actionYml('  token: { description: t, required: false }\n'),
+      '.github/workflows/ci.yml':
+        'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./a\n',
+    };
+    for (const [f, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(workspace, f)), { recursive: true });
+      writeFileSync(join(workspace, f), text);
+    }
+    g('add', '-A');
+    g('commit', '-q', '-m', 'base');
+    g('checkout', '-q', '-b', 'change');
+    writeFileSync(join(workspace, 'b/action.yml'), actionYml(''));
+    g('commit', '-q', '-am', 'break b');
+    const fresh = (given: Record<string, string>) => {
+      Object.assign(state, { outputs: {}, annotations: [], infos: [], summary: '', failed: [] });
+      return action(workspace, { 'base-ref': 'main', 'expected-impact': 'major', ...given });
+    };
+
+    // Before: auto ran, graded nothing and annotated FP812 on action.yml, which this repository does not have.
+    const auto = await fresh({ impact: 'auto' });
+    expect(auto.infos).toContain('impact: every published workflow and action is ignored (see ignore)');
+    expect(auto.annotations).toEqual([]);
+    expect(auto.outputs['required-impact']).toBe('');
+    // impact: on runs: nothing is graded, and the verdict goes on a workflow ignore leaves in.
+    const on = await fresh({ impact: 'on' });
+    expect(on.outputs['required-impact']).toBe('none');
+    expect(on.annotations.map((a) => [String(a.props?.title).split(' ')[0], a.props?.file])).toEqual([
+      ['FP812', '.github/workflows/ci.yml'],
+    ]);
+    // With paths, auto says it was ignore that left the unit out.
+    const within = await fresh({ impact: 'auto', paths: 'b' });
+    expect(within.infos).toContain(
+      'impact: skipped (every published workflow or action within the paths is ignored; see ignore)',
+    );
+    expect(within.annotations).toEqual([]);
+  });
+
   it('skips impact: auto when nothing within the paths is published', async () => {
     const workspace = renamedRepo();
     const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });

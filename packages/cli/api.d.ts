@@ -570,8 +570,9 @@ export declare function check(options?: CheckOptions): Promise<Analysis>;
 
 /**
  * `flowpact impact`: checks that the declared release impact covers the changes to published workflows and actions.
- * When impact mode is skipped (on `merge_group`, or with paths that hold nothing to grade or to report on), `notes`
- * says why, and the analysis reports nothing.
+ * When impact mode is skipped (on `merge_group`, or when there is nothing to grade or to report on: paths that hold
+ * only what the change removed, or an `ignore` that matches every workflow and action), `notes` says why, and the
+ * analysis reports nothing.
  */
 export declare function impact(options?: ImpactOptions): Promise<Analysis>;
 

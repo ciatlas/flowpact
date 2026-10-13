@@ -90,10 +90,17 @@ graded.
   published unit to `ignore` is still graded for it, and the edit applies to impact mode once it is merged (the run
   notes `impact: this pull request changes what ignore leaves out of impact mode (…)`). Every other finding follows
   the pull request's own `ignore`.
-- Findings about the declaration that no change points at (`FP811`–`FP813`) go on a file within the paths: the first
-  published file graded, else the first workflow or action file there. When the paths hold neither (say, only an
-  unpublished workflow the change removed), there is nothing to grade or to report on, and impact mode is skipped:
-  `impact: skipped (nothing within the paths to grade or to report on)`.
+- When `ignore` leaves out every published unit (within the paths), nothing is graded. `impact: auto` then skips the
+  run, as in a repository that publishes nothing: `impact: every published workflow and action is ignored (see
+  ignore)`, or with paths `impact: skipped (every published workflow or action within the paths is ignored; see
+  ignore)`. `impact: on` and the CLI still run: the required impact is `none`, and the declaration is still checked,
+  so a label that declares more than the title is still `FP811`.
+- Findings about the declaration that no change points at (`FP811`–`FP813`) go on a file impact mode looks at: the
+  first published file graded, else the first workflow or action file that is not ignored (within the paths, when
+  there are paths). When there is neither (say, the paths hold only an unpublished workflow the change removed, or
+  `ignore` matches every workflow and action), there is nothing to grade or to report on, and impact mode is skipped:
+  `impact: skipped (nothing within the paths to grade or to report on)`, or without paths `impact: skipped (every
+  workflow and action is ignored: nothing to grade or to report on)`.
 - The reports say so: the terminal and Markdown reports add `only within <paths>: graded <units>`, and the JSON
   report's `impact.scope` lists the `paths` and the `units` graded.
 
@@ -169,7 +176,8 @@ jobs:
           impact: auto   # off (default) | auto | on
 ```
 
-`auto` turns impact mode on for pull requests in repositories that publish workflows or actions. The action fetches
+`auto` turns impact mode on for pull requests in repositories that publish workflows or actions, unless the
+baseline's `ignore` leaves out every one of them. The action fetches
 the base commit (and, for release pull requests, the release tags) when the checkout is shallow, with a one-off
 authorization header — `persist-credentials: false` works, and `contents: read` is enough. The job summary gets an
 **Impact** section, and the outputs `required-impact`, `declared-impact` and `impact-ok` let later steps react.

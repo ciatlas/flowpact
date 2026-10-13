@@ -731,3 +731,43 @@ describe('ignore and impact mode', () => {
     );
   });
 });
+
+describe('ignore that leaves out every published unit', () => {
+  const CONFIG = '.github/flowpact/flowpact.config.yml';
+  const CI = '.github/workflows/ci.yml';
+  const action = (name: string, input: boolean) =>
+    `name: ${name}\ndescription: action ${name}\ninputs:\n${input ? '  token: { description: t, required: false }\n' : ''}runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "${input ? '${{ inputs.token }}' : '${{ github.token }}'}"\n`;
+  /** Published actions a and b, both ignored on main, no root action.yml, and a CI workflow; the change breaks b. */
+  const ignored = (ignore: string) =>
+    repo(
+      {
+        [CONFIG]: `ignore: ["${ignore}"]\nimpact:\n  publish: ["*/action.yml"]\n`,
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+        [CI]: 'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: ./a\n',
+      },
+      { 'b/action.yml': action('b', false) },
+    );
+  const declared = ['--base', 'main', '--title', 'fix: x', '--labels', 'semver:major'];
+
+  it('reports the verdict on a file that ignore leaves in', async () => {
+    const r = await flowpact(ignored('*/action.yml'), ['impact', ...declared, '--format', 'json']);
+    // Before: FP811 and FP812 on action.yml, which this repository does not have.
+    expect(r.exitCode).toBe(1);
+    const report = JSON.parse(r.stdout);
+    expect(report.impact).toMatchObject({ required: 'none', ok: false, changes: [] });
+    expect(
+      report.findings.map((f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`),
+    ).toEqual([`FP811@${CI}`, `FP812@${CI}`]);
+  });
+
+  it('skips impact mode when ignore leaves out every workflow and action', async () => {
+    const root = ignored('**');
+    const r = await flowpact(root, ['impact', ...declared]);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toBe('');
+    expect(r.stderr).toContain(
+      'impact: skipped (every workflow and action is ignored: nothing to grade or to report on)',
+    );
+  });
+});

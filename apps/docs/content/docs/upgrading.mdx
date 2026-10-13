@@ -43,7 +43,8 @@ its path lies within the paths, and `flowpact generate <paths>` deletes it; 0.14
 A published workflow or action whose file `ignore` matches is no longer graded. 0.14 graded it but dropped its
 findings, so the verdict could say `required major` while the run passed. Now the verdict and the findings agree, and
 impact mode's findings are never dropped by `ignore`. If an ignored unit is one you publish, remove it from `ignore` to
-gate its changes.
+gate its changes. When `ignore` leaves out every published unit, `impact: auto` skips the run as in a repository that
+publishes nothing, and `impact: on` reports the verdict on the first workflow or action file that is not ignored.
 
 Impact mode reads `ignore` from the baseline's config, as it reads `impact.publish`, so a pull request's own `ignore`
 edit applies to impact mode once it is merged. A pull request that adds a published unit to `ignore` is still graded

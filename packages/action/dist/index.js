@@ -21890,9 +21890,9 @@ var coveredBy = (within2) => (file) => !within2 || within2.targets.has(file) || 
 function unitsLookedAt(base, head, { within: within2, ignore = [] }) {
   if (!within2 && !ignore.length) return void 0;
   const covered = coveredBy(within2);
-  return new Set(
-    [...base.units(), ...head.units()].filter((u) => covered(u.file) && !matchesAny(ignore, u.file)).map((u) => u.path)
-  );
+  const units = [...base.units(), ...head.units()];
+  const looked = units.filter((u) => covered(u.file) && !matchesAny(ignore, u.file));
+  return within2 || looked.length < units.length ? new Set(looked.map((u) => u.path)) : void 0;
 }
 function ignoreEditOf(base, head, policy, { within: within2, ignore = [], pending }) {
   if (!pending) return [];
@@ -21903,17 +21903,24 @@ function ignoreEditOf(base, head, policy, { within: within2, ignore = [], pendin
   return [...new Set(edited.map((u) => u.path))].sort();
 }
 function anchorOf(head, { within: within2, ignore = [] }, published) {
-  const headFiles = new Set(head.units().map((u) => u.file));
-  const graded = published.map((u) => u.file).filter((f) => headFiles.has(f));
-  const targets = [...within2?.targets ?? []].filter((f) => !matchesAny(ignore, f));
-  return graded.sort()[0] ?? targets.sort()[0];
+  const headFiles = head.units().map((u) => u.file);
+  const graded = published.map((u) => u.file).filter((f) => headFiles.includes(f));
+  const others = (within2 ? [...within2.targets] : headFiles).filter((f) => !matchesAny(ignore, f));
+  return graded.sort()[0] ?? others.sort()[0];
 }
-function scopeOf(head, lookAt, published) {
+function narrowedOf(base, head, policy, lookAt, published) {
+  const { within: within2, ignore = [] } = lookAt;
+  const covered = coveredBy(within2);
+  const ignored = [...base.units(), ...head.units()].filter(
+    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file)
+  );
   const anchor2 = anchorOf(head, lookAt, published);
+  return { ignored: [...new Set(ignored.map((u) => u.path))].sort(), ...anchor2 ? { anchor: anchor2 } : {} };
+}
+function scopeOf(within2, published) {
   return {
-    paths: [...new Set(lookAt.within.paths.map((p) => p.relative))],
-    units: [...new Set(published.map((u) => u.path))].sort(),
-    ...anchor2 ? { anchor: anchor2 } : {}
+    paths: [...new Set(within2.paths.map((p) => p.relative))],
+    units: [...new Set(published.map((u) => u.path))].sort()
   };
 }
 function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
@@ -21930,7 +21937,8 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
     verdict: impactVerdict(changes, declared, policy),
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
-    ...within2 ? { scope: scopeOf(head, lookAt, published) } : {},
+    ...within2 ? { scope: scopeOf(within2, published) } : {},
+    ...units ? { narrowed: narrowedOf(base, head, policy, lookAt, published) } : {},
     ...ignoreEdited.length ? { ignoreEdited } : {}
   };
 }
@@ -22462,7 +22470,7 @@ var expressionRules = [
 var describeSource = (s) => s.kind === "explicit" ? "the explicit impact" : s.kind === "version" ? `the version bump ${s.value}` : `the ${s.kind === "title" ? "title" : "labels"} "${s.value}"`;
 var related = (changes) => changes.slice(0, 20).map((c) => ({ loc: c.loc, message: `${c.level}: ${c.message}` }));
 var verdictLoc = (impact, changes) => changes[0]?.loc ?? impact.changes[0]?.loc ?? {
-  file: impact.scope?.anchor ?? impact.publishedFiles[0] ?? "action.yml",
+  file: impact.narrowed?.anchor ?? impact.publishedFiles[0] ?? "action.yml",
   line: 1,
   column: 1,
   endLine: 1,
@@ -24956,10 +24964,18 @@ function impactPathsOf(opts, project) {
     targets: project.targets
   };
 }
-function impactSkip(scope, onlyIfPublished) {
-  if (!scope || scope.units.length) return void 0;
-  if (onlyIfPublished) return "no published workflow or action within the paths; see impact.publish";
-  return scope.anchor ? void 0 : "nothing within the paths to grade or to report on";
+function pathsSkip(scope, narrowed, onlyIfPublished) {
+  if (scope.units.length) return void 0;
+  if (onlyIfPublished)
+    return narrowed.ignored.length ? "every published workflow or action within the paths is ignored; see ignore" : "no published workflow or action within the paths; see impact.publish";
+  return narrowed.anchor ? void 0 : "nothing within the paths to grade or to report on";
+}
+function impactSkip(impact, onlyIfPublished) {
+  const { scope, narrowed } = impact;
+  if (!narrowed) return void 0;
+  if (scope) return pathsSkip(scope, narrowed, onlyIfPublished);
+  if (impact.publishedFiles.length || narrowed.anchor) return void 0;
+  return "every workflow and action is ignored: nothing to grade or to report on";
 }
 function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
@@ -24968,7 +24984,7 @@ function impactOf(opts, index, lookAt, logger) {
     "impact",
     () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt)
   );
-  const skipped = impactSkip(result.scope, impact.onlyIfPublished);
+  const skipped = impactSkip(result, impact.onlyIfPublished);
   return skipped ? { impact: void 0, impactSkipped: skipped } : { impact: result };
 }
 function ruleRun(fields) {
@@ -26957,16 +26973,18 @@ function prepareInputImpact(root, config2, request, logger) {
   }
 }
 function nothingPublishedNote(root, logger, options) {
-  if (options.publishedFiles?.length !== 0) return void 0;
-  const { policy } = options;
+  const { policy, publishedFiles, ignore = [] } = options;
+  const graded = (file) => !ignore.some((p) => matchesPattern(file, p));
+  if (!publishedFiles || publishedFiles.some(graded)) return void 0;
   const project = loadProject({
     root,
     logger,
     ...policy.publish ? { publish: policy.publish } : {}
   });
   const units = [...project.workflows.values(), ...project.actions.values()];
-  if (units.some((u) => isPublished(u, policy))) return void 0;
-  return "impact: no published workflows or actions (see impact.publish)";
+  const published = units.filter((u) => isPublished(u, policy));
+  if (published.some((u) => graded(u.file))) return void 0;
+  return publishedFiles.length || published.length ? "impact: every published workflow and action is ignored (see ignore)" : "impact: no published workflows or actions (see impact.publish)";
 }
 function autoImpact(root, logger, options, withPaths) {
   if (withPaths) return { options: { ...options, onlyIfPublished: true } };

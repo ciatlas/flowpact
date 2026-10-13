@@ -35,6 +35,7 @@ import {
   computeImpact,
   type DeclaredInput,
   type ImpactLookAt,
+  type ImpactNarrowed,
   type ImpactPaths,
   type ImpactPolicy,
   type ImpactResult,
@@ -82,8 +83,8 @@ export interface AnalyzeOptions {
      */
     ignore?: readonly string[];
     /**
-     * Run only when the paths hold a published unit, in the baseline or the working tree (the action's `impact: auto`).
-     * Without paths, the caller decides that beforehand.
+     * Run only when the paths hold a published unit that is not ignored, in the baseline or the working tree (the
+     * action's `impact: auto`). Without paths, the caller decides that beforehand.
      */
     onlyIfPublished?: boolean;
   };
@@ -140,9 +141,10 @@ export interface AnalysisResult {
   /** Impact mode's changes and verdict, when it ran. */
   impact?: ImpactResult;
   /**
-   * Why impact mode did not run although it was set up: the paths hold nothing published and no workflow or action of
-   * the working tree that is not ignored (say, only what the change removed), so nothing to grade or to report on; or
-   * nothing published, when it runs only then (`onlyIfPublished`).
+   * Why impact mode did not run although it was set up: nothing to grade or to report on, i.e. nothing published (within
+   * the paths) is graded and no workflow or action of the working tree (within them) is left that is not ignored (say,
+   * only what the change removed, or an `ignore` that matches everything); or, with paths, nothing published within
+   * them, when it runs only then (`onlyIfPublished`).
    */
   impactSkipped?: string;
   /**
@@ -462,20 +464,36 @@ function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | un
 /**
  * Why impact mode does not run with these paths: nothing published within them when it runs only then (`impact:
  * auto`), or nothing to grade or to report on, i.e. nothing published and no workflow or action of the working tree
- * that is not ignored (say, only what the change removed).
+ * within them that is not ignored (say, only what the change removed).
  */
-function impactSkip(
-  scope: ImpactScope | undefined,
+function pathsSkip(
+  scope: ImpactScope,
+  narrowed: ImpactNarrowed,
   onlyIfPublished: boolean | undefined,
 ): string | undefined {
-  if (!scope || scope.units.length) return undefined;
-  if (onlyIfPublished) return 'no published workflow or action within the paths; see impact.publish';
-  return scope.anchor ? undefined : 'nothing within the paths to grade or to report on';
+  if (scope.units.length) return undefined;
+  if (onlyIfPublished)
+    return narrowed.ignored.length
+      ? 'every published workflow or action within the paths is ignored; see ignore'
+      : 'no published workflow or action within the paths; see impact.publish';
+  return narrowed.anchor ? undefined : 'nothing within the paths to grade or to report on';
+}
+
+/**
+ * Why impact mode does not run: with paths, see `pathsSkip`; without, `ignore` leaves out every workflow and action, so
+ * nothing is graded and there is no file to report on.
+ */
+function impactSkip(impact: ImpactResult, onlyIfPublished: boolean | undefined): string | undefined {
+  const { scope, narrowed } = impact;
+  if (!narrowed) return undefined;
+  if (scope) return pathsSkip(scope, narrowed, onlyIfPublished);
+  if (impact.publishedFiles.length || narrowed.anchor) return undefined;
+  return 'every workflow and action is ignored: nothing to grade or to report on';
 }
 
 /**
  * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
- * them; never one whose file `ignore` matches). With paths that hold nothing to grade or report on, why it does not.
+ * them; never one whose file the baseline's `ignore` matches). With nothing to grade or report on, why it does not.
  */
 function impactOf(
   opts: AnalyzeOptions,
@@ -488,7 +506,7 @@ function impactOf(
   const result = logger.time('impact', () =>
     computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt),
   );
-  const skipped = impactSkip(result.scope, impact.onlyIfPublished);
+  const skipped = impactSkip(result, impact.onlyIfPublished);
   return skipped ? { impact: undefined, impactSkipped: skipped } : { impact: result };
 }
 
