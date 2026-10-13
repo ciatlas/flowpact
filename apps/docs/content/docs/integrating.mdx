@@ -99,7 +99,7 @@ jobs:
       - name: flowpact
         env:
           GH_TOKEN: ${{ github.token }}
-          FLOWPACT_VERSION: 0.14.0
+          FLOWPACT_VERSION: 0.14.1
         run: |
           gh release download "v$FLOWPACT_VERSION" --repo ciatlas/flowpact \
             --pattern "flowpact-$FLOWPACT_VERSION.tgz" --dir "$RUNNER_TEMP"
