@@ -61,7 +61,10 @@ const undefinedEnvRef = defineRule({
 });
 
 /** The job and step a site is in, if any. */
-function siteScope(wf: WorkflowDecl, site: ExprSite): { job: JobDecl | undefined; step: StepDecl | undefined } {
+function siteScope(
+  wf: WorkflowDecl,
+  site: ExprSite,
+): { job: JobDecl | undefined; step: StepDecl | undefined } {
   const job = site.job ? wf.jobs[site.job] : undefined;
   const step = job && site.step !== undefined ? job.steps[site.step] : undefined;
   return { job, step };
