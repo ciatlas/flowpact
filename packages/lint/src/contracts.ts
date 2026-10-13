@@ -7,8 +7,11 @@ import {
   type FileSystem,
   type InputDecl,
   insideRepository,
+  type JobDecl,
   type Json,
+  type OutputDecl,
   type ProjectIndex,
+  type SecretDecl,
   sym,
   type UnitDecl,
   type WorkflowDecl,
@@ -126,15 +129,26 @@ function inputContract(i: InputDecl): ContractInput {
 
 const stepRef = (s: { id?: string; index: number }) => s.id ?? `#${s.index + 1}`;
 
-function workflowInterface(wf: WorkflowDecl): Contract['interface'] {
+/** The contract entries of declared inputs, by name (unsorted). */
+function inputsContract(decls: Record<string, InputDecl> | undefined): Record<string, ContractInput> {
   const inputs: Record<string, ContractInput> = {};
-  for (const i of Object.values(wf.call?.inputs ?? {})) inputs[i.name] = inputContract(i);
-  const dispatchInputs: Record<string, ContractInput> = {};
-  for (const i of Object.values(wf.dispatch?.inputs ?? {})) dispatchInputs[i.name] = inputContract(i);
+  for (const i of Object.values(decls ?? {})) inputs[i.name] = inputContract(i);
+  return inputs;
+}
+
+/** The contract entries of declared secrets, by name (unsorted). */
+function secretsContract(
+  decls: Record<string, SecretDecl> | undefined,
+): Record<string, { required: boolean }> {
   const secrets: Record<string, { required: boolean }> = {};
-  for (const s of Object.values(wf.call?.secrets ?? {})) secrets[s.name] = { required: s.required };
+  for (const s of Object.values(decls ?? {})) secrets[s.name] = { required: s.required };
+  return secrets;
+}
+
+/** The contract entries of declared outputs, by name (unsorted): the description and the value, when set. */
+function outputsContract(decls: Record<string, OutputDecl> | undefined): Contract['interface']['outputs'] {
   const outputs: Contract['interface']['outputs'] = {};
-  for (const o of Object.values(wf.call?.outputs ?? {})) {
+  for (const o of Object.values(decls ?? {})) {
     outputs[o.name] = {
       ...(o.description ? { description: o.description } : {}),
       ...(o.value !== undefined
@@ -142,6 +156,14 @@ function workflowInterface(wf: WorkflowDecl): Contract['interface'] {
         : {}),
     };
   }
+  return outputs;
+}
+
+function workflowInterface(wf: WorkflowDecl): Contract['interface'] {
+  const inputs = inputsContract(wf.call?.inputs);
+  const dispatchInputs = inputsContract(wf.dispatch?.inputs);
+  const secrets = secretsContract(wf.call?.secrets);
+  const outputs = outputsContract(wf.call?.outputs);
   return {
     inputs: sortedRecord(inputs),
     ...(Object.keys(dispatchInputs).length ? { dispatchInputs: sortedRecord(dispatchInputs) } : {}),
@@ -151,19 +173,17 @@ function workflowInterface(wf: WorkflowDecl): Contract['interface'] {
 }
 
 function actionInterface(a: ActionDecl): Contract['interface'] {
-  const inputs: Record<string, ContractInput> = {};
-  for (const i of Object.values(a.inputs)) inputs[i.name] = inputContract(i);
-  const outputs: Contract['interface']['outputs'] = {};
-  for (const o of Object.values(a.outputs)) {
-    outputs[o.name] = {
-      ...(o.description ? { description: o.description } : {}),
-      ...(o.value !== undefined
-        ? { value: typeof o.value === 'string' ? o.value : JSON.stringify(o.value) }
-        : {}),
-    };
-  }
-  return { inputs: sortedRecord(inputs), outputs: sortedRecord(outputs) };
+  return {
+    inputs: sortedRecord(inputsContract(a.inputs)),
+    outputs: sortedRecord(outputsContract(a.outputs)),
+  };
 }
+
+type Consumer = Contract['consumers'][number];
+
+/** Where a consumer uses the unit from: its unit, job and step. */
+const consumerKey = (c: Consumer) => `${c.from}#${c.job ?? ''}#${c.step ?? ''}`;
+const byConsumer = (a: Consumer, b: Consumer) => byCodePoint(consumerKey(a), consumerKey(b));
 
 function consumersOf(index: ProjectIndex, unit: UnitDecl): Contract['consumers'] {
   const out: Contract['consumers'] = [];
@@ -195,42 +215,54 @@ function consumersOf(index: ProjectIndex, unit: UnitDecl): Contract['consumers']
       });
     }
   }
-  return out.sort((a, b) =>
-    byCodePoint(`${a.from}#${a.job ?? ''}#${a.step ?? ''}`, `${b.from}#${b.job ?? ''}#${b.step ?? ''}`),
-  );
+  return out.sort(byConsumer);
+}
+
+type ContractCall = NonNullable<Contract['calls']>[number];
+
+/** The text of each binding, by name (unsorted). */
+const bindingTexts = (bindings: Record<string, Binding>): Record<string, string> =>
+  Object.fromEntries(Object.values(bindings).map((b) => [b.name, bindingText(b)]));
+
+/** What a call passes as secrets: `inherit`, the bindings by name, or nothing. */
+function callSecrets(job: JobDecl): Pick<ContractCall, 'secrets'> {
+  if (job.secretsInherit) return { secrets: 'inherit' };
+  const secrets = bindingTexts(job.secrets);
+  return Object.keys(secrets).length ? { secrets: sortedRecord(secrets) } : {};
+}
+
+/** The shape of a call's matrix: what it expands to, or an empty inexact shape when it is computed at runtime. */
+function callMatrix(job: JobDecl): Pick<ContractCall, 'matrix'> {
+  if (!job.matrix) return {};
+  const exp = expandMatrix(job.matrix);
+  if (exp.dynamic) return { matrix: { combinations: 0, keys: [], exact: false } };
+  return { matrix: { combinations: exp.combos.length, keys: [...exp.keys].sort(), exact: exp.exact } };
+}
+
+function callContract(job: JobDecl, uses: NonNullable<JobDecl['uses']>): ContractCall {
+  const matrix = callMatrix(job);
+  const withs = bindingTexts(job.with);
+  const secrets = callSecrets(job);
+  return {
+    job: job.id,
+    uses: uses.target ?? uses.raw,
+    ...(Object.keys(withs).length ? { with: sortedRecord(withs) } : {}),
+    ...secrets,
+    ...(job.needs.length ? { needs: job.needs.map((n) => n.id).sort() } : {}),
+    ...matrix,
+  };
 }
 
 function callsOf(wf: WorkflowDecl): Contract['calls'] {
   const calls: NonNullable<Contract['calls']> = [];
-  for (const job of Object.values(wf.jobs)) {
-    if (!job.uses) continue;
-    const exp = job.matrix ? expandMatrix(job.matrix) : undefined;
-    const withs = Object.fromEntries(Object.values(job.with).map((b) => [b.name, bindingText(b)]));
-    const secrets = job.secretsInherit
-      ? ('inherit' as const)
-      : Object.fromEntries(Object.values(job.secrets).map((b) => [b.name, bindingText(b)]));
-    calls.push({
-      job: job.id,
-      uses: job.uses.target ?? job.uses.raw,
-      ...(Object.keys(withs).length ? { with: sortedRecord(withs) } : {}),
-      ...(secrets === 'inherit' || Object.keys(secrets).length
-        ? { secrets: secrets === 'inherit' ? secrets : sortedRecord(secrets) }
-        : {}),
-      ...(job.needs.length ? { needs: job.needs.map((n) => n.id).sort() } : {}),
-      ...(exp && !exp.dynamic
-        ? { matrix: { combinations: exp.combos.length, keys: [...exp.keys].sort(), exact: exp.exact } }
-        : exp?.dynamic
-          ? { matrix: { combinations: 0, keys: [], exact: false } }
-          : {}),
-    });
-  }
+  for (const job of Object.values(wf.jobs)) if (job.uses) calls.push(callContract(job, job.uses));
   return calls.sort((a, b) => byCodePoint(a.job, b.job));
 }
 
 function usesOf(index: ProjectIndex, unit: UnitDecl): Contract['uses'] {
   const uses: NonNullable<Contract['uses']> = [];
   for (const u of index.actionUses.filter((x) => x.unit === unit)) {
-    const withs = Object.fromEntries(Object.values(u.step.with).map((b) => [b.name, bindingText(b)]));
+    const withs = bindingTexts(u.step.with);
     uses.push({
       ...(u.job ? { job: u.job.id } : {}),
       step: stepRef(u.step),
@@ -306,6 +338,49 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 type AddChange = (breaking: boolean, path: string, message: string) => void;
 
+/** Records a change to one input: what changed (`changed type from …`), which the caller prefixes with the input. */
+type InputChange = (breaking: boolean, what: string) => void;
+
+/** The changes to an input both contracts declare. */
+function diffInput(
+  change: InputChange,
+  old: ContractInput,
+  cur: ContractInput,
+  mustPass: (i: ContractInput) => boolean,
+): void {
+  const oldType = old.type ?? 'string';
+  const curType = cur.type ?? 'string';
+  if (oldType !== curType) change(true, `changed type from ${oldType} to ${curType}`);
+  diffRequired(change, old, cur, mustPass);
+  if (!same(old.default, cur.default)) {
+    change(
+      false,
+      `default changed from ${JSON.stringify(old.default ?? null)} to ${JSON.stringify(cur.default ?? null)}`,
+    );
+  }
+  if (!same(old.options, cur.options)) diffOptions(change, old.options, cur.options);
+  if (old.description !== cur.description) change(false, 'description changed');
+}
+
+/** Whether every caller must now pass the input (breaking), or it only became required or optional. */
+function diffRequired(
+  change: InputChange,
+  old: ContractInput,
+  cur: ContractInput,
+  mustPass: (i: ContractInput) => boolean,
+): void {
+  const oldNeeds = mustPass(old);
+  const curNeeds = mustPass(cur);
+  if (!oldNeeds && curNeeds) change(true, 'must now be passed by every caller');
+  else if (old.required !== cur.required) change(false, `is now ${cur.required ? 'required' : 'optional'}`);
+}
+
+/** A change to an input's options; removing one breaks the callers that pass it. */
+function diffOptions(change: InputChange, old: string[] | undefined, cur: string[] | undefined): void {
+  const removed = (old ?? []).filter((o) => !(cur ?? []).includes(o));
+  change(removed.length > 0, `options changed${removed.length ? ` (removed: ${removed.join(', ')})` : ''}`);
+}
+
 function diffInputs(
   add: AddChange,
   key: 'inputs' | 'dispatchInputs',
@@ -317,39 +392,14 @@ function diffInputs(
   for (const [name, old] of Object.entries(before)) {
     const path = `${key}.${name}`;
     const cur = after[name];
-    if (!cur) {
-      add(true, path, `${label} "${name}" was removed — callers that pass it will fail`);
-      continue;
-    }
-    if ((old.type ?? 'string') !== (cur.type ?? 'string')) {
-      add(
-        true,
-        path,
-        `${label} "${name}" changed type from ${old.type ?? 'string'} to ${cur.type ?? 'string'}`,
+    if (!cur) add(true, path, `${label} "${name}" was removed — callers that pass it will fail`);
+    else
+      diffInput(
+        (breaking, what) => add(breaking, path, `${label} "${name}" ${what}`),
+        old,
+        cur,
+        opts.mustPass,
       );
-    }
-    const oldNeeds = opts.mustPass(old);
-    const curNeeds = opts.mustPass(cur);
-    if (!oldNeeds && curNeeds) add(true, path, `${label} "${name}" must now be passed by every caller`);
-    else if (old.required !== cur.required) {
-      add(false, path, `${label} "${name}" is now ${cur.required ? 'required' : 'optional'}`);
-    }
-    if (!same(old.default, cur.default)) {
-      add(
-        false,
-        path,
-        `${label} "${name}" default changed from ${JSON.stringify(old.default ?? null)} to ${JSON.stringify(cur.default ?? null)}`,
-      );
-    }
-    if (!same(old.options, cur.options)) {
-      const removed = (old.options ?? []).filter((o) => !(cur.options ?? []).includes(o));
-      add(
-        removed.length > 0,
-        path,
-        `${label} "${name}" options changed${removed.length ? ` (removed: ${removed.join(', ')})` : ''}`,
-      );
-    }
-    if (old.description !== cur.description) add(false, path, `${label} "${name}" description changed`);
   }
   for (const [name, cur] of Object.entries(after)) {
     if (before[name]) continue;
@@ -362,6 +412,129 @@ function diffInputs(
   }
 }
 
+type Secrets = NonNullable<Contract['interface']['secrets']>;
+
+/** Secrets the current contract removed or made required (both breaking), or made optional. */
+function diffSecrets(add: AddChange, before: Secrets, after: Secrets): void {
+  for (const [name, old] of Object.entries(before)) {
+    const cur = after[name];
+    if (!cur) add(true, `secrets.${name}`, `secret "${name}" was removed — callers that pass it will fail`);
+    else if (!old.required && cur.required) add(true, `secrets.${name}`, `secret "${name}" is now required`);
+    else if (old.required && !cur.required) add(false, `secrets.${name}`, `secret "${name}" is now optional`);
+  }
+}
+
+/** Secrets the current contract added: a required one breaks the callers of a unit that could be called. */
+function addedSecrets(add: AddChange, before: Secrets, after: Secrets, wasCallable: boolean): void {
+  for (const [name, cur] of Object.entries(after)) {
+    if (!before[name])
+      add(
+        cur.required && wasCallable,
+        `secrets.${name}`,
+        `secret "${name}" was added${cur.required ? ' as required' : ''}`,
+      );
+  }
+}
+
+/** Outputs removed (breaking: consumers that read one get an empty value), changed or added. */
+function diffOutputs(
+  add: AddChange,
+  before: Contract['interface']['outputs'],
+  after: Contract['interface']['outputs'],
+): void {
+  for (const [name, old] of Object.entries(before)) {
+    const cur = after[name];
+    if (!cur)
+      add(true, `outputs.${name}`, `output "${name}" was removed — consumers reading it get an empty value`);
+    else if (!same(old, cur)) add(false, `outputs.${name}`, `output "${name}" changed`);
+  }
+  for (const name of Object.keys(after)) {
+    if (!before[name]) add(false, `outputs.${name}`, `output "${name}" was added`);
+  }
+}
+
+/** A change to the triggers: losing `workflow_call` breaks every caller. */
+function diffTriggers(add: AddChange, before: string[] | undefined, after: string[] | undefined): void {
+  const lost = (before ?? []).filter((t) => !(after ?? []).includes(t));
+  add(
+    lost.includes('workflow_call'),
+    'triggers',
+    `triggers changed from [${(before ?? []).join(', ')}] to [${(after ?? []).join(', ')}]`,
+  );
+}
+
+/** Changes to what names the unit: its path (breaking when it could be called), its triggers and its name. */
+function diffIdentity(add: AddChange, before: Contract, after: Contract, wasCallable: boolean): void {
+  if (before.path !== after.path) {
+    add(
+      wasCallable,
+      'path',
+      `path changed from ${before.path} to ${after.path}${wasCallable ? ' — callers referencing the old path will fail' : ''}`,
+    );
+  }
+  if (!same(before.triggers, after.triggers)) diffTriggers(add, before.triggers, after.triggers);
+  if (before.name !== after.name)
+    add(false, 'name', `name changed from "${before.name ?? ''}" to "${after.name ?? ''}"`);
+}
+
+/** Adds to `details` the inputs a call started or stopped passing, or now passes another value for. */
+function passedDetails(
+  details: string[],
+  old: Record<string, string> | undefined,
+  cur: Record<string, string> | undefined,
+): void {
+  for (const k of new Set([...Object.keys(old ?? {}), ...Object.keys(cur ?? {})])) {
+    const o = old?.[k];
+    const n = cur?.[k];
+    if (o !== n)
+      details.push(
+        o === undefined ? `passes ${k}` : n === undefined ? `stopped passing ${k}` : `changed ${k}`,
+      );
+  }
+}
+
+/** What changed in a call: what it calls, the inputs it passes, its secrets, matrix and needs. */
+function callDetails(old: ContractCall, cur: ContractCall): string[] {
+  const details: string[] = [];
+  if (old.uses !== cur.uses) details.push(`now calls ${cur.uses}`);
+  passedDetails(details, old.with, cur.with);
+  if (!same(old.secrets, cur.secrets)) details.push('secrets changed');
+  if (!same(old.matrix, cur.matrix)) details.push('matrix changed');
+  if (!same(old.needs, cur.needs)) details.push('needs changed');
+  return details;
+}
+
+const callsByJob = (calls: Contract['calls']) => new Map((calls ?? []).map((c) => [c.job, c]));
+
+/** Reusable workflows the unit stopped calling, calls differently or started calling (none of it breaking). */
+function diffCalls(add: AddChange, before: Contract['calls'], after: Contract['calls']): void {
+  const bc = callsByJob(before);
+  const ac = callsByJob(after);
+  for (const [job, old] of bc) {
+    const cur = ac.get(job);
+    if (!cur) add(false, `calls.${job}`, `jobs.${job} no longer calls ${old.uses}`);
+    else if (!same(old, cur))
+      add(false, `calls.${job}`, `jobs.${job}: ${callDetails(old, cur).join(', ') || 'call changed'}`);
+  }
+  for (const [job, cur] of ac)
+    if (!bc.has(job)) add(false, `calls.${job}`, `jobs.${job} now calls ${cur.uses}`);
+}
+
+/** Changes to the local actions the unit uses and to its consumers (none of it breaking). */
+function diffUsage(add: AddChange, before: Contract, after: Contract): void {
+  if (!same(before.uses, after.uses)) add(false, 'uses', 'local action usage changed');
+  if (same(before.consumers, after.consumers)) return;
+  const bk = new Set(before.consumers.map(consumerKey));
+  const ak = new Set(after.consumers.map(consumerKey));
+  const added = [...ak].filter((k) => !bk.has(k)).length;
+  const removed = [...bk].filter((k) => !ak.has(k)).length;
+  add(
+    false,
+    'consumers',
+    added || removed ? `consumers changed (+${added} / -${removed})` : 'what consumers pass or read changed',
+  );
+}
+
 /** Classifies what changed between the locked contract and the current one. */
 export function diffContracts(before: Contract, after: Contract): ContractChange[] {
   const changes: ContractChange[] = [];
@@ -372,7 +545,7 @@ export function diffContracts(before: Contract, after: Contract): ContractChange
   const isWorkflow = before.kind === 'workflow';
   // Without `workflow_call` before, nobody could call the workflow: new call inputs/secrets break no caller.
   const wasCallable = !isWorkflow || (before.triggers ?? []).includes('workflow_call');
-  diffInputs(add, 'inputs', isWorkflow ? 'input' : 'input', bi.inputs, ai.inputs, {
+  diffInputs(add, 'inputs', 'input', bi.inputs, ai.inputs, {
     // GitHub requires a `required` workflow_call input from every caller, even when it has a default.
     mustPass: (i) => (isWorkflow ? i.required : i.required && i.default === undefined),
     additionsBreak: wasCallable,
@@ -381,93 +554,14 @@ export function diffContracts(before: Contract, after: Contract): ContractChange
     mustPass: (i) => i.required && i.default === undefined,
     additionsBreak: true,
   });
-
   const bs = bi.secrets ?? {};
   const as = ai.secrets ?? {};
-  for (const [name, old] of Object.entries(bs)) {
-    const cur = as[name];
-    if (!cur) add(true, `secrets.${name}`, `secret "${name}" was removed — callers that pass it will fail`);
-    else if (!old.required && cur.required) add(true, `secrets.${name}`, `secret "${name}" is now required`);
-    else if (old.required && !cur.required) add(false, `secrets.${name}`, `secret "${name}" is now optional`);
-  }
-  for (const [name, cur] of Object.entries(as)) {
-    if (!bs[name])
-      add(
-        cur.required && wasCallable,
-        `secrets.${name}`,
-        `secret "${name}" was added${cur.required ? ' as required' : ''}`,
-      );
-  }
-
-  for (const [name, old] of Object.entries(bi.outputs)) {
-    const cur = ai.outputs[name];
-    if (!cur)
-      add(true, `outputs.${name}`, `output "${name}" was removed — consumers reading it get an empty value`);
-    else if (!same(old, cur)) add(false, `outputs.${name}`, `output "${name}" changed`);
-  }
-  for (const name of Object.keys(ai.outputs)) {
-    if (!bi.outputs[name]) add(false, `outputs.${name}`, `output "${name}" was added`);
-  }
-
-  if (before.path !== after.path) {
-    add(
-      wasCallable,
-      'path',
-      `path changed from ${before.path} to ${after.path}${wasCallable ? ' — callers referencing the old path will fail' : ''}`,
-    );
-  }
-  if (!same(before.triggers, after.triggers)) {
-    const lost = (before.triggers ?? []).filter((t) => !(after.triggers ?? []).includes(t));
-    add(
-      lost.includes('workflow_call'),
-      'triggers',
-      `triggers changed from [${(before.triggers ?? []).join(', ')}] to [${(after.triggers ?? []).join(', ')}]`,
-    );
-  }
-  if (before.name !== after.name)
-    add(false, 'name', `name changed from "${before.name ?? ''}" to "${after.name ?? ''}"`);
-
-  const byJob = (calls: Contract['calls']) => new Map((calls ?? []).map((c) => [c.job, c]));
-  const bc = byJob(before.calls);
-  const ac = byJob(after.calls);
-  for (const [job, old] of bc) {
-    const cur = ac.get(job);
-    if (!cur) add(false, `calls.${job}`, `jobs.${job} no longer calls ${old.uses}`);
-    else if (!same(old, cur)) {
-      const details: string[] = [];
-      if (old.uses !== cur.uses) details.push(`now calls ${cur.uses}`);
-      for (const k of new Set([...Object.keys(old.with ?? {}), ...Object.keys(cur.with ?? {})])) {
-        const o = old.with?.[k];
-        const n = cur.with?.[k];
-        if (o !== n)
-          details.push(
-            o === undefined ? `passes ${k}` : n === undefined ? `stopped passing ${k}` : `changed ${k}`,
-          );
-      }
-      if (!same(old.secrets, cur.secrets)) details.push('secrets changed');
-      if (!same(old.matrix, cur.matrix)) details.push('matrix changed');
-      if (!same(old.needs, cur.needs)) details.push('needs changed');
-      add(false, `calls.${job}`, `jobs.${job}: ${details.join(', ') || 'call changed'}`);
-    }
-  }
-  for (const [job, cur] of ac)
-    if (!bc.has(job)) add(false, `calls.${job}`, `jobs.${job} now calls ${cur.uses}`);
-
-  if (!same(before.uses, after.uses)) add(false, 'uses', 'local action usage changed');
-  if (!same(before.consumers, after.consumers)) {
-    const key = (c: Contract['consumers'][number]) => `${c.from}#${c.job ?? ''}#${c.step ?? ''}`;
-    const bk = new Set(before.consumers.map(key));
-    const ak = new Set(after.consumers.map(key));
-    const added = [...ak].filter((k) => !bk.has(k)).length;
-    const removed = [...bk].filter((k) => !ak.has(k)).length;
-    add(
-      false,
-      'consumers',
-      added || removed
-        ? `consumers changed (+${added} / -${removed})`
-        : 'what consumers pass or read changed',
-    );
-  }
+  diffSecrets(add, bs, as);
+  addedSecrets(add, bs, as, wasCallable);
+  diffOutputs(add, bi.outputs, ai.outputs);
+  diffIdentity(add, before, after, wasCallable);
+  diffCalls(add, before.calls, after.calls);
+  diffUsage(add, before, after);
   return changes;
 }
 
@@ -537,14 +631,16 @@ export interface ContractPlan {
   breaking: number;
 }
 
-/** Compares the contracts on disk with the ones the current workflows produce. */
-export function planContracts(index: ProjectIndex, fs: FileSystem): ContractPlan {
-  const dir = CONTRACTS_DIR;
-  const existing = readContracts(fs);
-  const entries: ContractPlanEntry[] = [];
-  const units = index.units().sort((a, b) => byCodePoint(a.path, b.path));
-  // A contract that names a unit is matched by path even if it was written under another file name, so adding
-  // `ci.yaml` next to `ci.yml` does not move `ci.yml`'s contract (and diff it against the wrong workflow).
+/**
+ * The contract file of each unit. A contract that names a unit is matched by path even if it was written under another
+ * file name, so adding `ci.yaml` next to `ci.yml` does not move `ci.yml`'s contract (and diff it against the wrong
+ * workflow); other units get a file name no contract takes.
+ */
+function expectedFiles(
+  existing: Map<string, ExistingContract>,
+  units: UnitDecl[],
+  dir: string,
+): Map<string, UnitDecl> {
   const lockedFile = new Map<string, string>();
   for (const [file, prev] of existing) {
     const c = prev.contract;
@@ -558,6 +654,71 @@ export function planContracts(index: ProjectIndex, fs: FileSystem): ContractPlan
     taken.add(file);
     expected.set(file, unit);
   }
+  return expected;
+}
+
+/** The regenerated consumers, with the entries of callers that do not parse taken from the locked contract. */
+const withBrokenConsumers = (current: Consumer[], locked: Consumer[], broken: Set<string>): Consumer[] =>
+  [...current.filter((c) => !broken.has(c.from)), ...locked.filter((c) => broken.has(c.from))].sort(
+    byConsumer,
+  );
+
+/** The entry of a unit that parses: its contract regenerated, and compared with the locked one when there is one. */
+function regeneratedEntry(
+  index: ProjectIndex,
+  file: string,
+  unit: UnitDecl,
+  prev: ExistingContract | undefined,
+  broken: Set<string>,
+): ContractPlanEntry {
+  const contract = buildContract(index, unit);
+  if (broken.size && prev?.contract)
+    contract.consumers = withBrokenConsumers(contract.consumers, prev.contract.consumers, broken);
+  const after = serializeContract(contract);
+  if (!prev) return { file, status: 'create', unit: unit.path, after, changes: [] };
+  // Checkouts with core.autocrlf convert line endings; the content is what matters.
+  if (normalizeContractText(prev.text) === after)
+    return { file, status: 'unchanged', unit: unit.path, before: prev.text, after, changes: [] };
+  return {
+    file,
+    status: 'update',
+    unit: unit.path,
+    before: prev.text,
+    after,
+    changes: prev.contract ? diffContracts(prev.contract, contract) : [],
+    ...(prev.error ? { invalid: prev.error } : {}),
+  };
+}
+
+/** The entry of a contract file that no unit produces any more. */
+const orphanEntry = (file: string, prev: ExistingContract): ContractPlanEntry => ({
+  file,
+  status: 'delete',
+  ...(prev.contract ? { unit: prev.contract.path } : {}),
+  before: prev.text,
+  changes: [],
+  ...(prev.error ? { invalid: prev.error } : {}),
+});
+
+/** A plan of these entries: whether anything drifted, the count per status and the breaking changes. */
+function planOf(entries: ContractPlanEntry[], skipped: string[]): ContractPlan {
+  const counts: Record<ContractStatus, number> = { create: 0, update: 0, delete: 0, unchanged: 0 };
+  for (const e of entries) counts[e.status]++;
+  return {
+    entries,
+    skipped,
+    drift: entries.some((e) => e.status !== 'unchanged'),
+    counts,
+    breaking: entries.reduce((n, e) => n + e.changes.filter((c) => c.breaking).length, 0),
+  };
+}
+
+/** Compares the contracts on disk with the ones the current workflows produce. */
+export function planContracts(index: ProjectIndex, fs: FileSystem): ContractPlan {
+  const existing = readContracts(fs);
+  const entries: ContractPlanEntry[] = [];
+  const units = index.units().sort((a, b) => byCodePoint(a.path, b.path));
+  const expected = expectedFiles(existing, units, CONTRACTS_DIR);
   const skipped: string[] = [];
   // A caller that does not parse cannot say what it passes; keep its consumer entries from the locked contracts.
   const broken = new Set(units.filter((u) => u.parseErrors.length > 0).map((u) => u.path));
@@ -579,56 +740,11 @@ export function planContracts(index: ProjectIndex, fs: FileSystem): ContractPlan
       }
       continue;
     }
-    const contract = buildContract(index, unit);
-    if (broken.size && prev?.contract) {
-      contract.consumers = [
-        ...contract.consumers.filter((c) => !broken.has(c.from)),
-        ...prev.contract.consumers.filter((c) => broken.has(c.from)),
-      ].sort((a, b) =>
-        byCodePoint(`${a.from}#${a.job ?? ''}#${a.step ?? ''}`, `${b.from}#${b.job ?? ''}#${b.step ?? ''}`),
-      );
-    }
-    const after = serializeContract(contract);
-    if (!prev) {
-      entries.push({ file, status: 'create', unit: unit.path, after, changes: [] });
-      continue;
-    }
-    // Checkouts with core.autocrlf convert line endings; the content is what matters.
-    if (normalizeContractText(prev.text) === after) {
-      entries.push({ file, status: 'unchanged', unit: unit.path, before: prev.text, after, changes: [] });
-      continue;
-    }
-    entries.push({
-      file,
-      status: 'update',
-      unit: unit.path,
-      before: prev.text,
-      after,
-      changes: prev.contract ? diffContracts(prev.contract, contract) : [],
-      ...(prev.error ? { invalid: prev.error } : {}),
-    });
+    entries.push(regeneratedEntry(index, file, unit, prev, broken));
   }
-  for (const [file, prev] of existing) {
-    if (expected.has(file)) continue;
-    entries.push({
-      file,
-      status: 'delete',
-      ...(prev.contract ? { unit: prev.contract.path } : {}),
-      before: prev.text,
-      changes: [],
-      ...(prev.error ? { invalid: prev.error } : {}),
-    });
-  }
+  for (const [file, prev] of existing) if (!expected.has(file)) entries.push(orphanEntry(file, prev));
   entries.sort((a, b) => byCodePoint(a.file, b.file));
-  const counts: Record<ContractStatus, number> = { create: 0, update: 0, delete: 0, unchanged: 0 };
-  for (const e of entries) counts[e.status]++;
-  return {
-    entries,
-    skipped,
-    drift: entries.some((e) => e.status !== 'unchanged'),
-    counts,
-    breaking: entries.reduce((n, e) => n + e.changes.filter((c) => c.breaking).length, 0),
-  };
+  return planOf(entries, skipped);
 }
 
 /** A unified diff of the plan, with git headers, applicable with `git apply` from the repository root. */
@@ -747,6 +863,43 @@ export function assertSafeWritePath(abs: string, trees: string[]): void {
 }
 
 /**
+ * Refuses to write contracts into the checkout through a symlink, which could redirect a write (or delete) elsewhere.
+ * Every target is checked before anything is written, so a refusal leaves the directory as it was.
+ */
+function assertSafeContractPaths(root: string, plan: ContractPlan): void {
+  const unsafe = plan.entries
+    .filter((e) => e.status !== 'unchanged')
+    .map((e) => e.file)
+    .filter(
+      (f) =>
+        isSymlink(join(root, f)) ||
+        !insideRepository(root, join(root, f)) ||
+        followsLinkIn(realpathNearest(root), join(root, f)),
+    );
+  if (unsafe.length)
+    throw new UnsafePathError(
+      `Not writing contracts: ${unsafe.join(', ')} ${unsafe.length === 1 ? 'is a symlink, goes through one, or links' : 'are symlinks, go through one, or link'} outside the repository`,
+    );
+}
+
+/**
+ * Writes (or, in the repository, deletes) one entry's file under `base`; returns whether it touched the file. An
+ * output directory gets every contract but the deleted ones; the repository only the ones that changed.
+ */
+function applyEntry(e: ContractPlanEntry, base: string, outDir: string | undefined): boolean {
+  const abs = join(base, e.file);
+  if (e.status === 'delete') {
+    if (outDir || !existsSync(abs)) return false;
+    rmSync(abs);
+    return true;
+  }
+  if (e.status === 'unchanged' && !outDir) return false;
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, e.after ?? '');
+  return true;
+}
+
+/**
  * Applies a plan to disk. With `outDir`, files are written there (same relative paths) instead of the repository,
  * and deletions are skipped — used to hand regenerated contracts to people who cannot run flowpact. `trees` are where
  * such a write must not go through a symlink (default: the repository).
@@ -762,37 +915,9 @@ export function writeContracts(
   // An output directory inside the repository is checked like a report path, every file before any is written.
   if (outDir)
     for (const e of plan.entries) if (e.status !== 'delete') assertSafeWritePath(join(outDir, e.file), trees);
-  // Contracts are written into the checkout; a symlink there must not redirect a write (or delete) elsewhere. Every
-  // target is checked before anything is written, so a refusal leaves the directory as it was.
-  if (!outDir) {
-    const unsafe = plan.entries
-      .filter((e) => e.status !== 'unchanged')
-      .map((e) => e.file)
-      .filter(
-        (f) =>
-          isSymlink(join(root, f)) ||
-          !insideRepository(root, join(root, f)) ||
-          followsLinkIn(realpathNearest(root), join(root, f)),
-      );
-    if (unsafe.length)
-      throw new UnsafePathError(
-        `Not writing contracts: ${unsafe.join(', ')} ${unsafe.length === 1 ? 'is a symlink, goes through one, or links' : 'are symlinks, go through one, or link'} outside the repository`,
-      );
-  }
-  for (const e of plan.entries) {
-    const abs = join(base, e.file);
-    if (e.status === 'delete') {
-      if (!outDir && existsSync(abs)) {
-        rmSync(abs);
-        written.push(e.file);
-      }
-      continue;
-    }
-    if (e.status === 'unchanged' && !outDir) continue;
-    mkdirSync(dirname(abs), { recursive: true });
-    writeFileSync(abs, e.after ?? '');
-    written.push(e.file);
-  }
+  // Contracts are written into the checkout.
+  if (!outDir) assertSafeContractPaths(root, plan);
+  for (const e of plan.entries) if (applyEntry(e, base, outDir)) written.push(e.file);
   return written;
 }
 
@@ -825,13 +950,8 @@ export function contractsInScope(index: ProjectIndex): (e: ContractPlanEntry) =>
 /** The part of a plan that concerns `keep`: drift, counts and the patch then only cover those units. */
 export function scopePlan(plan: ContractPlan, keep: (e: ContractPlanEntry) => boolean): ContractPlan {
   const entries = plan.entries.filter(keep);
-  const counts: Record<ContractStatus, number> = { create: 0, update: 0, delete: 0, unchanged: 0 };
-  for (const e of entries) counts[e.status]++;
-  return {
+  return planOf(
     entries,
-    skipped: plan.skipped.filter((u) => entries.some((e) => e.unit === u)),
-    drift: entries.some((e) => e.status !== 'unchanged'),
-    counts,
-    breaking: entries.reduce((n, e) => n + e.changes.filter((c) => c.breaking).length, 0),
-  };
+    plan.skipped.filter((u) => entries.some((e) => e.unit === u)),
+  );
 }

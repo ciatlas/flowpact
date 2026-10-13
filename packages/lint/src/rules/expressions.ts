@@ -1,6 +1,20 @@
-import { type Diagnostic, type ExprSite, type Loc, lookup, siteAt, sym } from '@ciatlas/core';
-import { defineRule, type RuleDefinition } from './types';
-import { quote } from './util';
+import {
+  type Binding,
+  type Diagnostic,
+  type ExprSegment,
+  type ExprSite,
+  type JobDecl,
+  type Loc,
+  type LocatedRef,
+  lookup,
+  type StepDecl,
+  siteAt,
+  sym,
+  type UnitDecl,
+  type WorkflowDecl,
+} from '@ciatlas/core';
+import { defineRule, type RuleContext, type RuleDefinition } from './types';
+import { namesKey, quote } from './util';
 
 const GITHUB_ENV_HINTS: Record<string, string> = {
   GITHUB_SHA: 'github.sha',
@@ -40,35 +54,71 @@ const undefinedEnvRef = defineRule({
     for (const wf of ctx.index.project.workflows.values()) {
       for (const site of wf.sites) {
         if (site.field === 'workflow.env' || site.field === 'input.default') continue;
-        const job = site.job ? wf.jobs[site.job] : undefined;
-        const step = job && site.step !== undefined ? job.steps[site.step] : undefined;
-        for (const seg of site.segments) {
-          for (const ref of seg.refs) {
-            const name = ref.path[0];
-            if (ref.context !== 'env' || !name || name === '*' || name === '?') continue;
-            if (lookup(wf.env, name) || (job && lookup(job.env, name)) || (step && lookup(step.env, name)))
-              continue;
-            if (job) {
-              const earlier = site.step === undefined ? job.steps : job.steps.slice(0, site.step);
-              if (earlier.some((s) => s.writesEnv.dynamic)) continue;
-              if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase())))
-                continue;
-              // Composite actions and remote actions may export variables we cannot see.
-              if (earlier.some((s) => s.uses && s.uses.kind !== 'docker')) continue;
-            }
-            const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
-            ctx.report({
-              message: `env.${name} is not defined in this scope${hint ? ` — runner variables are not in the env context; use ${hint}` : ''}`,
-              loc: ref.loc,
-              symbol: sym.env(wf.path, site.job, name),
-              ...(hint ? { fix: `Replace \`env.${name}\` with \`${hint}\`.` } : {}),
-            });
-          }
-        }
+        checkEnvReads(ctx, wf, site);
       }
     }
   },
 });
+
+/** The job and step a site is in, if any. */
+function siteScope(
+  wf: WorkflowDecl,
+  site: ExprSite,
+): { job: JobDecl | undefined; step: StepDecl | undefined } {
+  const job = site.job ? wf.jobs[site.job] : undefined;
+  const step = job && site.step !== undefined ? job.steps[site.step] : undefined;
+  return { job, step };
+}
+
+/** FP501 for the `env.<name>` reads of a site. */
+function checkEnvReads(ctx: RuleContext, wf: WorkflowDecl, site: ExprSite): void {
+  const { job, step } = siteScope(wf, site);
+  for (const seg of site.segments) {
+    for (const ref of seg.refs) {
+      const name = ref.path[0];
+      if (ref.context !== 'env' || !namesKey(name)) continue;
+      if (envEntry(wf, job, step, name) || maybeWrittenEarlier(job, site, name)) continue;
+      reportUndefinedEnv(ctx, wf, site, ref, name);
+    }
+  }
+}
+
+/** The entry under `env:` of the workflow, the job or the step that defines a variable, if any. */
+function envEntry(
+  wf: WorkflowDecl,
+  job: JobDecl | undefined,
+  step: StepDecl | undefined,
+  name: string,
+): Binding | undefined {
+  return lookup(wf.env, name) || (job && lookup(job.env, name)) || (step && lookup(step.env, name));
+}
+
+/** Whether a step before the site in its job may have written a variable to `$GITHUB_ENV`. */
+function maybeWrittenEarlier(job: JobDecl | undefined, site: ExprSite, name: string): boolean {
+  if (!job) return false;
+  const earlier = site.step === undefined ? job.steps : job.steps.slice(0, site.step);
+  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
+  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
+  // Composite actions and remote actions may export variables we cannot see.
+  return earlier.some((s) => s.uses && s.uses.kind !== 'docker');
+}
+
+/** FP501's report, with the matching context when the name is a runner variable (`env.GITHUB_SHA`). */
+function reportUndefinedEnv(
+  ctx: RuleContext,
+  wf: WorkflowDecl,
+  site: ExprSite,
+  ref: LocatedRef,
+  name: string,
+): void {
+  const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
+  ctx.report({
+    message: `env.${name} is not defined in this scope${hint ? ` — runner variables are not in the env context; use ${hint}` : ''}`,
+    loc: ref.loc,
+    symbol: sym.env(wf.path, site.job, name),
+    ...(hint ? { fix: `Replace \`env.${name}\` with \`${hint}\`.` } : {}),
+  });
+}
 
 const expressionParseError = defineRule({
   code: 'FP502',
@@ -87,22 +137,28 @@ const expressionParseError = defineRule({
   check(ctx) {
     for (const unit of ctx.index.units()) {
       for (const site of unit.sites) {
-        for (const seg of site.segments) {
-          if (!seg.expr.error) continue;
-          const loc = { ...seg.loc };
-          if (seg.loc.line === seg.loc.endLine) {
-            loc.column = seg.loc.column + seg.expr.error.offset;
-            loc.endColumn = Math.max(loc.column + 1, seg.loc.endColumn);
-          }
-          ctx.report({
-            message: `Invalid expression ${quote(seg.expr.source.length > 60 ? `${seg.expr.source.slice(0, 57)}...` : seg.expr.source)}: ${seg.expr.error.message}`,
-            loc,
-          });
-        }
+        for (const seg of site.segments) if (seg.expr.error) reportParseError(ctx, seg, seg.expr.error);
       }
     }
   },
 });
+
+/** FP502 for a segment whose expression does not parse: on one line, it points at the error's offset. */
+function reportParseError(
+  ctx: RuleContext,
+  seg: ExprSegment,
+  error: { offset: number; message: string },
+): void {
+  const loc = { ...seg.loc };
+  if (seg.loc.line === seg.loc.endLine) {
+    loc.column = seg.loc.column + error.offset;
+    loc.endColumn = Math.max(loc.column + 1, seg.loc.endColumn);
+  }
+  ctx.report({
+    message: `Invalid expression ${quote(seg.expr.source.length > 60 ? `${seg.expr.source.slice(0, 57)}...` : seg.expr.source)}: ${error.message}`,
+    loc,
+  });
+}
 
 const schemaViolation = defineRule({
   code: 'FP503',
@@ -193,50 +249,68 @@ jobs:
   check(ctx) {
     for (const unit of ctx.index.units()) {
       // 1. What GitHub's own parser reports (expressions inside ${{ }}).
-      for (const e of unit.schemaErrors) {
-        if (e.kind !== 'context') continue;
-        const name = /'([^']+)'/.exec(e.message)?.[1];
-        ctx.report({
-          message: `${name ? `\`${name}\`` : 'This context'} is not available here — ${unit.kind === 'workflow' ? 'GitHub rejects the workflow' : 'GitHub fails the step using the action'} ("${e.message}")`,
-          loc: refLocFor(unit.sites, e, name) ?? e.loc,
-        });
-      }
+      for (const e of unit.schemaErrors) if (e.kind === 'context') reportParserContextError(ctx, unit, e);
       // 2. Bare `if:` conditions, which the parser does not validate, against GitHub's context-availability table.
-      for (const site of unit.sites) {
-        if (!site.isCondition || site.text.includes('${{')) continue;
-        const table = CONDITION_TABLES[`${unit.kind}:${site.field}`];
-        if (!table) continue;
-        const rejects =
-          unit.kind === 'workflow' ? 'GitHub rejects the workflow' : 'GitHub fails the step using the action';
-        for (const seg of site.segments) {
-          for (const ref of seg.refs) {
-            if (table.contexts.has(ref.context)) continue;
-            ctx.report({
-              message: `\`${ref.context}\` is not available in ${table.label} — ${rejects} ("Unrecognized named-value: '${ref.context}'")`,
-              loc: ref.loc,
-            });
-          }
-          if (!table.functions) continue;
-          for (const fn of functionCalls(seg.expr.source)) {
-            const name = fn.name.toLowerCase();
-            if (STANDARD_FUNCTIONS.has(name) || table.functions.has(name)) continue;
-            ctx.report({
-              message: `\`${fn.name}()\` is not available in ${table.label} — ${rejects} ("Unrecognized function: '${fn.name}'")`,
-              loc: seg.expr.source.includes('\n')
-                ? seg.loc
-                : {
-                    ...seg.loc,
-                    column: seg.loc.column + fn.offset,
-                    endLine: seg.loc.line,
-                    endColumn: seg.loc.column + fn.offset + fn.name.length,
-                  },
-            });
-          }
-        }
-      }
+      for (const site of unit.sites) checkBareCondition(ctx, unit, site);
     }
   },
 });
+
+/** What GitHub does when a unit uses a context or function where it is not available. */
+const rejection = (unit: UnitDecl) =>
+  unit.kind === 'workflow' ? 'GitHub rejects the workflow' : 'GitHub fails the step using the action';
+
+/** FP505 for a context error of GitHub's parser, pointed at the reference it names. */
+function reportParserContextError(ctx: RuleContext, unit: UnitDecl, e: Diagnostic): void {
+  const name = /'([^']+)'/.exec(e.message)?.[1];
+  ctx.report({
+    message: `${name ? `\`${name}\`` : 'This context'} is not available here — ${rejection(unit)} ("${e.message}")`,
+    loc: refLocFor(unit.sites, e, name) ?? e.loc,
+  });
+}
+
+/** FP505 for a bare `if:` (no `${{ }}`): the contexts and functions it uses must be available in that field. */
+function checkBareCondition(ctx: RuleContext, unit: UnitDecl, site: ExprSite): void {
+  if (!site.isCondition || site.text.includes('${{')) return;
+  const table = CONDITION_TABLES[`${unit.kind}:${site.field}`];
+  if (!table) return;
+  const rejects = rejection(unit);
+  for (const seg of site.segments) {
+    for (const ref of seg.refs) {
+      if (table.contexts.has(ref.context)) continue;
+      ctx.report({
+        message: `\`${ref.context}\` is not available in ${table.label} — ${rejects} ("Unrecognized named-value: '${ref.context}'")`,
+        loc: ref.loc,
+      });
+    }
+    if (table.functions) checkConditionFunctions(ctx, seg, table.label, table.functions, rejects);
+  }
+}
+
+/** FP505 for the functions a bare condition calls, other than the standard ones and those its field allows. */
+function checkConditionFunctions(
+  ctx: RuleContext,
+  seg: ExprSegment,
+  label: string,
+  allowed: Set<string>,
+  rejects: string,
+): void {
+  for (const fn of functionCalls(seg.expr.source)) {
+    const name = fn.name.toLowerCase();
+    if (STANDARD_FUNCTIONS.has(name) || allowed.has(name)) continue;
+    ctx.report({
+      message: `\`${fn.name}()\` is not available in ${label} — ${rejects} ("Unrecognized function: '${fn.name}'")`,
+      loc: seg.expr.source.includes('\n')
+        ? seg.loc
+        : {
+            ...seg.loc,
+            column: seg.loc.column + fn.offset,
+            endLine: seg.loc.line,
+            endColumn: seg.loc.column + fn.offset + fn.name.length,
+          },
+    });
+  }
+}
 
 /** Function names called in an expression (outside string literals), with their offset. */
 function functionCalls(source: string): { name: string; offset: number }[] {

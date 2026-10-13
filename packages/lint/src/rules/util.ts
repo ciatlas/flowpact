@@ -46,6 +46,15 @@ export function chainRelated(chain: CallSite[]): RelatedLocation[] {
 /** Quotes a name from the analyzed YAML, making control characters (incl. newlines) visible. */
 export const quote = (s: string) => `"${escapeControl(s)}"`;
 
+/** A message's ` — did you mean "x"?` suffix for a guess, or nothing without one. */
+export const didYouMeanNote = (guess: string | undefined) =>
+  guess ? ` — did you mean ${quote(guess)}?` : '';
+
+/** True when a reference's path segment names a key: present, and neither a `*` filter nor a `?` computed index. */
+export function namesKey(segment: string | undefined): segment is string {
+  return !!segment && segment !== '*' && segment !== '?';
+}
+
 export function listNames(names: string[], max = 6): string {
   if (names.length === 0) return '(none)';
   const shown = names.slice(0, max).join(', ');

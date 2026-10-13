@@ -22,7 +22,13 @@ import {
   type UnitDecl,
 } from '@ciatlas/core';
 import { ConfigError, defaultConfig, type FlowpactConfig, type Override } from './config';
-import { type ContractPlan, contractsInScope, planContracts, scopePlan } from './contracts';
+import {
+  type ContractPlan,
+  type ContractPlanEntry,
+  contractsInScope,
+  planContracts,
+  scopePlan,
+} from './contracts';
 import { computeImpact, type DeclaredInput, type ImpactPolicy, type ImpactResult } from './impact';
 import { createRegistry, IMPACT_CODES } from './rules/index';
 import { CODE_PATTERN, type RuleRegistry } from './rules/registry';
@@ -123,6 +129,48 @@ export interface AnalysisResult {
 
 const compact = (s: string) => s.toLowerCase().replace(/[-_\s]/g, '');
 
+/** The first of the closest `candidates` that are at most `max` edits away by `distance`. */
+function nearest(candidates: string[], distance: (c: string) => number, max: number): string | undefined {
+  let best: { rule: string; d: number } | undefined;
+  for (const rule of candidates) {
+    const d = distance(rule);
+    if (d <= max && (!best || d < best.d)) best = { rule, d };
+  }
+  return best?.rule;
+}
+
+/**
+ * The prefix of a key read as a code: as CODE_PATTERN reads it (`AB12` in AB12602) when that reading is a code
+ * (category digits are 1-9); otherwise the start before the first digit (`ACME` in ACME6011, which is no code).
+ */
+function keyPrefixOf(k: string): string | undefined {
+  const asCode = CODE_PATTERN.exec(k.toUpperCase());
+  return asCode && asCode[2] !== '0' ? asCode[1] : /^([a-z][a-z0-9]{1,9}?)\d/.exec(k)?.[1]?.toUpperCase();
+}
+
+/** The loaded rule name `key` (compacted: `k`) spells another way, or misspells by at most two edits. */
+function nameTypo(names: string[], key: string, k: string): string | undefined {
+  // camelCase and snake_case as dashes, so a typo is measured in the name's own words; a key without any separator
+  // (`missingrequiredinptu`) is compared without them, one edit dearer.
+  const spelled = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .toLowerCase()
+    .replace(/[_\s]+/g, '-');
+  const undashed = !/[-_\s]/.test(key) && !/[a-z0-9][A-Z]/.test(key);
+  return (
+    names.find((n) => compact(n) === k) ??
+    nearest(
+      names,
+      (n) =>
+        Math.min(
+          typoDistance(spelled, n),
+          undashed ? typoDistance(k, compact(n)) + 1 : Number.POSITIVE_INFINITY,
+        ),
+      2,
+    )
+  );
+}
+
 /**
  * The loaded rule an unknown key is a typo of, if it is one:
  * - a key with the built-in `FP` prefix and a digit (`FP10l`, `fp-101`), or a built-in code with one character
@@ -134,14 +182,6 @@ const compact = (s: string) => s.toLowerCase().replace(/[-_\s]/g, '');
  */
 function typoOf(registry: RuleRegistry, key: string): { typo: boolean; rule?: string } {
   const k = compact(key);
-  const nearest = (candidates: string[], distance: (c: string) => number, max: number) => {
-    let best: { rule: string; d: number } | undefined;
-    for (const rule of candidates) {
-      const d = distance(rule);
-      if (d <= max && (!best || d < best.d)) best = { rule, d };
-    }
-    return best?.rule;
-  };
   const rules = registry.all();
   const codes = rules.map((r) => r.code);
   const fromCode = (c: string) => typoDistance(k, c.toLowerCase());
@@ -155,37 +195,19 @@ function typoOf(registry: RuleRegistry, key: string): { typo: boolean; rule?: st
     1,
   );
   if (k.startsWith('fp') && builtin) return { typo: true, rule: builtin };
-  // The prefix as CODE_PATTERN reads it (`AB12` in AB12602) when that reading is a code (category digits are 1-9);
-  // otherwise the start before the first digit (`ACME` in ACME6011, which is no code).
   const prefix = (code: string) => CODE_PATTERN.exec(code.toUpperCase())?.[1];
-  const asCode = CODE_PATTERN.exec(k.toUpperCase());
-  const keyPrefix =
-    asCode && asCode[2] !== '0' ? asCode[1] : /^([a-z][a-z0-9]{1,9}?)\d/.exec(k)?.[1]?.toUpperCase();
+  const keyPrefix = keyPrefixOf(k);
   const code = nearest(
     codes.filter((c) => keyPrefix !== undefined && prefix(c) === keyPrefix),
     fromCode,
     1,
   );
   if (code) return { typo: true, rule: code };
-  const names = rules.map((r) => r.name);
-  // camelCase and snake_case as dashes, so a typo is measured in the name's own words; a key without any separator
-  // (`missingrequiredinptu`) is compared without them, one edit dearer.
-  const spelled = key
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .toLowerCase()
-    .replace(/[_\s]+/g, '-');
-  const undashed = !/[-_\s]/.test(key) && !/[a-z0-9][A-Z]/.test(key);
-  const rule =
-    names.find((n) => compact(n) === k) ??
-    nearest(
-      names,
-      (n) =>
-        Math.min(
-          typoDistance(spelled, n),
-          undashed ? typoDistance(k, compact(n)) + 1 : Number.POSITIVE_INFINITY,
-        ),
-      2,
-    );
+  const rule = nameTypo(
+    rules.map((r) => r.name),
+    key,
+    k,
+  );
   return rule ? { typo: true, rule } : { typo: false };
 }
 
@@ -241,60 +263,72 @@ export function fingerprint(code: string, symbol: string | undefined, file: stri
     .slice(0, 16);
 }
 
-export function analyze(opts: AnalyzeOptions): AnalysisResult {
-  const started = performance.now();
-  const logger = opts.logger ?? silentLogger;
+/** The config a run applies. */
+function effectiveConfig(opts: AnalyzeOptions): FlowpactConfig {
   // A run without rules (generate, trace, graph, the impact baseline) has no use for rule settings and overrides, so
   // entries for rules it does not load cannot fail it.
   const configured = opts.config ?? defaultConfig();
-  const config = opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
-  // Units to load even when nothing here uses them: what the config (and, in impact mode, the baseline) publishes.
-  const publishPatterns = [
+  return opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
+}
+
+/** Units to load even when nothing here uses them: what the config (and, in impact mode, the baseline) publishes. */
+function publishPatternsOf(config: FlowpactConfig, opts: AnalyzeOptions): string[] {
+  return [
     ...new Set([
       ...(config.impact.publish ?? []),
       ...(opts.impact?.policy.publish ?? []),
       ...(opts.impact?.publishedFiles ?? []),
     ]),
   ];
-  const registry = opts.registry ?? createRegistry();
-  const repository = opts.repository ?? config.repository ?? detectRepository(opts.root);
-  logger.debug('config resolved', {
-    file: opts.configFile ?? '(defaults)',
-    repository: repository ?? '(unknown)',
-    rules: Object.keys(config.rules).length,
-  });
+}
 
-  const project = logger.time('load project', () =>
+/** Loads the project's workflows and actions (the targeted ones and what they reach, plus what is published). */
+function loadUnits(
+  opts: AnalyzeOptions,
+  logger: Logger,
+  publish: string[],
+  repository: string | undefined,
+): Project {
+  return logger.time('load project', () =>
     loadProject({
       root: opts.root,
       ...(opts.fs ? { fs: opts.fs } : {}),
       ...(opts.paths ? { paths: opts.paths } : {}),
-      ...(publishPatterns.length ? { publish: publishPatterns } : {}),
+      ...(publish.length ? { publish } : {}),
       ...(repository ? { repository } : {}),
       validateSchema: opts.validateSchema ?? true,
       logger,
     }),
   );
+}
 
-  const index = logger.time('build graph', () => new ProjectIndex(project));
-  logger.info(
-    `graph built: ${index.nodes.size} symbols, ${index.edges.length} edges, ${index.callSites.length} reusable calls`,
-  );
+/** A job's matrix: as the workflow states it, with the keys the config declares for a dynamic one added. */
+function expandJobMatrix(config: FlowpactConfig, unit: UnitDecl, job: JobDecl): MatrixExpansion {
+  const shape = config.matrixShapes[`${unit.path}#${job.id}`];
+  if (shape && (job.matrix?.dynamic || job.matrix?.includeDynamic)) {
+    // Declared keys complement whatever the workflow states statically.
+    const staticKeys = expandMatrix(job.matrix).keys;
+    return declaredMatrix([...new Set([...staticKeys, ...shape.keys])]);
+  }
+  return expandMatrix(job.matrix);
+}
 
-  const matrixCache = new Map<JobDecl, MatrixExpansion>();
+/**
+ * Every job's matrix, expanded once and cached for the rules, with the number of combinations. Every matrix is
+ * expanded up front so stats and debug logs are complete even if no rule asks.
+ */
+function expandMatrices(
+  project: Project,
+  config: FlowpactConfig,
+  logger: Logger,
+): { matrix: RuleContext['matrix']; combinations: () => number } {
+  const cache = new Map<JobDecl, MatrixExpansion>();
   let combinations = 0;
   const matrix = (unit: UnitDecl, job: JobDecl): MatrixExpansion => {
-    let exp = matrixCache.get(job);
+    let exp = cache.get(job);
     if (!exp) {
-      const shape = config.matrixShapes[`${unit.path}#${job.id}`];
-      if (shape && (job.matrix?.dynamic || job.matrix?.includeDynamic)) {
-        // Declared keys complement whatever the workflow states statically.
-        const staticKeys = expandMatrix(job.matrix).keys;
-        exp = declaredMatrix([...new Set([...staticKeys, ...shape.keys])]);
-      } else {
-        exp = expandMatrix(job.matrix);
-      }
-      matrixCache.set(job, exp);
+      exp = expandJobMatrix(config, unit, job);
+      cache.set(job, exp);
       combinations += exp.combos.length;
       logger.debug(`matrix expanded: ${unit.path} › jobs.${job.id}`, {
         combinations: exp.combos.length,
@@ -305,14 +339,24 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
     }
     return exp;
   };
-  // Expand every matrix up front so stats and debug logs are complete even if no rule asks.
   for (const wf of project.workflows.values())
     for (const job of Object.values(wf.jobs)) if (job.matrix) matrix(wf, job);
+  return { matrix, combinations: () => combinations };
+}
 
-  const unloaded: string[] = [];
-  // Warned about once, with the overrides' entries, below.
+/**
+ * The effective severity of each rule, and the codes `--only` selects (undefined: every rule). Config entries for
+ * rules that are not loaded go to `unloaded`; an unknown rule passed to `--only` is an error.
+ */
+function selectRules(
+  registry: RuleRegistry,
+  config: FlowpactConfig,
+  only: string[] | undefined,
+  unloaded: string[],
+): { severities: Map<string, SeveritySetting>; only: string[] | undefined } {
+  // Warned about once, with the overrides' entries, after the rules ran.
   const severities = resolveSeverities(registry, config, { unloaded });
-  const unknownOnly = (opts.only ?? []).filter((o) => !registry.get(o));
+  const unknownOnly = (only ?? []).filter((o) => !registry.get(o));
   if (unknownOnly.length) {
     const names = registry.all().flatMap((r) => [r.code, r.name]);
     throw new ConfigError(
@@ -324,40 +368,62 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
       }),
     );
   }
-  const only = opts.only?.map((o) => registry.get(o)!.code);
-  const ruleLog = logger.child('rules');
-  // Generated files (gh-aw lock files, `DO NOT EDIT` headers) are checked as callers and callees, but rules about their
-  // internals (`generatedFiles: 'skip'`) stay quiet: nobody can act on them in the file itself.
-  const generatedFiles = generatedFilesOf(project, config);
-  for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
-  const skipped: Finding[] = [];
+  return { severities, only: only?.map((o) => registry.get(o)!.code) };
+}
 
-  const contractInScope = contractsInScope(index);
-  let contracts: ContractPlan | undefined;
-  if (opts.checkContracts) {
-    contracts = logger.time('compare contracts', () =>
-      planContracts(index, opts.fs ?? nodeFileSystem(opts.root)),
-    );
-    // With paths, only the contracts in scope count (drift output, patch, summary).
-    if (project.targets.size > 0) contracts = scopePlan(contracts, contractInScope);
-    logger.info(
-      `contracts: ${contracts.counts.unchanged} unchanged, ${contracts.counts.update} outdated, ${contracts.counts.create} missing, ${contracts.counts.delete} orphaned`,
-      { breaking: contracts.breaking },
-    );
-  }
+/** Check mode: the contracts on disk compared with the current ones (with paths, only the contracts in scope). */
+function compareContracts(
+  opts: AnalyzeOptions,
+  index: ProjectIndex,
+  contractInScope: (e: ContractPlanEntry) => boolean,
+  logger: Logger,
+): ContractPlan | undefined {
+  if (!opts.checkContracts) return undefined;
+  let contracts = logger.time('compare contracts', () =>
+    planContracts(index, opts.fs ?? nodeFileSystem(opts.root)),
+  );
+  // With paths, only the contracts in scope count (drift output, patch, summary).
+  if (index.project.targets.size > 0) contracts = scopePlan(contracts, contractInScope);
+  logger.info(
+    `contracts: ${contracts.counts.unchanged} unchanged, ${contracts.counts.update} outdated, ${contracts.counts.create} missing, ${contracts.counts.delete} orphaned`,
+    { breaking: contracts.breaking },
+  );
+  return contracts;
+}
 
-  const impact = opts.impact
-    ? logger.time('impact', () =>
-        computeImpact(
-          opts.impact!.base,
-          index,
-          opts.impact!.baseline,
-          opts.impact!.declared,
-          opts.impact!.policy,
-        ),
-      )
-    : undefined;
+/** Impact mode's changes and verdict, when it runs. */
+function impactOf(opts: AnalyzeOptions, index: ProjectIndex, logger: Logger): ImpactResult | undefined {
+  const impact = opts.impact;
+  if (!impact) return undefined;
+  return logger.time('impact', () =>
+    computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy),
+  );
+}
 
+/** What running the rules of one analysis needs. */
+interface RuleRun {
+  registry: RuleRegistry;
+  severities: Map<string, SeveritySetting>;
+  /** The codes `--only` selects; undefined for every rule. */
+  only: string[] | undefined;
+  ruleLog: Logger;
+  index: ProjectIndex;
+  config: FlowpactConfig;
+  matrix: RuleContext['matrix'];
+  configFile: string | undefined;
+  contracts: ContractPlan | undefined;
+  impact: ImpactResult | undefined;
+  /** Generated files, whose internals rules with `generatedFiles: 'skip'` stay quiet about. */
+  generatedFiles: Map<string, string>;
+  /** Whether a rule runs in this analysis (`ctx.runs`). */
+  runs: (code: string) => boolean;
+  /** Findings not reported because they are about the internals of generated files. */
+  skipped: Finding[];
+}
+
+/** A run of these rules, with `runs` answering for it. */
+function ruleRun(fields: Omit<RuleRun, 'runs' | 'skipped'>): RuleRun {
+  const { registry, severities, only } = fields;
   const runs = (code: string): boolean => {
     const rule = registry.get(code);
     if (!rule) return false;
@@ -365,80 +431,109 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
       (severities.get(rule.code) ?? rule.defaultSeverity) !== 'off' && (!only || only.includes(rule.code))
     );
   };
-  const runRules = (phase: 'main' | 'post', extra: Partial<RuleContext>): Finding[] => {
-    const out: Finding[] = [];
-    for (const rule of registry.all()) {
-      if ((rule.phase ?? 'main') !== phase) continue;
-      const severity = severities.get(rule.code) ?? rule.defaultSeverity;
-      if (severity === 'off' || (only && !only.includes(rule.code))) {
-        ruleLog.trace(`${rule.code} ${rule.name} skipped`, { severity });
-        continue;
-      }
-      const before = out.length;
-      const ctx: RuleContext = {
-        index,
-        config,
-        logger: ruleLog.child(rule.code),
-        matrix,
-        runs,
-        ...(opts.configFile ? { configFile: opts.configFile } : {}),
-        ...(contracts ? { contracts } : {}),
-        ...(impact ? { impact } : {}),
-        ...extra,
-        report: (input) => {
-          const finding = toFinding(rule, severity, input, registry);
-          if (rule.generatedFiles === 'skip' && generatedFiles.has(input.loc.file)) skipped.push(finding);
-          else out.push(finding);
-        },
-      };
-      const t0 = performance.now();
-      try {
-        rule.check(ctx);
-      } catch (err) {
-        ruleLog.error(`${rule.code} ${rule.name} crashed: ${(err as Error).message}`, {
-          stack: (err as Error).stack,
-        });
-        throw err;
-      }
-      ruleLog.debug(`${rule.code} ${rule.name}`, {
-        findings: out.length - before,
-        ms: Math.round((performance.now() - t0) * 100) / 100,
-      });
-    }
-    return out;
-  };
+  return { ...fields, runs, skipped: [] };
+}
 
-  const findings = dedupe(runRules('main', {}));
-  // Overrides are matched against the whole repository, so linting a subset of files does not make
-  // overrides for other files look unused; the scope filter is applied afterwards.
-  const applied = applyOverrides(
-    findings,
-    config,
-    registry,
-    opts.overrideLocs ?? [],
-    opts.now ?? new Date(),
-    { unloaded },
-  );
-  if (unloaded.length)
-    logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join('; ')}`);
-  for (const u of applied.usage) {
-    const code = registry.get(u.override.rule)?.code ?? '';
-    const severity = severities.get(code);
-    const rule = registry.get(code);
-    // Contract rules only run in check mode; under `lint` their overrides cannot be judged. Rules of skipped plugins
-    // never run at all.
-    const notRun =
-      !rule ||
-      (IMPACT_CODES.includes(rule.code)
-        ? !opts.impact
-        : rule.category === 'contracts' && !opts.checkContracts);
-    if (severity === 'off' || (only && !only.includes(code)) || notRun) u.inactive = true;
-    // An override written for findings that are now skipped in generated files (FP902 says why it matches nothing).
-    if (!u.matched && rule) {
-      const n = skipped.filter((f) => overrideMatches(u.override, rule.code, f)).length;
-      if (n) u.skippedInGenerated = n;
-    }
+/** The context a rule checks in; what it reports goes to `out`, or to the skipped findings for a generated file. */
+function ruleContext(
+  run: RuleRun,
+  rule: RuleDefinition,
+  severity: SeveritySetting,
+  out: Finding[],
+  extra: Partial<RuleContext>,
+): RuleContext {
+  return {
+    index: run.index,
+    config: run.config,
+    logger: run.ruleLog.child(rule.code),
+    matrix: run.matrix,
+    runs: run.runs,
+    ...(run.configFile ? { configFile: run.configFile } : {}),
+    ...(run.contracts ? { contracts: run.contracts } : {}),
+    ...(run.impact ? { impact: run.impact } : {}),
+    ...extra,
+    report: (input) => {
+      const finding = toFinding(rule, severity, input, run.registry);
+      if (rule.generatedFiles === 'skip' && run.generatedFiles.has(input.loc.file)) run.skipped.push(finding);
+      else out.push(finding);
+    },
+  };
+}
+
+/** Runs one rule, logging how many findings it added to `out` and how long it took; a crash is logged and rethrown. */
+function checkRule(run: RuleRun, rule: RuleDefinition, ctx: RuleContext, out: Finding[]): void {
+  const before = out.length;
+  const t0 = performance.now();
+  try {
+    rule.check(ctx);
+  } catch (err) {
+    run.ruleLog.error(`${rule.code} ${rule.name} crashed: ${(err as Error).message}`, {
+      stack: (err as Error).stack,
+    });
+    throw err;
   }
+  run.ruleLog.debug(`${rule.code} ${rule.name}`, {
+    findings: out.length - before,
+    ms: Math.round((performance.now() - t0) * 100) / 100,
+  });
+}
+
+/** Runs the rules of a phase that are on (and selected by `--only`), in registry order. */
+function runRules(run: RuleRun, phase: 'main' | 'post', extra: Partial<RuleContext>): Finding[] {
+  const out: Finding[] = [];
+  for (const rule of run.registry.all()) {
+    if ((rule.phase ?? 'main') !== phase) continue;
+    const severity = run.severities.get(rule.code) ?? rule.defaultSeverity;
+    if (severity === 'off' || (run.only && !run.only.includes(rule.code))) {
+      run.ruleLog.trace(`${rule.code} ${rule.name} skipped`, { severity });
+      continue;
+    }
+    checkRule(run, rule, ruleContext(run, rule, severity, out, extra), out);
+  }
+  return out;
+}
+
+/** Whether a rule never runs in this analysis: not loaded, or a rule of a mode (impact, check) that is not on. */
+function notRunIn(rule: RuleDefinition | undefined, opts: AnalyzeOptions): boolean {
+  // Contract rules only run in check mode; under `lint` their overrides cannot be judged. Rules of skipped plugins
+  // never run at all.
+  if (!rule) return true;
+  return IMPACT_CODES.includes(rule.code)
+    ? !opts.impact
+    : rule.category === 'contracts' && !opts.checkContracts;
+}
+
+/** Counts the findings skipped in generated files that an override would match (FP902 says why it matches nothing). */
+function countSkipped(u: OverrideUsage, code: string, skipped: Finding[]): void {
+  const n = skipped.filter((f) => overrideMatches(u.override, code, f)).length;
+  if (n) u.skippedInGenerated = n;
+}
+
+/**
+ * Marks an override whose rule does not run in this analysis as inactive, and counts the findings it would match that
+ * are skipped in generated files.
+ */
+function judgeOverride(u: OverrideUsage, run: RuleRun, opts: AnalyzeOptions): void {
+  const code = run.registry.get(u.override.rule)?.code ?? '';
+  const severity = run.severities.get(code);
+  const rule = run.registry.get(code);
+  const notRun = notRunIn(rule, opts);
+  if (severity === 'off' || (run.only && !run.only.includes(code)) || notRun) u.inactive = true;
+  // An override written for findings that are now skipped in generated files.
+  if (!u.matched && rule) countSkipped(u, rule.code, run.skipped);
+}
+
+/**
+ * Whether a finding is reported: with paths, it is about a targeted file or a contract in scope, and no `ignore`
+ * pattern matches its file.
+ */
+function scopeOf(
+  index: ProjectIndex,
+  config: FlowpactConfig,
+  contracts: ContractPlan | undefined,
+  contractInScope: (e: ContractPlanEntry) => boolean,
+): (f: Finding) => boolean {
+  const { targets } = index.project;
   // The contract of a targeted workflow belongs to it (e.g. a conflicted contract, FP805), and so do the contracts
   // that list it as a consumer.
   const scopedEntries = (contracts?.entries ?? []).filter(contractInScope);
@@ -447,73 +542,198 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
   const contractUnitsInScope = new Set(
     scopedEntries.flatMap((e) => (e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])),
   );
-  const inScope = (f: Finding) =>
-    (project.targets.size === 0 ||
-      project.targets.has(f.loc.file) ||
+  return (f) =>
+    (targets.size === 0 ||
+      targets.has(f.loc.file) ||
       contractFilesInScope.has(f.loc.file) ||
       (f.category === 'contracts' && contractUnitsInScope.has(f.loc.file))) &&
     !config.ignore.some((p) => matchesPattern(f.loc.file, p));
-  const accepted = applied.kept.filter(inScope);
-  const suppressed = applied.suppressed.filter(inScope);
-  const skippedInScope = dedupe(skipped).filter(inScope);
-  if (skippedInScope.length > 0) {
+}
+
+/** Logs what the scope, generated files and overrides took out of the findings. */
+function logFiltered(
+  logger: Logger,
+  config: FlowpactConfig,
+  f: {
+    findings: Finding[];
+    accepted: Finding[];
+    suppressed: SuppressedFinding[];
+    skippedInScope: Finding[];
+    usage: OverrideUsage[];
+  },
+): void {
+  if (f.skippedInScope.length > 0) {
     logger.info(
-      `skipped ${skippedInScope.length} finding(s) about the internals of ${new Set(skippedInScope.map((f) => f.loc.file)).size} generated file(s)`,
+      `skipped ${f.skippedInScope.length} finding(s) about the internals of ${new Set(f.skippedInScope.map((s) => s.loc.file)).size} generated file(s)`,
     );
   }
-  const usage = applied.usage;
-  if (accepted.length + suppressed.length !== findings.length) {
+  if (f.accepted.length + f.suppressed.length !== f.findings.length) {
     logger.debug(
-      `filtered ${findings.length - accepted.length - suppressed.length} finding(s) by targets/ignore`,
+      `filtered ${f.findings.length - f.accepted.length - f.suppressed.length} finding(s) by targets/ignore`,
     );
   }
   if (config.overrides.length) {
     logger.info(
-      `overrides: ${suppressed.length} finding(s) suppressed by ${usage.filter((u) => u.matched && !u.expired).length} override(s)`,
+      `overrides: ${f.suppressed.length} finding(s) suppressed by ${f.usage.filter((u) => u.matched && !u.expired).length} override(s)`,
       {
-        expired: usage.filter((u) => u.expired).length,
-        unused: usage.filter((u) => !u.matched && !u.expired && !u.inactive).length,
+        expired: f.usage.filter((u) => u.expired).length,
+        unused: f.usage.filter((u) => !u.matched && !u.expired && !u.inactive).length,
       },
     );
   }
-  const post = runRules('post', { overrides: usage });
-  const kept = dedupe([...accepted, ...post]).sort(
-    (a, b) =>
-      compareLoc(a.loc, b.loc) ||
-      SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-      a.code.localeCompare(b.code),
-  );
+}
 
-  const summary = summarize(project, index, kept, combinations, suppressed.length, skippedInScope.length);
+/** Report order: by location, then severity, then code. */
+const byReportOrder = (a: Finding, b: Finding): number =>
+  compareLoc(a.loc, b.loc) ||
+  SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+  a.code.localeCompare(b.code);
+
+/** The result's metadata: the tool, the root, the config file and the repository. */
+function metaOf(opts: AnalyzeOptions, repository: string | undefined): AnalysisResult['meta'] {
+  return {
+    ...toolMeta(),
+    root: opts.root,
+    ...(opts.configFile ? { configFile: opts.configFile } : {}),
+    ...(repository ? { repository } : {}),
+  };
+}
+
+/** The analysis result, from what the run produced. */
+function resultOf(
+  opts: AnalyzeOptions,
+  run: RuleRun,
+  r: Pick<AnalysisResult, 'project' | 'findings' | 'summary' | 'suppressed' | 'durationMs'> & {
+    repository: string | undefined;
+    unloaded: string[];
+  },
+): AnalysisResult {
+  return {
+    meta: metaOf(opts, r.repository),
+    project: r.project,
+    index: run.index,
+    findings: r.findings,
+    summary: r.summary,
+    rules: run.registry.all().map((x) => ({
+      code: x.code,
+      name: x.name,
+      severity: run.severities.get(x.code) ?? x.defaultSeverity,
+    })),
+    suppressed: r.suppressed,
+    ...(run.contracts ? { contracts: run.contracts } : {}),
+    ...(r.unloaded.length ? { unloadedRules: r.unloaded } : {}),
+    ...(run.impact ? { impact: run.impact } : {}),
+    ...(opts.configFile && opts.configText !== undefined
+      ? { configSource: new SourceFile(opts.configFile, opts.configText) }
+      : {}),
+    durationMs: r.durationMs,
+  };
+}
+
+/** Everything the rules of an analysis run with; config entries for rules that are not loaded go to `unloaded`. */
+function prepareRules(
+  opts: AnalyzeOptions,
+  logger: Logger,
+  base: Pick<RuleRun, 'registry' | 'index' | 'config' | 'matrix'>,
+  unloaded: string[],
+): { run: RuleRun; contractInScope: (e: ContractPlanEntry) => boolean } {
+  const { registry, index, config } = base;
+  const { severities, only } = selectRules(registry, config, opts.only, unloaded);
+  const ruleLog = logger.child('rules');
+  // Generated files (gh-aw lock files, `DO NOT EDIT` headers) are checked as callers and callees, but rules about their
+  // internals (`generatedFiles: 'skip'`) stay quiet: nobody can act on them in the file itself.
+  const generatedFiles = generatedFilesOf(index.project, config);
+  for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
+  const contractInScope = contractsInScope(index);
+  const contracts = compareContracts(opts, index, contractInScope, logger);
+  const impact = impactOf(opts, index, logger);
+  const run = ruleRun({
+    ...base,
+    severities,
+    only,
+    ruleLog,
+    configFile: opts.configFile,
+    contracts,
+    impact,
+    generatedFiles,
+  });
+  return { run, contractInScope };
+}
+
+/**
+ * Runs the main rules, applies the overrides and the scope, then runs the post rules: the findings to report, the
+ * ones overrides accepted, and the ones in scope skipped in generated files.
+ */
+function runPhases(
+  run: RuleRun,
+  opts: AnalyzeOptions,
+  logger: Logger,
+  contractInScope: (e: ContractPlanEntry) => boolean,
+  unloaded: string[],
+): { kept: Finding[]; suppressed: SuppressedFinding[]; skippedInScope: Finding[] } {
+  const { config } = run;
+  const findings = dedupe(runRules(run, 'main', {}));
+  // Overrides are matched against the whole repository, so linting a subset of files does not make
+  // overrides for other files look unused; the scope filter is applied afterwards.
+  const applied = applyOverrides(
+    findings,
+    config,
+    run.registry,
+    opts.overrideLocs ?? [],
+    opts.now ?? new Date(),
+    { unloaded },
+  );
+  if (unloaded.length)
+    logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join('; ')}`);
+  for (const u of applied.usage) judgeOverride(u, run, opts);
+  const inScope = scopeOf(run.index, config, run.contracts, contractInScope);
+  const accepted = applied.kept.filter(inScope);
+  const suppressed = applied.suppressed.filter(inScope);
+  const skippedInScope = dedupe(run.skipped).filter(inScope);
+  logFiltered(logger, config, { findings, accepted, suppressed, skippedInScope, usage: applied.usage });
+  const post = runRules(run, 'post', { overrides: applied.usage });
+  return { kept: dedupe([...accepted, ...post]).sort(byReportOrder), suppressed, skippedInScope };
+}
+
+export function analyze(opts: AnalyzeOptions): AnalysisResult {
+  const started = performance.now();
+  const logger = opts.logger ?? silentLogger;
+  const config = effectiveConfig(opts);
+  const publishPatterns = publishPatternsOf(config, opts);
+  const registry = opts.registry ?? createRegistry();
+  const repository = opts.repository ?? config.repository ?? detectRepository(opts.root);
+  logger.debug('config resolved', {
+    file: opts.configFile ?? '(defaults)',
+    repository: repository ?? '(unknown)',
+    rules: Object.keys(config.rules).length,
+  });
+
+  const project = loadUnits(opts, logger, publishPatterns, repository);
+  const index = logger.time('build graph', () => new ProjectIndex(project));
+  logger.info(
+    `graph built: ${index.nodes.size} symbols, ${index.edges.length} edges, ${index.callSites.length} reusable calls`,
+  );
+  const { matrix, combinations } = expandMatrices(project, config, logger);
+
+  const unloaded: string[] = [];
+  const { run, contractInScope } = prepareRules(opts, logger, { registry, index, config, matrix }, unloaded);
+  const { kept, suppressed, skippedInScope } = runPhases(run, opts, logger, contractInScope, unloaded);
+
+  const summary = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
   const durationMs = Math.round(performance.now() - started);
   logger.info(
     `analysis finished: ${summary.errors} error(s), ${summary.warnings} warning(s), ${summary.infos} info`,
     { ms: durationMs },
   );
-
-  return {
-    meta: {
-      ...toolMeta(),
-      root: opts.root,
-      ...(opts.configFile ? { configFile: opts.configFile } : {}),
-      ...(repository ? { repository } : {}),
-    },
+  return resultOf(opts, run, {
+    repository,
     project,
-    index,
     findings: kept,
     summary,
-    rules: registry
-      .all()
-      .map((r) => ({ code: r.code, name: r.name, severity: severities.get(r.code) ?? r.defaultSeverity })),
     suppressed,
-    ...(contracts ? { contracts } : {}),
-    ...(unloaded.length ? { unloadedRules: unloaded } : {}),
-    ...(impact ? { impact } : {}),
-    ...(opts.configFile && opts.configText !== undefined
-      ? { configSource: new SourceFile(opts.configFile, opts.configText) }
-      : {}),
+    unloaded,
     durationMs,
-  };
+  });
 }
 
 function toFinding(

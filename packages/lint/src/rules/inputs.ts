@@ -1,10 +1,15 @@
 import {
+  type ActionUse,
   type Binding,
+  type CallSite,
+  type ContextResolver,
   chainTo,
   didYouMean,
+  type ExprSite,
   evaluateTemplate,
   type InputDecl,
   type Json,
+  type LocatedRef,
   lookup,
   type ProjectIndex,
   readsContextDynamically,
@@ -15,8 +20,8 @@ import {
   type Usage,
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
-import { defineRule, type RuleDefinition } from './types';
-import { chainRelated, listNames, quote, useInCondition } from './util';
+import { defineRule, type RuleContext, type RuleDefinition } from './types';
+import { chainRelated, didYouMeanNote, listNames, namesKey, quote, useInCondition } from './util';
 
 /**
  * For every workflow with `workflow_dispatch`: input names read as `github.event.inputs.<name>` in the workflows and
@@ -25,29 +30,46 @@ import { chainRelated, listNames, quote, useInCondition } from './util';
 function eventInputReadsByRoot(index: ProjectIndex): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
   for (const root of index.project.workflows.values()) {
-    if (!root.dispatch) continue;
-    const names = new Set<string>();
-    const seen = new Set<UnitDecl>();
-    const queue: UnitDecl[] = [root];
-    while (queue.length) {
-      const unit = queue.shift()!;
-      if (seen.has(unit)) continue;
-      seen.add(unit);
-      for (const { ref } of refsOf(unit)) {
-        const [a, b, c] = ref.path;
-        if (ref.context === 'github' && a === 'event' && b === 'inputs' && c) names.add(c.toLowerCase());
-      }
-      for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
-      for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
-    }
-    out.set(root.path, names);
+    if (root.dispatch) out.set(root.path, eventInputReadsFrom(index, root));
   }
   return out;
+}
+
+/** The names read as `github.event.inputs.<name>` (lowercased) in `root` and every workflow and action it reaches. */
+function eventInputReadsFrom(index: ProjectIndex, root: UnitDecl): Set<string> {
+  const names = new Set<string>();
+  const seen = new Set<UnitDecl>();
+  const queue: UnitDecl[] = [root];
+  while (queue.length) {
+    const unit = queue.shift()!;
+    if (seen.has(unit)) continue;
+    seen.add(unit);
+    addEventInputReads(unit, names);
+    for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
+    for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
+  }
+  return names;
+}
+
+/** Adds the names a unit reads as `github.event.inputs.<name>`, lowercased. */
+function addEventInputReads(unit: UnitDecl, names: Set<string>): void {
+  for (const { ref } of refsOf(unit)) {
+    const [a, b, c] = ref.path;
+    if (ref.context === 'github' && a === 'event' && b === 'inputs' && c) names.add(c.toLowerCase());
+  }
 }
 
 function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {
   if (unit.kind === 'action') return unit.inputs;
   return { ...(unit.dispatch?.inputs ?? {}), ...(unit.call?.inputs ?? {}) };
+}
+
+/**
+ * Whether an omitted input is '': it is optional and has no default. GitHub substitutes false for booleans and 0 for
+ * numbers; only strings become ''.
+ */
+function emptyWhenOmitted(input: InputDecl): boolean {
+  return !input.required && !input.hasDefault && input.type !== 'boolean' && input.type !== 'number';
 }
 
 const missingRequiredInput = defineRule({
@@ -78,37 +100,43 @@ const missingRequiredInput = defineRule({
     },
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
-      const inputs = call.callee.call?.inputs ?? {};
-      for (const input of Object.values(inputs)) {
-        // GitHub's parser rejects the call whenever a required input is missing, default or not.
-        if (!input.required || lookup(call.job.with, input.name)) continue;
-        ctx.report({
-          message: `jobs.${call.job.id} calls ${call.callee.path} without required input ${quote(input.name)}`,
-          loc: call.job.uses?.loc ?? call.job.loc,
-          symbol: sym.input(call.callee.path, input.name),
-          related: [
-            ...chainRelated(chainTo(ctx.index, call.caller.path)),
-            { loc: input.loc, message: `${quote(input.name)} is declared required here` },
-          ],
-          fix: `Add \`${input.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`,
-        });
-      }
-    }
-    for (const use of ctx.index.actionUses) {
-      for (const input of Object.values(use.action.inputs)) {
-        if (!input.required || input.hasDefault || lookup(use.step.with, input.name)) continue;
-        ctx.report({
-          message: `Step ${use.step.id ?? `#${use.step.index + 1}`} uses ${use.action.path} without required input ${quote(input.name)} — GitHub will run it with an empty value`,
-          loc: use.step.uses?.loc ?? use.step.loc,
-          symbol: sym.input(use.action.path, input.name),
-          related: [{ loc: input.loc, message: `${quote(input.name)} is declared required here` }],
-          fix: `Add \`${input.name}: <value>\` under the step's \`with:\`.`,
-        });
-      }
-    }
+    for (const call of ctx.index.callSites) reportMissingCallInputs(ctx, call);
+    for (const use of ctx.index.actionUses) reportMissingActionInputs(ctx, use);
   },
 });
+
+/** FP101 for a reusable workflow call. */
+function reportMissingCallInputs(ctx: RuleContext, call: CallSite): void {
+  const inputs = call.callee.call?.inputs ?? {};
+  for (const input of Object.values(inputs)) {
+    // GitHub's parser rejects the call whenever a required input is missing, default or not.
+    if (!input.required || lookup(call.job.with, input.name)) continue;
+    ctx.report({
+      message: `jobs.${call.job.id} calls ${call.callee.path} without required input ${quote(input.name)}`,
+      loc: call.job.uses?.loc ?? call.job.loc,
+      symbol: sym.input(call.callee.path, input.name),
+      related: [
+        ...chainRelated(chainTo(ctx.index, call.caller.path)),
+        { loc: input.loc, message: `${quote(input.name)} is declared required here` },
+      ],
+      fix: `Add \`${input.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`,
+    });
+  }
+}
+
+/** FP101 for a step that uses a local action: a required input with a default is never missing there. */
+function reportMissingActionInputs(ctx: RuleContext, use: ActionUse): void {
+  for (const input of Object.values(use.action.inputs)) {
+    if (!input.required || input.hasDefault || lookup(use.step.with, input.name)) continue;
+    ctx.report({
+      message: `Step ${use.step.id ?? `#${use.step.index + 1}`} uses ${use.action.path} without required input ${quote(input.name)} — GitHub will run it with an empty value`,
+      loc: use.step.uses?.loc ?? use.step.loc,
+      symbol: sym.input(use.action.path, input.name),
+      related: [{ loc: input.loc, message: `${quote(input.name)} is declared required here` }],
+      fix: `Add \`${input.name}: <value>\` under the step's \`with:\`.`,
+    });
+  }
+}
 
 const unknownInput = defineRule({
   code: 'FP102',
@@ -140,7 +168,7 @@ const unknownInput = defineRule({
         if (lookup(inputs, b.name)) continue;
         const guess = didYouMean(b.name, names);
         ctx.report({
-          message: `${target} has no input ${quote(b.name)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
+          message: `${target} has no input ${quote(b.name)}${didYouMeanNote(guess)}`,
           loc: b.loc,
           symbol: sym.input(target, b.name),
           related: declLoc ? [{ loc: declLoc, message: `declared inputs: ${listNames(names)}` }] : [],
@@ -186,30 +214,42 @@ const inputTypeMismatch = defineRule({
   },
   check(ctx) {
     for (const call of ctx.index.callSites) {
-      for (const b of Object.values(call.job.with)) {
-        const input = lookup(call.callee.call?.inputs ?? {}, b.name);
-        const expected = input?.type;
-        if (!input || !expected || !['boolean', 'number'].includes(expected)) continue;
-        const v = b.site
-          ? evaluateTemplate(b.site.text, () => UNKNOWN)
-          : { known: true as const, value: b.value, taint: [] };
-        if (!v.known) continue;
-        const actual = jsonKind(v.value);
-        if (actual === expected) continue;
-        ctx.report({
-          message: `Input ${quote(input.name)} of ${call.callee.path} is a ${expected}, but jobs.${call.job.id} passes a ${actual} (${JSON.stringify(v.value)})`,
-          loc: b.valueLoc,
-          symbol: sym.input(call.callee.path, input.name),
-          related: [{ loc: input.loc, message: `declared as type: ${expected}` }],
-          fix:
-            expected === 'boolean'
-              ? `Use an unquoted boolean: \`${b.name}: ${String(v.value).toLowerCase() === 'true'}\`, or an expression that yields one.`
-              : `Use an unquoted number for ${quote(b.name)}.`,
-        });
-      }
+      for (const b of Object.values(call.job.with)) checkLiteralType(ctx, call, b);
     }
   },
 });
+
+/** FP103 for one binding of a call: a value known before the run must have the type of a boolean or number input. */
+function checkLiteralType(ctx: RuleContext, call: CallSite, b: Binding): void {
+  const input = lookup(call.callee.call?.inputs ?? {}, b.name);
+  const expected = input?.type;
+  if (!input || !expected || !['boolean', 'number'].includes(expected)) return;
+  const v = knownValue(b);
+  if (!v.known) return;
+  const actual = jsonKind(v.value);
+  if (actual === expected) return;
+  ctx.report({
+    message: `Input ${quote(input.name)} of ${call.callee.path} is a ${expected}, but jobs.${call.job.id} passes a ${actual} (${JSON.stringify(v.value)})`,
+    loc: b.valueLoc,
+    symbol: sym.input(call.callee.path, input.name),
+    related: [{ loc: input.loc, message: `declared as type: ${expected}` }],
+    fix: literalTypeFix(expected, b.name, v.value),
+  });
+}
+
+/** A binding's value as far as it is known before the run: the literal, or its expression evaluated without context. */
+function knownValue(b: Binding): ReturnType<typeof evaluateTemplate> {
+  return b.site
+    ? evaluateTemplate(b.site.text, () => UNKNOWN)
+    : { known: true as const, value: b.value, taint: [] };
+}
+
+/** FP103's fix: write a literal of the declared type. */
+function literalTypeFix(expected: string, name: string, value: Json): string {
+  return expected === 'boolean'
+    ? `Use an unquoted boolean: \`${name}: ${String(value).toLowerCase() === 'true'}\`, or an expression that yields one.`
+    : `Use an unquoted number for ${quote(name)}.`;
+}
 
 const unusedInput = defineRule({
   code: 'FP104',
@@ -242,22 +282,27 @@ if: inputs.legacy-flag`,
         const symbol = sym.input(unit.path, input.name);
         if (ctx.index.usagesOf(symbol).length > 0) continue;
         if (dispatchReads.get(unit.path)?.has(input.name.toLowerCase())) continue;
-        const passed = (
-          unit.kind === 'workflow'
-            ? ctx.index.callersOf(unit.path).map((c) => lookup(c.job.with, input.name))
-            : ctx.index.usersOf(unit.path).map((u) => lookup(u.step.with, input.name))
-        ).filter((b): b is Binding => b !== undefined);
-        const n = passed.length;
-        ctx.report({
-          message: `Input ${quote(input.name)} of ${unit.path} is never read${n ? ` (yet ${n} caller${n > 1 ? 's pass' : ' passes'} it)` : ''}`,
-          loc: input.loc,
-          symbol,
-          related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: 'passed here' })),
-        });
+        reportUnusedInput(ctx, unit, input, symbol);
       }
     }
   },
 });
+
+/** FP104's report, naming the local callers that still pass the input. */
+function reportUnusedInput(ctx: RuleContext, unit: UnitDecl, input: InputDecl, symbol: string): void {
+  const passed = (
+    unit.kind === 'workflow'
+      ? ctx.index.callersOf(unit.path).map((c) => lookup(c.job.with, input.name))
+      : ctx.index.usersOf(unit.path).map((u) => lookup(u.step.with, input.name))
+  ).filter((b): b is Binding => b !== undefined);
+  const n = passed.length;
+  ctx.report({
+    message: `Input ${quote(input.name)} of ${unit.path} is never read${n ? ` (yet ${n} caller${n > 1 ? 's pass' : ' passes'} it)` : ''}`,
+    loc: input.loc,
+    symbol,
+    related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: 'passed here' })),
+  });
+}
 
 /** A local caller of a reusable workflow or action: the bindings it passes and where it calls. */
 interface Caller {
@@ -312,75 +357,112 @@ if: inputs.variant != ''`,
       // published reusable workflow: see `impact.publish`), nor for a workflow that can be dispatched without it.
       const published = isPublished(unit, ctx.config.impact);
       const callersDecide = callers.length > 0 && !(unit.kind === 'workflow' && unit.dispatch) && !published;
-      const flagged: { input: InputDecl; usage: Usage; omitting: Caller[] }[] = [];
-      /** Per condition site, the inputs it reads by value that every local caller passes (so they are not flagged). */
-      const passedBySite = new Map<number, string[]>();
-      for (const input of Object.values(declaredInputs(unit))) {
-        // GitHub substitutes false for booleans and 0 for numbers; only strings become ''.
-        if (input.required || input.hasDefault || input.type === 'boolean' || input.type === 'number')
-          continue;
-        // Comparisons with a constant (`inputs.x != ''`, `inputs.x == 'yes'`), tests such as `contains()` and
-        // fallbacks handle the omitted case explicitly. A condition that does so for the input is trusted with its
-        // other reads too (`inputs.x != '' && inputs.x != steps.s.outputs.current`); otherwise only a value that
-        // decides the condition as it is gets reported.
-        const inConditions = ctx.index
-          .usagesOf(sym.input(unit.path, input.name))
-          .filter((u) => u.site.isCondition)
-          .map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
-        const handledSites = new Set(
-          inConditions.filter((x) => x.use === 'compared' || x.use === 'fallback').map((x) => x.u.site.id),
-        );
-        const usages = inConditions
-          .filter((x) => (x.use === 'truthiness' || x.use === 'value') && !handledSites.has(x.u.site.id))
-          .map((x) => x.u);
-        if (usages.length === 0) continue;
-        const omitting = callers.filter((c) => !lookup(c.with, input.name));
-        if (callersDecide && omitting.length === 0) {
-          for (const usage of usages) addName(passedBySite, usage.site.id, input.name);
-          continue;
-        }
-        for (const usage of usages) flagged.push({ input, usage, omitting });
-      }
-      // One finding per input (each can be overridden on its own), naming the other inputs the same condition reads:
-      // those reported too, and those every caller passes (why they are not reported).
-      const flaggedBySite = new Map<number, string[]>();
-      for (const { input, usage } of flagged) addName(flaggedBySite, usage.site.id, input.name);
-      for (const { input, usage, omitting } of flagged) {
-        const others = (flaggedBySite.get(usage.site.id) ?? []).filter((n) => n !== input.name);
-        const passed = passedBySite.get(usage.site.id) ?? [];
-        const notes = [
-          ...(others.length
-            ? [
-                `so ${others.length > 1 ? 'are' : 'is'} ${others.map(quote).join(', ')}, read by the same condition`,
-              ]
-            : []),
-          ...(passed.length
-            ? [
-                `${passed.map(quote).join(', ')}, also read by this condition, ${passed.length > 1 ? 'are' : 'is'} passed by every caller`,
-              ]
-            : []),
-        ];
-        ctx.report({
-          message:
-            `Condition reads optional input ${quote(input.name)}, which has no default and is '' when omitted` +
-            (notes.length ? ` (${notes.join('; ')})` : ''),
-          loc: usage.ref.loc,
-          symbol: sym.input(unit.path, input.name),
-          related: [
-            {
-              loc: input.loc,
-              message:
-                published && callers.length > 0 && omitting.length === 0
-                  ? 'declared optional without a default; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it'
-                  : 'declared optional without a default',
-            },
-            ...omitting.slice(0, 3).map((c) => ({ loc: c.loc, message: `${c.label} omits it` })),
-          ],
-        });
-      }
+      const reads = optionalInputReads(ctx.index, unit, callers, callersDecide);
+      reportOptionalInputReads(ctx, unit, reads, published && callers.length > 0);
     }
   },
 });
+
+/** A condition's read of an optional input, and the local callers that omit the input. */
+interface OptionalRead {
+  input: InputDecl;
+  usage: Usage;
+  omitting: Caller[];
+}
+
+/**
+ * The condition reads FP105 reports in a unit, and per condition site the inputs it reads by value that every local
+ * caller passes (so they are not flagged; `callersDecide` says whether the callers can prove that).
+ */
+function optionalInputReads(
+  index: ProjectIndex,
+  unit: UnitDecl,
+  callers: Caller[],
+  callersDecide: boolean,
+): { flagged: OptionalRead[]; passedBySite: Map<number, string[]> } {
+  const flagged: OptionalRead[] = [];
+  const passedBySite = new Map<number, string[]>();
+  for (const input of Object.values(declaredInputs(unit))) {
+    if (!emptyWhenOmitted(input)) continue;
+    const usages = decidingReads(index, unit, input);
+    if (usages.length === 0) continue;
+    const omitting = callers.filter((c) => !lookup(c.with, input.name));
+    if (callersDecide && omitting.length === 0) {
+      for (const usage of usages) addName(passedBySite, usage.site.id, input.name);
+      continue;
+    }
+    for (const usage of usages) flagged.push({ input, usage, omitting });
+  }
+  return { flagged, passedBySite };
+}
+
+/**
+ * The reads of an input that decide a condition by its value. Comparisons with a constant (`inputs.x != ''`,
+ * `inputs.x == 'yes'`), tests such as `contains()` and fallbacks handle the omitted case explicitly. A condition that
+ * does so for the input is trusted with its other reads too (`inputs.x != '' && inputs.x != steps.s.outputs.current`);
+ * otherwise only a value that decides the condition as it is gets reported.
+ */
+function decidingReads(index: ProjectIndex, unit: UnitDecl, input: InputDecl): Usage[] {
+  const inConditions = index
+    .usagesOf(sym.input(unit.path, input.name))
+    .filter((u) => u.site.isCondition)
+    .map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
+  const handledSites = new Set(
+    inConditions.filter((x) => x.use === 'compared' || x.use === 'fallback').map((x) => x.u.site.id),
+  );
+  return inConditions
+    .filter((x) => (x.use === 'truthiness' || x.use === 'value') && !handledSites.has(x.u.site.id))
+    .map((x) => x.u);
+}
+
+/**
+ * FP105's reports: one finding per input (each can be overridden on its own), naming the other inputs the same
+ * condition reads: those reported too, and those every caller passes (why they are not reported).
+ */
+function reportOptionalInputReads(
+  ctx: RuleContext,
+  unit: UnitDecl,
+  { flagged, passedBySite }: { flagged: OptionalRead[]; passedBySite: Map<number, string[]> },
+  publishedWithCallers: boolean,
+): void {
+  const flaggedBySite = new Map<number, string[]>();
+  for (const { input, usage } of flagged) addName(flaggedBySite, usage.site.id, input.name);
+  for (const { input, usage, omitting } of flagged) {
+    const others = (flaggedBySite.get(usage.site.id) ?? []).filter((n) => n !== input.name);
+    const notes = conditionNotes(others, passedBySite.get(usage.site.id) ?? []);
+    ctx.report({
+      message:
+        `Condition reads optional input ${quote(input.name)}, which has no default and is '' when omitted` +
+        (notes.length ? ` (${notes.join('; ')})` : ''),
+      loc: usage.ref.loc,
+      symbol: sym.input(unit.path, input.name),
+      related: [
+        {
+          loc: input.loc,
+          message:
+            publishedWithCallers && omitting.length === 0
+              ? 'declared optional without a default; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it'
+              : 'declared optional without a default',
+        },
+        ...omitting.slice(0, 3).map((c) => ({ loc: c.loc, message: `${c.label} omits it` })),
+      ],
+    });
+  }
+}
+
+/** FP105's notes on the other inputs a condition reads: reported as well, or passed by every caller. */
+function conditionNotes(others: string[], passed: string[]): string[] {
+  return [
+    ...(others.length
+      ? [`so ${others.length > 1 ? 'are' : 'is'} ${others.map(quote).join(', ')}, read by the same condition`]
+      : []),
+    ...(passed.length
+      ? [
+          `${passed.map(quote).join(', ')}, also read by this condition, ${passed.length > 1 ? 'are' : 'is'} passed by every caller`,
+        ]
+      : []),
+  ];
+}
 
 function addName(bySite: Map<number, string[]>, site: number, name: string): void {
   const names = bySite.get(site) ?? [];
@@ -445,32 +527,60 @@ jobs:
   check(ctx) {
     for (const call of ctx.index.callSites) {
       const outer = declaredInputs(call.caller);
-      for (const b of Object.values(call.job.with)) {
-        const target = lookup(call.callee.call?.inputs ?? {}, b.name);
-        if (!target?.required || !b.site) continue;
-        const v = evaluateTemplate(b.site.text, ({ context, path }) => {
-          if (context !== 'inputs' || !path[0]) return undefined;
-          const src = lookup(outer, path[0]);
-          if (src && !src.required && !src.hasDefault && src.type !== 'boolean' && src.type !== 'number')
-            return { known: true, value: '', taint: [] };
-          return undefined;
-        });
-        if (!v.known || (v.value !== '' && v.value !== null)) continue;
-        const srcRef = b.site.segments.flatMap((s) => s.refs).find((r) => r.context === 'inputs');
-        const src = srcRef?.path[0] ? lookup(outer, srcRef.path[0]) : undefined;
-        ctx.report({
-          message: `Required input ${quote(target.name)} of ${call.callee.path} is fed from optional input ${quote(src?.name ?? '?')} without a default`,
-          loc: srcRef?.loc ?? b.valueLoc,
-          symbol: sym.input(call.callee.path, target.name),
-          related: [
-            ...(src ? [{ loc: src.loc, message: 'optional, no default' }] : []),
-            { loc: target.loc, message: `required by ${call.callee.path}` },
-          ],
-        });
-      }
+      for (const b of Object.values(call.job.with)) checkForwarded(ctx, call, outer, b);
     }
   },
 });
+
+/** FP107 for one binding of a call: a required input must not be empty when the caller's own caller omits an input. */
+function checkForwarded(
+  ctx: RuleContext,
+  call: CallSite,
+  outer: Record<string, InputDecl>,
+  b: Binding,
+): void {
+  const target = lookup(call.callee.call?.inputs ?? {}, b.name);
+  if (!target?.required || !b.site) return;
+  if (emptyWhenInputsOmitted(b.site, outer)) reportForwarded(ctx, call, outer, b, b.site, target);
+}
+
+/** Whether a `with:` value is '' (or null) when the inputs of the caller it reads are omitted. */
+function emptyWhenInputsOmitted(site: ExprSite, outer: Record<string, InputDecl>): boolean {
+  const v = evaluateTemplate(site.text, omittedInputs(outer));
+  return v.known && (v.value === '' || v.value === null);
+}
+
+/** FP107's report, at the caller's input the value is fed from. */
+function reportForwarded(
+  ctx: RuleContext,
+  call: CallSite,
+  outer: Record<string, InputDecl>,
+  b: Binding,
+  site: ExprSite,
+  target: InputDecl,
+): void {
+  const srcRef = site.segments.flatMap((s) => s.refs).find((r) => r.context === 'inputs');
+  const src = srcRef?.path[0] ? lookup(outer, srcRef.path[0]) : undefined;
+  ctx.report({
+    message: `Required input ${quote(target.name)} of ${call.callee.path} is fed from optional input ${quote(src?.name ?? '?')} without a default`,
+    loc: srcRef?.loc ?? b.valueLoc,
+    symbol: sym.input(call.callee.path, target.name),
+    related: [
+      ...(src ? [{ loc: src.loc, message: 'optional, no default' }] : []),
+      { loc: target.loc, message: `required by ${call.callee.path}` },
+    ],
+  });
+}
+
+/** Resolves `inputs.<name>` to '' for the declared inputs that are '' when omitted; other references stay unknown. */
+function omittedInputs(outer: Record<string, InputDecl>): ContextResolver {
+  return ({ context, path }) => {
+    if (context !== 'inputs' || !path[0]) return undefined;
+    const src = lookup(outer, path[0]);
+    if (src && emptyWhenOmitted(src)) return { known: true, value: '', taint: [] };
+    return undefined;
+  };
+}
 
 const undefinedInputRef = defineRule({
   code: 'FP108',
@@ -490,35 +600,41 @@ const undefinedInputRef = defineRule({
     for (const unit of ctx.index.units()) {
       const inputs = declaredInputs(unit);
       const names = Object.keys(inputs);
-      for (const site of unit.sites) {
-        if (site.field === 'input.default') continue;
-        for (const seg of site.segments) {
-          for (const ref of seg.refs) {
-            let name: string | undefined;
-            if (ref.context === 'inputs') name = ref.path[0];
-            else if (
-              ref.context === 'github' &&
-              ref.path[0] === 'event' &&
-              ref.path[1] === 'inputs' &&
-              unit.kind === 'workflow' &&
-              unit.dispatch
-            )
-              // Elsewhere `github.event` belongs to the triggering workflow, not to this unit.
-              name = ref.path[2];
-            if (!name || name === '*' || name === '?' || lookup(inputs, name)) continue;
-            const guess = didYouMean(name, names);
-            ctx.report({
-              message: `${unit.path} has no input ${quote(name)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
-              loc: ref.loc,
-              symbol: sym.input(unit.path, name),
-              ...(guess ? { fix: `Use \`inputs.${guess}\`.` } : {}),
-            });
-          }
-        }
+      for (const { site, ref } of refsOf(unit)) {
+        if (site.field !== 'input.default') checkInputRead(ctx, unit, inputs, names, ref);
       }
     }
   },
 });
+
+/** FP108 for one reference: the input it reads, if any, must be declared (`names` lists the declared ones). */
+function checkInputRead(
+  ctx: RuleContext,
+  unit: UnitDecl,
+  inputs: Record<string, InputDecl>,
+  names: string[],
+  ref: LocatedRef,
+): void {
+  const name = inputReadName(unit, ref);
+  if (!namesKey(name) || lookup(inputs, name)) return;
+  const guess = didYouMean(name, names);
+  ctx.report({
+    message: `${unit.path} has no input ${quote(name)}${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: sym.input(unit.path, name),
+    ...(guess ? { fix: `Use \`inputs.${guess}\`.` } : {}),
+  });
+}
+
+/** The input a reference reads: `inputs.<name>`, or `github.event.inputs.<name>` in a workflow that can be dispatched. */
+function inputReadName(unit: UnitDecl, ref: LocatedRef): string | undefined {
+  if (ref.context === 'inputs') return ref.path[0];
+  // Elsewhere `github.event` belongs to the triggering workflow, not to this unit.
+  const dispatched = unit.kind === 'workflow' && unit.dispatch;
+  if (ref.context === 'github' && ref.path[0] === 'event' && ref.path[1] === 'inputs' && dispatched)
+    return ref.path[2];
+  return undefined;
+}
 
 export const inputRules: RuleDefinition[] = [
   missingRequiredInput,

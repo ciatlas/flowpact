@@ -6,6 +6,7 @@ import {
   comboLabel,
   definitelyFalsy,
   didYouMean,
+  type ExprSegment,
   type ExprSite,
   evaluate,
   evaluateTemplate,
@@ -30,7 +31,15 @@ import {
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
-import { chainRelated, type Guard, guardOf, isWholeExpression, quote, useInCondition } from './util';
+import {
+  chainRelated,
+  type Guard,
+  guardOf,
+  isWholeExpression,
+  namesKey,
+  quote,
+  useInCondition,
+} from './util';
 
 const hasMatrixRef = (site: ExprSite) =>
   site.segments.some((s) => s.refs.some((r) => r.context === 'matrix'));
@@ -68,13 +77,18 @@ function shellTestSegments(script: string, segments = findTemplateSegments(scrip
     const nl = script.indexOf('\n', seg.end);
     const before = script.slice(lineStart, seg.start - 1);
     const after = script.slice(seg.end + 1, nl < 0 ? script.length : nl);
-    const operand =
-      /(?:^|[\s(!])-[a-zA-Z]\s+$/.test(before) ||
-      /^\s+(?:==?|!=)\s/.test(after) ||
-      /\s(?:==?|!=)\s+$/.test(before);
-    if (operand && inShellTest(before, after)) out.add(i);
+    if (isTestOperand(before, after) && inShellTest(before, after)) out.add(i);
   }
   return out;
+}
+
+/** The text between `before` and `after` is an operand of a test operator: `-z "…"`, `"…" = x`, `x != "…"`. */
+function isTestOperand(before: string, after: string): boolean {
+  return (
+    /(?:^|[\s(!])-[a-zA-Z]\s+$/.test(before) ||
+    /^\s+(?:==?|!=)\s/.test(after) ||
+    /\s(?:==?|!=)\s+$/.test(before)
+  );
 }
 
 /**
@@ -131,8 +145,7 @@ function affectedCombos(
   onlyKey?: string,
   text = site.text,
 ): { combos: Combination[]; keys: string[]; perKey: Map<string, number> } {
-  const known = new Set(exp.keys.map((k) => k.toLowerCase()));
-  if (onlyKey !== undefined) for (const k of [...known]) if (k !== onlyKey.toLowerCase()) known.delete(k);
+  const known = trackedKeys(exp, onlyKey);
   const combos: Combination[] = [];
   const perKey = new Map<string, number>();
   for (const combo of exp.combos) {
@@ -145,6 +158,13 @@ function affectedCombos(
     for (const key of new Set(missing.map((t) => t.key))) perKey.set(key, (perKey.get(key) ?? 0) + 1);
   }
   return { combos, keys: [...perKey.keys()], perKey };
+}
+
+/** The keys of a matrix whose absence counts (lowercased): all of them, or only `onlyKey` when it is one. */
+function trackedKeys(exp: MatrixExpansion, onlyKey: string | undefined): Set<string> {
+  const known = new Set(exp.keys.map((k) => k.toLowerCase()));
+  if (onlyKey !== undefined) for (const k of [...known]) if (k !== onlyKey.toLowerCase()) known.delete(k);
+  return known;
 }
 
 /** The first read of one of `keys`, outside the segments in `skip` (indexes in `site.segments`). */
@@ -191,7 +211,15 @@ function dedupe(items: RelatedLocation[]): RelatedLocation[] {
   });
 }
 
-function* matrixJobs(ctx: RuleContext): Generator<{ wf: WorkflowDecl; job: JobDecl; exp: MatrixExpansion }> {
+/**
+ * Whether a matrix's combinations can be checked one by one: known, and not over GitHub's limit (then the matrix is
+ * rejected as a whole, FP406, and checking each combination would only be slow).
+ */
+function checkable(exp: MatrixExpansion): boolean {
+  return !exp.dynamic && exp.combos.length > 0 && exp.combos.length <= GITHUB_MATRIX_LIMIT;
+}
+
+function* matrixJobs(ctx: RuleContext): Generator<MatrixJob> {
   for (const wf of ctx.index.project.workflows.values()) {
     for (const job of Object.values(wf.jobs)) {
       if (!job.matrix) continue;
@@ -270,73 +298,98 @@ with:
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
-      // Over GitHub's limit the matrix is rejected as a whole (FP406); checking each combination would only be slow.
-      if (exp.dynamic || exp.combos.length === 0 || exp.combos.length > GITHUB_MATRIX_LIMIT) continue;
-      const targets: {
-        binding: Binding;
-        target: string;
-        callee?: UnitDecl;
-        input?: InputDecl;
-        symbol?: string;
-        step?: StepDecl;
-      }[] = [];
-      if (job.uses) {
-        const callee = ctx.index.calleeOf(job);
-        for (const b of Object.values(job.with)) {
-          const input = callee?.call ? lookup(callee.call.inputs, b.name) : undefined;
-          targets.push({
-            binding: b,
-            target: callee?.path ?? job.uses.raw,
-            ...(callee ? { callee } : {}),
-            ...(input ? { input, symbol: sym.input(callee!.path, input.name) } : {}),
-          });
-        }
-      }
-      for (const step of job.steps) {
-        const action = ctx.index.actionOf(step);
-        for (const b of Object.values(step.with)) {
-          const input = action ? lookup(action.inputs, b.name) : undefined;
-          targets.push({
-            binding: b,
-            target: action?.path ?? step.uses?.raw ?? `step #${step.index + 1}`,
-            step,
-            ...(action ? { callee: action } : {}),
-            ...(input ? { input, symbol: sym.input(action!.path, input.name) } : {}),
-          });
-        }
-      }
-      for (const t of targets) {
-        const site = t.binding.site;
-        if (!site || !hasMatrixRef(site)) continue;
-        const impact = emptyInputImpact(ctx.index, t.callee, t.input);
-        if (!impact) continue;
-        const { combos, keys, perKey } = affectedCombos(site, exp, isEmptyValue, guardsOf(job, site));
-        if (combos.length === 0) continue;
-        const keyList = keys.map((k) => `matrix.${k}`).join(', ');
-        const cause =
-          keys.length === 1
-            ? `matrix.${keys[0]} is not defined there`
-            : `not defined there: ${keys.map((k) => `matrix.${k} (${perKey.get(k)})`).join(', ')}`;
-        ctx.report({
-          message: `Input ${quote(t.binding.name)} for ${t.target} is empty in ${combos.length} of ${exp.combos.length} matrix combinations — ${cause}${impact.note}`,
-          loc: firstMatrixRefLoc(site, keys),
-          combos: combos.map((c) => comboLabel(c, exp.keys)),
-          symbol: t.symbol ?? `${wf.path}#jobs.${job.id}.with.${t.binding.name}`,
-          related: [
-            ...chainRelated(chainTo(ctx.index, wf.path)),
-            ...comboRelated(job, combos, keys),
-            ...(t.input
-              ? [{ loc: t.input.loc, message: `receives the empty value: input ${quote(t.binding.name)}` }]
-              : []),
-            ...impact.related,
-          ],
-          fix: `Set ${keys.map((k) => `\`${k}\``).join(', ')} in every combination, or use a fallback: \`\${{ ${keyList.split(', ')[0]} || '<default>' }}\`.`,
-          severity: impact.severity,
-        });
-      }
+      if (!checkable(exp)) continue;
+      for (const t of withTargets(ctx, job)) checkWithTarget(ctx, { wf, job, exp }, t);
     }
   },
 });
+
+/** A `with:` value FP401 checks: the binding, what receives it and, when known, the input it sets. */
+interface WithTarget {
+  binding: Binding;
+  target: string;
+  callee?: UnitDecl;
+  input?: InputDecl;
+  symbol?: string;
+  step?: StepDecl;
+}
+
+/** The `with:` values of a job: those passed to the reusable workflow it calls, then those of each step. */
+function withTargets(ctx: RuleContext, job: JobDecl): WithTarget[] {
+  return [...callTargets(ctx, job), ...job.steps.flatMap((step) => stepTargets(ctx, step))];
+}
+
+/** The `with:` values a job passes to the reusable workflow it calls. */
+function callTargets(ctx: RuleContext, job: JobDecl): WithTarget[] {
+  const uses = job.uses;
+  if (!uses) return [];
+  const callee = ctx.index.calleeOf(job);
+  return Object.values(job.with).map((b) => {
+    const input = callee?.call ? lookup(callee.call.inputs, b.name) : undefined;
+    return {
+      binding: b,
+      target: callee?.path ?? uses.raw,
+      ...(callee ? { callee } : {}),
+      ...(input ? { input, symbol: sym.input(callee!.path, input.name) } : {}),
+    };
+  });
+}
+
+/** The `with:` values a step passes to its action. */
+function stepTargets(ctx: RuleContext, step: StepDecl): WithTarget[] {
+  const action = ctx.index.actionOf(step);
+  return Object.values(step.with).map((b) => {
+    const input = action ? lookup(action.inputs, b.name) : undefined;
+    return {
+      binding: b,
+      target: action?.path ?? step.uses?.raw ?? `step #${step.index + 1}`,
+      step,
+      ...(action ? { callee: action } : {}),
+      ...(input ? { input, symbol: sym.input(action!.path, input.name) } : {}),
+    };
+  });
+}
+
+/** A job with a matrix, the workflow it is in and its expansion. */
+interface MatrixJob {
+  wf: WorkflowDecl;
+  job: JobDecl;
+  exp: MatrixExpansion;
+}
+
+/** FP401 for one `with:` value: reported when it is empty in some combinations and the input cares. */
+function checkWithTarget(ctx: RuleContext, { wf, job, exp }: MatrixJob, t: WithTarget): void {
+  const site = t.binding.site;
+  if (!site || !hasMatrixRef(site)) return;
+  const impact = emptyInputImpact(ctx.index, t.callee, t.input);
+  if (!impact) return;
+  const { combos, keys, perKey } = affectedCombos(site, exp, isEmptyValue, guardsOf(job, site));
+  if (combos.length === 0) return;
+  const keyList = keys.map((k) => `matrix.${k}`).join(', ');
+  ctx.report({
+    message: `Input ${quote(t.binding.name)} for ${t.target} is empty in ${combos.length} of ${exp.combos.length} matrix combinations — ${missingKeys(keys, perKey)}${impact.note}`,
+    loc: firstMatrixRefLoc(site, keys),
+    combos: combos.map((c) => comboLabel(c, exp.keys)),
+    symbol: t.symbol ?? `${wf.path}#jobs.${job.id}.with.${t.binding.name}`,
+    related: [
+      ...chainRelated(chainTo(ctx.index, wf.path)),
+      ...comboRelated(job, combos, keys),
+      ...(t.input
+        ? [{ loc: t.input.loc, message: `receives the empty value: input ${quote(t.binding.name)}` }]
+        : []),
+      ...impact.related,
+    ],
+    fix: `Set ${keys.map((k) => `\`${k}\``).join(', ')} in every combination, or use a fallback: \`\${{ ${keyList.split(', ')[0]} || '<default>' }}\`.`,
+    severity: impact.severity,
+  });
+}
+
+/** Which keys are missing, with how many combinations lack each when there are several. */
+function missingKeys(keys: string[], perKey: Map<string, number>): string {
+  return keys.length === 1
+    ? `matrix.${keys[0]} is not defined there`
+    : `not defined there: ${keys.map((k) => `matrix.${k} (${perKey.get(k)})`).join(', ')}`;
+}
 
 const SKIP_FIELDS = new Set(['job.strategy']);
 const WITH_FIELDS = new Set(['job.with', 'step.with']);
@@ -355,45 +408,56 @@ const matrixKeyMissingInCombo = defineRule({
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
-      if (exp.dynamic || exp.combos.length === 0 || exp.combos.length > GITHUB_MATRIX_LIMIT) continue;
-      for (const site of wf.sites) {
-        if (site.job !== job.id || site.isCondition || SKIP_FIELDS.has(site.field) || !hasMatrixRef(site))
-          continue;
-        if (site.yamlPath.at(-1) === 'continue-on-error') continue;
-        // Empty `with:` values are FP401's; here only values that still degrade (e.g. `--config=`).
-        const predicate = WITH_FIELDS.has(site.field)
-          ? (v: ReturnType<typeof evaluateTemplate>) => !isEmptyValue(v)
-          : () => true;
-        // One finding per key, so counts are right and each key can be overridden on its own.
-        const read = new Map<string, string>();
-        for (const seg of site.segments)
-          for (const r of seg.refs)
-            if (r.context === 'matrix' && r.path[0] && !read.has(r.path[0].toLowerCase()))
-              read.set(r.path[0].toLowerCase(), r.path[0]);
-        for (const key of read.values()) {
-          // A script that only tests the value in the shell (`[[ -z "${{ matrix.k }}" ]]`) handles the empty case.
-          const unhandled = unhandledReads(site, key);
-          if (!unhandled) continue;
-          const guards = guardsOf(job, site);
-          const { combos } = affectedCombos(site, exp, predicate, guards, key, unhandled.text);
-          if (combos.length === 0) continue;
-          // The count says how often the key is missing; combinations where the whole input is empty are FP401's.
-          const all = WITH_FIELDS.has(site.field)
-            ? affectedCombos(site, exp, () => true, guards, key).combos.length
-            : combos.length;
-          const rest = all - combos.length;
-          ctx.report({
-            message: `matrix.${key} is undefined in ${all} of ${exp.combos.length} combinations of jobs.${job.id}${rest ? `; in ${rest} of them the whole input is empty (FP401)` : ''}`,
-            loc: firstMatrixRefLoc(site, [key], unhandled.tested),
-            combos: combos.map((c) => comboLabel(c, exp.keys)),
-            symbol: sym.matrix(wf.path, job.id, key),
-            related: comboRelated(job, combos, [key]),
-          });
-        }
-      }
+      if (!checkable(exp)) continue;
+      for (const site of wf.sites) if (judgedValue(site, job)) checkMatrixKeys(ctx, { wf, job, exp }, site);
     }
   },
 });
+
+/** Whether FP402 judges a site of `job`: a value that reads the matrix (not a condition or `continue-on-error`). */
+function judgedValue(site: ExprSite, job: JobDecl): boolean {
+  if (site.job !== job.id || site.isCondition || SKIP_FIELDS.has(site.field) || !hasMatrixRef(site))
+    return false;
+  return site.yamlPath.at(-1) !== 'continue-on-error';
+}
+
+/** The matrix keys a site reads, once each (case-insensitively), as spelled in their first read. */
+function matrixKeysRead(site: ExprSite): string[] {
+  const read = new Map<string, string>();
+  for (const seg of site.segments)
+    for (const r of seg.refs)
+      if (r.context === 'matrix' && r.path[0] && !read.has(r.path[0].toLowerCase()))
+        read.set(r.path[0].toLowerCase(), r.path[0]);
+  return [...read.values()];
+}
+
+/** FP402 for the matrix keys a value reads: one finding per key, so counts are right and each can be overridden. */
+function checkMatrixKeys(ctx: RuleContext, { wf, job, exp }: MatrixJob, site: ExprSite): void {
+  // Empty `with:` values are FP401's; here only values that still degrade (e.g. `--config=`).
+  const predicate = WITH_FIELDS.has(site.field)
+    ? (v: ReturnType<typeof evaluateTemplate>) => !isEmptyValue(v)
+    : () => true;
+  for (const key of matrixKeysRead(site)) {
+    // A script that only tests the value in the shell (`[[ -z "${{ matrix.k }}" ]]`) handles the empty case.
+    const unhandled = unhandledReads(site, key);
+    if (!unhandled) continue;
+    const guards = guardsOf(job, site);
+    const { combos } = affectedCombos(site, exp, predicate, guards, key, unhandled.text);
+    if (combos.length === 0) continue;
+    // The count says how often the key is missing; combinations where the whole input is empty are FP401's.
+    const all = WITH_FIELDS.has(site.field)
+      ? affectedCombos(site, exp, () => true, guards, key).combos.length
+      : combos.length;
+    const rest = all - combos.length;
+    ctx.report({
+      message: `matrix.${key} is undefined in ${all} of ${exp.combos.length} combinations of jobs.${job.id}${rest ? `; in ${rest} of them the whole input is empty (FP401)` : ''}`,
+      loc: firstMatrixRefLoc(site, [key], unhandled.tested),
+      combos: combos.map((c) => comboLabel(c, exp.keys)),
+      symbol: sym.matrix(wf.path, job.id, key),
+      related: comboRelated(job, combos, [key]),
+    });
+  }
+}
 
 const dynamicMatrixUnverified = defineRule({
   code: 'FP403',
@@ -410,12 +474,7 @@ const dynamicMatrixUnverified = defineRule({
     for (const { wf, job, exp } of matrixJobs(ctx)) {
       const m = job.matrix!;
       if (exp.declared || (!exp.dynamic && !m.includeDynamic)) continue;
-      const keys = new Set<string>();
-      for (const site of wf.sites) {
-        if (site.job !== job.id) continue;
-        for (const seg of site.segments)
-          for (const r of seg.refs) if (r.context === 'matrix' && r.path[0]) keys.add(r.path[0]);
-      }
+      const keys = matrixKeysReadIn(wf, job);
       if (keys.size === 0) continue;
       ctx.report({
         message: `jobs.${job.id} has a runtime-computed matrix; reads of ${[...keys].map((k) => `matrix.${k}`).join(', ')} cannot be verified`,
@@ -425,6 +484,17 @@ const dynamicMatrixUnverified = defineRule({
     }
   },
 });
+
+/** The matrix keys the sites of a job read, as spelled. */
+function matrixKeysReadIn(wf: WorkflowDecl, job: JobDecl): Set<string> {
+  const keys = new Set<string>();
+  for (const site of wf.sites) {
+    if (site.job !== job.id) continue;
+    for (const seg of site.segments)
+      for (const r of seg.refs) if (r.context === 'matrix' && r.path[0]) keys.add(r.path[0]);
+  }
+  return keys;
+}
 
 const undefinedMatrixKey = defineRule({
   code: 'FP404',
@@ -445,42 +515,59 @@ const undefinedMatrixKey = defineRule({
       for (const site of wf.sites) {
         if (!site.job || site.field === 'job.strategy') continue;
         const job = wf.jobs[site.job];
-        if (!job) continue;
-        const exp = job.matrix ? ctx.matrix(wf, job) : undefined;
-        if (exp && !exp.declared && (exp.dynamic || job.matrix?.includeDynamic)) continue;
-        const keys = new Set((exp?.keys ?? []).map((k) => k.toLowerCase()));
-        // The reads of each undefined key, in order (the first spelling names the key).
-        const reads = new Map<string, LocatedRef[]>();
-        for (const seg of site.segments) {
-          for (const r of seg.refs) {
-            const k = r.path[0];
-            if (r.context !== 'matrix' || !k || k === '*' || k === '?' || keys.has(k.toLowerCase())) continue;
-            reads.set(k.toLowerCase(), [...(reads.get(k.toLowerCase()) ?? []), r]);
-          }
-        }
-        for (const refs of reads.values()) {
-          const k = refs[0]!.path[0]!;
-          const where = job.matrix
-            ? `matrix.${k} is not defined in any combination of jobs.${job.id} (keys: ${exp!.keys.join(', ') || 'none'})`
-            : `jobs.${job.id} has no matrix, so matrix.${k} is always empty`;
-          const related = job.matrix ? [{ loc: job.matrix.loc, message: 'matrix defined here' }] : [];
-          if (onlyFallbacks(site, k, job, exp)) {
-            ctx.report({
-              message: `${where}; the fallback always applies`,
-              loc: refs[0]!.loc,
-              symbol: sym.matrix(wf.path, job.id, k),
-              related,
-              severity: 'info',
-            });
-            continue;
-          }
-          for (const r of refs)
-            ctx.report({ message: where, loc: r.loc, symbol: sym.matrix(wf.path, job.id, k), related });
-        }
+        if (job) checkUndefinedKeys(ctx, wf, job, site);
       }
     }
   },
 });
+
+/** FP404 for the reads in a site of keys its job's matrix never defines (or of any key, without a matrix). */
+function checkUndefinedKeys(ctx: RuleContext, wf: WorkflowDecl, job: JobDecl, site: ExprSite): void {
+  const exp = job.matrix ? ctx.matrix(wf, job) : undefined;
+  if (exp && !exp.declared && (exp.dynamic || job.matrix?.includeDynamic)) return;
+  for (const refs of undefinedKeyReads(site, exp).values())
+    reportUndefinedKey(ctx, { wf, job, exp }, site, refs);
+}
+
+/** The reads of each key `exp` does not define, by lowercased key, in order (the first spelling names the key). */
+function undefinedKeyReads(site: ExprSite, exp: MatrixExpansion | undefined): Map<string, LocatedRef[]> {
+  const keys = new Set((exp?.keys ?? []).map((k) => k.toLowerCase()));
+  const reads = new Map<string, LocatedRef[]>();
+  for (const seg of site.segments) {
+    for (const r of seg.refs) {
+      const k = r.path[0];
+      if (r.context !== 'matrix' || !namesKey(k) || keys.has(k.toLowerCase())) continue;
+      reads.set(k.toLowerCase(), [...(reads.get(k.toLowerCase()) ?? []), r]);
+    }
+  }
+  return reads;
+}
+
+/** FP404 for the reads of one undefined key: one info finding when every read falls back, else one per read. */
+function reportUndefinedKey(
+  ctx: RuleContext,
+  { wf, job, exp }: { wf: WorkflowDecl; job: JobDecl; exp: MatrixExpansion | undefined },
+  site: ExprSite,
+  refs: LocatedRef[],
+): void {
+  const k = refs[0]!.path[0]!;
+  const where = job.matrix
+    ? `matrix.${k} is not defined in any combination of jobs.${job.id} (keys: ${exp!.keys.join(', ') || 'none'})`
+    : `jobs.${job.id} has no matrix, so matrix.${k} is always empty`;
+  const related = job.matrix ? [{ loc: job.matrix.loc, message: 'matrix defined here' }] : [];
+  if (onlyFallbacks(site, k, job, exp)) {
+    ctx.report({
+      message: `${where}; the fallback always applies`,
+      loc: refs[0]!.loc,
+      symbol: sym.matrix(wf.path, job.id, k),
+      related,
+      severity: 'info',
+    });
+    return;
+  }
+  for (const r of refs)
+    ctx.report({ message: where, loc: r.loc, symbol: sym.matrix(wf.path, job.id, k), related });
+}
 
 /** The combinations to evaluate a job's expressions in; a job without a matrix has one, without any key. */
 function combosOf(exp: MatrixExpansion | undefined): Combination[] {
@@ -510,26 +597,33 @@ function onlyFallbacks(site: ExprSite, key: string, job: JobDecl, exp: MatrixExp
   const live = all.filter((c) => !guards.some((g) => skippedIn(g, c)));
   // When the job or step never runs, judge the read as written: the key is a typo either way.
   const combos = live.length > 0 ? live : all;
-  if (site.isCondition && isWholeExpression(site)) {
-    const ast = site.segments[0]!.expr.ast;
-    if (!ast) return false;
-    const neverTrue = combos.every((c) => {
-      const resolve = matrixResolver(c);
-      return definitelyFalsy(ast, resolve) && !definitelyFalsy(ast, unknownKey(resolve, lower));
-    });
-    if (neverTrue) return false;
-  }
-  for (const seg of site.segments) {
-    const reads = seg.refs.filter((r) => r.context === 'matrix' && r.path[0]?.toLowerCase() === lower);
-    if (reads.length === 0) continue;
-    const fallbacks = fallbacksOf(seg.expr);
-    for (const r of reads) {
-      const fallback = fallbacks.get(r.start);
-      if (!fallback) return false;
-      if (combos.some((c) => isEmptyValue(evaluate(fallback, matrixResolver(c))))) return false;
-    }
-  }
-  return true;
+  if (site.isCondition && isWholeExpression(site) && neverTrue(site, lower, combos)) return false;
+  return site.segments.every((seg) => readsFallBack(seg, lower, combos));
+}
+
+/**
+ * For a condition that is one expression: true when it is false in every combination, while it could be true if the
+ * key had a value. Also true when it does not parse, so it does not count as a fallback.
+ */
+function neverTrue(site: ExprSite, lower: string, combos: Combination[]): boolean {
+  const ast = site.segments[0]!.expr.ast;
+  if (!ast) return true;
+  return combos.every((c) => {
+    const resolve = matrixResolver(c);
+    return definitelyFalsy(ast, resolve) && !definitelyFalsy(ast, unknownKey(resolve, lower));
+  });
+}
+
+/** True when every read of the key in a segment is a fallback (`matrix.k || 'x'`) that is never empty. */
+function readsFallBack(seg: ExprSegment, lower: string, combos: Combination[]): boolean {
+  const reads = seg.refs.filter((r) => r.context === 'matrix' && r.path[0]?.toLowerCase() === lower);
+  if (reads.length === 0) return true;
+  const fallbacks = fallbacksOf(seg.expr);
+  return reads.every((r) => {
+    const fallback = fallbacks.get(r.start);
+    if (!fallback) return false;
+    return !combos.some((c) => isEmptyValue(evaluate(fallback, matrixResolver(c))));
+  });
 }
 
 const unusedMatrixShape = defineRule({

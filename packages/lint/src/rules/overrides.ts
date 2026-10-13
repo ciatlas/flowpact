@@ -1,5 +1,5 @@
 import type { Loc } from '@ciatlas/core';
-import { defineRule, type RuleDefinition } from './types';
+import { defineRule, type OverrideUsage, type RuleDefinition } from './types';
 
 /** Days before expiry at which FP903 starts reminding. */
 const EXPIRY_WARNING_DAYS = 14;
@@ -35,19 +35,25 @@ const overrideExpired = defineRule({
     for (const u of ctx.overrides ?? []) {
       // Like FP902: an override whose rule did not run (off, --only, contract rules under lint) is judged where it runs.
       if (!u.expired || u.inactive) continue;
-      const owner = u.override.owner ? ` (owner ${u.override.owner})` : '';
-      ctx.report({
-        message: u.matched
-          ? `Override for ${describe(u.override)} expired on ${u.override.expires}${owner}; ${u.matched} finding${u.matched === 1 ? ' is' : 's are'} reported again`
-          : `Override for ${describe(u.override)} expired on ${u.override.expires}${owner}; it matches no finding now`,
-        loc: configLoc(u.loc),
-        fix: u.matched
-          ? `Fix the finding${u.matched === 1 ? '' : 's'} and delete the override, or extend \`expires\` with an updated reason ("${u.override.reason}").`
-          : 'Delete the override.',
-      });
+      ctx.report({ message: expiredMessage(u), loc: configLoc(u.loc), fix: expiredFix(u) });
     }
   },
 });
+
+/** FP901's message: how many findings the expired override let through again, if any. */
+function expiredMessage(u: OverrideUsage): string {
+  const owner = u.override.owner ? ` (owner ${u.override.owner})` : '';
+  return u.matched
+    ? `Override for ${describe(u.override)} expired on ${u.override.expires}${owner}; ${u.matched} finding${u.matched === 1 ? ' is' : 's are'} reported again`
+    : `Override for ${describe(u.override)} expired on ${u.override.expires}${owner}; it matches no finding now`;
+}
+
+/** FP901's fix: fix the findings it matches (or extend it), or, matching none, delete it. */
+function expiredFix(u: OverrideUsage): string {
+  return u.matched
+    ? `Fix the finding${u.matched === 1 ? '' : 's'} and delete the override, or extend \`expires\` with an updated reason ("${u.override.reason}").`
+    : 'Delete the override.';
+}
 
 const overrideUnused = defineRule({
   code: 'FP902',
@@ -65,9 +71,7 @@ const overrideUnused = defineRule({
       if (u.expired || u.inactive || u.matched > 0) continue;
       const n = u.skippedInGenerated ?? 0;
       ctx.report({
-        message: n
-          ? `Override for ${describe(u.override)} matches no finding: ${u.override.rule} is not reported in generated files, where its ${n} finding${n === 1 ? ' is' : 's are'}`
-          : `Override for ${describe(u.override)} matches no finding`,
+        message: unusedMessage(u, n),
         loc: configLoc(u.loc),
         ...(n
           ? {
@@ -78,6 +82,13 @@ const overrideUnused = defineRule({
     }
   },
 });
+
+/** FP902's message, naming the findings in generated files (`n`) the override would match. */
+function unusedMessage(u: OverrideUsage, n: number): string {
+  return n
+    ? `Override for ${describe(u.override)} matches no finding: ${u.override.rule} is not reported in generated files, where its ${n} finding${n === 1 ? ' is' : 's are'}`
+    : `Override for ${describe(u.override)} matches no finding`;
+}
 
 const overrideExpiringSoon = defineRule({
   code: 'FP903',

@@ -95,6 +95,70 @@ function jobChecks(index: ProjectIndex, wf: WorkflowDecl): Map<string, JobChecks
 
 const quoteName = (n: string) => `"… / ${n}"`;
 
+/** What comparing the checks of a workflow's jobs needs. */
+interface NameDiff {
+  /** Every name the head reports. */
+  headNames: Set<string>;
+  /** Every name the base reported. */
+  baseNames: Set<string>;
+  /** Records a change to the head workflow's checks. */
+  add: (level: ImpactLevel, certain: boolean, message: string, loc: Loc) => void;
+  /** Where to report a change to a head job: its name, the job, or the file start. */
+  jobLoc: (chain: string) => Loc;
+}
+
+/** A base job without a counterpart in the head: the checks it reported that nothing reports any more. */
+function goneJob(d: NameDiff, bj: JobChecks, file: string): void {
+  const gone = bj.names.filter((n) => !d.headNames.has(n.name));
+  if (!gone.length) return;
+  d.add(
+    'major',
+    true,
+    `${bj.names.length > 1 ? `checks ${quoteName(bj.stem)}` : `check ${quoteName(bj.names[0]!.name)}`} no longer reported; consumers that require ${bj.names.length > 1 ? 'them' : 'it'} wait forever`,
+    fileStart(file),
+  );
+}
+
+/** A job in both: a changed stem renames every check, else the names (matrix values) are compared. */
+function compareJob(d: NameDiff, bj: JobChecks, hj: JobChecks): void {
+  if (bj.stem !== hj.stem) {
+    // The static part changed: every name the job reports changed, whatever the unknown values are.
+    d.add(
+      'major',
+      true,
+      `check ${quoteName(bj.stem)} is now ${quoteName(hj.stem)}; consumers that require the old name wait forever`,
+      d.jobLoc(hj.chain),
+    );
+    return;
+  }
+  // Same stem: compare the names (matrix values). Unknown values cannot be compared.
+  const removed = bj.names.filter((n) => n.certain && !d.headNames.has(n.name));
+  const added = hj.names.filter((n) => n.certain && !d.baseNames.has(n.name));
+  for (const n of removed)
+    d.add(
+      'major',
+      true,
+      `check ${quoteName(n.name)} no longer reported; consumers that require it wait forever`,
+      d.jobLoc(hj.chain),
+    );
+  for (const n of added) d.add('minor', true, `new check ${quoteName(n.name)}`, d.jobLoc(hj.chain));
+  const unsure = bj.names.some((n) => !n.certain) || hj.names.some((n) => !n.certain);
+  if (unsure && JSON.stringify(bj.names.map((n) => n.name)) !== JSON.stringify(hj.names.map((n) => n.name)))
+    d.add('major', false, `checks ${quoteName(bj.stem)} may report different names`, d.jobLoc(hj.chain));
+}
+
+/** A head job without a counterpart in the base: the checks it reports that the base did not. */
+function newJob(d: NameDiff, hj: JobChecks): void {
+  const fresh = hj.names.filter((n) => !d.baseNames.has(n.name));
+  if (fresh.length)
+    d.add(
+      'minor',
+      true,
+      `new check${hj.names.length > 1 ? 's' : ''} ${quoteName(hj.names.length > 1 ? hj.stem : hj.names[0]!.name)}`,
+      d.jobLoc(hj.chain),
+    );
+}
+
 function checkNameChanges(
   base: ProjectIndex,
   head: ProjectIndex,
@@ -103,69 +167,34 @@ function checkNameChanges(
 ): ImpactChange[] {
   const before = jobChecks(base, b);
   const after = jobChecks(head, h);
-  const jobLoc = (chain: string) => {
-    const id = chain.split(' > ')[0]!;
-    const job: JobDecl | undefined = h.jobs[id];
-    return job?.nameLoc ?? job?.loc ?? fileStart(h.file);
-  };
   const out: ImpactChange[] = [];
-  const add = (level: ImpactLevel, certain: boolean, message: string, loc: Loc) =>
-    out.push({ unit: h.path, kind: 'check-name', level, certain, message, loc });
-  const headNames = new Set([...after.values()].flatMap((j) => j.names.map((n) => n.name)));
-  const baseNames = new Set([...before.values()].flatMap((j) => j.names.map((n) => n.name)));
+  const d: NameDiff = {
+    headNames: new Set([...after.values()].flatMap((j) => j.names.map((n) => n.name))),
+    baseNames: new Set([...before.values()].flatMap((j) => j.names.map((n) => n.name))),
+    add: (level, certain, message, loc) =>
+      out.push({ unit: h.path, kind: 'check-name', level, certain, message, loc }),
+    jobLoc: (chain) => {
+      const id = chain.split(' > ')[0]!;
+      const job: JobDecl | undefined = h.jobs[id];
+      return job?.nameLoc ?? job?.loc ?? fileStart(h.file);
+    },
+  };
   const matchedHead = new Set<string>();
 
   for (const bj of before.values()) {
-    let hj = after.get(bj.chain);
     // A job renamed by id but reporting the same names (or the same stem) is the same job to consumers.
-    if (!hj) hj = [...after.values()].find((x) => !before.has(x.chain) && x.stem === bj.stem);
+    const hj =
+      after.get(bj.chain) ?? [...after.values()].find((x) => !before.has(x.chain) && x.stem === bj.stem);
     if (!hj) {
-      const gone = bj.names.filter((n) => !headNames.has(n.name));
-      if (gone.length)
-        add(
-          'major',
-          true,
-          `${bj.names.length > 1 ? `checks ${quoteName(bj.stem)}` : `check ${quoteName(bj.names[0]!.name)}`} no longer reported; consumers that require ${bj.names.length > 1 ? 'them' : 'it'} wait forever`,
-          fileStart(h.file),
-        );
+      goneJob(d, bj, h.file);
       continue;
     }
     matchedHead.add(hj.chain);
-    if (bj.stem !== hj.stem) {
-      // The static part changed: every name the job reports changed, whatever the unknown values are.
-      add(
-        'major',
-        true,
-        `check ${quoteName(bj.stem)} is now ${quoteName(hj.stem)}; consumers that require the old name wait forever`,
-        jobLoc(hj.chain),
-      );
-      continue;
-    }
-    // Same stem: compare the names (matrix values). Unknown values cannot be compared.
-    const removed = bj.names.filter((n) => n.certain && !headNames.has(n.name));
-    const added = hj.names.filter((n) => n.certain && !baseNames.has(n.name));
-    for (const n of removed)
-      add(
-        'major',
-        true,
-        `check ${quoteName(n.name)} no longer reported; consumers that require it wait forever`,
-        jobLoc(hj.chain),
-      );
-    for (const n of added) add('minor', true, `new check ${quoteName(n.name)}`, jobLoc(hj.chain));
-    const unsure = bj.names.some((n) => !n.certain) || hj.names.some((n) => !n.certain);
-    if (unsure && JSON.stringify(bj.names.map((n) => n.name)) !== JSON.stringify(hj.names.map((n) => n.name)))
-      add('major', false, `checks ${quoteName(bj.stem)} may report different names`, jobLoc(hj.chain));
+    compareJob(d, bj, hj);
   }
   for (const hj of after.values()) {
     if (matchedHead.has(hj.chain) || before.has(hj.chain)) continue;
-    const fresh = hj.names.filter((n) => !baseNames.has(n.name));
-    if (fresh.length)
-      add(
-        'minor',
-        true,
-        `new check${hj.names.length > 1 ? 's' : ''} ${quoteName(hj.names.length > 1 ? hj.stem : hj.names[0]!.name)}`,
-        jobLoc(hj.chain),
-      );
+    newJob(d, hj);
   }
   return out;
 }
@@ -190,15 +219,15 @@ function interfaceLoc(h: UnitDecl, path: string): Loc {
   const dot = path.indexOf('.');
   const kind = path.slice(0, dot);
   const name = path.slice(dot + 1);
-  const decls: Record<string, { loc: Loc }> | undefined =
-    h.kind === 'workflow'
-      ? kind === 'inputs' || kind === 'secrets' || kind === 'outputs'
-        ? h.call?.[kind]
-        : undefined
-      : kind === 'inputs' || kind === 'outputs'
-        ? h[kind]
-        : undefined;
+  const decls = interfaceDecls(h, kind);
   return (dot > 0 && decls && Object.hasOwn(decls, name) ? decls[name]?.loc : undefined) ?? fileStart(h.file);
+}
+
+/** A unit's interface declarations of one kind (`inputs`, `secrets` of a workflow, `outputs`); none for others. */
+function interfaceDecls(h: UnitDecl, kind: string): Record<string, { loc: Loc }> | undefined {
+  if (h.kind === 'workflow')
+    return kind === 'inputs' || kind === 'secrets' || kind === 'outputs' ? h.call?.[kind] : undefined;
+  return kind === 'inputs' || kind === 'outputs' ? h[kind] : undefined;
 }
 
 function interfaceChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h: UnitDecl): ImpactChange[] {
@@ -344,6 +373,90 @@ function runtimeChanges(b: ActionDecl, h: ActionDecl): ImpactChange[] {
 const describeUnit = (u: UnitDecl) =>
   u.kind === 'workflow' ? `reusable workflow ${u.path}` : `action ${u.path}`;
 
+/** A published base unit whose path the head does not have, or has for another kind of unit. */
+const removedUnit = (path: string, b: UnitDecl): ImpactChange => ({
+  unit: path,
+  kind: 'unit',
+  level: 'major',
+  certain: true,
+  message: `${describeUnit(b)} was removed or moved; consumers that reference it fail`,
+  loc: fileStart(b.file),
+});
+
+/** The change that stops comparing a published unit: the head no longer publishes it, or a side has YAML errors. */
+function blockingChange(
+  path: string,
+  b: UnitDecl,
+  h: UnitDecl,
+  policy: Pick<ImpactPolicy, 'publish'>,
+): ImpactChange | undefined {
+  if (!isPublished(h, policy)) {
+    return {
+      unit: path,
+      kind: 'unit',
+      level: 'major',
+      certain: true,
+      message:
+        h.kind === 'workflow'
+          ? `${path} can no longer be called (no workflow_call)`
+          : `${path} is no longer published`,
+      loc: fileStart(h.file),
+    };
+  }
+  if (h.parseErrors.length) {
+    return {
+      unit: path,
+      kind: 'unit',
+      level: 'major',
+      certain: !b.parseErrors.length,
+      message: `${describeUnit(h)} has YAML errors (${h.parseErrors[0]!.message}); consumers' runs fail`,
+      loc: h.parseErrors[0]!.loc,
+    };
+  }
+  if (b.parseErrors.length) {
+    return {
+      unit: path,
+      kind: 'unit',
+      level: 'patch',
+      certain: false,
+      message: `${describeUnit(h)} could not be compared: the baseline has YAML errors`,
+      loc: fileStart(h.file),
+    };
+  }
+  return undefined;
+}
+
+/** The graded changes between the base and head versions of a published unit that both parse. */
+function comparedChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h: UnitDecl): ImpactChange[] {
+  const out = [...interfaceChanges(base, head, b, h), ...usesChanges(b, h)];
+  if (b.kind === 'workflow' && h.kind === 'workflow')
+    out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
+  if (b.kind === 'action' && h.kind === 'action') out.push(...runtimeChanges(b, h));
+  return out;
+}
+
+/** Adds to `out` the units the head publishes that the base did not (or did not publish). */
+function newUnits(
+  out: ImpactChange[],
+  baseUnits: Map<string, UnitDecl>,
+  headUnits: Map<string, UnitDecl>,
+  policy: Pick<ImpactPolicy, 'publish'>,
+): void {
+  for (const [path, h] of headUnits) {
+    if (!isPublished(h, policy)) continue;
+    const b = baseUnits.get(path);
+    if (b && isPublished(b, policy)) continue;
+    out.push({
+      unit: path,
+      kind: 'unit',
+      level: 'minor',
+      certain: true,
+      message: `new ${describeUnit(h)}`,
+      loc: fileStart(h.file),
+    });
+  }
+}
+
 /**
  * Every graded change to a published unit between `base` and `head`. `headExists` tells whether a unit's file is still
  * in the working tree (a unit can exist without being loaded, e.g. an action nothing here uses any more).
@@ -362,70 +475,14 @@ export function impactChanges(
     const h = headUnits.get(path);
     if (!h || h.kind !== b.kind) {
       if (!h && headExists(b.file)) continue;
-      out.push({
-        unit: path,
-        kind: 'unit',
-        level: 'major',
-        certain: true,
-        message: `${describeUnit(b)} was removed or moved; consumers that reference it fail`,
-        loc: fileStart(b.file),
-      });
+      out.push(removedUnit(path, b));
       continue;
     }
-    if (!isPublished(h, policy)) {
-      out.push({
-        unit: path,
-        kind: 'unit',
-        level: 'major',
-        certain: true,
-        message:
-          h.kind === 'workflow'
-            ? `${path} can no longer be called (no workflow_call)`
-            : `${path} is no longer published`,
-        loc: fileStart(h.file),
-      });
-      continue;
-    }
-    if (h.parseErrors.length) {
-      out.push({
-        unit: path,
-        kind: 'unit',
-        level: 'major',
-        certain: !b.parseErrors.length,
-        message: `${describeUnit(h)} has YAML errors (${h.parseErrors[0]!.message}); consumers' runs fail`,
-        loc: h.parseErrors[0]!.loc,
-      });
-      continue;
-    }
-    if (b.parseErrors.length) {
-      out.push({
-        unit: path,
-        kind: 'unit',
-        level: 'patch',
-        certain: false,
-        message: `${describeUnit(h)} could not be compared: the baseline has YAML errors`,
-        loc: fileStart(h.file),
-      });
-      continue;
-    }
-    out.push(...interfaceChanges(base, head, b, h), ...usesChanges(b, h));
-    if (b.kind === 'workflow' && h.kind === 'workflow')
-      out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
-    if (b.kind === 'action' && h.kind === 'action') out.push(...runtimeChanges(b, h));
+    const blocking = blockingChange(path, b, h, policy);
+    if (blocking) out.push(blocking);
+    else out.push(...comparedChanges(base, head, b, h));
   }
-  for (const [path, h] of headUnits) {
-    if (!isPublished(h, policy)) continue;
-    const b = baseUnits.get(path);
-    if (b && isPublished(b, policy)) continue;
-    out.push({
-      unit: path,
-      kind: 'unit',
-      level: 'minor',
-      certain: true,
-      message: `new ${describeUnit(h)}`,
-      loc: fileStart(h.file),
-    });
-  }
+  newUnits(out, baseUnits, headUnits, policy);
   return out;
 }
 
@@ -496,12 +553,8 @@ export interface ImpactVerdict {
 export const countedChanges = (changes: ImpactChange[], policy: Pick<ImpactPolicy, 'uncertain'>) =>
   changes.filter((c) => c.certain || policy.uncertain === 'fail');
 
-export function impactVerdict(
-  changes: ImpactChange[],
-  input: DeclaredInput,
-  policy: ImpactPolicy,
-): ImpactVerdict {
-  const required = maxLevel(countedChanges(changes, policy).map((c) => c.level));
+/** Every source that declares a level: the explicit level, the release version (else the title), and the labels. */
+function declaredSources(input: DeclaredInput, policy: ImpactPolicy): DeclaredSource[] {
   const sources: DeclaredSource[] = [];
   if (input.explicit) sources.push({ kind: 'explicit', value: input.explicit, level: input.explicit });
   if (input.release) {
@@ -515,13 +568,24 @@ export function impactVerdict(
     const level = levelFromLabels(input.labels, policy.labels);
     if (level) sources.push({ kind: 'labels', value: input.labels.join(', '), level });
   }
-  // Exactly one authoritative source: an explicit level, the release version, or the configured one (title by
-  // default). Falling back to another source would declare something the release tool never reads.
-  const authority: DeclaredSource['kind'] = input.explicit
-    ? 'explicit'
-    : input.release
-      ? 'version'
-      : (policy.declaredBy ?? 'title');
+  return sources;
+}
+
+/**
+ * Exactly one authoritative source: an explicit level, the release version, or the configured one (title by default).
+ * Falling back to another source would declare something the release tool never reads.
+ */
+const authorityOf = (input: DeclaredInput, policy: ImpactPolicy): DeclaredSource['kind'] =>
+  input.explicit ? 'explicit' : input.release ? 'version' : (policy.declaredBy ?? 'title');
+
+export function impactVerdict(
+  changes: ImpactChange[],
+  input: DeclaredInput,
+  policy: ImpactPolicy,
+): ImpactVerdict {
+  const required = maxLevel(countedChanges(changes, policy).map((c) => c.level));
+  const sources = declaredSources(input, policy);
+  const authority = authorityOf(input, policy);
   const declared = sources.find((s) => s.kind === authority);
   const advisory = sources.filter((s) => s !== declared);
   const conflict = declared

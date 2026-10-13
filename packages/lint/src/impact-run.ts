@@ -184,6 +184,180 @@ function defaultBase(root: string): string {
 
 const ZERO_SHA = /^0+$/;
 
+/** For a push, the commit before it, or why there is none (a new branch or tag); undefined for other events. */
+function pushBase(event: ImpactRequest['event']): string | { skip: string } | undefined {
+  if (event?.name !== 'push') return undefined;
+  const before = event.payload?.before;
+  if (before && !ZERO_SHA.test(before)) return before;
+  return { skip: 'push without a previous commit (new branch or tag)' };
+}
+
+/** The requested baseline: `--base`, the pull request's base, the commit before a push, or the remote's default branch. */
+function requestedBase(root: string, req: ImpactRequest): string | { skip: string } {
+  if (req.base) return req.base;
+  const sha = req.event?.payload?.pull_request?.base?.sha;
+  if (sha) return sha;
+  return pushBase(req.event) ?? defaultBase(root);
+}
+
+/** The tag of the release `previous` (as release-please names it), fetched through `req.fetch` when the clone lacks it. */
+function releaseTag(
+  root: string,
+  previous: string,
+  settings: ReturnType<typeof releaseSettings>,
+  req: ImpactRequest,
+): string {
+  const tags = [
+    ...(settings.component
+      ? [`${settings.component}-v${previous}`, `${settings.component}-${previous}`]
+      : []),
+    settings.includeV ? `v${previous}` : previous,
+    settings.includeV ? previous : `v${previous}`,
+  ];
+  const found = () =>
+    tags.find((t) => {
+      try {
+        resolveCommit(root, `refs/tags/${t}`);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+  let tag = found();
+  if (!tag && req.fetch) {
+    req.fetch(tags.map((t) => `+refs/tags/${t}:refs/tags/${t}`));
+    tag = found();
+  }
+  if (!tag)
+    throw new ImpactSetupError(
+      `No release tag for ${previous} (tried ${tags.join(', ')}); fetch tags first.`,
+    );
+  return tag;
+}
+
+/**
+ * A release pull request changes only versions and the changelog; what matters is everything since the last release,
+ * against the version it proposes. Its tag and versions, or undefined when the version does not change.
+ */
+function lastRelease(
+  root: string,
+  commit: string,
+  req: ImpactRequest,
+): { tag: string; release: NonNullable<DeclaredInput['release']> } | undefined {
+  const previous = versionOf(gitFileSystem(root, commit));
+  const next = versionOf(workingTree(root));
+  if (!previous || !next || previous === next) return undefined;
+  const settings = releaseSettings(workingTree(root));
+  const tag = releaseTag(root, previous, settings, req);
+  return {
+    tag,
+    release: {
+      previous,
+      version: next,
+      bumpMinorPreMajor: settings.bumpMinorPreMajor,
+      bumpPatchForMinorPreMajor: settings.bumpPatchForMinorPreMajor,
+    },
+  };
+}
+
+interface Baseline {
+  kind: 'ref' | 'release';
+  ref: string;
+  commit: string;
+  release?: NonNullable<DeclaredInput['release']>;
+}
+
+/** The commit of the requested ref, or for a release pull request, of the last release's tag. */
+function baselineOf(
+  root: string,
+  ref: string,
+  req: ImpactRequest,
+  pr: { title: string | undefined; labels: string[] },
+  notes: string[],
+): Baseline {
+  const commit = commitOf(root, ref, req.fetch);
+  const last = isReleasePullRequest(pr.title, pr.labels) ? lastRelease(root, commit, req) : undefined;
+  if (!last) return { kind: 'ref', ref, commit };
+  const tagCommit = commitOf(root, `refs/tags/${last.tag}`, undefined);
+  notes.push(
+    `release pull request: ${last.release.previous} → ${last.release.version}, compared with ${last.tag}`,
+  );
+  return { kind: 'release', ref: last.tag, commit: tagCommit, release: last.release };
+}
+
+/** The checked-out commit, if there is one. */
+function headCommit(root: string): string | undefined {
+  try {
+    return resolveCommit(root, 'HEAD');
+  } catch {
+    return undefined;
+  }
+}
+
+/** The baseline's files, read from git. */
+function baselineFiles(root: string, commit: string): FileSystem {
+  try {
+    return gitFileSystem(root, commit);
+  } catch (err) {
+    throw new ImpactSetupError((err as Error).message);
+  }
+}
+
+/** Whether the base config is a file of this repository, i.e. the pull request's own version of it. */
+function baseConfigInRepository(root: string, req: ImpactRequest): boolean {
+  const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : undefined;
+  return top !== undefined && pathInside(top, req.baseConfigFile!);
+}
+
+/** The baseline's config, and the impact policy it sets. */
+function baselinePolicy(
+  root: string,
+  fs: FileSystem,
+  req: ImpactRequest,
+  headConfig: FlowpactConfig,
+  notes: string[],
+): { config: FlowpactConfig | undefined; policy: ImpactPolicy } {
+  const configPath = req.configPath
+    ? relative(root, join(root, req.configPath)).split('\\').join('/')
+    : undefined;
+  const baseInRepository = baseConfigInRepository(root, req);
+  if (baseInRepository) {
+    notes.push(
+      "the base config is a file of this repository, so the baseline's impact settings leave it out",
+    );
+  }
+  const config = baselineConfig(fs, configPath, baseInRepository ? undefined : req.baseConfig, notes);
+  // Policy comes from the baseline (or the defaults), never from the pull request, so it cannot relax its own check.
+  const policy: ImpactPolicy = { ...(config ?? defaultConfig()).impact };
+  if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
+    notes.push('this pull request changes impact settings; they apply after it is merged');
+  }
+  return { config, policy };
+}
+
+/** The pull request's title and labels: given in the request, else read from the pull request event. */
+function titleAndLabels(req: ImpactRequest): { title: string | undefined; labels: string[] } {
+  const pr = req.event?.payload?.pull_request;
+  const title = req.title ?? pr?.title;
+  const labels = req.labels ?? (pr?.labels ?? []).map((l) => l.name ?? '').filter(Boolean);
+  return { title, labels };
+}
+
+/** What the pull request declares: the explicit level, the title (not for a release), the labels and the release. */
+function declaredOf(
+  req: ImpactRequest,
+  title: string | undefined,
+  labels: string[],
+  release: DeclaredInput['release'],
+): DeclaredInput {
+  return {
+    ...(req.expect ? { explicit: req.expect } : {}),
+    ...(title !== undefined && !release ? { title } : {}),
+    ...(labels.length ? { labels } : {}),
+    ...(release ? { release } : {}),
+  };
+}
+
 /** Resolves the baseline and the declaration, and analyses the baseline. */
 export function prepareImpact(
   root: string,
@@ -198,99 +372,17 @@ export function prepareImpact(
       'pull_request_target runs on the default branch, so it would compare the default branch with itself. Run impact mode on pull_request (or pass a base and check out the pull request head).',
     );
   }
-  const payload = req.event?.payload;
-  const pr = payload?.pull_request;
-  const title = req.title ?? pr?.title;
-  const labels = req.labels ?? (pr?.labels ?? []).map((l) => l.name ?? '').filter(Boolean);
+  const { title, labels } = titleAndLabels(req);
   const notes: string[] = [];
 
-  let baseRef: string;
-  if (req.base) baseRef = req.base;
-  else if (pr?.base?.sha) baseRef = pr.base.sha;
-  else if (eventName === 'push' && payload?.before && !ZERO_SHA.test(payload.before))
-    baseRef = payload.before;
-  else if (eventName === 'push') return { skip: 'push without a previous commit (new branch or tag)' };
-  else baseRef = defaultBase(root);
+  const requested = requestedBase(root, req);
+  if (typeof requested !== 'string') return requested;
+  const baseline = baselineOf(root, requested, req, { title, labels }, notes);
+  const { kind, ref: baseRef, commit, release } = baseline;
+  if (headCommit(root) === commit) return { skip: `the baseline ${baseRef} is the checked-out commit` };
 
-  let kind: 'ref' | 'release' = 'ref';
-  let release: DeclaredInput['release'];
-  let commit = commitOf(root, baseRef, req.fetch);
-
-  if (isReleasePullRequest(title, labels)) {
-    // A release pull request changes only versions and the changelog; what matters is everything since the last
-    // release, against the version it proposes.
-    const previous = versionOf(gitFileSystem(root, commit));
-    const next = versionOf(workingTree(root));
-    if (previous && next && previous !== next) {
-      const settings = releaseSettings(workingTree(root));
-      const tags = [
-        ...(settings.component
-          ? [`${settings.component}-v${previous}`, `${settings.component}-${previous}`]
-          : []),
-        settings.includeV ? `v${previous}` : previous,
-        settings.includeV ? previous : `v${previous}`,
-      ];
-      const found = () =>
-        tags.find((t) => {
-          try {
-            resolveCommit(root, `refs/tags/${t}`);
-            return true;
-          } catch {
-            return false;
-          }
-        });
-      let tag = found();
-      if (!tag && req.fetch) {
-        req.fetch(tags.map((t) => `+refs/tags/${t}:refs/tags/${t}`));
-        tag = found();
-      }
-      if (!tag)
-        throw new ImpactSetupError(
-          `No release tag for ${previous} (tried ${tags.join(', ')}); fetch tags first.`,
-        );
-      release = {
-        previous,
-        version: next,
-        bumpMinorPreMajor: settings.bumpMinorPreMajor,
-        bumpPatchForMinorPreMajor: settings.bumpPatchForMinorPreMajor,
-      };
-      baseRef = tag;
-      kind = 'release';
-      commit = commitOf(root, `refs/tags/${tag}`, undefined);
-      notes.push(`release pull request: ${previous} → ${next}, compared with ${tag}`);
-    }
-  }
-
-  let head: string | undefined;
-  try {
-    head = resolveCommit(root, 'HEAD');
-  } catch {
-    head = undefined;
-  }
-  if (head === commit) return { skip: `the baseline ${baseRef} is the checked-out commit` };
-
-  let fs: FileSystem;
-  try {
-    fs = gitFileSystem(root, commit);
-  } catch (err) {
-    throw new ImpactSetupError((err as Error).message);
-  }
-  const configPath = req.configPath
-    ? relative(root, join(root, req.configPath)).split('\\').join('/')
-    : undefined;
-  const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : undefined;
-  const baseInRepository = top !== undefined && pathInside(top, req.baseConfigFile!);
-  if (baseInRepository) {
-    notes.push(
-      "the base config is a file of this repository, so the baseline's impact settings leave it out",
-    );
-  }
-  const baseConfig = baselineConfig(fs, configPath, baseInRepository ? undefined : req.baseConfig, notes);
-  // Policy comes from the baseline (or the defaults), never from the pull request, so it cannot relax its own check.
-  const policy: ImpactPolicy = { ...(baseConfig ?? defaultConfig()).impact };
-  if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
-    notes.push('this pull request changes impact settings; they apply after it is merged');
-  }
+  const fs = baselineFiles(root, commit);
+  const { config: baseConfig, policy } = baselinePolicy(root, fs, req, headConfig, notes);
   logger?.debug('impact baseline', { ref: baseRef, commit, kind });
   // No rules run on the baseline (only: []), so its rule settings cannot fail it.
   const base = analyze({
@@ -305,12 +397,7 @@ export function prepareImpact(
     options: {
       base: base.index,
       baseline: { kind, ref: baseRef, commit },
-      declared: {
-        ...(req.expect ? { explicit: req.expect } : {}),
-        ...(title !== undefined && !release ? { title } : {}),
-        ...(labels.length ? { labels } : {}),
-        ...(release ? { release } : {}),
-      },
+      declared: declaredOf(req, title, labels, release),
       policy,
       // Load the head's copies of what the baseline published, so a unit that still exists is compared, not "removed".
       publishedFiles: base.index
