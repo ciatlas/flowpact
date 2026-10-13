@@ -726,6 +726,18 @@ describe('impact mode', () => {
         ],
       ]);
     }
+    // Where no pull request's run with the baseline comes first, a failure as in 0.14. Before: a warning, exit-code 0.
+    for (const [event, given] of [
+      ['pull_request_target', { impact: 'auto' }],
+      ['schedule', { impact: 'auto' }],
+      ['workflow_dispatch', { impact: 'auto' }],
+      ['workflow_dispatch', { impact: 'on', 'base-ref': 'change' }],
+    ] as const) {
+      const s = await fresh(event, given);
+      expect(s.failed).toEqual(['paths not found under .: .github/workflows/gone.yml']);
+      expect(s.outputs['exit-code']).toBe('2');
+      expect(s.annotations).toEqual([]);
+    }
     // Without impact mode, still a failure.
     expect((await fresh('push', {})).failed[0]).toContain('paths not found');
   });
@@ -767,6 +779,12 @@ describe('impact mode', () => {
           'paths without a workflow or action under .: actions/old. Not refused while impact mode is skipped, as the change may have removed them.',
         ],
       ]);
+    }
+    // Where no pull request's run with the baseline comes first, a failure as in 0.14. Before: a warning, exit-code 0.
+    for (const event of ['pull_request_target', 'schedule']) {
+      const s = await fresh(event, { impact: 'auto' });
+      expect(s.failed[0]).toContain('None of the paths is a workflow');
+      expect(s.outputs['exit-code']).toBe('2');
     }
     // Beside a path that names a workflow, actions/old was never refused, so there is nothing to warn about.
     const beside = await fresh('merge_group', {

@@ -27,8 +27,9 @@ to gate every published unit. `flowpact impact` takes paths too, where 0.14 refu
 
 A removed or renamed unit is graded only when its old path, or a directory holding it, is among the paths, so prefer
 directory paths (`actions/`) in the action's `paths` input; a path that names only the removed unit fails later pull
-requests once the removal is merged. A path the change removed is no longer refused as missing in impact mode, and only warned
-about where impact mode is skipped (`merge_group`, push), as is a removed action's directory that keeps other files.
+requests once the removal is merged. A path the change removed is no longer refused as missing in impact mode, and
+only warned about where impact mode is skipped on `merge_group` or `push`, which follow the pull request's run, as is
+a removed action's directory that keeps other files. On other events, a skipped impact mode still refuses them.
 
 `flowpact graph` takes paths as well, and then draws only those workflows and actions and what they call.
 

@@ -6,6 +6,7 @@ import {
   type AnalyzeOptions,
   contractPatch,
   exitCodeFor,
+  followsPullRequest,
   githubEvent,
   IMPACT_CODES,
   type ImpactLevel,
@@ -155,17 +156,23 @@ function impactFor(
   );
 }
 
+/** Whether this run follows a pull request's run, which has the baseline (`merge_group`, `push` in GitHub Actions). */
+const afterPullRequest = () =>
+  process.env.GITHUB_ACTIONS === 'true' && followsPullRequest(process.env.GITHUB_EVENT_NAME);
+
 /**
  * The paths that name no workflow or action of the working tree yet are not refused, and notes about them: in impact
- * mode, what the change removed; when impact mode was asked for but skipped, every such path that would be refused
- * (one the working tree lacks, or one that holds no workflow or action, such as a removed action's directory that
- * keeps its README), since without a baseline a path the change removed cannot be told from a mistake.
+ * mode, what the change removed; when impact mode was asked for but skipped on `merge_group` or `push`, every such path
+ * that would be refused (one the working tree lacks, or one that holds no workflow or action, such as a removed
+ * action's directory that keeps its README), since without a baseline a path the change removed cannot be told from a
+ * mistake, and the pull request's run, which has one, came first. Anywhere else, a skipped impact mode refuses them.
  */
 function unrefused(
   result: AnalysisResult,
   impact: PreparedImpact | undefined,
 ): { paths: string[]; notes: string[] } {
-  if (!impact || !('skip' in impact)) return { paths: result.removedPaths ?? [], notes: [] };
+  if (!impact || !('skip' in impact) || !afterPullRequest())
+    return { paths: result.removedPaths ?? [], notes: [] };
   const { missingTargets: missing = [], ignoredTargets = [], targets, wholeRepository } = result.project;
   // Beside a path that names a workflow or action, one that holds none is not refused anyway.
   const empty = targets.size || wholeRepository ? [] : ignoredTargets;

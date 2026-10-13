@@ -29,6 +29,7 @@ import {
   exitCodeFor,
   type Finding,
   type FlowpactConfig,
+  followsPullRequest,
   githubEvent,
   type ImpactLevel,
   type ImpactRequest,
@@ -769,13 +770,18 @@ async function analyzeRoot(
 /**
  * The paths that name no workflow or action of the working tree yet do not fail the step. In impact mode, a path that
  * names a workflow or action of the baseline stands for what the change removed. When impact mode was asked for but
- * skipped (on merge_group or push, or `impact: auto` off pull requests), there is no baseline to tell a removed path
- * from a mistake, so a path that would fail the step (one the working tree lacks, or one that holds no workflow or
- * action, such as a removed action's directory that keeps its README) is a warning: the pull request's run, which has
- * the baseline, refuses a mistake.
+ * skipped on `merge_group` or `push`, there is no baseline to tell a removed path from a mistake, so a path that would
+ * fail the step (one the working tree lacks, or one that holds no workflow or action, such as a removed action's
+ * directory that keeps its README) is a warning: the pull request's run, which has the baseline, came first and refused
+ * a mistake. On other events (`pull_request_target`, `schedule`, `workflow_dispatch`) no such run comes first, so a
+ * skipped impact mode fails the step on such a path, as 0.14 did.
  */
 function unrefused(result: AnalysisResult, inputs: Inputs, where: string): string[] {
-  const skipped = inputs.impact !== 'off' && !result.impact && !result.impactSkipped;
+  const skipped =
+    inputs.impact !== 'off' &&
+    !result.impact &&
+    !result.impactSkipped &&
+    followsPullRequest(process.env.GITHUB_EVENT_NAME);
   if (!skipped) return result.removedPaths ?? [];
   const { missingTargets: missing = [], ignoredTargets = [], targets, wholeRepository } = result.project;
   // Beside a path that names a workflow or action, one that holds none does not fail the step anyway.

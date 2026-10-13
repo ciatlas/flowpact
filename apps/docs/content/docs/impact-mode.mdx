@@ -82,10 +82,13 @@ graded.
   removes it, not later ones: once the removal is merged, the baseline lacks the unit too, so the path names nothing
   any more, and the runs of later pull requests fail on it until it is taken out of the paths. A directory that also
   holds other units, such as `actions/`, keeps working: another reason to prefer it.
-- When impact mode is skipped (`merge_group`, a push without a commit before it, `impact: auto` outside pull
-  requests), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks, or one
-  left without a workflow or action (a removed action's directory that keeps its README or `dist/`), is a warning
-  there, not an error. The pull request's run, which has the baseline, still refuses a path that never held one.
+- When impact mode is skipped on `merge_group` or `push` (a push without a commit before it, or `impact: auto`
+  without `base-ref`), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks,
+  or one left without a workflow or action (a removed action's directory that keeps its README or `dist/`), is a
+  warning there, not an error: the pull request's run, which has the baseline, came first and refused a path that
+  never held one. Where no such run comes first (`pull_request_target`, `schedule` or `workflow_dispatch` without a
+  baseline, or a local run whose baseline is the checked-out commit), a skipped impact mode refuses such a path, as
+  a run without impact mode does.
 - Units within the paths that are not published (an internal workflow, an action `impact.publish` does not list) are not
   graded. With no published unit there, the required impact is `none`.
 - Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths, when both

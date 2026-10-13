@@ -25362,6 +25362,7 @@ import { readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs
 import { join as join5, relative as relative5, sep as sep2 } from "path";
 var ImpactSetupError = class extends Error {
 };
+var followsPullRequest = (event) => event === "merge_group" || event === "push";
 function githubEvent(env = process.env) {
   if (!env.GITHUB_EVENT_NAME) return void 0;
   let payload;
@@ -27291,7 +27292,7 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
   return result;
 }
 function unrefused(result, inputs, where) {
-  const skipped = inputs.impact !== "off" && !result.impact && !result.impactSkipped;
+  const skipped = inputs.impact !== "off" && !result.impact && !result.impactSkipped && followsPullRequest(process.env.GITHUB_EVENT_NAME);
   if (!skipped) return result.removedPaths ?? [];
   const { missingTargets: missing = [], ignoredTargets = [], targets, wholeRepository } = result.project;
   const empty = targets.size || wholeRepository ? [] : ignoredTargets;

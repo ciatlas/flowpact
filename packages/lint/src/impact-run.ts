@@ -66,6 +66,15 @@ export type PreparedImpact =
   | { skip: string }
   | { options: NonNullable<AnalyzeOptions['impact']>; notes: string[] };
 
+/**
+ * Whether a run on this GitHub event follows the run of a pull request, which has the baseline: `merge_group` and
+ * `push`. Only there may a path that names no workflow or action of the working tree go unrefused while impact mode is
+ * skipped, as the change may have removed what it named and that run has refused a mistake. Elsewhere
+ * (`pull_request_target`, `schedule`, `workflow_dispatch`, a run outside GitHub Actions) no such run comes first.
+ */
+export const followsPullRequest = (event: string | undefined): boolean =>
+  event === 'merge_group' || event === 'push';
+
 /** Reads `GITHUB_EVENT_NAME` / `GITHUB_EVENT_PATH` (a missing or unreadable payload is treated as none). */
 export function githubEvent(env: NodeJS.ProcessEnv = process.env): ImpactRequest['event'] {
   if (!env.GITHUB_EVENT_NAME) return undefined;

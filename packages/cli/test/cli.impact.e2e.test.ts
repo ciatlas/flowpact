@@ -536,6 +536,12 @@ describe('flowpact impact with paths the change removed', () => {
   const CONFIG = '.github/flowpact/flowpact.config.yml';
   const action = (name: string) =>
     `name: ${name}\ndescription: action ${name}\ninputs:\n  token: { description: t, required: false }\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "\${{ inputs.token }}"\n`;
+  /** The environment of a run in GitHub Actions on `event`, with its payload. */
+  const ci = (root: string, event: string, payload: unknown = {}) => {
+    const file = join(root, '..', `event-${event}.json`);
+    writeFileSync(file, JSON.stringify(payload));
+    return { GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: event, GITHUB_EVENT_PATH: file };
+  };
   /** Published actions a and b on main (under `sub`); the branch removes b. */
   const removedB = (sub = '') => {
     const root = repo(
@@ -567,10 +573,23 @@ describe('flowpact impact with paths the change removed', () => {
     const report = JSON.parse(merge.stdout);
     expect(report.impact).toBeUndefined();
     expect(report.findings).toEqual([]);
-    // Skipped because the baseline is the checked-out commit: the same, beside an existing path.
-    const same = await flowpact(root, ['lint', '--impact', 'b', 'a', '--base', 'HEAD']);
-    expect(same.exitCode).toBe(0);
-    expect(same.stderr).toContain('not refused while impact mode is skipped');
+    // So on a push that impact mode skips (a new branch): a pull request's run came before it too.
+    const push = await flowpact(
+      root,
+      ['lint', '--impact', 'b', 'a'],
+      ci(root, 'push', { before: '0'.repeat(40) }),
+    );
+    expect(push.exitCode).toBe(0);
+    expect(push.stderr).toContain('not refused while impact mode is skipped');
+    // Where no pull request's run comes first, skipped impact mode refuses it as 0.14 did: locally, and on
+    // schedule or workflow_dispatch, when the baseline is the checked-out commit. Before: exit 0 with the note.
+    for (const env of [{}, ci(root, 'schedule'), ci(root, 'workflow_dispatch')]) {
+      const same = await flowpact(root, ['lint', '--impact', 'b', 'a', '--base', 'HEAD'], env);
+      expect(same.exitCode).toBe(2);
+      expect(same.stderr).toContain('Path not found');
+      expect(same.stderr).toContain('is the checked-out commit');
+      expect(same.stderr).not.toContain('not refused');
+    }
     // Without impact mode, still refused.
     expect((await flowpact(root, ['lint', 'b'])).exitCode).toBe(2);
   });
@@ -601,6 +620,10 @@ describe('flowpact impact with paths the change removed', () => {
       'impact: paths without a workflow or action, not refused while impact mode is skipped (the change may have removed them): b',
     );
     expect(JSON.parse(merge.stdout).findings).toEqual([]);
+    // Refused where no pull request's run comes first. Before: exit 0 with the note.
+    const scheduled = await flowpact(root, ['lint', '--impact', 'b', '--base', 'HEAD'], ci(root, 'schedule'));
+    expect(scheduled.exitCode).toBe(2);
+    expect(scheduled.stderr).toContain('None of the paths is a workflow');
     // Beside a path that names a workflow or action, b was never refused, so there is nothing to note.
     const beside = await flowpact(root, ['lint', '--impact', 'b', 'a', '--base', 'HEAD']);
     expect(beside.exitCode).toBe(0);
