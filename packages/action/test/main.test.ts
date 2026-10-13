@@ -1001,6 +1001,48 @@ describe('impact mode', () => {
     expect(s.failed).toEqual([]);
   });
 
+  it('uses a base-config file of the workspace that the checked-out commit does not track on both sides', async () => {
+    // The organization's config checked out into a gitignored directory of the workspace.
+    const workspace = mkdtempSync(join(temp, 'org-checkout-'));
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    g('config', 'commit.gpgsign', 'false');
+    const actionYml = (input: string) =>
+      `name: a\ndescription: d\ninputs:\n${input}runs:\n  using: composite\n  steps: [{ shell: bash, run: "true" }]\n`;
+    const files: Record<string, string> = {
+      '.github/flowpact/flowpact.config.yml': 'impact:\n  publish: ["*/action.yml"]\n',
+      '.gitignore': '.org/\n',
+      'a/action.yml': actionYml('  token: { description: t, required: false }\n'),
+      'b/action.yml': actionYml('  token: { description: t, required: false }\n'),
+    };
+    for (const [f, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(workspace, f)), { recursive: true });
+      writeFileSync(join(workspace, f), text);
+    }
+    g('add', '-A');
+    g('commit', '-q', '-m', 'base');
+    g('checkout', '-q', '-b', 'change');
+    writeFileSync(join(workspace, 'b/action.yml'), actionYml(''));
+    g('commit', '-q', '-am', 'break b, which the base config ignores');
+    mkdirSync(join(workspace, '.org'));
+    writeFileSync(join(workspace, '.org/base.yml'), 'ignore: ["b/**"]\n');
+    const s = await action(workspace, {
+      impact: 'on',
+      'base-ref': 'main',
+      'expected-impact': 'patch',
+      'base-config': join(workspace, '.org/base.yml'),
+    });
+    // Before: "this pull request changes what ignore leaves out of impact mode (b)", and FP810 failed the step.
+    expect(
+      s.infos.filter((i) => i.includes('ignore leaves out') || i.includes('file of this repository')),
+    ).toEqual([]);
+    expect(s.outputs['required-impact']).toBe('none');
+    expect(s.outputs['exit-code']).toBe('0');
+    expect(s.failed).toEqual([]);
+  });
+
   it('skips impact: auto when nothing within the paths is published', async () => {
     const workspace = renamedRepo();
     const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });

@@ -213,8 +213,11 @@ impact:
   `FP105: warning`. `ignore` and `generated` lists add up.
 - Settings that name files of one repository (`overrides`, `matrixShapes`, `repository`, `impact.publish`) and
   `plugins` are config errors in a base config.
-- In [impact mode](/docs/impact-mode), the base config also applies under the baseline's config; one that is a file of
-  the repository is [read differently](/docs/impact-mode#configuration), so a pull request cannot relax its own check.
+- In [impact mode](/docs/impact-mode), the base config also applies under the baseline's config. One that the pull
+  request's commits can change (a file of the repository, or one within a submodule) is
+  [read differently](/docs/impact-mode#configuration), so a pull request cannot relax its own check through it. One
+  outside the repository, or checked out into a directory of the workspace that the repository does not track, applies
+  on both sides.
 
 Repositories keep a config that works on its own: locally and in the editor, without the wrapper, flowpact uses the
 repository's config and its defaults.

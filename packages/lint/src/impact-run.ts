@@ -3,7 +3,8 @@
  * (the pull request's base, the commit before a push, or the last release for a release pull request) analysed from
  * git, and the policy from the baseline's config.
  */
-import { readFileSync, realpathSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import {
   type FileSystem,
@@ -43,9 +44,12 @@ export interface ImpactRequest {
   /** The base config the head uses (`--base-config`, from `loadBaseConfig`); the baseline's config goes on top of it too. */
   baseConfig?: Record<string, unknown>;
   /**
-   * Where the base config was read from. A file inside the repository is the pull request's own version of it, so the
-   * baseline's impact settings leave it out: a pull request cannot relax its own check through it. For the baseline's
-   * `ignore`, its version in the baseline is read from git.
+   * Where the base config was read from. A file of the checked-out commit, or one within a submodule, is the pull
+   * request's own version of it, so the baseline's impact settings leave it out: a pull request cannot relax its own
+   * check through it. For the baseline's `ignore`, its version in the baseline is read from git (within a submodule,
+   * at the baseline's commit of it). A file outside the repository, or one of the working tree that the checked-out
+   * commit does not track (say, an organization's config checked out into an ignored directory), is the same on both
+   * sides: no commit of the pull request can change it.
    */
   baseConfigFile?: string;
   /** Called with refs (commits, `refs/tags/…`) the clone lacks, so a shallow checkout can fetch them. */
@@ -319,39 +323,136 @@ function baselineFiles(root: string, commit: string): FileSystem {
   }
 }
 
-/** Whether the base config is a file of this repository, i.e. the pull request's own version of it. */
-function baseConfigInRepository(root: string, req: ImpactRequest): boolean {
-  const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : undefined;
-  return top !== undefined && pathInside(top, req.baseConfigFile!);
+/** A git command's output in `dir`, with pathspecs taken literally; undefined when it fails. */
+function gitOutput(dir: string, args: string[]): string | undefined {
+  try {
+    return execFileSync('git', ['--literal-pathspecs', '-C', dir, ...args], {
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 64 * 1024 * 1024,
+    }).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+type TreeEntries = Map<string, { mode: string; object: string }>;
+
+/**
+ * The entries of `commit`'s tree along `path` (relative to the top of the repository at `dir`): the file and each
+ * directory above it that the tree has, by path. Undefined when git cannot list them (say, no commit checked out).
+ */
+function entriesAlong(dir: string, commit: string, path: string): TreeEntries | undefined {
+  const parts = path.split('/');
+  const along = parts.map((_, i) => parts.slice(0, i + 1).join('/'));
+  const out = gitOutput(dir, ['ls-tree', '-z', '--full-tree', commit, '--', ...along]);
+  if (out === undefined) return undefined;
+  const entries: TreeEntries = new Map();
+  for (const entry of out.split('\0')) {
+    const tab = entry.indexOf('\t');
+    if (tab < 0) continue;
+    const [mode = '', , object = ''] = entry.slice(0, tab).split(' ');
+    entries.set(entry.slice(tab + 1), { mode, object });
+  }
+  return entries;
+}
+
+/** The submodule a tree holds `path` in (see `entriesAlong`): its path and its commit. */
+function submoduleHolding(entries: TreeEntries, path: string): { path: string; commit: string } | undefined {
+  const parts = path.split('/');
+  for (let i = 1; i < parts.length; i++) {
+    const dir = parts.slice(0, i).join('/');
+    const entry = entries.get(dir);
+    if (entry?.mode === '160000') return { path: dir, commit: entry.object };
+  }
+  return undefined;
+}
+
+/** The real top directory of the git work tree `root` is in. */
+const realTop = (root: string) => realpathSync(gitTopLevel(root)!);
+
+/**
+ * The base config's path in the repository when the pull request's commits can change it: a file of the checked-out
+ * commit, or one within a submodule, whose commit they may move. Undefined for one outside the repository, and for one
+ * of the working tree that the checked-out commit does not track, which is the same on both sides.
+ */
+function baseConfigOfRepository(root: string, req: ImpactRequest): string | undefined {
+  const file = req.baseConfig ? req.baseConfigFile : undefined;
+  const top = file ? gitTopLevel(root) : undefined;
+  if (!file || top === undefined || !pathInside(top, file)) return undefined;
+  const path = relative(realTop(root), realpathSync(file)).split(sep).join('/');
+  const entries = entriesAlong(realTop(root), 'HEAD', path);
+  // Without a commit to tell, it is the pull request's own.
+  if (!entries || entries.has(path) || submoduleHolding(entries, path)) return path;
+  return undefined;
+}
+
+/** Whether `dir` is the top of a git work tree of its own (a submodule that is checked out). */
+function isCheckout(dir: string): boolean {
+  const top = existsSync(dir) ? gitTopLevel(dir) : undefined;
+  return top !== undefined && realpathSync(top) === realpathSync(dir);
+}
+
+function hasCommit(dir: string, commit: string): boolean {
+  try {
+    resolveCommit(dir, commit);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * The baseline's version of a base config of the repository; undefined when the baseline lacks it, or has an invalid
- * one (noted), whose `ignore` then does not count.
+ * `path` as `commit` of the repository at `dir` has it, through the submodules that hold it, each at its commit there:
+ * `text` (undefined when the commit lacks the file), or `unread`, the submodule (`shown` before its path) whose commit
+ * this clone lacks.
+ */
+function textAt(
+  dir: string,
+  commit: string,
+  path: string,
+  shown = '',
+): { text: string | undefined } | { unread: string } {
+  const sub = submoduleHolding(entriesAlong(dir, commit, path) ?? new Map(), path);
+  if (!sub) return { text: baselineFiles(dir, commit).read(path) };
+  const subDir = join(dir, sub.path);
+  if (!isCheckout(subDir) || !hasCommit(subDir, sub.commit))
+    return { unread: `${shown}${sub.path} at ${sub.commit.slice(0, 7)}` };
+  return textAt(subDir, sub.commit, path.slice(sub.path.length + 1), `${shown}${sub.path}/`);
+}
+
+/**
+ * The baseline's version of a base config of the repository: `config`, absent when the baseline lacks it or has an
+ * invalid one (noted), whose `ignore` then does not count; `unread` when a submodule's commit it is in is not in the
+ * clone (noted).
  */
 function baseConfigAt(
   root: string,
   commit: string,
-  file: string,
+  path: string,
   notes: string[],
-): FlowpactConfig | undefined {
-  const top = realpathSync(gitTopLevel(root)!);
-  const path = relative(top, realpathSync(file)).split(sep).join('/');
-  const text = baselineFiles(top, commit).read(path);
-  if (text === undefined) return undefined;
+): { config?: FlowpactConfig; unread?: true } {
+  const read = textAt(realTop(root), commit, path);
+  if ('unread' in read) {
+    notes.push(
+      `the baseline's version of the base config ${path} is in the submodule ${read.unread}, which this clone lacks, so impact mode reads no ignore from it for the baseline`,
+    );
+    return { unread: true };
+  }
+  if (read.text === undefined) return {};
   try {
-    return parseConfig(parseBaseConfig(text, path), path);
+    return { config: parseConfig(parseBaseConfig(read.text, path), path) };
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
     notes.push(`the baseline's ${path} is invalid (${err.message}); impact mode reads no ignore from it`);
-    return undefined;
+    return {};
   }
 }
 
 /**
  * The baseline's `ignore`, which impact mode pairs with the pull request's own: its config's, on top of the base
- * config's. A base config outside the repository is the same on both sides; one of the repository counts as the
- * baseline has it, so a base config the pull request leaves alone ignores the same on both sides.
+ * config's. A base config the pull request cannot change is the same on both sides; one of the repository counts as the
+ * baseline has it, so a base config the pull request leaves alone ignores the same on both sides. `unread` names one
+ * whose baseline version cannot be read.
  */
 function baselineIgnore(
   root: string,
@@ -359,11 +460,12 @@ function baselineIgnore(
   repositoryBaseConfig: string | undefined,
   config: FlowpactConfig | undefined,
   notes: string[],
-): readonly string[] {
+): { patterns: readonly string[]; unread?: string } {
   const own = (config ?? defaultConfig()).ignore;
-  if (!repositoryBaseConfig) return own;
+  if (!repositoryBaseConfig) return { patterns: own };
   const base = baseConfigAt(root, commit, repositoryBaseConfig, notes);
-  return base ? [...new Set([...base.ignore, ...own])] : own;
+  if (base.unread) return { patterns: own, unread: repositoryBaseConfig };
+  return { patterns: base.config ? [...new Set([...base.config.ignore, ...own])] : own };
 }
 
 /** The baseline's config, the impact policy it sets, and its `ignore`. */
@@ -373,11 +475,16 @@ function baselinePolicy(
   req: ImpactRequest,
   headConfig: FlowpactConfig,
   notes: string[],
-): { config: FlowpactConfig | undefined; policy: ImpactPolicy; ignore: readonly string[] } {
+): {
+  config: FlowpactConfig | undefined;
+  policy: ImpactPolicy;
+  ignore: ReturnType<typeof baselineIgnore>;
+} {
   const configPath = req.configPath
     ? relative(root, join(root, req.configPath)).split('\\').join('/')
     : undefined;
-  const baseInRepository = baseConfigInRepository(root, req);
+  const repositoryBaseConfig = baseConfigOfRepository(root, req);
+  const baseInRepository = repositoryBaseConfig !== undefined;
   if (baseInRepository) {
     notes.push(
       "the base config is a file of this repository, so the baseline's impact settings leave it out",
@@ -394,13 +501,7 @@ function baselinePolicy(
   if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
     notes.push('this pull request changes impact settings; they apply after it is merged');
   }
-  const ignore = baselineIgnore(
-    root,
-    baseline.commit,
-    baseInRepository ? req.baseConfigFile : undefined,
-    config,
-    notes,
-  );
+  const ignore = baselineIgnore(root, baseline.commit, repositoryBaseConfig, config, notes);
   return { config, policy, ignore };
 }
 
@@ -477,7 +578,8 @@ export function prepareImpact(
         .map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ignore,
+      ignore: ignore.patterns,
+      ...(ignore.unread ? { ignoreUnread: ignore.unread } : {}),
     },
     notes,
   };

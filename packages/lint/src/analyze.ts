@@ -84,6 +84,12 @@ export interface AnalyzeOptions {
      */
     ignore?: readonly string[];
     /**
+     * A base config of the repository whose version in the baseline cannot be read (a submodule's commit the clone
+     * lacks), so `ignore` lacks what it lists: the units only the pull request's `ignore` matches are graded, and the
+     * note about them does not say that they are left out once the pull request is merged.
+     */
+    ignoreUnread?: string;
+    /**
      * Run only when the paths hold a published unit that `ignore` does not leave out, in the baseline or the working
      * tree (the action's `impact: auto`). Without paths, the caller decides that beforehand.
      */
@@ -502,13 +508,19 @@ function impactSkip(
   return 'every workflow and action is ignored: nothing to grade or to report on';
 }
 
-/** Notes about how impact mode graded: the published units the pull request adds to `ignore`, graded until merged. */
-const gradingNotes = (impact: ImpactResult): string[] =>
-  impact.ignoreAdded
-    ? [
-        `this pull request changes what ignore leaves out of impact mode (${impact.ignoreAdded.join(', ')}); that applies after it is merged`,
-      ]
-    : [];
+/**
+ * Notes about how impact mode graded: the published units only the pull request's `ignore` matches, graded until it is
+ * merged, or, when the baseline's version of a base config (`unread`) cannot be read, graded for that.
+ */
+function gradingNotes(impact: ImpactResult, unread: string | undefined): string[] {
+  if (!impact.ignoreAdded) return [];
+  const units = impact.ignoreAdded.join(', ');
+  return [
+    unread
+      ? `the baseline's ignore lacks what the pull request's leaves out of impact mode (${units}), as the baseline's version of ${unread} cannot be read; they are graded`
+      : `this pull request changes what ignore leaves out of impact mode (${units}); that applies after it is merged`,
+  ];
+}
 
 /**
  * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
@@ -528,7 +540,7 @@ function impactOf(
   );
   const skipped = impactSkip(result, impact.onlyIfPublished, index.project.targets.size);
   // The notes hold whether impact mode runs or not.
-  const notes = gradingNotes(result);
+  const notes = gradingNotes(result, impact.ignoreUnread);
   return {
     ...(skipped ? { impact: undefined, impactSkipped: skipped } : { impact: result }),
     ...(notes.length ? { impactNotes: notes } : {}),

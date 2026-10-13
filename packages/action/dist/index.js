@@ -8680,7 +8680,7 @@ var require_cronstrue = __commonJS({
 });
 
 // src/main.ts
-import { execFileSync as execFileSync2 } from "child_process";
+import { execFileSync as execFileSync3 } from "child_process";
 import { mkdirSync as mkdirSync2, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir } from "os";
 import { dirname as dirname3, isAbsolute as isAbsolute6, join as join6, relative as relative7, resolve as resolve7, sep as sep4 } from "path";
@@ -24984,9 +24984,13 @@ function impactSkip(impact, onlyIfPublished, targets) {
   if (impact.publishedFiles.length || narrowed.anchor) return void 0;
   return "every workflow and action is ignored: nothing to grade or to report on";
 }
-var gradingNotes = (impact) => impact.ignoreAdded ? [
-  `this pull request changes what ignore leaves out of impact mode (${impact.ignoreAdded.join(", ")}); that applies after it is merged`
-] : [];
+function gradingNotes(impact, unread) {
+  if (!impact.ignoreAdded) return [];
+  const units = impact.ignoreAdded.join(", ");
+  return [
+    unread ? `the baseline's ignore lacks what the pull request's leaves out of impact mode (${units}), as the baseline's version of ${unread} cannot be read; they are graded` : `this pull request changes what ignore leaves out of impact mode (${units}); that applies after it is merged`
+  ];
+}
 function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
   if (!impact) return { impact: void 0 };
@@ -24995,7 +24999,7 @@ function impactOf(opts, index, lookAt, logger) {
     () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt)
   );
   const skipped = impactSkip(result, impact.onlyIfPublished, index.project.targets.size);
-  const notes = gradingNotes(result);
+  const notes = gradingNotes(result, impact.ignoreUnread);
   return {
     ...skipped ? { impact: void 0, impactSkipped: skipped } : { impact: result },
     ...notes.length ? { impactNotes: notes } : {}
@@ -25361,7 +25365,8 @@ function exitCodeFor(summary2, failOn) {
 }
 
 // ../lint/src/impact-run.ts
-import { readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
+import { execFileSync as execFileSync2 } from "child_process";
+import { existsSync as existsSync5, readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
 import { join as join5, relative as relative5, sep as sep2 } from "path";
 var ImpactSetupError = class extends Error {
 };
@@ -25540,32 +25545,97 @@ function baselineFiles(root, commit) {
     throw new ImpactSetupError(err.message);
   }
 }
-function baseConfigInRepository(root, req) {
-  const top = req.baseConfig && req.baseConfigFile ? gitTopLevel(root) : void 0;
-  return top !== void 0 && pathInside(top, req.baseConfigFile);
-}
-function baseConfigAt(root, commit, file, notes) {
-  const top = realpathSync3(gitTopLevel(root));
-  const path = relative5(top, realpathSync3(file)).split(sep2).join("/");
-  const text2 = baselineFiles(top, commit).read(path);
-  if (text2 === void 0) return void 0;
+function gitOutput(dir, args) {
   try {
-    return parseConfig(parseBaseConfig(text2, path), path);
+    return execFileSync2("git", ["--literal-pathspecs", "-C", dir, ...args], {
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 64 * 1024 * 1024
+    }).toString();
+  } catch {
+    return void 0;
+  }
+}
+function entriesAlong(dir, commit, path) {
+  const parts = path.split("/");
+  const along = parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+  const out = gitOutput(dir, ["ls-tree", "-z", "--full-tree", commit, "--", ...along]);
+  if (out === void 0) return void 0;
+  const entries2 = /* @__PURE__ */ new Map();
+  for (const entry of out.split("\0")) {
+    const tab = entry.indexOf("	");
+    if (tab < 0) continue;
+    const [mode = "", , object2 = ""] = entry.slice(0, tab).split(" ");
+    entries2.set(entry.slice(tab + 1), { mode, object: object2 });
+  }
+  return entries2;
+}
+function submoduleHolding(entries2, path) {
+  const parts = path.split("/");
+  for (let i = 1; i < parts.length; i++) {
+    const dir = parts.slice(0, i).join("/");
+    const entry = entries2.get(dir);
+    if (entry?.mode === "160000") return { path: dir, commit: entry.object };
+  }
+  return void 0;
+}
+var realTop = (root) => realpathSync3(gitTopLevel(root));
+function baseConfigOfRepository(root, req) {
+  const file = req.baseConfig ? req.baseConfigFile : void 0;
+  const top = file ? gitTopLevel(root) : void 0;
+  if (!file || top === void 0 || !pathInside(top, file)) return void 0;
+  const path = relative5(realTop(root), realpathSync3(file)).split(sep2).join("/");
+  const entries2 = entriesAlong(realTop(root), "HEAD", path);
+  if (!entries2 || entries2.has(path) || submoduleHolding(entries2, path)) return path;
+  return void 0;
+}
+function isCheckout2(dir) {
+  const top = existsSync5(dir) ? gitTopLevel(dir) : void 0;
+  return top !== void 0 && realpathSync3(top) === realpathSync3(dir);
+}
+function hasCommit(dir, commit) {
+  try {
+    resolveCommit(dir, commit);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function textAt(dir, commit, path, shown = "") {
+  const sub = submoduleHolding(entriesAlong(dir, commit, path) ?? /* @__PURE__ */ new Map(), path);
+  if (!sub) return { text: baselineFiles(dir, commit).read(path) };
+  const subDir = join5(dir, sub.path);
+  if (!isCheckout2(subDir) || !hasCommit(subDir, sub.commit))
+    return { unread: `${shown}${sub.path} at ${sub.commit.slice(0, 7)}` };
+  return textAt(subDir, sub.commit, path.slice(sub.path.length + 1), `${shown}${sub.path}/`);
+}
+function baseConfigAt(root, commit, path, notes) {
+  const read = textAt(realTop(root), commit, path);
+  if ("unread" in read) {
+    notes.push(
+      `the baseline's version of the base config ${path} is in the submodule ${read.unread}, which this clone lacks, so impact mode reads no ignore from it for the baseline`
+    );
+    return { unread: true };
+  }
+  if (read.text === void 0) return {};
+  try {
+    return { config: parseConfig(parseBaseConfig(read.text, path), path) };
   } catch (err) {
     if (!(err instanceof ConfigError)) throw err;
     notes.push(`the baseline's ${path} is invalid (${err.message}); impact mode reads no ignore from it`);
-    return void 0;
+    return {};
   }
 }
 function baselineIgnore(root, commit, repositoryBaseConfig, config2, notes) {
   const own2 = (config2 ?? defaultConfig()).ignore;
-  if (!repositoryBaseConfig) return own2;
+  if (!repositoryBaseConfig) return { patterns: own2 };
   const base = baseConfigAt(root, commit, repositoryBaseConfig, notes);
-  return base ? [.../* @__PURE__ */ new Set([...base.ignore, ...own2])] : own2;
+  if (base.unread) return { patterns: own2, unread: repositoryBaseConfig };
+  return { patterns: base.config ? [.../* @__PURE__ */ new Set([...base.config.ignore, ...own2])] : own2 };
 }
 function baselinePolicy(root, baseline, req, headConfig, notes) {
   const configPath = req.configPath ? relative5(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
-  const baseInRepository = baseConfigInRepository(root, req);
+  const repositoryBaseConfig = baseConfigOfRepository(root, req);
+  const baseInRepository = repositoryBaseConfig !== void 0;
   if (baseInRepository) {
     notes.push(
       "the base config is a file of this repository, so the baseline's impact settings leave it out"
@@ -25581,13 +25651,7 @@ function baselinePolicy(root, baseline, req, headConfig, notes) {
   if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
     notes.push("this pull request changes impact settings; they apply after it is merged");
   }
-  const ignore = baselineIgnore(
-    root,
-    baseline.commit,
-    baseInRepository ? req.baseConfigFile : void 0,
-    config2,
-    notes
-  );
+  const ignore = baselineIgnore(root, baseline.commit, repositoryBaseConfig, config2, notes);
   return { config: config2, policy, ignore };
 }
 function titleAndLabels(req) {
@@ -25642,14 +25706,15 @@ function prepareImpact(root, headConfig, req, logger) {
       publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ignore
+      ignore: ignore.patterns,
+      ...ignore.unread ? { ignoreUnread: ignore.unread } : {}
     },
     notes
   };
 }
 
 // ../lint/src/plugins.ts
-import { existsSync as existsSync5 } from "fs";
+import { existsSync as existsSync6 } from "fs";
 import { isAbsolute as isAbsolute4, resolve as resolve5 } from "path";
 import { pathToFileURL } from "url";
 var isRule = (v) => typeof v === "object" && v !== null && typeof v.code === "string" && typeof v.check === "function";
@@ -25657,7 +25722,7 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   const loaded = [];
   for (const spec of config2.plugins) {
     const abs = isAbsolute4(spec) ? spec : resolve5(root, spec);
-    if (!existsSync5(abs))
+    if (!existsSync6(abs))
       throw new ConfigError(`Plugin not found: ${spec}`, void 0, [`plugins: ${abs} does not exist`]);
     let mod;
     try {
@@ -26976,7 +27041,7 @@ function fetchRefs(root, refs, token, logger) {
   for (const ref of refs) {
     const spec = refspecOf(ref);
     try {
-      execFileSync2("git", ["-C", root, "fetch", "--no-tags", "--depth=1", "origin", spec], {
+      execFileSync3("git", ["-C", root, "fetch", "--no-tags", "--depth=1", "origin", spec], {
         env,
         stdio: "pipe"
       });
