@@ -11,9 +11,9 @@ with a version bump.
 
 ## What is stable
 
-Build on these. A release that changes one in an incompatible way says so under **Breaking changes** in its release
-notes, with [upgrade notes](/docs/upgrading). Before 1.0, that can happen in a minor release (0.8 → 0.9), never in a
-patch release.
+Build on these. Only a major release changes one in an incompatible way, and says so under **Breaking changes** in its
+release notes, with [upgrade notes](/docs/upgrading); minor and patch releases never do. This holds before 1.0 too: the
+next breaking change releases 1.0.0. Up to 0.14, a breaking change could come in a minor release (0.8 → 0.9).
 
 | Interface | Reference |
 | --- | --- |
@@ -278,8 +278,9 @@ Renovate updates the wrapper's npm dependency, and pinned action references wher
 ```
 
 - `minimumReleaseAge` waits a few days after a release before proposing it.
-- Before 1.0, read the **Breaking changes** section of a minor update before merging it; patch updates can be merged
-  automatically (`"matchUpdateTypes": ["patch"], "automerge": true`).
+- Read the **Breaking changes** section and the upgrade notes of a major update before merging it, and the release notes
+  of a minor one, which can change what is reported; patch updates can be merged automatically
+  (`"matchUpdateTypes": ["patch"], "automerge": true`).
 - `npm audit signatures` in the wrapper's CI checks that the installed version was published from this repository's
   release workflow.
 - Dependabot works the same way, with the `npm` and `github-actions` ecosystems.
