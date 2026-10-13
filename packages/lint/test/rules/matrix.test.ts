@@ -183,6 +183,43 @@ describe('FP401 empty-binding-for-matrix-combo — the shipped-without-a-variant
       expect(f?.related.at(-1)?.loc.line).toBe(9);
     });
 
+    it('is quiet when a called workflow’s condition reads the input only through github, the caller’s', () => {
+      // GitHub gives a called workflow its caller's github context, so `github.event.inputs.target` there is the
+      // caller's event, not the empty value this call passes; `inputs.target` is that value.
+      const called = (condition: string) => ({
+        [`${WF}/caller.yml`]: yaml`
+          on: push
+          jobs:
+            c:
+              strategy:
+                matrix:
+                  include: [{ t: a }, { other: b }]
+              uses: ./.github/workflows/callee.yml
+              with:
+                target: \${{ matrix.t }}
+        `,
+        [`${WF}/callee.yml`]: yaml`
+          on:
+            workflow_call:
+              inputs:
+                target: { type: string, required: false }
+            workflow_dispatch:
+              inputs:
+                target: { type: string, required: false }
+          jobs:
+            j:
+              runs-on: x
+              if: ${condition}
+              steps:
+                - run: echo hi
+        `,
+      });
+      const fp401 = (condition: string) => byCode(lint(called(condition)), 'FP401').map((f) => f.severity);
+      expect(fp401('github.event.inputs.target')).toEqual([]);
+      expect(fp401('github.Event.Inputs.target')).toEqual([]);
+      expect(fp401('github.event.inputs.target && inputs.target')).toEqual(['error']);
+    });
+
     it('is a warning when the empty value replaces a non-empty default', () => {
       const [f] = run("{ required: false, default: '6' }");
       expect(f?.severity).toBe('warning');

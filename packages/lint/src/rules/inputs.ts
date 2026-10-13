@@ -18,6 +18,7 @@ import {
   UNKNOWN,
   type UnitDecl,
   type Usage,
+  usageReadsCallerEvent,
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
@@ -50,17 +51,27 @@ function eventInputReadsFrom(index: ProjectIndex, root: UnitDecl, every: string[
     const unit = queue.shift()!;
     if (seen.has(unit)) continue;
     seen.add(unit);
-    addEventInputReads(unit, names, every);
+    addEventInputReads(unit, names, every, unit === root);
     for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
     for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
   }
   return names;
 }
 
-/** Adds the dispatch inputs a unit reads through `github.event.inputs`, lowercased (see `eventInputsRead`). */
-function addEventInputReads(unit: UnitDecl, names: Set<string>, every: string[]): void {
-  for (const { ref } of refsOf(unit)) for (const name of eventInputsRead(ref, every)) names.add(name);
+/**
+ * Adds the dispatch inputs a unit reads through `github.event.inputs`, lowercased (see `eventInputsRead`). The
+ * dispatched workflow's own input defaults and `workflow_call` outputs are left out: GitHub evaluates them only when it
+ * is called, with its caller's event. Those of a workflow it calls are evaluated with its event.
+ */
+function addEventInputReads(unit: UnitDecl, names: Set<string>, every: string[], dispatched: boolean): void {
+  for (const { site, ref } of refsOf(unit)) {
+    if (dispatched && onlyWhenCalled(site)) continue;
+    for (const name of eventInputsRead(ref, every)) names.add(name);
+  }
 }
+
+/** Whether GitHub evaluates a workflow's site only when the workflow is called. */
+const onlyWhenCalled = (site: ExprSite) => site.field === 'input.default' || site.field === 'workflow.output';
 
 /**
  * The dispatch inputs (lowercased) a reference reads through `github.event.inputs`: the one it names
@@ -515,13 +526,14 @@ const passthroughDropped = defineRule({
         const input = lookup(call.callee.call?.inputs ?? {}, b.name);
         if (!input) continue;
         const reads = ctx.index.usagesOf(sym.input(call.callee.path, input.name));
-        // A called workflow's `github.event.inputs` is its caller's event (GitHub gives it the caller's `github`
-        // context), so reading the input only that way never takes in the value this call passes.
-        if (reads.some((u) => !isEventInputs(u.ref))) continue;
+        // A called workflow gets its caller's `github` context, event payload included, so reading the input only
+        // through `github` (`github.event.inputs.<name>`, `toJSON(github)`, or the step's own env values that read
+        // them) never takes in the value this call passes.
+        if (reads.some((u) => !usageReadsCallerEvent(ctx.index, u))) continue;
         ctx.report({
           message: `jobs.${call.job.id} passes ${quote(b.name)} to ${call.callee.path}, which ${
             reads.length > 0
-              ? 'reads it only through github.event.inputs, the caller’s event when it is called'
+              ? 'reads it only through the github context, the caller’s when it is called'
               : 'never reads it'
           }`,
           loc: b.loc,
@@ -533,10 +545,7 @@ const passthroughDropped = defineRule({
   },
 });
 
-/**
- * Whether a reference is `github.event.inputs…`, in any case (`github.Event.Inputs…`): in a called workflow, the
- * caller's event rather than its inputs.
- */
+/** Whether a reference is `github.event.inputs…`, in any case (`github.Event.Inputs…`). */
 function isEventInputs(ref: { context: string; path: string[] }): boolean {
   return ref.context === 'github' && isProperty(ref.path[0], 'event') && isProperty(ref.path[1], 'inputs');
 }

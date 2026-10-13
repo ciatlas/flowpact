@@ -248,9 +248,9 @@ describe('whole reads are reads (FP104, FP106, FP203)', () => {
   });
 });
 
-describe('github.event.inputs in a called workflow (FP106)', () => {
-  // GitHub gives a called workflow its caller's `github` context, so `github.event.inputs` there is the caller's event:
-  // a callee that reads an input only that way drops the value the call passes, named or as a whole.
+describe('github in a called workflow (FP106)', () => {
+  // GitHub gives a called workflow its caller's `github` context, so `github`, and `github.event.inputs` in it, is the
+  // caller's there: a callee that reads an input only that way drops the value the call passes, named or as a whole.
   const callee = (reads: string) => yaml`
     on:
       workflow_call:
@@ -273,37 +273,71 @@ describe('github.event.inputs in a called workflow (FP106)', () => {
         with:
           target: prod
   `;
-  const fp106 = (reads: string) =>
-    byCode(lint({ [`${WF}/callee.yml`]: callee(reads), [`${WF}/caller.yml`]: caller }), 'FP106').map(
+  const messages = (calleeFile: string) =>
+    byCode(lint({ [`${WF}/callee.yml`]: calleeFile, [`${WF}/caller.yml`]: caller }), 'FP106').map(
       (f) => f.message,
     );
+  const fp106 = (reads: string) => messages(callee(reads));
+  const only = `jobs.c passes "target" to ${WF}/callee.yml, which reads it only through the github context, the caller’s when it is called`;
 
   it('reports a value the callee reads only through github.event.inputs', () => {
-    const only = `jobs.c passes "target" to ${WF}/callee.yml, which reads it only through github.event.inputs, the caller’s event when it is called`;
     expect(fp106('${{ github.event.inputs.target }}')).toEqual([only]);
     expect(fp106('${{ github.event.inputs.* }}')).toEqual([only]);
+  });
+
+  // In a workflow that can be dispatched, core reads a whole or computed github or github.event as a read of every
+  // dispatch input (ciatlas/core#22): in a called workflow that is the caller's context too.
+  it.each([
+    '${{ toJSON(github) }}',
+    '${{ toJSON(github.event) }}',
+    '${{ github[env.K] }}',
+    '${{ github.event[env.K] }}',
+    '${{ toJSON(github.*) }}',
+  ])('reports a value the callee reads only through %s', (read) => {
+    expect(fp106(read)).toEqual([only]);
+  });
+
+  // The step's own env value is no symbol: core reads `env.G` as what G's value reads (here only github), so the step
+  // reads the input only through github as well.
+  const ownEnv = (g: string, read: string) =>
+    messages(callee(read).replace('      - run: ', `      - env:\n          G: ${g}\n        run: `));
+
+  it.each([
+    ['${{ toJSON(github) }}', '${{ env.G }}'],
+    ['${{ github.event[matrix.k] }}', '${{ env.G }}'],
+    ['${{ github.event.inputs.target }}', '${{ env.G }}'],
+    ['${{ toJSON(github) }}', '${{ toJSON(env) }}'],
+  ])('reports a value the callee reads only through its step’s env G: %s, read as %s', (g, read) => {
+    expect(ownEnv(g, read)).toEqual([only]);
   });
 
   it('does not report a value the callee also reads through inputs', () => {
     expect(fp106('${{ github.event.inputs.target }} ${{ inputs.target }}')).toEqual([]);
     expect(fp106('${{ inputs.target }}')).toEqual([]);
+    expect(ownEnv('${{ github.event.inputs.target }} ${{ inputs.target }}', '${{ env.G }}')).toEqual([]);
+  });
+
+  it('reports a value a callee that can only be called never reads, though it reads github.event.inputs as a whole', () => {
+    // There github.event.inputs is always the caller's: core reads none of the callee's inputs through it, nor counts
+    // it as a dynamic read of `inputs` (ciatlas/core#22).
+    const callOnly = callee('${{ toJSON(github.event.inputs) }} ${{ github.event.inputs[env.K] }}').replace(
+      '  workflow_dispatch:\n    inputs:\n      target: { type: string, required: false }\n',
+      '',
+    );
+    expect(callOnly).not.toContain('workflow_dispatch');
+    expect(messages(callOnly)).toEqual([`jobs.c passes "target" to ${WF}/callee.yml, which never reads it`]);
   });
 
   describe('written in any case (#128)', () => {
-    // GitHub looks context properties up ignoring case, so github.Event.Inputs is the caller's event as well. Until
-    // core counts such a read as one of the input (ciatlas/core#28), the finding says the callee never reads it;
-    // either way the call's value is dropped.
-    const dropped = new RegExp(
-      `^jobs\\.c passes "target" to ${WF}/callee\\.yml, which (reads it only|never reads)`,
-    );
-
+    // GitHub looks context properties up ignoring case, so github.Event.Inputs is the caller's event as well, and core
+    // reads it as the input (ciatlas/core#28).
     it.each([
       '${{ github.Event.Inputs.target }}',
       '${{ GitHub.EVENT.inputs.target }}',
       '${{ github.event.INPUTS.target }}',
       '${{ github.Event.Inputs.* }}',
     ])('reports a value the callee reads only through %s', (read) => {
-      expect(fp106(read)).toEqual([expect.stringMatching(dropped)]);
+      expect(fp106(read)).toEqual([only]);
     });
 
     it('does not report a value the callee also reads through inputs', () => {

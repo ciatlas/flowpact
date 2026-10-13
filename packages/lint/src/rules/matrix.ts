@@ -28,6 +28,7 @@ import {
   type TemplateSegment,
   UNKNOWN,
   type UnitDecl,
+  usageReadsCallerEvent,
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
@@ -248,10 +249,17 @@ function emptyInputImpact(
     return { severity: 'warning', related: [], note: `, which replaces the input's default ${shown}` };
   }
   // A missing default is '' for a string, the same as `default: ''`. A fallback (`inputs.x || 'all'`) replaces it. A
-  // whole read (`toJSON(inputs)`, `inputs[matrix.key]`) does not single the input out (see `Usage.whole`).
+  // whole read (`toJSON(inputs)`, `inputs[matrix.key]`) does not single the input out (see `Usage.whole`). A read
+  // through `github` (`github.event.inputs.x`) in a called workflow is its caller's context, not the value passed.
   const condition = index
     .usagesOf(sym.input(callee.path, input.name))
-    .find((u) => u.site.isCondition && !u.whole && useInCondition(u.site, u.ref) !== 'fallback');
+    .find(
+      (u) =>
+        u.site.isCondition &&
+        !u.whole &&
+        !usageReadsCallerEvent(index, u) &&
+        useInCondition(u.site, u.ref) !== 'fallback',
+    );
   if (!condition) return undefined;
   return {
     severity: 'error',

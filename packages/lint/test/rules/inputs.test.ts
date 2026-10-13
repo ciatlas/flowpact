@@ -273,9 +273,8 @@ describe('FP104 unused-input', () => {
       expect(fp104({ [`${WF}/root.yml`]: both, [`${WF}/callee.yml`]: whole })).toEqual([unread('only')]);
     });
 
-    // A named read counts only an input that the dispatched workflow's event holds. These read in a called workflow:
-    // in the dispatched workflow itself, core resolves github.event.inputs.<name> to its input of that name, whichever
-    // trigger declares it.
+    // A named read counts only an input that the dispatched workflow's event holds: its workflow_dispatch inputs. These
+    // read in a called workflow; the dispatched workflow's own read is the test after them.
     const noInputs = yaml`
       on:
         workflow_dispatch:
@@ -296,6 +295,74 @@ describe('FP104 unused-input', () => {
       ['an input of a workflow dispatched without inputs', noInputs, '${{ github.event.inputs.x }}', 'x'],
     ])('does not count a named read of %s in a called workflow', (_, wf, read, name) => {
       expect(fp104({ [`${WF}/root.yml`]: wf, [`${WF}/callee.yml`]: callee(read) })).toEqual([unread(name)]);
+    });
+
+    it('does not count the dispatched workflow’s own named read of an input only workflow_call declares', () => {
+      // Dispatched, its github.event.inputs holds target and level; called, it is the caller's event. Core reads
+      // github.event.inputs.<name> only as a workflow_dispatch input (ciatlas/core#23).
+      const own = both.replace(
+        'call:\n    uses: ./.github/workflows/callee.yml',
+        'j:\n    runs-on: x\n    steps:\n      - run: echo "${{ github.event.inputs.only }} ${{ github.event.inputs.target }} ${{ github.event.inputs.level }}"',
+      );
+      expect(own).toContain('github.event.inputs.only');
+      expect(fp104({ [`${WF}/root.yml`]: own })).toEqual([unread('only')]);
+    });
+
+    // A called workflow's github.event is its caller's, never its own inputs (ciatlas/core#22).
+    it('reports a callee input read only through toJSON(github.event.inputs) in the callee', () => {
+      const own = callee('${{ toJSON(github.event.inputs) }}').replace(
+        'on: { workflow_call: }',
+        'on:\n  workflow_call:\n    inputs:\n      own: { type: string, required: false }',
+      );
+      const files = {
+        [`${WF}/root.yml`]: root.replace(
+          'uses: ./.github/workflows/callee.yml',
+          'uses: ./.github/workflows/callee.yml\n    with:\n      own: x',
+        ),
+        [`${WF}/callee.yml`]: own,
+      };
+      expect(fp104(files)).toEqual([unread('own', 'callee.yml', ' (yet 1 caller passes it)')]);
+    });
+
+    // GitHub evaluates a workflow's input defaults and workflow_call outputs only when it is called: with its caller's
+    // event, so the dispatched workflow's own never read its dispatch inputs. A workflow it calls is evaluated with its
+    // event, so the callee's do.
+    it('does not count the dispatched workflow’s own input defaults and workflow_call outputs', () => {
+      const own = yaml`
+        on:
+          workflow_call:
+            inputs:
+              only: { type: string, required: false, default: '\${{ github.event.inputs.target }}' }
+            outputs:
+              o: { value: '\${{ toJSON(github.event.inputs) }}' }
+          workflow_dispatch:
+            inputs:
+              target: { type: string }
+              level: { type: string }
+        jobs:
+          j:
+            runs-on: x
+            steps:
+              - run: echo "\${{ inputs.only }} \${{ github.event.inputs.level }}"
+      `;
+      expect(fp104({ [`${WF}/root.yml`]: own })).toEqual([unread('target')]);
+    });
+
+    it('counts the input defaults and workflow_call outputs of a workflow it calls', () => {
+      const defaults = yaml`
+        on:
+          workflow_call:
+            inputs:
+              t: { type: string, required: false, default: '\${{ github.event.inputs.target }}' }
+            outputs:
+              o: { value: '\${{ github.event.inputs.level }}' }
+        jobs:
+          a:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo "\${{ inputs.t }}"
+      `;
+      expect(fp104({ [`${WF}/root.yml`]: root, [`${WF}/callee.yml`]: defaults })).toEqual([]);
     });
 
     it('leaves the inputs of workflows that do not run the reader when dispatched', () => {
