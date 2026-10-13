@@ -365,6 +365,27 @@ describe('FP104 unused-input', () => {
       expect(fp104({ [`${WF}/root.yml`]: root, [`${WF}/callee.yml`]: defaults })).toEqual([]);
     });
 
+    it('counts the defaults of a called workflow that can be dispatched too, when another workflow is dispatched', () => {
+      // Called by root.yml, callee.yml's default reads root.yml's event. Dispatched itself, it reads none of its own.
+      const both = yaml`
+        on:
+          workflow_call:
+            inputs:
+              t: { type: string, required: false, default: '\${{ github.event.inputs.target }}' }
+          workflow_dispatch:
+            inputs:
+              u: { type: string }
+        jobs:
+          a:
+            runs-on: ubuntu-latest
+            steps:
+              - run: echo "\${{ inputs.t }} \${{ github.event.inputs.level }}"
+      `;
+      expect(fp104({ [`${WF}/root.yml`]: root, [`${WF}/callee.yml`]: both })).toEqual([
+        unread('u', 'callee.yml'),
+      ]);
+    });
+
     it('leaves the inputs of workflows that do not run the reader when dispatched', () => {
       // Another dispatched workflow that does not run the reader, and one that cannot be dispatched, keep theirs.
       const other = yaml`
