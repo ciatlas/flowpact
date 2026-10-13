@@ -256,6 +256,44 @@ describe('flowpact trace', () => {
     expect(up.stdout).toContain('missing in { name: windows }');
   });
 
+  it('traces up to the context a caller passes', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-ctx-'));
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    writeFileSync(
+      join(root, '.github/workflows/callee.yml'),
+      'on:\n  workflow_call:\n    inputs:\n      title: { type: string }\njobs:\n  j:\n    runs-on: x\n    steps: [{ run: \'echo "${{ inputs.title }}"\' }]\n',
+    );
+    writeFileSync(
+      join(root, '.github/workflows/pr.yml'),
+      'on: pull_request\njobs:\n  a:\n    uses: ./.github/workflows/callee.yml\n    with:\n      title: ${{ github.event.pull_request.title }}\n',
+    );
+    const up = await flowpact(['trace', 'callee.yml:title', '--up', '--root', root, '-q']);
+    expect(up.exitCode).toBe(0);
+    expect(up.stdout).toContain(
+      'context in .github/workflows/pr.yml › jobs.a  .github/workflows/pr.yml:6:18',
+    );
+    expect(up.stdout).toContain('github.event.pull_request.title');
+    expect(up.stdout).not.toContain('no known sources');
+    const json = await flowpact([
+      'trace',
+      'callee.yml:title',
+      '--up',
+      '--root',
+      root,
+      '-q',
+      '--format',
+      'json',
+    ]);
+    expect(JSON.parse(json.stdout).traces[0].leaves).toEqual([
+      {
+        role: 'context',
+        where: '.github/workflows/pr.yml › jobs.a',
+        loc: expect.objectContaining({ file: '.github/workflows/pr.yml', line: 6, column: 18 }),
+        text: 'github.event.pull_request.title',
+      },
+    ]);
+  });
+
   it('lists the whole interface for a bare workflow and supports JSON', async () => {
     const r = await flowpact([
       'trace',

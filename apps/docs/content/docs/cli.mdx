@@ -226,6 +226,35 @@ Symbols can be written in several ways:
 
 <Screenshot name="trace-up" alt="flowpact trace --up showing the matrix values feeding an input, with one combination missing" caption="Upstream: the input is fed by matrix.config, which one combination does not define." />
 
+Upstream, each `◀` branch is a value the symbol is computed from, traced further up in turn. Where the trace ends, the
+tree says what it ends at:
+
+| Leaf | The value comes from |
+| --- | --- |
+| `literal` | a plain value: what a caller or a step passes, or an env variable's or output's own value |
+| `omitted` | nothing: a caller or step does not pass the input |
+| `value`, `missing`, `dynamic` | a matrix key: its value in each combination, a combination that does not define it, or a matrix computed at runtime |
+| `context` | a context flowpact does not follow: `github.event.pull_request.title`, `runner.os`, `needs.<job>.result`, `steps.<id>.outcome`, or an `env` variable set at runtime (`$GITHUB_ENV`). A value read from the step's own `env:` is followed to what that entry reads. |
+| `invalid` | an expression that does not parse ([`FP502`](/docs/rules/fp502) reports it) |
+| `expression` | an expression that reads no context, such as `format('v{0}', 1)` |
+
+A `context` leaf shows where outside data enters. Here a reusable workflow's input carries a pull request's title, text
+its author controls, while another caller passes its own input and the branch or tag it runs on:
+
+```text
+$ flowpact trace notify.yml:message --up
+.github/workflows/notify.yml#inputs.message:4:7 (input)
+├── ◀ .github/workflows/release.yml#inputs.version:4:7 (input)
+│   via Released ${{ inputs.version }} from ${{ github.ref_name }}  @ .github/workflows/release.yml:9:29
+├── context in .github/workflows/pr.yml › jobs.notify  .github/workflows/pr.yml:6:20
+│   github.event.pull_request.title
+└── context in .github/workflows/release.yml › jobs.notify  .github/workflows/release.yml:9:56
+    github.ref_name
+```
+
+flowpact does not judge whether such a value is safe where it is used. [zizmor](https://github.com/zizmorcore/zizmor)
+reports expressions expanded into scripts (template injection); pass them through `env:` instead.
+
 ## `flowpact impact`
 
 For publishers of reusable workflows and actions: checks that the release impact a pull request declares covers the

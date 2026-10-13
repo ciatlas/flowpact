@@ -354,12 +354,18 @@ function undeclared(index: ProjectIndex, kind: string, symbol: string, node: Gra
   }
 }
 
+/**
+ * Trace leaves whose text is the value itself (a literal, a matrix value, the context it is read from, an expression),
+ * shown next to the role. The others (`omitted`, `missing`, a use downstream) say enough with the role and the place.
+ */
+const SHOWN_VALUES = new Set(['literal', 'value', 'context', 'expression', 'invalid']);
+
 /** The direct sources or destinations of a value on one line: `a` · `b` · `c` +2. */
 function flowLine(root: TraceNode): string {
   const entries: string[] = [];
   for (const child of root.children) entries.push(code(short(child.symbol)));
   for (const leaf of root.leaves) {
-    const value = leaf.role === 'literal' || leaf.role === 'value' ? ` ${code(leaf.text)}` : '';
+    const value = SHOWN_VALUES.has(leaf.role) ? ` ${code(leaf.text)}` : '';
     entries.push(`${leaf.role}${value} in ${code(short(leaf.where))}`);
   }
   const unique = [...new Set(entries)];

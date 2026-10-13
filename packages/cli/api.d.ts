@@ -416,7 +416,14 @@ export interface TraceNode {
   /** How the value got here from the parent node. */
   via?: { loc: Loc; text: string; note?: string };
   children: TraceNode[];
-  /** Where the value is used, e.g. in a `run` script or a condition. */
+  /**
+   * Downstream, where the value is used, e.g. `run script` or `condition`. Upstream, where it comes from when that is
+   * not another symbol: `literal` (a plain value: passed by a caller or a step, or an env variable's or output's own
+   * value), `omitted` (a caller or step does not pass the input), `value`, `missing` or `dynamic` (a matrix key's
+   * combinations), `context` (read from a context flowpact does not follow, such as `github.event.pull_request.title`;
+   * `text` is the reference as written), `invalid` (an expression that does not parse) or `expression` (an expression
+   * that reads no context).
+   */
   leaves: { role: string; where: string; loc: Loc; text: string }[];
   /** Why the branch stops early; `seen`: it is shown elsewhere in the same trace. */
   stop?: 'cycle' | 'depth' | 'seen';

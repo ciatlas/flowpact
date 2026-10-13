@@ -210,3 +210,49 @@ describe('hoverMarkdown', () => {
     expect(header(hover(ROOT, 'secrets.DEPLOY_TOKEN'))).toContain('· secret ·');
   });
 });
+
+describe('hoverMarkdown: sources the graph does not follow', () => {
+  const callee = '.github/workflows/callee.yml';
+  const repo: Record<string, string> = {
+    [callee]: `on:
+  workflow_call:
+    inputs:
+      title: { type: string }
+jobs:
+  j:
+    runs-on: x
+    steps:
+      - run: echo "\${{ inputs.title }}"
+`,
+    '.github/workflows/pr.yml': `on: pull_request
+jobs:
+  a:
+    uses: ./.github/workflows/callee.yml
+    with:
+      title: \${{ github.event.pull_request.title }}
+  b:
+    uses: ./.github/workflows/callee.yml
+    with:
+      title: \${{ format('v{0}', 1) }}
+`,
+  };
+  const at = new SymbolLocator(
+    analyze({
+      root: '/virtual/repo',
+      fs: memoryFileSystem(repo),
+      config: parseConfig({}),
+      validateSchema: false,
+      repository: 'acme/repo',
+    }).index,
+  );
+
+  it('names the context a caller passes, and an expression that reads none', () => {
+    const lines = repo[callee]!.slice(0, repo[callee]!.indexOf('inputs.title')).split('\n');
+    const occurrence = at.at(callee, lines.length, lines.at(-1)!.length + 8);
+    if (!occurrence) throw new Error('no symbol at inputs.title');
+    const text = hoverMarkdown(at, occurrence);
+    expect(text).toContain(
+      "**From** context `github.event.pull_request.title` in `pr.yml › jobs.a` · expression `${{ format('v{0}', 1) }}` in `pr.yml › jobs.b`",
+    );
+  });
+});

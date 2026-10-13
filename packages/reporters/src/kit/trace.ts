@@ -58,7 +58,7 @@ export function renderTrace(root: TraceNode, direction: TraceDirection, opts: Re
         out.push(`${prefix}${branch}${c.cyan(arrow)}${nodeLabel(t, item.node)}`);
         if (item.node.via) {
           out.push(
-            `${nextPrefix}${c.dim(`via ${item.node.via.text}`)}${c.dim(`  @ ${formatLoc(item.node.via.loc)}`)}`,
+            `${nextPrefix}${c.dim(`via ${safe(item.node.via.text)}`)}${c.dim(`  @ ${formatLoc(item.node.via.loc)}`)}`,
           );
         }
         walk(item.node, nextPrefix);
@@ -70,8 +70,9 @@ export function renderTrace(root: TraceNode, direction: TraceDirection, opts: Re
             : l.role === 'literal' || l.role === 'value'
               ? c.green(l.role)
               : c.bold(l.role);
-        out.push(`${prefix}${branch}${role} ${c.dim('in')} ${l.where}  ${c.dim(formatLoc(l.loc))}`);
-        out.push(`${nextPrefix}${c.dim(l.text)}`);
+        // Texts come from the analyzed files: control characters are escaped, as in node labels.
+        out.push(`${prefix}${branch}${role} ${c.dim('in')} ${safe(l.where)}  ${c.dim(formatLoc(l.loc))}`);
+        out.push(`${nextPrefix}${c.dim(safe(l.text))}`);
       }
     });
   };

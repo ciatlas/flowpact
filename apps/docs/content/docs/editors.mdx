@@ -32,8 +32,9 @@ Hovering an input, secret, output, env variable, matrix key, job or `uses:` valu
 
 - **Header:** flowpact, the kind of symbol, and a link to this section.
 - **First line:** the symbol and where it belongs, with its declaration: type, required or optional, default, values.
-- **From / To:** where the value comes from (callers' values, upstream outputs) and where it goes (a callee's inputs,
-  scripts, conditions), one hop each, with any further entries counted. `flowpact trace` shows the whole chain.
+- **From / To:** where the value comes from (callers' values, upstream outputs, contexts such as
+  `github.event.pull_request.title`) and where it goes (a callee's inputs, scripts, conditions), one hop each, with any
+  further entries counted. `flowpact trace` shows the whole chain.
 - On a caller's `with:` or `secrets:` key, the card shows what this call passes and where the value goes in the callee.
 
 Other extensions add their own sections below it; GitHub's GitHub Actions extension, for example, describes the

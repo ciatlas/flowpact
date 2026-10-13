@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { memoryFileSystem, sym, trace } from '@ciatlas/core';
+import { memoryFileSystem, sym, type TraceNode, trace } from '@ciatlas/core';
 import { analyze, createRegistry, reportSchema, toolMeta } from '@flowpact/lint';
 import {
   codeFrame,
@@ -124,6 +124,32 @@ describe('renderTrace', () => {
     );
     expect(up).toContain('missing in { name: windows }');
     expect(up).toContain("(undefined → '')");
+  });
+
+  it('escapes control characters in leaf and via texts', () => {
+    const loc = { file: 'a.yml', line: 1, column: 1, endLine: 1, endColumn: 2 };
+    const node: TraceNode = {
+      symbol: 'a.yml#inputs.x',
+      label: 'inputs.x',
+      kind: 'input',
+      unit: 'a.yml',
+      children: [
+        {
+          symbol: 'b.yml#inputs.y',
+          label: 'inputs.y',
+          kind: 'input',
+          via: { loc, text: '\u001b[31mred' },
+          children: [],
+          leaves: [],
+        },
+      ],
+      leaves: [{ role: 'context', where: 'b.yml \u001b[0m', loc, text: "github.event['\u001b[32mx']" }],
+    };
+    const out = renderTrace(node, 'up', plain);
+    expect(out).not.toContain('\u001b');
+    expect(out).toContain("github.event['\\x1b[32mx']");
+    expect(out).toContain('via \\x1b[31mred');
+    expect(out).toContain('in b.yml \\x1b[0m');
   });
 
   it('says when nothing reads a symbol', () => {
