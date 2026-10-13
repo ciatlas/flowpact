@@ -47,7 +47,8 @@ the verdict and the findings agree, and impact mode's findings are never dropped
 you publish, remove it from `ignore` to gate its changes: the pull request that removes it is already graded for it.
 When `ignore` leaves out every published unit, `impact: auto` skips the run as in a repository that publishes nothing,
 and `impact: on` reports the verdict on the first workflow or action file (within the paths) that is not ignored, or
-is skipped, saying so, when every one is.
+is skipped, saying so, when every one is. The reports name the published units `ignore` left out (`left out by
+ignore: …`, and `impact.ignored` in the JSON report).
 
 Because a unit is left out only when the baseline's `ignore` matches it too, a pull request's own `ignore` edit cannot
 take a published unit out of its check: a pull request that adds one to `ignore` is still graded for it. Where it

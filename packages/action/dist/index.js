@@ -25800,6 +25800,10 @@ var reportSchema = object({
           })
         ),
         "Only when paths were given: impact mode graded only the published units within them, and the verdict is about those alone."
+      ),
+      ignored: described(
+        optional(array(string2())),
+        "Only when `ignore` left out published workflows or actions (within the paths): those units, which were not graded, as both the baseline's and the pull request's `ignore` match them."
       )
     })
   ),
@@ -25852,7 +25856,8 @@ function toJsonReport(result, opts = {}) {
         ...result.impact.verdict.declared ? { declared: result.impact.verdict.declared } : {},
         ok: result.impact.verdict.ok,
         changes: result.impact.changes,
-        ...result.impact.scope ? { scope: { paths: result.impact.scope.paths, units: result.impact.scope.units } } : {}
+        ...result.impact.scope ? { scope: { paths: result.impact.scope.paths, units: result.impact.scope.units } } : {},
+        ...result.impact.narrowed?.ignored.length ? { ignored: result.impact.narrowed.ignored } : {}
       }
     } : {},
     rules: result.rules,
@@ -26214,11 +26219,16 @@ function listedChanges(impact) {
 }
 var shortCommit = (sha) => sha.slice(0, 7);
 var MAX_LISTED = 10;
+var listOf = (items, quote2) => `${items.slice(0, MAX_LISTED).map(quote2).join(", ")}${items.length > MAX_LISTED ? ` and ${items.length - MAX_LISTED} more` : ""}`;
 function describeScope(scope, quote2) {
-  const list = (items) => `${items.slice(0, MAX_LISTED).map(quote2).join(", ")}${items.length > MAX_LISTED ? ` and ${items.length - MAX_LISTED} more` : ""}`;
-  return `within ${list(scope.paths)}: graded ${scope.units.length ? list(scope.units) : "nothing published"}`;
+  return `within ${listOf(scope.paths, quote2)}: graded ${scope.units.length ? listOf(scope.units, quote2) : "nothing published"}`;
 }
-var ungraded = (impact) => impact.scope ? "the published workflows or actions within the paths" : "published workflows or actions";
+var ignoredUnits = (impact, quote2) => impact.narrowed?.ignored.length ? listOf(impact.narrowed.ignored, quote2) : void 0;
+function ungraded(impact) {
+  const ignored = Boolean(impact.narrowed?.ignored.length);
+  if (!impact.scope && !ignored) return "published workflows or actions";
+  return `the published workflows or actions${impact.scope ? " within the paths" : ""}${ignored ? " that ignore leaves in" : ""}`;
+}
 
 // ../reporters/src/markdown.ts
 var SEVERITY = {
@@ -26353,12 +26363,14 @@ function impactChangeLines(impact, opts) {
 function renderImpactMarkdown(impact, opts) {
   const v = impact.verdict;
   const icon = v.ok ? "\u2705" : "\u274C";
+  const ignored = ignoredUnits(impact, markdownCode);
   return [
     "### Impact",
     "",
     `${icon} Declared **${markdownText(describeDeclared(impact))}** \xB7 required **${v.required}**`,
     "",
     ...impactChangeLines(impact, opts),
+    ...ignored ? ["", `<sub>Left out by ignore: ${ignored}</sub>`] : [],
     ...impact.scope ? ["", `<sub>Only ${describeScope(impact.scope, markdownCode)}</sub>`] : [],
     "",
     `<sub>Baseline: ${impact.baseline.kind === "release" ? "last release " : ""}${markdownCode(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})</sub>`

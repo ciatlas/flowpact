@@ -26,16 +26,28 @@ export const shortCommit = (sha: string) => sha.slice(0, 7);
 /** The most paths, and units, a report lists by name; the rest are counted. */
 const MAX_LISTED = 10;
 
+/** The first items of a list, each formatted by `quote` (such as Markdown code), and how many more there are. */
+const listOf = (items: string[], quote: (s: string) => string) =>
+  `${items.slice(0, MAX_LISTED).map(quote).join(', ')}${items.length > MAX_LISTED ? ` and ${items.length - MAX_LISTED} more` : ''}`;
+
 /**
  * What paths narrowed impact mode to: `within a, b: graded a`, or `graded nothing published` when no published unit is
  * within them. `quote` formats each path, such as Markdown code.
  */
 export function describeScope(scope: ImpactScope, quote: (s: string) => string): string {
-  const list = (items: string[]) =>
-    `${items.slice(0, MAX_LISTED).map(quote).join(', ')}${items.length > MAX_LISTED ? ` and ${items.length - MAX_LISTED} more` : ''}`;
-  return `within ${list(scope.paths)}: graded ${scope.units.length ? list(scope.units) : 'nothing published'}`;
+  return `within ${listOf(scope.paths, quote)}: graded ${scope.units.length ? listOf(scope.units, quote) : 'nothing published'}`;
 }
 
-/** What a run without graded changes found none in: published units, or with paths, those within the paths. */
-export const ungraded = (impact: ImpactResult) =>
-  impact.scope ? 'the published workflows or actions within the paths' : 'published workflows or actions';
+/** The published units (within the paths) that `ignore` left out, listed; undefined when it left out none. */
+export const ignoredUnits = (impact: ImpactResult, quote: (s: string) => string): string | undefined =>
+  impact.narrowed?.ignored.length ? listOf(impact.narrowed.ignored, quote) : undefined;
+
+/**
+ * What a run without graded changes found none in: published units, or with paths those within the paths, and those
+ * that `ignore` leaves in when it left out any.
+ */
+export function ungraded(impact: ImpactResult): string {
+  const ignored = Boolean(impact.narrowed?.ignored.length);
+  if (!impact.scope && !ignored) return 'published workflows or actions';
+  return `the published workflows or actions${impact.scope ? ' within the paths' : ''}${ignored ? ' that ignore leaves in' : ''}`;
+}

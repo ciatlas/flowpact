@@ -220,6 +220,11 @@ export interface ImpactVerdict {
     /** The published workflows and actions within them, in the baseline or the working tree: the only ones graded. */
     units: string[];
   };
+  /**
+   * Only when `ignore` left out published workflows or actions (within the paths): those units, which were not graded,
+   * as both the baseline's and the pull request's `ignore` match them.
+   */
+  ignored?: string[];
 }
 
 /** The JSON report, schema v1: what `flowpact lint --format json` prints. */

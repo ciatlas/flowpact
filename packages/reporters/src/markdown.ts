@@ -6,7 +6,14 @@ import {
   type ImpactResult,
   type Severity,
 } from '@flowpact/lint';
-import { describeDeclared, describeScope, listedChanges, shortCommit, ungraded } from './impact';
+import {
+  describeDeclared,
+  describeScope,
+  ignoredUnits,
+  listedChanges,
+  shortCommit,
+  ungraded,
+} from './impact';
 import {
   buildCallGraph,
   markdownCell as cell,
@@ -188,12 +195,14 @@ function impactChangeLines(impact: ImpactResult, opts: MarkdownOptions): string[
 function renderImpactMarkdown(impact: ImpactResult, opts: MarkdownOptions): string[] {
   const v = impact.verdict;
   const icon = v.ok ? '✅' : '❌';
+  const ignored = ignoredUnits(impact, code);
   return [
     '### Impact',
     '',
     `${icon} Declared **${text(describeDeclared(impact))}** · required **${v.required}**`,
     '',
     ...impactChangeLines(impact, opts),
+    ...(ignored ? ['', `<sub>Left out by ignore: ${ignored}</sub>`] : []),
     ...(impact.scope ? ['', `<sub>Only ${describeScope(impact.scope, code)}</sub>`] : []),
     '',
     `<sub>Baseline: ${impact.baseline.kind === 'release' ? 'last release ' : ''}${code(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})</sub>`,

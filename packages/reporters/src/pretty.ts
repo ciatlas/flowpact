@@ -9,7 +9,14 @@ import {
   type Severity,
   type ToolMeta,
 } from '@flowpact/lint';
-import { describeDeclared, describeScope, listedChanges, shortCommit, ungraded } from './impact';
+import {
+  describeDeclared,
+  describeScope,
+  ignoredUnits,
+  listedChanges,
+  shortCommit,
+  ungraded,
+} from './impact';
 import {
   box,
   codeFrame,
@@ -171,10 +178,15 @@ export function renderImpact(t: Theme, impact: ImpactResult): string {
   return lines.join('\n');
 }
 
-/** The lines under the changes: that there are none, what paths narrowed impact mode to, and the baseline. */
+/**
+ * The lines under the changes: that there are none, what `ignore` left out, what paths narrowed impact mode to, and the
+ * baseline.
+ */
 function impactFooter(t: Theme, impact: ImpactResult): string[] {
+  const ignored = ignoredUnits(impact, safe);
   return [
     ...(listedChanges(impact).length === 0 ? [`  no changes to ${ungraded(impact)}`] : []),
+    ...(ignored ? [`  left out by ignore: ${ignored}`] : []),
     ...(impact.scope ? [`  only ${describeScope(impact.scope, safe)}`] : []),
     `  baseline: ${impact.baseline.kind === 'release' ? 'last release ' : ''}${safe(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})`,
   ].map((line) => t.c.dim(line));

@@ -112,7 +112,9 @@ graded.
   paths to grade or to report on)` when they hold only what the change removed (say, an unpublished workflow), or
   without paths `impact: skipped (every workflow and action is ignored: nothing to grade or to report on)`.
 - The reports say so: the terminal and Markdown reports add `only within <paths>: graded <units>`, and the JSON
-  report's `impact.scope` lists the `paths` and the `units` graded.
+  report's `impact.scope` lists the `paths` and the `units` graded. When `ignore` left out published units, they add
+  `left out by ignore: <units>` (and say `no changes to the published workflows or actions that ignore leaves in`
+  where nothing graded changed), and the JSON report's `impact.ignored` lists them.
 
 ## Where the declared impact comes from
 
@@ -211,7 +213,8 @@ flowpact check --impact --base origin/main --expect minor  # everything check do
 | `--labels <a,b>` | Pull request labels. |
 
 `--format json` adds an `impact` section (baseline, required, declared, `ok` and every graded change) to the report;
-with paths, its `scope` lists them and the published units graded within them.
+with paths, its `scope` lists them and the published units graded within them, and `ignored` lists the published units
+`ignore` left out.
 
 ### Configuration
 

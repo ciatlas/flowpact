@@ -125,6 +125,10 @@ export const reportSchema = z.object({
         ),
         'Only when paths were given: impact mode graded only the published units within them, and the verdict is about those alone.',
       ),
+      ignored: described(
+        z.optional(z.array(z.string())),
+        "Only when `ignore` left out published workflows or actions (within the paths): those units, which were not graded, as both the baseline's and the pull request's `ignore` match them.",
+      ),
     }),
   ),
   rules: z.array(
@@ -185,6 +189,7 @@ export function toJsonReport(result: AnalysisResult, opts: { includeGraph?: bool
             ...(result.impact.scope
               ? { scope: { paths: result.impact.scope.paths, units: result.impact.scope.units } }
               : {}),
+            ...(result.impact.narrowed?.ignored.length ? { ignored: result.impact.narrowed.ignored } : {}),
           },
         }
       : {}),

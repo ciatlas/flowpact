@@ -754,6 +754,39 @@ describe('ignore and impact mode', () => {
     );
   });
 
+  it('says in every report which published units ignore left out', async () => {
+    // main and the pull request both ignore b, which the pull request breaks.
+    const root = repo(
+      {
+        [CONFIG]: 'ignore: ["b/**"]\nimpact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      { 'b/action.yml': action('b', false) },
+    );
+    const run = (...args: string[]) =>
+      flowpact(root, ['impact', ...args, '--base', 'main', '--expect', 'patch']);
+    // Before: "no changes to published workflows or actions", though published b changed.
+    const pretty = await run();
+    expect(pretty.stdout).not.toContain('no changes to published workflows or actions');
+    expect(pretty.stdout).toContain('no changes to the published workflows or actions that ignore leaves in');
+    expect(pretty.stdout).toContain('left out by ignore: b');
+    const markdown = await run('--format', 'markdown');
+    expect(markdown.stdout).toContain(
+      'No changes to the published workflows or actions that ignore leaves in.',
+    );
+    expect(markdown.stdout).toContain('<sub>Left out by ignore: `b`</sub>');
+    const report = JSON.parse((await run('--format', 'json')).stdout);
+    expect(report.impact).toMatchObject({ required: 'none', ok: true, ignored: ['b'] });
+    // With paths, within them.
+    const within = await run('a', 'b');
+    expect(within.stdout).toContain(
+      'no changes to the published workflows or actions within the paths that ignore leaves in',
+    );
+    expect(within.stdout).toContain('left out by ignore: b');
+    expect(JSON.parse((await run('a', '--format', 'json')).stdout).impact.ignored).toBeUndefined();
+  });
+
   it('grades a unit the pull request takes out of ignore, so it cannot pass the gate that way either', async () => {
     // main ignores b; the pull request takes b out of ignore and removes its input in the same change.
     const root = repo(

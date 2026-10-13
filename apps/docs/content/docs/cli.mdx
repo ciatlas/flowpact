@@ -132,7 +132,8 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
 - `rules` lists every rule with its code, name and effective severity (`off` included).
 - With `--impact` (or `flowpact impact`), `impact` holds the verdict: the `baseline`, the `required` and `declared`
   impact, `ok`, and every graded change. With paths, `impact.scope` lists the `paths` and the published `units`
-  within them, the only ones graded. See [Impact mode](/docs/impact-mode).
+  within them, the only ones graded; `impact.ignored` lists the published units `ignore` left out. See
+  [Impact mode](/docs/impact-mode).
 
 ## `flowpact check`
 
