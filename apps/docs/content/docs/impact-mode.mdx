@@ -88,16 +88,17 @@ graded.
   there, not an error. The pull request's run, which has the baseline, still refuses a path that never held one.
 - Units within the paths that are not published (an internal workflow, an action `impact.publish` does not list) are not
   graded. With no published unit there, the required impact is `none`.
-- Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths: a
-  published unit whose file is ignored is not graded, so neither the verdict nor the findings are about it. Impact
-  mode reads `ignore` from the **baseline's** config, like its [settings](#configuration): a pull request that adds a
-  published unit to `ignore` is still graded for it, and the edit applies to impact mode once it is merged (the run
-  notes `impact: this pull request changes what ignore leaves out of impact mode (…)`). Every other finding follows
-  the pull request's own `ignore`.
+- Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths, when both
+  the **baseline's** config and the pull request's match them: such a published unit is not graded, so neither the
+  verdict nor the findings are about it. Matching both means that a pull request's own `ignore` edit never lets a
+  change through: one that adds a published unit to `ignore` is still graded for it until the edit is merged (the run
+  notes `impact: this pull request changes what ignore leaves out of impact mode (…); that applies after it is
+  merged`), and one that takes a unit out of `ignore` is graded for it at once. Every other finding follows the pull
+  request's own `ignore`.
 - When `ignore` leaves out every published unit (within the paths), nothing is graded. `impact: auto` then skips the
-  run, as in a repository that publishes nothing: `impact: every published workflow and action is ignored (see
-  ignore)`, or with paths `impact: skipped (every published workflow or action within the paths is ignored; see
-  ignore)`. `impact: on` and the CLI still run: the required impact is `none`, and the declaration is still checked,
+  run, as in a repository that publishes nothing: `impact: the baseline's and the pull request's ignore leave out
+  every published workflow and action (…); see ignore`, or with paths `impact: skipped (every published workflow or
+  action within the paths is ignored; see ignore)`. `impact: on` and the CLI still run: the required impact is `none`, and the declaration is still checked,
   so a label that declares more than the title is still `FP811`.
 - Findings about the declaration that no change points at (`FP811`–`FP813`) go on a file impact mode looks at: the
   first published file graded, else the first workflow or action file that is not ignored (within the paths, when
@@ -180,8 +181,8 @@ jobs:
           impact: auto   # off (default) | auto | on
 ```
 
-`auto` turns impact mode on for pull requests in repositories that publish workflows or actions, unless the
-baseline's `ignore` leaves out every one of them. The action fetches
+`auto` turns impact mode on for pull requests in repositories that publish workflows or actions, unless `ignore`
+leaves out every one of them (both the baseline's and the pull request's match it). The action fetches
 the base commit (and, for release pull requests, the release tags) when the checkout is shallow, with a one-off
 authorization header — `persist-credentials: false` works, and `contents: read` is enough. The job summary gets an
 **Impact** section, and the outputs `required-impact`, `declared-impact` and `impact-ok` let later steps react.
@@ -219,8 +220,10 @@ impact:
 ```
 
 The impact settings are read from the **baseline** (the same `--config` path, or the default locations), so a pull
-request cannot relax its own check; changed settings apply once it is merged. So is `ignore`, as far as impact mode
-goes: it does not grade the published units the baseline's `ignore` matches. A
+request cannot relax its own check; changed settings apply once it is merged. As far as impact mode goes, `ignore` is
+read from both sides: it leaves out only the published units that both the baseline's and the pull request's `ignore`
+match, so an edit to it can neither take a unit out of the check nor slip a change through ([Only some
+units](#only-some-units)). A
 [base config](/docs/configuration#base-config) applies under the baseline's config too. When the baseline has no config,
 or an invalid one, the base config's settings apply, or the defaults without one.
 

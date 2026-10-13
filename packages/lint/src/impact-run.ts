@@ -411,7 +411,8 @@ export function prepareImpact(
         .units()
         .filter((u) => isPublished(u, policy))
         .map((u) => u.file),
-      // Like the policy, so a pull request cannot take a published unit out of its own check by ignoring it.
+      // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
+      // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
       ignore: config.ignore,
     },
     notes,

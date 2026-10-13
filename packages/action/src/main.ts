@@ -352,45 +352,53 @@ function prepareInputImpact(
   }
 }
 
+/** The first files of a list, and how many more there are. */
+const listed = (files: string[], max = 10) =>
+  `${files.slice(0, max).join(', ')}${files.length > max ? ` and ${files.length - max} more` : ''}`;
+
 /**
- * Why `impact: auto` stops when nothing published is graded, without paths: nothing is published, or the baseline's
- * `ignore` leaves out every published unit. Decided on both sides: a pull request that deletes or unpublishes the only
- * published unit is still checked.
+ * Why `impact: auto` stops when nothing published is graded, without paths: nothing is published, or `ignore` leaves
+ * out every published unit (both the baseline's and the pull request's match each). Decided on both sides: a pull
+ * request that deletes, unpublishes or takes out of `ignore` the only published unit is still checked.
  */
 function nothingPublishedNote(
   root: string,
   logger: Logger,
   options: NonNullable<AnalyzeOptions['impact']>,
+  headIgnore: readonly string[],
 ): string | undefined {
-  const { policy, publishedFiles, ignore = [] } = options;
-  const graded = (file: string) => !ignore.some((p) => matchesPattern(file, p));
-  if (!publishedFiles || publishedFiles.some(graded)) return undefined;
+  const { policy, publishedFiles, ignore } = options;
+  const leftOut = (file: string) =>
+    ignore !== undefined &&
+    [ignore, headIgnore].every((patterns) => patterns.some((p) => matchesPattern(file, p)));
+  if (!publishedFiles?.every(leftOut)) return undefined;
   const project = loadProject({
     root,
     logger,
     ...(policy.publish ? { publish: policy.publish } : {}),
   });
   const units = [...project.workflows.values(), ...project.actions.values()];
-  const published = units.filter((u) => isPublished(u, policy));
-  if (published.some((u) => graded(u.file))) return undefined;
-  return publishedFiles.length || published.length
-    ? 'impact: every published workflow and action is ignored (see ignore)'
+  const published = units.filter((u) => isPublished(u, policy)).map((u) => u.file);
+  if (!published.every(leftOut)) return undefined;
+  const files = [...new Set([...publishedFiles, ...published])].sort();
+  return files.length
+    ? `impact: the baseline's and the pull request's ignore leave out every published workflow and action (${listed(files)}); see ignore`
     : 'impact: no published workflows or actions (see impact.publish)';
 }
 
 /**
- * `impact: auto` runs only where something is published. Without paths, that is decided here; with paths, the analysis
- * decides it from the units within them (`onlyIfPublished`), and keeps the baseline that tells a path the change
- * removed from a mistake.
+ * `impact: auto` runs only where something is published that `ignore` does not leave out. Without paths, that is decided
+ * here; with paths, the analysis decides it from the units within them (`onlyIfPublished`), and keeps the baseline that
+ * tells a path the change removed from a mistake.
  */
 function autoImpact(
   root: string,
   logger: Logger,
   options: NonNullable<AnalyzeOptions['impact']>,
-  withPaths: boolean,
+  head: { config: FlowpactConfig; withPaths: boolean },
 ): { options?: NonNullable<AnalyzeOptions['impact']>; note?: string } {
-  if (withPaths) return { options: { ...options, onlyIfPublished: true } };
-  const note = nothingPublishedNote(root, logger, options);
+  if (head.withPaths) return { options: { ...options, onlyIfPublished: true } };
+  const note = nothingPublishedNote(root, logger, options, head.config.ignore);
   return note ? { note } : { options };
 }
 
@@ -414,7 +422,7 @@ function impactSetup(
   if ('skip' in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
   return auto
-    ? autoImpact(root, logger, prepared.options, inputs.paths.length > 0)
+    ? autoImpact(root, logger, prepared.options, { config, withPaths: inputs.paths.length > 0 })
     : { options: prepared.options };
 }
 

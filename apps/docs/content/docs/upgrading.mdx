@@ -40,16 +40,17 @@ its path lies within the paths, and `flowpact generate <paths>` deletes it; 0.14
 
 ### Impact mode leaves ignored units out
 
-A published workflow or action whose file `ignore` matches is no longer graded. 0.14 graded it but dropped its
-findings, so the verdict could say `required major` while the run passed. Now the verdict and the findings agree, and
-impact mode's findings are never dropped by `ignore`. If an ignored unit is one you publish, remove it from `ignore` to
-gate its changes. When `ignore` leaves out every published unit, `impact: auto` skips the run as in a repository that
-publishes nothing, and `impact: on` reports the verdict on the first workflow or action file that is not ignored.
+A published workflow or action whose file both the baseline's `ignore` and the pull request's match is no longer
+graded. 0.14 graded it but dropped its findings, so the verdict could say `required major` while the run passed. Now
+the verdict and the findings agree, and impact mode's findings are never dropped by `ignore`. If an ignored unit is one
+you publish, remove it from `ignore` to gate its changes: the pull request that removes it is already graded for it.
+When `ignore` leaves out every published unit, `impact: auto` skips the run as in a repository that publishes nothing,
+and `impact: on` reports the verdict on the first workflow or action file that is not ignored.
 
-Impact mode reads `ignore` from the baseline's config, as it reads `impact.publish`, so a pull request's own `ignore`
-edit applies to impact mode once it is merged. A pull request that adds a published unit to `ignore` is still graded
-for it: where it under-declares, it now fails with `FP810`, where 0.14 dropped the finding and passed with
-`impact-ok: false`. Every other finding follows the pull request's own `ignore`, as before.
+Because a unit is left out only when the baseline's `ignore` matches it too, a pull request's own `ignore` edit cannot
+take a published unit out of its check: a pull request that adds one to `ignore` is still graded for it. Where it
+under-declares, it now fails with `FP810`, where 0.14 dropped the finding and passed with `impact-ok: false`. Every
+other finding follows the pull request's own `ignore`, as before.
 
 ## 0.13 → 0.14
 

@@ -636,31 +636,27 @@ export interface ImpactScope {
 
 /** What paths or `ignore` left out of impact mode, when they leave out anything. */
 export interface ImpactNarrowed {
-  /** The published units (within the paths) that `ignore` leaves out. */
+  /** The published units (within the paths) that `ignore` leaves out: both the baseline's and the pull request's match. */
   ignored: string[];
   /**
    * Where findings about the verdict go when no change is there to place them on: the first published file graded in
-   * the working tree, else the first workflow or action file of the working tree (within the paths) that is not
-   * ignored. Absent when there is neither, say paths that hold only what the change removed, none of it published, or
-   * an `ignore` that matches every workflow and action: there is nothing to report on.
+   * the working tree, else the first workflow or action file of the working tree (within the paths) that `ignore` does
+   * not leave out. Absent when there is neither, say paths that hold only what the change removed, none of it
+   * published, or an `ignore` that matches every workflow and action: there is nothing to report on.
    */
   anchor?: string;
 }
 
-/** What impact mode looks at: every unit, or with paths those within them; never one whose file is ignored. */
+/** What impact mode looks at: every unit, or with paths those within them; never one that `ignore` leaves out. */
 export interface ImpactLookAt {
   /** Paths that narrow impact mode to the units within them. */
   within?: ImpactPaths;
   /**
-   * The `ignore` patterns of the baseline's config, like the impact settings: the units whose files match are not
-   * graded.
+   * The `ignore` patterns of the baseline's config and of the pull request's (the working tree's). A unit whose file
+   * both match is not graded, so neither adding a published unit to `ignore` nor taking it out in the pull request lets
+   * its change through. Without them, every unit is graded.
    */
-  ignore?: readonly string[];
-  /**
-   * The pull request's own `ignore` patterns, which impact mode applies once it is merged: the published units they
-   * would leave out or put back are listed in the result (`ignoreEdited`).
-   */
-  pending?: readonly string[];
+  ignore?: { baseline: readonly string[]; head: readonly string[] };
 }
 
 const matchesAny = (patterns: readonly string[], file: string) =>
@@ -670,39 +666,51 @@ const matchesAny = (patterns: readonly string[], file: string) =>
 const coveredBy = (within: ImpactPaths | undefined) => (file: string) =>
   !within || within.targets.has(file) || within.paths.some((p) => pathHolds(p.relative, file));
 
+/** Whether impact mode leaves a file out: both the baseline's and the pull request's `ignore` match it. */
+const leftOutBy = (ignore: ImpactLookAt['ignore']) => (file: string) =>
+  ignore !== undefined && matchesAny(ignore.baseline, file) && matchesAny(ignore.head, file);
+
 /**
  * The units of either side impact mode looks at, by path; undefined when it looks at every unit (no paths, and an
  * `ignore` that leaves out none).
  */
-function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore = [] }: ImpactLookAt) {
-  if (!within && !ignore.length) return undefined;
+function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore }: ImpactLookAt) {
+  if (!within && !ignore) return undefined;
   const covered = coveredBy(within);
+  const leftOut = leftOutBy(ignore);
   const units = [...base.units(), ...head.units()];
-  const looked = units.filter((u) => covered(u.file) && !matchesAny(ignore, u.file));
+  const looked = units.filter((u) => covered(u.file) && !leftOut(u.file));
   return within || looked.length < units.length ? new Set(looked.map((u) => u.path)) : undefined;
 }
 
-/** The published units (within the paths) that the pull request's own `ignore` leaves out or puts back. */
-function ignoreEditOf(
+/**
+ * The published units (within the paths) that only the pull request's own `ignore` matches: graded until it is merged,
+ * left out after.
+ */
+function ignoreAddedOf(
   base: ProjectIndex,
   head: ProjectIndex,
   policy: Pick<ImpactPolicy, 'publish'>,
-  { within, ignore = [], pending }: ImpactLookAt,
+  { within, ignore }: ImpactLookAt,
 ): string[] {
-  if (!pending) return [];
+  if (!ignore) return [];
   const covered = coveredBy(within);
-  const edited = [...base.units(), ...head.units()].filter(
+  const added = [...base.units(), ...head.units()].filter(
     (u) =>
-      isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file) !== matchesAny(pending, u.file),
+      isPublished(u, policy) &&
+      covered(u.file) &&
+      matchesAny(ignore.head, u.file) &&
+      !matchesAny(ignore.baseline, u.file),
   );
-  return [...new Set(edited.map((u) => u.path))].sort();
+  return [...new Set(added.map((u) => u.path))].sort();
 }
 
 /** The file of the working tree to place findings about the verdict on, when no change is there (see `anchor`). */
-function anchorOf(head: ProjectIndex, { within, ignore = [] }: ImpactLookAt, published: UnitDecl[]) {
+function anchorOf(head: ProjectIndex, { within, ignore }: ImpactLookAt, published: UnitDecl[]) {
   const headFiles = head.units().map((u) => u.file);
   const graded = published.map((u) => u.file).filter((f) => headFiles.includes(f));
-  const others = (within ? [...within.targets] : headFiles).filter((f) => !matchesAny(ignore, f));
+  const leftOut = leftOutBy(ignore);
+  const others = (within ? [...within.targets] : headFiles).filter((f) => !leftOut(f));
   return graded.sort()[0] ?? others.sort()[0];
 }
 
@@ -714,10 +722,10 @@ function narrowedOf(
   lookAt: ImpactLookAt,
   published: UnitDecl[],
 ): ImpactNarrowed {
-  const { within, ignore = [] } = lookAt;
-  const covered = coveredBy(within);
+  const covered = coveredBy(lookAt.within);
+  const leftOut = leftOutBy(lookAt.ignore);
   const ignored = [...base.units(), ...head.units()].filter(
-    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file),
+    (u) => isPublished(u, policy) && covered(u.file) && leftOut(u.file),
   );
   const anchor = anchorOf(head, lookAt, published);
   return { ignored: [...new Set(ignored.map((u) => u.path))].sort(), ...(anchor ? { anchor } : {}) };
@@ -747,15 +755,15 @@ export interface ImpactResult {
   /** When paths or `ignore` leave out units: which published ones `ignore` does, and where to report the verdict. */
   narrowed?: ImpactNarrowed;
   /**
-   * The published units the pull request's own `ignore` leaves out or puts back (see `ImpactLookAt.pending`): graded as
-   * the baseline's `ignore` says until it is merged.
+   * The published units that only the pull request's own `ignore` matches (see `ImpactLookAt.ignore`): graded until it
+   * is merged, left out after.
    */
-  ignoreEdited?: string[];
+  ignoreAdded?: string[];
 }
 
 /**
  * Grades the changes and judges the declaration in one step. Only the published units impact mode looks at count (with
- * paths, those within them; never one whose file is ignored), so the verdict is about those units alone.
+ * paths, those within them; never one that `ignore` leaves out), so the verdict is about those units alone.
  */
 export function computeImpact(
   base: ProjectIndex,
@@ -771,7 +779,7 @@ export function computeImpact(
   const published = [...head.units(), ...base.units()].filter(
     (u) => isPublished(u, policy) && (!units || units.has(u.path)),
   );
-  const ignoreEdited = ignoreEditOf(base, head, policy, lookAt);
+  const ignoreAdded = ignoreAddedOf(base, head, policy, lookAt);
   return {
     baseline,
     changes,
@@ -780,6 +788,6 @@ export function computeImpact(
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
     ...(within ? { scope: scopeOf(within, published) } : {}),
     ...(units ? { narrowed: narrowedOf(base, head, policy, lookAt, published) } : {}),
-    ...(ignoreEdited.length ? { ignoreEdited } : {}),
+    ...(ignoreAdded.length ? { ignoreAdded } : {}),
   };
 }

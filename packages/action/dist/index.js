@@ -21887,32 +21887,35 @@ function impactVerdict(changes, input2, policy) {
 }
 var matchesAny = (patterns, file) => patterns.some((p) => matchesPattern(file, p));
 var coveredBy = (within2) => (file) => !within2 || within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
-function unitsLookedAt(base, head, { within: within2, ignore = [] }) {
-  if (!within2 && !ignore.length) return void 0;
+var leftOutBy = (ignore) => (file) => ignore !== void 0 && matchesAny(ignore.baseline, file) && matchesAny(ignore.head, file);
+function unitsLookedAt(base, head, { within: within2, ignore }) {
+  if (!within2 && !ignore) return void 0;
   const covered = coveredBy(within2);
+  const leftOut = leftOutBy(ignore);
   const units = [...base.units(), ...head.units()];
-  const looked = units.filter((u) => covered(u.file) && !matchesAny(ignore, u.file));
+  const looked = units.filter((u) => covered(u.file) && !leftOut(u.file));
   return within2 || looked.length < units.length ? new Set(looked.map((u) => u.path)) : void 0;
 }
-function ignoreEditOf(base, head, policy, { within: within2, ignore = [], pending }) {
-  if (!pending) return [];
+function ignoreAddedOf(base, head, policy, { within: within2, ignore }) {
+  if (!ignore) return [];
   const covered = coveredBy(within2);
-  const edited = [...base.units(), ...head.units()].filter(
-    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file) !== matchesAny(pending, u.file)
+  const added = [...base.units(), ...head.units()].filter(
+    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore.head, u.file) && !matchesAny(ignore.baseline, u.file)
   );
-  return [...new Set(edited.map((u) => u.path))].sort();
+  return [...new Set(added.map((u) => u.path))].sort();
 }
-function anchorOf(head, { within: within2, ignore = [] }, published) {
+function anchorOf(head, { within: within2, ignore }, published) {
   const headFiles = head.units().map((u) => u.file);
   const graded = published.map((u) => u.file).filter((f) => headFiles.includes(f));
-  const others = (within2 ? [...within2.targets] : headFiles).filter((f) => !matchesAny(ignore, f));
+  const leftOut = leftOutBy(ignore);
+  const others = (within2 ? [...within2.targets] : headFiles).filter((f) => !leftOut(f));
   return graded.sort()[0] ?? others.sort()[0];
 }
 function narrowedOf(base, head, policy, lookAt, published) {
-  const { within: within2, ignore = [] } = lookAt;
-  const covered = coveredBy(within2);
+  const covered = coveredBy(lookAt.within);
+  const leftOut = leftOutBy(lookAt.ignore);
   const ignored = [...base.units(), ...head.units()].filter(
-    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file)
+    (u) => isPublished(u, policy) && covered(u.file) && leftOut(u.file)
   );
   const anchor2 = anchorOf(head, lookAt, published);
   return { ignored: [...new Set(ignored.map((u) => u.path))].sort(), ...anchor2 ? { anchor: anchor2 } : {} };
@@ -21930,7 +21933,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
   const published = [...head.units(), ...base.units()].filter(
     (u) => isPublished(u, policy) && (!units || units.has(u.path))
   );
-  const ignoreEdited = ignoreEditOf(base, head, policy, lookAt);
+  const ignoreAdded = ignoreAddedOf(base, head, policy, lookAt);
   return {
     baseline,
     changes,
@@ -21939,7 +21942,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
     ...within2 ? { scope: scopeOf(within2, published) } : {},
     ...units ? { narrowed: narrowedOf(base, head, policy, lookAt, published) } : {},
-    ...ignoreEdited.length ? { ignoreEdited } : {}
+    ...ignoreAdded.length ? { ignoreAdded } : {}
   };
 }
 
@@ -25099,7 +25102,7 @@ function metaOf(opts, repository) {
   };
 }
 function impactFieldsOf(run2, removedPaths) {
-  const edited = run2.impact?.ignoreEdited;
+  const edited = run2.impact?.ignoreAdded;
   return {
     ...run2.impact ? { impact: run2.impact } : {},
     ...run2.impactSkipped ? { impactSkipped: run2.impactSkipped } : {},
@@ -25146,7 +25149,7 @@ function prepareRules(opts, logger, base, unloaded) {
   const baselineIgnore = opts.impact?.ignore;
   const lookAt = {
     ...within2 ? { within: within2 } : {},
-    ...baselineIgnore ? { ignore: baselineIgnore, pending: config2.ignore } : {}
+    ...baselineIgnore ? { ignore: { baseline: baselineIgnore, head: config2.ignore } } : {}
   };
   const impact = impactOf(opts, index, lookAt, logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
@@ -25276,11 +25279,11 @@ function summarize(project, index, findings, combinations, suppressed, skippedIn
 }
 function generatedFilesOf(project, config2) {
   const out = /* @__PURE__ */ new Map();
-  const listed = (u, patterns) => patterns.some((p) => matchesPattern(u.file, p) || matchesPattern(u.path, p));
+  const listed2 = (u, patterns) => patterns.some((p) => matchesPattern(u.file, p) || matchesPattern(u.path, p));
   for (const u of [...project.workflows.values(), ...project.actions.values()]) {
-    if (listed(u, config2.generated.exclude)) continue;
+    if (listed2(u, config2.generated.exclude)) continue;
     if (u.generated) out.set(u.file, u.generated);
-    else if (listed(u, config2.generated.include)) out.set(u.file, "generated.include");
+    else if (listed2(u, config2.generated.include)) out.set(u.file, "generated.include");
   }
   return out;
 }
@@ -25599,7 +25602,8 @@ function prepareImpact(root, headConfig, req, logger) {
       policy,
       // Load the head's copies of what the baseline published, so a unit that still exists is compared, not "removed".
       publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file),
-      // Like the policy, so a pull request cannot take a published unit out of its own check by ignoring it.
+      // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
+      // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
       ignore: config2.ignore
     },
     notes
@@ -26972,23 +26976,25 @@ function prepareInputImpact(root, config2, request, logger) {
     throw err;
   }
 }
-function nothingPublishedNote(root, logger, options) {
-  const { policy, publishedFiles, ignore = [] } = options;
-  const graded = (file) => !ignore.some((p) => matchesPattern(file, p));
-  if (!publishedFiles || publishedFiles.some(graded)) return void 0;
+var listed = (files, max = 10) => `${files.slice(0, max).join(", ")}${files.length > max ? ` and ${files.length - max} more` : ""}`;
+function nothingPublishedNote(root, logger, options, headIgnore) {
+  const { policy, publishedFiles, ignore } = options;
+  const leftOut = (file) => ignore !== void 0 && [ignore, headIgnore].every((patterns) => patterns.some((p) => matchesPattern(file, p)));
+  if (!publishedFiles?.every(leftOut)) return void 0;
   const project = loadProject({
     root,
     logger,
     ...policy.publish ? { publish: policy.publish } : {}
   });
   const units = [...project.workflows.values(), ...project.actions.values()];
-  const published = units.filter((u) => isPublished(u, policy));
-  if (published.some((u) => graded(u.file))) return void 0;
-  return publishedFiles.length || published.length ? "impact: every published workflow and action is ignored (see ignore)" : "impact: no published workflows or actions (see impact.publish)";
+  const published = units.filter((u) => isPublished(u, policy)).map((u) => u.file);
+  if (!published.every(leftOut)) return void 0;
+  const files = [.../* @__PURE__ */ new Set([...publishedFiles, ...published])].sort();
+  return files.length ? `impact: the baseline's and the pull request's ignore leave out every published workflow and action (${listed(files)}); see ignore` : "impact: no published workflows or actions (see impact.publish)";
 }
-function autoImpact(root, logger, options, withPaths) {
-  if (withPaths) return { options: { ...options, onlyIfPublished: true } };
-  const note = nothingPublishedNote(root, logger, options);
+function autoImpact(root, logger, options, head) {
+  if (head.withPaths) return { options: { ...options, onlyIfPublished: true } };
+  const note = nothingPublishedNote(root, logger, options, head.config.ignore);
   return note ? { note } : { options };
 }
 function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
@@ -27002,7 +27008,7 @@ function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
   const prepared = prepareInputImpact(root, config2, request, logger);
   if ("skip" in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
-  return auto ? autoImpact(root, logger, prepared.options, inputs.paths.length > 0) : { options: prepared.options };
+  return auto ? autoImpact(root, logger, prepared.options, { config: config2, withPaths: inputs.paths.length > 0 }) : { options: prepared.options };
 }
 function pluginsAllowed(value) {
   if (value !== "auto") return value === "true";

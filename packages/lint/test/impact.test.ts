@@ -653,19 +653,29 @@ describe('ignore leaves units out of impact mode', () => {
     expect(run([], { explicit: 'patch' }).impact?.verdict).toMatchObject({ required: 'major', ok: false });
   });
 
-  it("reads ignore from the baseline: the pull request's own edit applies once it is merged", () => {
-    // Before: a pull request that broke b and added b/** to ignore graded nothing: "required none, ok: true".
+  it("leaves a unit out only when both the baseline's and the pull request's ignore match it", () => {
+    // A pull request that breaks b and adds b/** to ignore is still graded for b; the edit applies once merged.
     const added = run([], { explicit: 'patch' }, undefined, ['b/**']);
     expect(added.impact?.verdict).toMatchObject({ required: 'major', ok: false });
     expect(located(added)).toEqual(['FP810@b/action.yml']);
     expect(added.impactNotes).toEqual([
       'this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
     ]);
-    // Taking b out of the baseline's ignore puts it back only once merged.
+    // Before: a pull request that broke b and took it out of the baseline's ignore graded nothing and passed, where
+    // 0.14 failed with FP810. Taken out of ignore, b is graded at once, so nothing waits for the merge to be noted.
     const removed = run(['b/**'], { explicit: 'patch' }, undefined, []);
-    expect(removed.impact?.verdict).toMatchObject({ required: 'none', ok: true });
-    expect(removed.impactNotes).toHaveLength(1);
-    // Only an edit that changes what is graded is noted: here b, within the paths, is not ignored either way.
+    expect(removed.impact?.verdict).toMatchObject({ required: 'major', ok: false });
+    expect(located(removed)).toEqual(['FP810@b/action.yml']);
+    expect(removed.impact?.narrowed).toBeUndefined();
+    expect(removed.impactNotes).toBeUndefined();
+    // With paths that hold b too.
+    expect(located(run(['b/**'], { explicit: 'patch' }, ['b'], []))).toEqual(['FP810@b/action.yml']);
+    // Different patterns that both match b leave it out, and only it.
+    const both = run(['*/action.yml'], { explicit: 'patch' }, undefined, ['b/**']);
+    expect(both.impact?.verdict).toMatchObject({ required: 'none', ok: true });
+    expect(both.impact?.narrowed).toEqual({ ignored: ['b'], anchor: 'a/action.yml' });
+    expect(both.impactNotes).toBeUndefined();
+    // Only an edit that adds a published unit within the paths is noted: here b is not within them.
     expect(run([], { explicit: 'patch' }, ['a'], ['x/**']).impactNotes).toBeUndefined();
     expect(run([], { explicit: 'patch' }, ['a'], ['b/**']).impactNotes).toBeUndefined();
   });

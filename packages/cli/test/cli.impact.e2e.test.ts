@@ -730,6 +730,41 @@ describe('ignore and impact mode', () => {
       'impact: this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
     );
   });
+
+  it('grades a unit the pull request takes out of ignore, so it cannot pass the gate that way either', async () => {
+    // main ignores b; the pull request takes b out of ignore and removes its input in the same change.
+    const root = repo(
+      {
+        [CONFIG]: 'ignore: ["b/**"]\nimpact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'b/action.yml': action('b', false),
+      },
+    );
+    for (const paths of [[], ['b']]) {
+      const r = await flowpact(root, [
+        'impact',
+        ...paths,
+        '--base',
+        'main',
+        '--title',
+        'fix: x',
+        '--format',
+        'json',
+      ]);
+      // Before: "required none, ok: true" and exit 0 (with paths, impact mode skipped); 0.14 failed with FP810.
+      expect(r.exitCode).toBe(1);
+      const report = JSON.parse(r.stdout);
+      expect(report.impact).toMatchObject({ required: 'major', ok: false });
+      expect(
+        report.findings.map((f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`),
+      ).toEqual(['FP810@b/action.yml']);
+      expect(r.stderr).not.toContain('ignore leaves out');
+    }
+  });
 });
 
 describe('ignore that leaves out every published unit', () => {

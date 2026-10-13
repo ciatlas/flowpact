@@ -78,13 +78,14 @@ export interface AnalyzeOptions {
     /** Files of the units the baseline published; their head versions are loaded even when nothing uses them. */
     publishedFiles?: string[];
     /**
-     * The baseline config's `ignore`: impact mode does not grade the units whose files match, and the pull request's own
-     * `ignore` applies once it is merged, like the policy. Without it, every published unit is graded.
+     * The baseline config's `ignore`: impact mode does not grade a unit whose file both it and the pull request's own
+     * `ignore` (the config's) match, so a pull request can neither ignore its way past the gate nor slip a change through
+     * by taking a unit out of `ignore`. Without it, every published unit is graded.
      */
     ignore?: readonly string[];
     /**
-     * Run only when the paths hold a published unit that is not ignored, in the baseline or the working tree (the
-     * action's `impact: auto`). Without paths, the caller decides that beforehand.
+     * Run only when the paths hold a published unit that `ignore` does not leave out, in the baseline or the working
+     * tree (the action's `impact: auto`). Without paths, the caller decides that beforehand.
      */
     onlyIfPublished?: boolean;
   };
@@ -142,9 +143,9 @@ export interface AnalysisResult {
   impact?: ImpactResult;
   /**
    * Why impact mode did not run although it was set up: nothing to grade or to report on, i.e. nothing published (within
-   * the paths) is graded and no workflow or action of the working tree (within them) is left that is not ignored (say,
-   * only what the change removed, or an `ignore` that matches everything); or, with paths, nothing published within
-   * them, when it runs only then (`onlyIfPublished`).
+   * the paths) is graded and no workflow or action of the working tree (within them) is left that `ignore` does not
+   * leave out (say, only what the change removed, or an `ignore` that matches everything); or, with paths, nothing
+   * published within them, when it runs only then (`onlyIfPublished`).
    */
   impactSkipped?: string;
   /**
@@ -464,7 +465,7 @@ function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | un
 /**
  * Why impact mode does not run with these paths: nothing published within them when it runs only then (`impact:
  * auto`), or nothing to grade or to report on, i.e. nothing published and no workflow or action of the working tree
- * within them that is not ignored (say, only what the change removed).
+ * within them that `ignore` does not leave out (say, only what the change removed).
  */
 function pathsSkip(
   scope: ImpactScope,
@@ -493,7 +494,8 @@ function impactSkip(impact: ImpactResult, onlyIfPublished: boolean | undefined):
 
 /**
  * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
- * them; never one whose file the baseline's `ignore` matches). With nothing to grade or report on, why it does not.
+ * them; never one whose file both the baseline's and the pull request's `ignore` match). With nothing to grade or
+ * report on, why it does not.
  */
 function impactOf(
   opts: AnalyzeOptions,
@@ -636,9 +638,9 @@ function judgeOverride(u: OverrideUsage, run: RuleRun, opts: AnalyzeOptions): vo
 }
 
 /**
- * Whether a finding is reported: impact mode's always (it grades only the published units within the paths whose files
- * are not ignored, so its findings and its verdict agree); any other with paths when it is about a targeted file or a
- * contract in scope, and when no `ignore` pattern matches its file.
+ * Whether a finding is reported: impact mode's always (it grades only the published units within the paths that
+ * `ignore` does not leave out, so its findings and its verdict agree); any other with paths when it is about a targeted
+ * file or a contract in scope, and when no `ignore` pattern matches its file.
  */
 function scopeOf(
   index: ProjectIndex,
@@ -718,7 +720,7 @@ function impactFieldsOf(
   run: RuleRun,
   removedPaths: string[] | undefined,
 ): Pick<AnalysisResult, 'impact' | 'impactSkipped' | 'impactNotes' | 'removedPaths'> {
-  const edited = run.impact?.ignoreEdited;
+  const edited = run.impact?.ignoreAdded;
   return {
     ...(run.impact ? { impact: run.impact } : {}),
     ...(run.impactSkipped ? { impactSkipped: run.impactSkipped } : {}),
@@ -787,11 +789,11 @@ function prepareRules(
     contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] }),
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  // `ignore` is the baseline's, as the policy is; the pull request's own applies to impact mode once merged.
+  // A unit is left out only when both the baseline's `ignore` and the pull request's own match it.
   const baselineIgnore = opts.impact?.ignore;
   const lookAt: ImpactLookAt = {
     ...(within ? { within } : {}),
-    ...(baselineIgnore ? { ignore: baselineIgnore, pending: config.ignore } : {}),
+    ...(baselineIgnore ? { ignore: { baseline: baselineIgnore, head: config.ignore } } : {}),
   };
   const impact = impactOf(opts, index, lookAt, logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
