@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:83fe5090-5664-5f7c-adce-028b89910a9e",
+  "serialNumber": "urn:uuid:83515a90-ffb7-5a18-871a-7f3b59b8c1ea",
   "version": 1,
   "metadata": {
     "component": {
@@ -142,10 +142,10 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:github/ciatlas/core@v0.1.0",
+      "bom-ref": "pkg:github/ciatlas/core@v0.2.0",
       "name": "@ciatlas/core",
-      "version": "0.1.0",
-      "purl": "pkg:github/ciatlas/core@v0.1.0",
+      "version": "0.2.0",
+      "purl": "pkg:github/ciatlas/core@v0.2.0",
       "licenses": [
         {
           "license": {
@@ -371,7 +371,7 @@
         "pkg:npm/%40actions/http-client@4.0.1",
         "pkg:npm/%40actions/io@3.0.2",
         "pkg:npm/%40actions/workflow-parser@0.3.61",
-        "pkg:github/ciatlas/core@v0.1.0",
+        "pkg:github/ciatlas/core@v0.2.0",
         "pkg:npm/ansi-regex@6.4.0",
         "pkg:npm/cronstrue@2.59.0",
         "pkg:npm/diff@9.0.0",

@@ -11277,7 +11277,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11407,10 +11407,7 @@ function collectRefs(root, source) {
         return {
           ...base,
           path: [...base.path, idx.literal.coerceString()],
-          end: Math.max(
-            base.end,
-            endOf(idx.token) + (source[endOf(idx.token)] === "]" ? 1 : 0)
-          )
+          end: Math.max(base.end, endOf(idx.token))
         };
       }
       if (idx instanceof Literal && idx.literal.kind === Kind.Number) {
@@ -11838,7 +11835,7 @@ function evaluateTemplate(text2, resolve7) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11849,7 +11846,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12051,7 +12048,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12192,11 +12189,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12263,7 +12260,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12399,7 +12396,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12412,7 +12409,7 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/graph.ts
 var sym = {
   input: (unit, name) => `${unit}#inputs.${name}`,
   secret: (unit, name) => `${unit}#secrets.${name}`,
@@ -12431,6 +12428,7 @@ var ProjectIndex = class {
     for (const wf of project.workflows.values()) this.indexWorkflow(wf);
     for (const a of project.actions.values()) this.indexAction(a);
     for (const unit of this.units()) for (const site of unit.sites) this.indexSite(unit, site);
+    for (const unit of this.units()) this.indexLiterals(unit);
   }
   project;
   nodes = /* @__PURE__ */ new Map();
@@ -12439,6 +12437,7 @@ var ProjectIndex = class {
   callSites = [];
   actionUses = [];
   sitesById = /* @__PURE__ */ new Map();
+  definitions = /* @__PURE__ */ new Map();
   units() {
     return [...this.project.workflows.values(), ...this.project.actions.values()];
   }
@@ -12474,6 +12473,15 @@ var ProjectIndex = class {
   }
   usagesOf(symbol) {
     return this.usages.get(symbol) ?? [];
+  }
+  /**
+   * What sets a symbol's value. Expressions (see `sinkOf`): each caller's `with:` for a reusable workflow's input, each
+   * `with:` of a step using an action for the action's input, a job's `outputs:` entry for its output, and so on. Plain
+   * values of env variables and outputs. A caller's or step's plain value or omission of an input is not listed: `trace`
+   * reads those from the calls.
+   */
+  definitionsOf(symbol) {
+    return this.definitions.get(symbol) ?? [];
   }
   outgoing(symbol, kind) {
     return this.edges.filter((e) => e.from === symbol && (!kind || e.kind === kind));
@@ -12801,9 +12809,41 @@ var ProjectIndex = class {
     const callee = this.calleeOf(job);
     return (callee?.call && lookup(callee.call.outputs, name)?.name) ?? name;
   }
+  define(symbol, def) {
+    const list = this.definitions.get(symbol);
+    if (list) list.push(def);
+    else this.definitions.set(symbol, [def]);
+  }
+  /** Env variables and outputs written as plain values (an expression is a site, indexed by `indexSite`). */
+  indexLiterals(unit) {
+    const u = unit.path;
+    if (unit.kind === "action") {
+      this.literalOutputs(unit, unit.outputs, (name) => sym.output(u, name));
+      return;
+    }
+    this.literalEnv(unit, void 0, unit.env);
+    this.literalOutputs(unit, unit.call?.outputs ?? {}, (name) => sym.output(u, name));
+    for (const job of Object.values(unit.jobs)) {
+      this.literalEnv(unit, job.id, job.env);
+      this.literalOutputs(unit, job.outputs, (name) => sym.jobOutput(u, job.id, name), job.id);
+    }
+  }
+  literalEnv(unit, job, env) {
+    for (const e of Object.values(env)) {
+      if (!e.site)
+        this.define(sym.env(unit.path, job, e.name), { unit, job, value: e.value, loc: e.valueLoc });
+    }
+  }
+  literalOutputs(unit, outputs, symbolOf, job) {
+    for (const o of Object.values(outputs)) {
+      if (!o.site && o.value !== void 0)
+        this.define(symbolOf(o.name), { unit, job, value: o.value, loc: o.loc });
+    }
+  }
   indexSite(unit, site) {
     this.sitesById.set(site.id, site);
     const sink = this.sinkOf(unit, site);
+    if (sink) this.define(sink, { unit, site });
     for (const seg of site.segments) {
       for (const ref of seg.refs) {
         for (const symbol of this.readsOf(unit, site, ref)) this.addUsage(unit, site, ref, symbol, sink);
@@ -12827,7 +12867,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -12854,7 +12894,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -12908,7 +12948,7 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { posix as posix2 } from "path";
 function createParseContext(repository) {
@@ -13599,7 +13639,7 @@ function parseActionFile(dir, file, text2, ctx) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/project.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
@@ -16164,10 +16204,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml4 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16240,7 +16280,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -16529,7 +16569,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/script-writes.ts
 import { posix as posix3 } from "path";
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
@@ -16800,7 +16840,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17052,7 +17092,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
@@ -17309,7 +17349,7 @@ function loadProject(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6d323cb02597ec589e4b8874c3bebd10e16a08a/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+0f5fcc01801c63fdc08794c36314b1ef6adc2f3c/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
