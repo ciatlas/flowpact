@@ -1,15 +1,20 @@
 import {
+  type ActionDecl,
   didYouMean,
+  type ExprSite,
+  type JobDecl,
+  type LocatedRef,
   lookup,
   readsContextDynamically,
   refsOf,
   type StepDecl,
   sym,
   type UnitDecl,
+  type WorkflowDecl,
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
-import { defineRule, type RuleDefinition } from './types';
-import { listNames, quote } from './util';
+import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
+import { didYouMeanNote, listNames, namesKey, quote } from './util';
 
 /** FP303's fix for an output of a unit that other repositories might use: published units are not judged. */
 function publishedFix(kind: 'workflow' | 'action', file: string, publish: string[] | undefined): string {
@@ -22,6 +27,11 @@ function publishedFix(kind: 'workflow' | 'action', file: string, publish: string
 function stepsInScope(unit: UnitDecl, jobId: string | undefined): StepDecl[] {
   if (unit.kind === 'action') return unit.steps;
   return jobId ? (unit.jobs[jobId]?.steps ?? []) : [];
+}
+
+/** The symbol of an output read from step `id` at `site` (the steps of an action belong to no job). */
+function stepOutputSymbol(unit: UnitDecl, site: ExprSite, id: string, output: string | undefined): string {
+  return sym.stepOutput(unit.path, unit.kind === 'workflow' ? site.job : undefined, id, output ?? '');
 }
 
 const undefinedOutputRef = defineRule({
@@ -47,83 +57,116 @@ const undefinedOutputRef = defineRule({
   check(ctx) {
     for (const unit of ctx.index.units()) {
       for (const { site, ref } of refsOf(unit)) {
-        const [a, b, c] = ref.path;
-        if (!a || a === '*' || a === '?') continue;
-        if ((ref.context === 'needs' || ref.context === 'jobs') && unit.kind === 'workflow') {
-          if (ref.context === 'jobs' && site.field !== 'workflow.output') continue;
-          if (b !== 'outputs' || !c || c === '*' || c === '?') continue;
-          const job = lookup(unit.jobs, a);
-          if (!job) {
-            if (ref.context === 'jobs') {
-              ctx.report({
-                message: `${unit.path} has no job ${quote(a)}`,
-                loc: ref.loc,
-                symbol: sym.job(unit.path, a),
-              });
-            }
-            continue; // needs.<missing> is reported by FP302
-          }
-          if (job.uses && job.uses.kind !== 'local-workflow') continue;
-          if (job.uses && !ctx.index.calleeOf(job)) continue;
-          const names = ctx.index.jobOutputNames(job);
-          if (names.some((n) => n.toLowerCase() === c.toLowerCase())) continue;
-          const guess = didYouMean(c, names);
-          const callee = ctx.index.calleeOf(job);
-          ctx.report({
-            message: `jobs.${job.id} has no output ${quote(c)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
-            loc: ref.loc,
-            symbol: sym.jobOutput(unit.path, job.id, c),
-            related: [
-              {
-                loc: callee?.call?.loc ?? job.loc,
-                message: `${callee ? `${callee.path} declares` : 'declared'} outputs: ${listNames(names)}`,
-              },
-            ],
-          });
-          continue;
-        }
-        if (ref.context === 'steps') {
-          const steps = stepsInScope(unit, site.job);
-          const step = steps.find((s) => s.id?.toLowerCase() === a.toLowerCase());
-          if (!step) {
-            const guess = didYouMean(
-              a,
-              steps.flatMap((s) => (s.id ? [s.id] : [])),
-            );
-            ctx.report({
-              message: `No step with id ${quote(a)} in ${site.job ? `jobs.${site.job}` : unit.path}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
-              loc: ref.loc,
-              symbol: sym.stepOutput(unit.path, unit.kind === 'workflow' ? site.job : undefined, a, c ?? ''),
-            });
-            continue;
-          }
-          if (site.step !== undefined && step.index >= site.step) {
-            ctx.report({
-              message: `Step ${quote(a)} runs ${step.index === site.step ? 'as' : 'after'} this step, so its outputs are not available yet`,
-              loc: ref.loc,
-              symbol: sym.stepOutput(unit.path, unit.kind === 'workflow' ? site.job : undefined, a, c ?? ''),
-              related: [{ loc: step.idLoc ?? step.loc, message: `step ${quote(a)} is defined here` }],
-            });
-            continue;
-          }
-          const action = ctx.index.actionOf(step);
-          if (b !== 'outputs' || !c || c === '*' || c === '?' || !action) continue;
-          // JavaScript and Docker actions may set outputs they do not declare; only composite outputs are fixed.
-          if (action.using !== 'composite') continue;
-          if (lookup(action.outputs, c)) continue;
-          const names = Object.keys(action.outputs);
-          const guess = didYouMean(c, names);
-          ctx.report({
-            message: `${action.path} has no output ${quote(c)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
-            loc: ref.loc,
-            symbol: sym.output(action.path, c),
-            related: [{ loc: step.uses?.loc ?? step.loc, message: `declared outputs: ${listNames(names)}` }],
-          });
-        }
+        const a = ref.path[0];
+        if (!namesKey(a)) continue;
+        if ((ref.context === 'needs' || ref.context === 'jobs') && unit.kind === 'workflow')
+          checkJobOutputRef(ctx, unit, site, ref, a);
+        else if (ref.context === 'steps') checkStepOutputRef(ctx, unit, site, ref, a);
       }
     }
   },
 });
+
+/**
+ * The output a job output read names: `needs.<job>.outputs.<name>`, or `jobs.<job>.outputs.<name>` in a workflow
+ * output (the only place `jobs` holds them). Undefined for other reads and for computed names.
+ */
+function jobOutputRead(site: ExprSite, ref: LocatedRef): string | undefined {
+  if (ref.context === 'jobs' && site.field !== 'workflow.output') return undefined;
+  const output = ref.path[2];
+  return ref.path[1] === 'outputs' && namesKey(output) ? output : undefined;
+}
+
+/** Where a job's outputs are declared: in the reusable workflow it calls, or on the job itself. */
+function jobOutputsDeclared(ctx: RuleContext, job: JobDecl, names: string[]): RelatedLocation {
+  const callee = ctx.index.calleeOf(job);
+  return {
+    loc: callee?.call?.loc ?? job.loc,
+    message: `${callee ? `${callee.path} declares` : 'declared'} outputs: ${listNames(names)}`,
+  };
+}
+
+/** FP301 for a job output read: the job must exist and, unless it calls a workflow flowpact cannot see, declare it. */
+function checkJobOutputRef(
+  ctx: RuleContext,
+  wf: WorkflowDecl,
+  site: ExprSite,
+  ref: LocatedRef,
+  a: string,
+): void {
+  const c = jobOutputRead(site, ref);
+  if (!c) return;
+  const job = lookup(wf.jobs, a);
+  if (!job) {
+    if (ref.context === 'jobs') {
+      ctx.report({ message: `${wf.path} has no job ${quote(a)}`, loc: ref.loc, symbol: sym.job(wf.path, a) });
+    }
+    return; // needs.<missing> is reported by FP302
+  }
+  if (job.uses && (job.uses.kind !== 'local-workflow' || !ctx.index.calleeOf(job))) return;
+  const names = ctx.index.jobOutputNames(job);
+  if (names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
+  const guess = didYouMean(c, names);
+  ctx.report({
+    message: `jobs.${job.id} has no output ${quote(c)}${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: sym.jobOutput(wf.path, job.id, c),
+    related: [jobOutputsDeclared(ctx, job, names)],
+  });
+}
+
+/** FP301 for `steps.<id>`: the step must exist in scope and run before the read. */
+function checkStepOutputRef(
+  ctx: RuleContext,
+  unit: UnitDecl,
+  site: ExprSite,
+  ref: LocatedRef,
+  a: string,
+): void {
+  const c = ref.path[2];
+  const steps = stepsInScope(unit, site.job);
+  const step = steps.find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step) {
+    const guess = didYouMean(
+      a,
+      steps.flatMap((s) => (s.id ? [s.id] : [])),
+    );
+    ctx.report({
+      message: `No step with id ${quote(a)} in ${site.job ? `jobs.${site.job}` : unit.path}${didYouMeanNote(guess)}`,
+      loc: ref.loc,
+      symbol: stepOutputSymbol(unit, site, a, c),
+    });
+    return;
+  }
+  if (site.step !== undefined && step.index >= site.step) {
+    ctx.report({
+      message: `Step ${quote(a)} runs ${step.index === site.step ? 'as' : 'after'} this step, so its outputs are not available yet`,
+      loc: ref.loc,
+      symbol: stepOutputSymbol(unit, site, a, c),
+      related: [{ loc: step.idLoc ?? step.loc, message: `step ${quote(a)} is defined here` }],
+    });
+    return;
+  }
+  checkActionOutputRef(ctx, step, ref);
+}
+
+/** FP301 for `steps.<id>.outputs.<name>` of a step that runs a composite action: the action must declare it. */
+function checkActionOutputRef(ctx: RuleContext, step: StepDecl, ref: LocatedRef): void {
+  const [, b, c] = ref.path;
+  const action = ctx.index.actionOf(step);
+  if (b !== 'outputs' || !namesKey(c) || !action) return;
+  // JavaScript and Docker actions may set outputs they do not declare; only composite outputs are fixed.
+  if (action.using !== 'composite') return;
+  if (lookup(action.outputs, c)) return;
+  const names = Object.keys(action.outputs);
+  const guess = didYouMean(c, names);
+  ctx.report({
+    message: `${action.path} has no output ${quote(c)}${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: sym.output(action.path, c),
+    related: [{ loc: step.uses?.loc ?? step.loc, message: `declared outputs: ${listNames(names)}` }],
+  });
+}
 
 const outputRefWithoutNeeds = defineRule({
   code: 'FP302',
@@ -147,48 +190,80 @@ const outputRefWithoutNeeds = defineRule({
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
-      // Every job a job depends on, directly or through its needs (lowercased ids; cycles are FP601's business).
-      const ancestors = new Map<string, Set<string>>();
-      const ancestorsOf = (id: string): Set<string> => {
-        const known = ancestors.get(id);
-        if (known) return known;
-        const found = new Set<string>();
-        ancestors.set(id, found);
-        for (const n of wf.jobs[id]?.needs ?? []) {
-          const dep = lookup(wf.jobs, n.id);
-          if (!dep || found.has(dep.id.toLowerCase())) continue;
-          found.add(dep.id.toLowerCase());
-          for (const up of ancestorsOf(dep.id)) found.add(up);
-        }
-        return found;
-      };
+      const ancestorsOf = ancestorsIn(wf);
       for (const { site, ref } of refsOf(wf)) {
-        const a = ref.path[0];
-        if (ref.context !== 'needs' || !site.job || !a || a === '*' || a === '?') continue;
-        const job = wf.jobs[site.job];
-        if (!job || job.needs.some((n) => n.id.toLowerCase() === a.toLowerCase())) continue;
-        const exists = lookup(wf.jobs, a);
-        // GitHub evaluates a job's own `if:` with every job it depends on, directly or not; everywhere else only the
-        // jobs under `needs:` are in the context (checked against GitHub, see the rule docs).
-        const indirect = exists !== undefined && ancestorsOf(job.id).has(exists.id.toLowerCase());
-        if (indirect && site.field === 'job.if') continue;
-        ctx.report({
-          message: !exists
-            ? `jobs.${site.job} reads needs.${a}, but ${wf.path} has no job ${quote(a)}`
-            : indirect
-              ? `jobs.${site.job} reads needs.${a}, which is empty here: ${quote(a)} is not under needs, and only the job's \`if:\` sees jobs it depends on indirectly`
-              : `jobs.${site.job} reads needs.${a} but does not list ${quote(a)} under needs`,
-          loc: ref.loc,
-          symbol: sym.job(wf.path, a),
-          related: [
-            { loc: job.needs[0]?.loc ?? job.loc, message: `needs: ${listNames(job.needs.map((n) => n.id))}` },
-          ],
-          ...(exists ? { fix: `Add ${quote(a)} to jobs.${site.job}.needs.` } : {}),
-        });
+        if (ref.context === 'needs') checkNeedsRef(ctx, wf, site, ref, ancestorsOf);
       }
     }
   },
 });
+
+/**
+ * Every job a job of `wf` depends on, directly or through its needs (lowercased ids; cycles are FP601's business).
+ * Computed on first use and remembered.
+ */
+function ancestorsIn(wf: WorkflowDecl): (id: string) => Set<string> {
+  const ancestors = new Map<string, Set<string>>();
+  const ancestorsOf = (id: string): Set<string> => {
+    const known = ancestors.get(id);
+    if (known) return known;
+    const found = new Set<string>();
+    ancestors.set(id, found);
+    for (const n of wf.jobs[id]?.needs ?? []) {
+      const dep = lookup(wf.jobs, n.id);
+      if (!dep || found.has(dep.id.toLowerCase())) continue;
+      found.add(dep.id.toLowerCase());
+      for (const up of ancestorsOf(dep.id)) found.add(up);
+    }
+    return found;
+  };
+  return ancestorsOf;
+}
+
+/** FP302 for one `needs.<job>` read in a job: `<job>` must be under that job's `needs:`. */
+function checkNeedsRef(
+  ctx: RuleContext,
+  wf: WorkflowDecl,
+  site: ExprSite,
+  ref: LocatedRef,
+  ancestorsOf: (id: string) => Set<string>,
+): void {
+  const a = ref.path[0];
+  if (!site.job || !namesKey(a)) return;
+  const job = wf.jobs[site.job];
+  if (!job || job.needs.some((n) => n.id.toLowerCase() === a.toLowerCase())) return;
+  const exists = lookup(wf.jobs, a);
+  // GitHub evaluates a job's own `if:` with every job it depends on, directly or not; everywhere else only the
+  // jobs under `needs:` are in the context (checked against GitHub, see the rule docs).
+  const indirect = exists !== undefined && ancestorsOf(job.id).has(exists.id.toLowerCase());
+  if (indirect && site.field === 'job.if') return;
+  ctx.report({
+    message: needsMessage(wf, site.job, a, exists !== undefined, indirect),
+    loc: ref.loc,
+    symbol: sym.job(wf.path, a),
+    related: [needsDeclared(job)],
+    ...(exists ? { fix: `Add ${quote(a)} to jobs.${site.job}.needs.` } : {}),
+  });
+}
+
+/** FP302's message: the job read does not exist, is a dependency only the job's `if:` sees, or is not under needs. */
+function needsMessage(
+  wf: WorkflowDecl,
+  jobId: string,
+  a: string,
+  exists: boolean,
+  indirect: boolean,
+): string {
+  if (!exists) return `jobs.${jobId} reads needs.${a}, but ${wf.path} has no job ${quote(a)}`;
+  if (indirect)
+    return `jobs.${jobId} reads needs.${a}, which is empty here: ${quote(a)} is not under needs, and only the job's \`if:\` sees jobs it depends on indirectly`;
+  return `jobs.${jobId} reads needs.${a} but does not list ${quote(a)} under needs`;
+}
+
+/** Where a job lists its needs, and what it lists. */
+function needsDeclared(job: JobDecl): RelatedLocation {
+  return { loc: job.needs[0]?.loc ?? job.loc, message: `needs: ${listNames(job.needs.map((n) => n.id))}` };
+}
 
 const unusedOutput = defineRule({
   code: 'FP303',
@@ -226,57 +301,67 @@ deploy:
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
       // Job outputs are internal to the workflow: only its own jobs and workflow outputs can read them.
-      if (!readsContextDynamically(wf, 'needs') && !readsContextDynamically(wf, 'jobs')) {
-        for (const job of Object.values(wf.jobs)) {
-          for (const o of Object.values(job.outputs)) {
-            if (ctx.index.usagesOf(sym.jobOutput(wf.path, job.id, o.name)).length > 0) continue;
-            ctx.report({
-              message: `Output ${quote(o.name)} of jobs.${job.id} is never read`,
-              loc: o.loc,
-              symbol: sym.jobOutput(wf.path, job.id, o.name),
-            });
-          }
-        }
-      }
-      // Workflow outputs: only judge an internal workflow (#40), and only when it has local callers.
-      const callers = ctx.index.callersOf(wf.path);
-      if (!wf.call || callers.length === 0 || isPublished(wf, ctx.config.impact)) continue;
-      for (const o of Object.values(wf.call.outputs)) {
-        const read = callers.some(
-          (c) => ctx.index.usagesOf(sym.jobOutput(c.caller.path, c.job.id, o.name)).length > 0,
-        );
-        if (read) continue;
-        ctx.report({
-          message: `Workflow output ${quote(o.name)} of ${wf.path} is not read by any of its ${callers.length} caller${callers.length > 1 ? 's' : ''}`,
-          loc: o.loc,
-          symbol: sym.output(wf.path, o.name),
-          // Without `impact.publish`, a workflow is internal here only because its name starts with `_`.
-          ...(ctx.config.impact.publish
-            ? { fix: publishedFix('workflow', wf.file, ctx.config.impact.publish) }
-            : {}),
-        });
-      }
+      if (!readsContextDynamically(wf, 'needs') && !readsContextDynamically(wf, 'jobs'))
+        reportUnusedJobOutputs(ctx, wf);
+      reportUnusedWorkflowOutputs(ctx, wf);
     }
-    for (const action of ctx.index.project.actions.values()) {
-      const users = ctx.index.usersOf(action.path);
-      if (users.length === 0 || isPublished(action, ctx.config.impact)) continue;
-      for (const o of Object.values(action.outputs)) {
-        const read = users.some(
-          (u) =>
-            u.step.id &&
-            ctx.index.usagesOf(sym.stepOutput(u.unit.path, u.job?.id, u.step.id, o.name)).length > 0,
-        );
-        if (read) continue;
-        ctx.report({
-          message: `Output ${quote(o.name)} of ${action.path} is not read by any of its ${users.length} user${users.length > 1 ? 's' : ''}`,
-          loc: o.loc,
-          symbol: sym.output(action.path, o.name),
-          fix: publishedFix('action', action.file, ctx.config.impact.publish),
-        });
-      }
-    }
+    for (const action of ctx.index.project.actions.values()) reportUnusedActionOutputs(ctx, action);
   },
 });
+
+/** FP303 for the job outputs of a workflow nothing in it reads. */
+function reportUnusedJobOutputs(ctx: RuleContext, wf: WorkflowDecl): void {
+  for (const job of Object.values(wf.jobs)) {
+    for (const o of Object.values(job.outputs)) {
+      if (ctx.index.usagesOf(sym.jobOutput(wf.path, job.id, o.name)).length > 0) continue;
+      ctx.report({
+        message: `Output ${quote(o.name)} of jobs.${job.id} is never read`,
+        loc: o.loc,
+        symbol: sym.jobOutput(wf.path, job.id, o.name),
+      });
+    }
+  }
+}
+
+/** FP303 for workflow outputs: only judge an internal workflow (#40), and only when it has local callers. */
+function reportUnusedWorkflowOutputs(ctx: RuleContext, wf: WorkflowDecl): void {
+  const callers = ctx.index.callersOf(wf.path);
+  if (!wf.call || callers.length === 0 || isPublished(wf, ctx.config.impact)) return;
+  for (const o of Object.values(wf.call.outputs)) {
+    const read = callers.some(
+      (c) => ctx.index.usagesOf(sym.jobOutput(c.caller.path, c.job.id, o.name)).length > 0,
+    );
+    if (read) continue;
+    ctx.report({
+      message: `Workflow output ${quote(o.name)} of ${wf.path} is not read by any of its ${callers.length} caller${callers.length > 1 ? 's' : ''}`,
+      loc: o.loc,
+      symbol: sym.output(wf.path, o.name),
+      // Without `impact.publish`, a workflow is internal here only because its name starts with `_`.
+      ...(ctx.config.impact.publish
+        ? { fix: publishedFix('workflow', wf.file, ctx.config.impact.publish) }
+        : {}),
+    });
+  }
+}
+
+/** FP303 for the outputs of an internal action that none of its local users reads. */
+function reportUnusedActionOutputs(ctx: RuleContext, action: ActionDecl): void {
+  const users = ctx.index.usersOf(action.path);
+  if (users.length === 0 || isPublished(action, ctx.config.impact)) return;
+  for (const o of Object.values(action.outputs)) {
+    const read = users.some(
+      (u) =>
+        u.step.id && ctx.index.usagesOf(sym.stepOutput(u.unit.path, u.job?.id, u.step.id, o.name)).length > 0,
+    );
+    if (read) continue;
+    ctx.report({
+      message: `Output ${quote(o.name)} of ${action.path} is not read by any of its ${users.length} user${users.length > 1 ? 's' : ''}`,
+      loc: o.loc,
+      symbol: sym.output(action.path, o.name),
+      fix: publishedFix('action', action.file, ctx.config.impact.publish),
+    });
+  }
+}
 
 const stepOutputNeverWritten = defineRule({
   code: 'FP304',
@@ -308,25 +393,38 @@ version: \${{ steps.meta.outputs.version }}`,
   check(ctx) {
     for (const unit of ctx.index.units()) {
       for (const { site, ref } of refsOf(unit)) {
-        const [a, b, c] = ref.path;
-        if (ref.context !== 'steps' || b !== 'outputs' || !a || !c || c === '*' || c === '?') continue;
-        const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
-        if (!step) continue;
-        const w = step.writesOutputs;
-        if (!w.mentions || w.dynamic) continue;
-        if (step.uses && !step.with.script) continue;
-        if (w.names.some((n) => n.toLowerCase() === c.toLowerCase())) continue;
-        const guess = didYouMean(c, w.names);
-        ctx.report({
-          message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
-          loc: ref.loc,
-          symbol: sym.stepOutput(unit.path, unit.kind === 'workflow' ? site.job : undefined, a, c),
-          related: [{ loc: step.runLoc ?? step.loc, message: 'outputs are written here' }],
-        });
+        if (ref.context === 'steps') checkStepOutputWritten(ctx, unit, site, ref);
       }
     }
   },
 });
+
+/**
+ * Whether FP304 can judge the outputs a step writes: its script names every write, and it is a `run:` step or an
+ * `actions/github-script` one (other actions may set outputs of their own).
+ */
+function writesAreKnown(step: StepDecl): boolean {
+  const w = step.writesOutputs;
+  if (!w.mentions || w.dynamic) return false;
+  return !(step.uses && !step.with.script);
+}
+
+/** FP304 for one `steps.<id>.outputs.<name>` read: a step whose writes are known must write `<name>`. */
+function checkStepOutputWritten(ctx: RuleContext, unit: UnitDecl, site: ExprSite, ref: LocatedRef): void {
+  const [a, b, c] = ref.path;
+  if (b !== 'outputs' || !a || !namesKey(c)) return;
+  const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step || !writesAreKnown(step)) return;
+  const w = step.writesOutputs;
+  if (w.names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
+  const guess = didYouMean(c, w.names);
+  ctx.report({
+    message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${didYouMeanNote(guess)}`,
+    loc: ref.loc,
+    symbol: stepOutputSymbol(unit, site, a, c),
+    related: [{ loc: step.runLoc ?? step.loc, message: 'outputs are written here' }],
+  });
+}
 
 export const outputRules: RuleDefinition[] = [
   undefinedOutputRef,

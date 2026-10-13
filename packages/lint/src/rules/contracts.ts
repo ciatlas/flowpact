@@ -1,5 +1,5 @@
-import type { Loc, UnitDecl } from '@ciatlas/core';
-import type { ContractPlanEntry } from '../contracts';
+import type { ActionDecl, Loc, UnitDecl, WorkflowDecl } from '@ciatlas/core';
+import type { ContractChange, ContractPlanEntry } from '../contracts';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { listNames } from './util';
 
@@ -8,19 +8,36 @@ const fileStart = (file: string): Loc => ({ file, line: 1, column: 1, endLine: 1
 /** Best location in the current workflow/action for a changed contract path such as `inputs.config`. */
 function locFor(unit: UnitDecl | undefined, path: string, fallback: Loc): Loc {
   if (!unit) return fallback;
-  const [kind, name] = path.split('.');
-  if (unit.kind === 'workflow') {
-    if (kind === 'inputs' && name) return unit.call?.inputs[name]?.loc ?? unit.call?.loc ?? fallback;
-    if (kind === 'dispatchInputs' && name)
-      return unit.dispatch?.inputs[name]?.loc ?? unit.dispatch?.loc ?? fallback;
-    if (kind === 'secrets' && name) return unit.call?.secrets[name]?.loc ?? unit.call?.loc ?? fallback;
-    if (kind === 'outputs' && name) return unit.call?.outputs[name]?.loc ?? unit.call?.loc ?? fallback;
-    if (kind === 'calls' && name) return unit.jobs[name]?.uses?.loc ?? unit.jobs[name]?.loc ?? fallback;
-    return unit.call?.loc ?? unit.dispatch?.loc ?? fallback;
-  }
-  if (kind === 'inputs' && name) return unit.inputs[name]?.loc ?? fallback;
-  if (kind === 'outputs' && name) return unit.outputs[name]?.loc ?? fallback;
-  return fallback;
+  const [kind = '', name] = path.split('.');
+  const loc = unit.kind === 'workflow' ? workflowLocFor(unit, kind, name) : actionLocFor(unit, kind, name);
+  return loc ?? fallback;
+}
+
+/**
+ * Per section of a workflow's contract, where the workflow declares an entry (`inputs.<name>`), else the section
+ * itself. A Map, so a path such as `constructor.x` finds no section.
+ */
+const WORKFLOW_ENTRY_LOCS = new Map<string, (wf: WorkflowDecl, name: string) => Loc | undefined>([
+  ['inputs', (wf, name) => wf.call?.inputs[name]?.loc ?? wf.call?.loc],
+  ['dispatchInputs', (wf, name) => wf.dispatch?.inputs[name]?.loc ?? wf.dispatch?.loc],
+  ['secrets', (wf, name) => wf.call?.secrets[name]?.loc ?? wf.call?.loc],
+  ['outputs', (wf, name) => wf.call?.outputs[name]?.loc ?? wf.call?.loc],
+  ['calls', (wf, name) => wf.jobs[name]?.uses?.loc ?? wf.jobs[name]?.loc],
+]);
+
+/** `locFor` in a workflow: the entry the path names, else the `workflow_call` or `workflow_dispatch` trigger. */
+function workflowLocFor(wf: WorkflowDecl, kind: string, name: string | undefined): Loc | undefined {
+  const entryLoc = name ? WORKFLOW_ENTRY_LOCS.get(kind) : undefined;
+  if (name && entryLoc) return entryLoc(wf, name);
+  return wf.call?.loc ?? wf.dispatch?.loc;
+}
+
+/** `locFor` in an action: the input or output the path names, if any. */
+function actionLocFor(action: ActionDecl, kind: string, name: string | undefined): Loc | undefined {
+  if (!name) return undefined;
+  if (kind === 'inputs') return action.inputs[name]?.loc;
+  if (kind === 'outputs') return action.outputs[name]?.loc;
+  return undefined;
 }
 
 function* entries(
@@ -77,14 +94,7 @@ const contractOutdated = defineRule({
       const changes = entry.changes.filter((c) => !c.breaking);
       if (changes.length === 0 && entry.changes.length > 0) continue; // only breaking changes → FP803
       ctx.report({
-        message: `Contract ${entry.file} is outdated: ${
-          changes.length
-            ? listNames(
-                changes.map((c) => c.message),
-                4,
-              )
-            : 'formatting or ordering changed'
-        }`,
+        message: `Contract ${entry.file} is outdated: ${outdatedSummary(changes)}`,
         loc: unit ? locFor(unit, changes[0]?.path ?? '', fileStart(unit.file)) : fileStart(entry.file),
         related: [{ loc: fileStart(entry.file), message: 'locked contract' }],
         ...(entry.unit ? { symbol: entry.unit } : {}),
@@ -92,6 +102,16 @@ const contractOutdated = defineRule({
     }
   },
 });
+
+/** FP802's summary of the non-breaking changes; without any, only the file's formatting or order differs. */
+function outdatedSummary(changes: ContractChange[]): string {
+  return changes.length
+    ? listNames(
+        changes.map((c) => c.message),
+        4,
+      )
+    : 'formatting or ordering changed';
+}
 
 const breakingInterfaceChange = defineRule({
   code: 'FP803',

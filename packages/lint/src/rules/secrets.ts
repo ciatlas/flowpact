@@ -5,20 +5,24 @@ import {
   chainTo,
   definitelyFalsy,
   didYouMean,
+  type EvalValue,
   type ExprSite,
   escapeControl,
   evaluateTemplate,
+  type InputDecl,
   known,
+  type LocatedRef,
   lookup,
   readsContextDynamically,
   refsOf,
+  type SecretDecl,
   secretsNeededBy,
   sym,
   UNKNOWN,
   type WorkflowDecl,
 } from '@ciatlas/core';
-import { defineRule, type RuleDefinition } from './types';
-import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, quote } from './util';
+import { defineRule, type RuleContext, type RuleDefinition } from './types';
+import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, namesKey, quote } from './util';
 
 const missingRequiredSecret = defineRule({
   code: 'FP201',
@@ -44,19 +48,24 @@ secrets:
       if (call.job.secretsInherit) continue;
       for (const s of Object.values(call.callee.call?.secrets ?? {})) {
         if (!s.required || lookup(call.job.secrets, s.name)) continue;
-        ctx.report({
-          message: `jobs.${call.job.id} calls ${call.callee.path} without required secret ${quote(s.name)}`,
-          loc: call.job.uses?.loc ?? call.job.loc,
-          symbol: sym.secret(call.callee.path, s.name),
-          related: [
-            ...chainRelated(chainTo(ctx.index, call.caller.path)),
-            { loc: s.loc, message: 'declared required here' },
-          ],
-        });
+        reportMissingSecret(ctx, call, s);
       }
     }
   },
 });
+
+/** FP201's report for a required secret a call does not pass. */
+function reportMissingSecret(ctx: RuleContext, call: CallSite, s: SecretDecl): void {
+  ctx.report({
+    message: `jobs.${call.job.id} calls ${call.callee.path} without required secret ${quote(s.name)}`,
+    loc: call.job.uses?.loc ?? call.job.loc,
+    symbol: sym.secret(call.callee.path, s.name),
+    related: [
+      ...chainRelated(chainTo(ctx.index, call.caller.path)),
+      { loc: s.loc, message: 'declared required here' },
+    ],
+  });
+}
 
 const unknownSecret = defineRule({
   code: 'FP202',
@@ -190,26 +199,43 @@ const undeclaredSecretRef = defineRule({
       if (strictCallers.length === 0) continue;
       const resolvers = new Map(strictCallers.map((c) => [c, callerInputsResolver(wf, c)]));
       for (const { site, ref } of refsOf(wf)) {
-        const name = ref.path[0];
-        if (ref.context !== 'secrets' || !name || name === '*' || name === '?') continue;
-        if (BUILTIN_SECRETS.has(name.toLowerCase()) || lookup(wf.call.secrets, name)) continue;
+        const name = undeclaredSecretRead(wf.call.secrets, ref);
+        if (!name) continue;
         // A caller whose inputs make the job's or step's `if:` false never runs the read.
         const guards = guardsOf(wf, site);
         const reached = strictCallers.filter((c) => !guards.some((g) => isFalse(g, resolvers.get(c)!)));
-        if (reached.length === 0) continue;
-        ctx.report({
-          message: `${wf.path} reads secrets.${name}, which is not declared — it is empty when called from ${reached.length} caller${reached.length > 1 ? 's' : ''} without \`secrets: inherit\``,
-          loc: ref.loc,
-          symbol: sym.secret(wf.path, name),
-          related: reached.slice(0, 3).map((c) => ({
-            loc: c.job.uses?.loc ?? c.job.loc,
-            message: `${c.caller.path} › jobs.${c.job.id} passes explicit secrets`,
-          })),
-        });
+        if (reached.length > 0) reportUndeclaredSecret(ctx, wf, ref, name, reached);
       }
     }
   },
 });
+
+/** The secret a reference reads, when it is neither one of GitHub's own nor declared in `declared`. */
+function undeclaredSecretRead(declared: Record<string, SecretDecl>, ref: LocatedRef): string | undefined {
+  const name = ref.path[0];
+  if (ref.context !== 'secrets' || !namesKey(name)) return undefined;
+  if (BUILTIN_SECRETS.has(name.toLowerCase()) || lookup(declared, name)) return undefined;
+  return name;
+}
+
+/** FP205's report, naming the callers (`reached`) that run the read without `secrets: inherit`. */
+function reportUndeclaredSecret(
+  ctx: RuleContext,
+  wf: WorkflowDecl,
+  ref: LocatedRef,
+  name: string,
+  reached: CallSite[],
+): void {
+  ctx.report({
+    message: `${wf.path} reads secrets.${name}, which is not declared — it is empty when called from ${reached.length} caller${reached.length > 1 ? 's' : ''} without \`secrets: inherit\``,
+    loc: ref.loc,
+    symbol: sym.secret(wf.path, name),
+    related: reached.slice(0, 3).map((c) => ({
+      loc: c.job.uses?.loc ?? c.job.loc,
+      message: `${c.caller.path} › jobs.${c.job.id} passes explicit secrets`,
+    })),
+  });
+}
 
 /**
  * The called workflow's `inputs` as one caller sets them: literal `with:` values, and for omitted inputs the default
@@ -220,15 +246,24 @@ function callerInputsResolver(callee: WorkflowDecl, call: CallSite): ContextReso
     if (context !== 'inputs') return undefined;
     if (path.length !== 1 || !path[0]) return UNKNOWN;
     const decl = lookup(callee.call?.inputs ?? {}, path[0]);
-    if (!decl) return UNKNOWN;
-    const b = lookup(call.job.with, decl.name);
-    if (b) return b.site ? evaluateTemplate(b.site.text, () => undefined) : known(b.value);
-    if (decl.hasDefault) {
-      const d = decl.default ?? null;
-      return typeof d === 'string' && d.includes('${{') ? UNKNOWN : known(d);
-    }
-    return known(decl.type === 'boolean' ? false : decl.type === 'number' ? 0 : '');
+    return decl ? callerInputValue(decl, call) : UNKNOWN;
   };
+}
+
+/** A declared input's value as one caller sets it: the `with:` value it passes, else the value when omitted. */
+function callerInputValue(decl: InputDecl, call: CallSite): EvalValue {
+  const b = lookup(call.job.with, decl.name);
+  if (b) return b.site ? evaluateTemplate(b.site.text, () => undefined) : known(b.value);
+  return omittedInputValue(decl);
+}
+
+/** An omitted input's value: its default (unknown when an expression), else `false`, `0` or `''` by type. */
+function omittedInputValue(decl: InputDecl): EvalValue {
+  if (decl.hasDefault) {
+    const d = decl.default ?? null;
+    return typeof d === 'string' && d.includes('${{') ? UNKNOWN : known(d);
+  }
+  return known(decl.type === 'boolean' ? false : decl.type === 'number' ? 0 : '');
 }
 
 /** The guards that decide whether a site in a job or step is evaluated: `if:` sites, or `false` for a literal `if: false`. */
