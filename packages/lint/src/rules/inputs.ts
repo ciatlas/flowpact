@@ -400,12 +400,13 @@ function optionalInputReads(
  * The reads of an input that decide a condition by its value. Comparisons with a constant (`inputs.x != ''`,
  * `inputs.x == 'yes'`), tests such as `contains()` and fallbacks handle the omitted case explicitly. A condition that
  * does so for the input is trusted with its other reads too (`inputs.x != '' && inputs.x != steps.s.outputs.current`);
- * otherwise only a value that decides the condition as it is gets reported.
+ * otherwise only a value that decides the condition as it is gets reported. A whole read (`toJSON(inputs)`,
+ * `inputs[matrix.key]`, see `Usage.whole`) does not single the input out, so it neither decides nor handles it.
  */
 function decidingReads(index: ProjectIndex, unit: UnitDecl, input: InputDecl): Usage[] {
   const inConditions = index
     .usagesOf(sym.input(unit.path, input.name))
-    .filter((u) => u.site.isCondition)
+    .filter((u) => u.site.isCondition && !u.whole)
     .map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
   const handledSites = new Set(
     inConditions.filter((x) => x.use === 'compared' || x.use === 'fallback').map((x) => x.u.site.id),

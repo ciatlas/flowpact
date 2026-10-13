@@ -247,10 +247,11 @@ function emptyInputImpact(
     const shown = typeof value === 'string' ? quote(value) : JSON.stringify(value);
     return { severity: 'warning', related: [], note: `, which replaces the input's default ${shown}` };
   }
-  // A missing default is '' for a string, the same as `default: ''`. A fallback (`inputs.x || 'all'`) replaces it.
+  // A missing default is '' for a string, the same as `default: ''`. A fallback (`inputs.x || 'all'`) replaces it. A
+  // whole read (`toJSON(inputs)`, `inputs[matrix.key]`) does not single the input out (see `Usage.whole`).
   const condition = index
     .usagesOf(sym.input(callee.path, input.name))
-    .find((u) => u.site.isCondition && useInCondition(u.site, u.ref) !== 'fallback');
+    .find((u) => u.site.isCondition && !u.whole && useInCondition(u.site, u.ref) !== 'fallback');
   if (!condition) return undefined;
   return {
     severity: 'error',
