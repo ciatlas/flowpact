@@ -22537,11 +22537,13 @@ var IMPACT_CODES = impactRules.map((r) => r.code);
 function eventInputReadsByRoot(index) {
   const out = /* @__PURE__ */ new Map();
   for (const root of index.project.workflows.values()) {
-    if (root.dispatch) out.set(root.path, eventInputReadsFrom(index, root));
+    if (!root.dispatch) continue;
+    const every = Object.values(root.dispatch.inputs).map((input2) => input2.name.toLowerCase());
+    out.set(root.path, eventInputReadsFrom(index, root, every));
   }
   return out;
 }
-function eventInputReadsFrom(index, root) {
+function eventInputReadsFrom(index, root, every) {
   const names = /* @__PURE__ */ new Set();
   const seen = /* @__PURE__ */ new Set();
   const queue = [root];
@@ -22549,17 +22551,26 @@ function eventInputReadsFrom(index, root) {
     const unit = queue.shift();
     if (seen.has(unit)) continue;
     seen.add(unit);
-    addEventInputReads(unit, names);
+    addEventInputReads(unit, names, every);
     for (const call of index.callSites) if (call.caller === unit) queue.push(call.callee);
     for (const use of index.actionUses) if (use.unit === unit) queue.push(use.action);
   }
   return names;
 }
-function addEventInputReads(unit, names) {
-  for (const { ref } of refsOf(unit)) {
-    const [a, b, c] = ref.path;
-    if (ref.context === "github" && a === "event" && b === "inputs" && c) names.add(c.toLowerCase());
+function addEventInputReads(unit, names, every) {
+  for (const { ref } of refsOf(unit)) for (const name of eventInputsRead(ref, every)) names.add(name);
+}
+function eventInputsRead(ref, every) {
+  if (ref.context !== "github") return [];
+  for (const [i, key] of ["event", "inputs"].entries()) {
+    const segment = ref.path[i];
+    if (segment === void 0) return every;
+    if (namesKey(segment) && segment.toLowerCase() !== key) return [];
   }
+  const name = ref.path[2];
+  if (!namesKey(name)) return every;
+  const input2 = name.toLowerCase();
+  return every.includes(input2) ? [input2] : [];
 }
 function declaredInputs(unit) {
   if (unit.kind === "action") return unit.inputs;
