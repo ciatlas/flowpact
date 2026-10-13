@@ -8,7 +8,7 @@ when you move to that release.
 
 ## 0.14 → 0.15
 
-0.15 makes paths mean the same in every command: the workflows and actions to look at.
+0.15 changes what some runs report. Each change below says what to do about it.
 
 ### Move to the new version
 
@@ -26,6 +26,13 @@ and the findings agree. If your impact check passes paths, it now guards only th
 to gate every published unit. `flowpact impact` takes paths too, where 0.14 refused them.
 
 `flowpact graph` takes paths as well, and then draws only those workflows and actions and what they call.
+
+### Impact mode leaves ignored units out
+
+A published workflow or action whose file `ignore` matches is no longer graded. 0.14 graded it but dropped its
+findings, so the verdict could say `required major` while the run passed. Now the verdict and the findings agree, and
+impact mode's findings are never dropped by `ignore`. If an ignored unit is one you publish, remove it from `ignore` to
+gate its changes.
 
 ## 0.13 → 0.14
 

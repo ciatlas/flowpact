@@ -21880,9 +21880,13 @@ function impactVerdict(changes, input2, policy) {
   };
 }
 var pathHolds = (path, file) => file === path || file.startsWith(`${path}/`);
-function unitsWithin(base, head, within2) {
-  const covered = (file) => within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
-  return new Set([...base.units(), ...head.units()].filter((u) => covered(u.file)).map((u) => u.path));
+function unitsLookedAt(base, head, { within: within2, ignore = [] }) {
+  if (!within2 && !ignore.length) return void 0;
+  const covered = (file) => !within2 || within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
+  const ignored = (file) => ignore.some((p) => matchesPattern(file, p));
+  return new Set(
+    [...base.units(), ...head.units()].filter((u) => covered(u.file) && !ignored(u.file)).map((u) => u.path)
+  );
 }
 function scopeOf(base, within2, published) {
   const baseFiles = base.units().map((u) => u.file);
@@ -21892,8 +21896,9 @@ function scopeOf(base, within2, published) {
     fromBaseline: within2.paths.filter((p) => baseFiles.some((f) => pathHolds(p.relative, f))).map((p) => p.given)
   };
 }
-function computeImpact(base, head, baseline, declared, policy, within2) {
-  const units = within2 ? unitsWithin(base, head, within2) : void 0;
+function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
+  const { within: within2 } = lookAt;
+  const units = unitsLookedAt(base, head, lookAt);
   const changes = impactChanges(base, head, policy, void 0, units);
   const published = [...head.units(), ...base.units()].filter(
     (u) => isPublished(u, policy) && (!units || units.has(u.path))
@@ -24923,12 +24928,12 @@ function impactPathsOf(opts, project) {
     targets: project.targets
   };
 }
-function impactOf(opts, index, within2, logger) {
+function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
   if (!impact) return void 0;
   return logger.time(
     "impact",
-    () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, within2)
+    () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt)
   );
 }
 function ruleRun(fields) {
@@ -25010,7 +25015,7 @@ function scopeOf2(index, config2, contracts, scope) {
   const contractUnitsInScope = new Set(
     scopedEntries.flatMap((e) => e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])
   );
-  return (f) => (!scope.narrowed || targets.has(f.loc.file) || contractFilesInScope.has(f.loc.file) || f.category === "contracts" && contractUnitsInScope.has(f.loc.file) || IMPACT_CODES.includes(f.code)) && !config2.ignore.some((p) => matchesPattern(f.loc.file, p));
+  return (f) => IMPACT_CODES.includes(f.code) || (!scope.narrowed || targets.has(f.loc.file) || contractFilesInScope.has(f.loc.file) || f.category === "contracts" && contractUnitsInScope.has(f.loc.file)) && !config2.ignore.some((p) => matchesPattern(f.loc.file, p));
 }
 function logFiltered(logger, config2, f) {
   if (f.skippedInScope.length > 0) {
@@ -25074,7 +25079,7 @@ function prepareRules(opts, logger, base, unloaded) {
     contractInScope: contractsInScope(index)
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  const impact = impactOf(opts, index, within2, logger);
+  const impact = impactOf(opts, index, { ...within2 ? { within: within2 } : {}, ignore: config2.ignore }, logger);
   const run2 = ruleRun({
     ...base,
     severities,

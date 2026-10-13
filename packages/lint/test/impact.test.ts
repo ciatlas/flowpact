@@ -533,3 +533,50 @@ describe('paths narrow impact mode', () => {
     ).toEqual([]);
   });
 });
+
+describe('ignore leaves units out of impact mode', () => {
+  const action = (name: string, inputs = '') =>
+    `name: ${name}\ndescription: d\n${inputs}runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "${inputs ? '${{ inputs.token }}' : 'hi'}"\n`;
+  const token = 'inputs:\n  token: { description: t, required: false }\n';
+  const publish = ['*/action.yml'];
+  /** Base: published actions a and b with an input; the head removes b's input, a major change. */
+  const base = { 'a/action.yml': action('a', token), 'b/action.yml': action('b', token) };
+  const head = { 'a/action.yml': action('a', token), 'b/action.yml': action('b') };
+  const run = (ignore: string[], declared: DeclaredInput, paths?: string[]) =>
+    analyze({
+      root: '/v',
+      fs: memoryFileSystem(head),
+      config: parseConfig({ ignore, impact: { publish } }),
+      validateSchema: false,
+      repository: 'a/b',
+      ...(paths ? { paths } : {}),
+      impact: {
+        base: index(base, publish),
+        baseline: { kind: 'ref', ref: 'main', commit: 'abc' },
+        declared,
+        policy: { ...DEFAULT_IMPACT_POLICY, publish },
+      },
+    });
+  const located = (r: ReturnType<typeof run>) => r.findings.map((f) => `${f.code}@${f.loc.file}`);
+
+  it('does not grade a published unit whose file is ignored, so the verdict and the findings agree', () => {
+    // 0.14 graded b anyway: "required major, ok: false" with the FP810 about b dropped by ignore, and exit 0.
+    const r = run(['b/**'], { explicit: 'patch' });
+    expect(r.impact?.changes).toEqual([]);
+    expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: true });
+    expect(r.impact?.publishedFiles).toEqual(['a/action.yml']);
+    expect(located(r)).toEqual(['FP812@a/action.yml']);
+    // With paths too.
+    expect(run(['b/**'], { explicit: 'patch' }, ['b']).impact?.verdict).toMatchObject({ required: 'none' });
+    // Not ignored, b is graded as before.
+    expect(run([], { explicit: 'patch' }).impact?.verdict).toMatchObject({ required: 'major', ok: false });
+  });
+
+  it('reports a failing verdict even when ignore matches the file it is placed on', () => {
+    // Nothing graded: a conflict between the declarations still fails, and its finding must say so.
+    const r = run(['**'], { title: 'fix: x', labels: ['semver:major'] });
+    expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: false });
+    expect(r.findings.map((f) => f.code)).toEqual(['FP811', 'FP812']);
+    expect(r.summary.errors).toBe(1);
+  });
+});

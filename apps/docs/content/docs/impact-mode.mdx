@@ -76,6 +76,9 @@ graded.
   baseline. A path the pull request removed (`actions/old`) grades that removal, as a major change.
 - Units within the paths that are not published (an internal workflow, an action `impact.publish` does not list) are not
   graded. With no published unit there, the required impact is `none`.
+- Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths: a
+  published unit whose file is ignored is not graded, so neither the verdict nor the findings are about it. Like every
+  other finding's, `ignore` comes from the checked-out config, not the baseline's.
 - The reports say so: the terminal and Markdown reports add `only within <paths>: graded <units>`, and the JSON
   report's `impact.scope` lists the `paths` and the `units` graded.
 

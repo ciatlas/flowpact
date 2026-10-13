@@ -642,11 +642,23 @@ export interface ImpactScope {
 /** Whether `file` is the file `path` names, or lies in the directory it names (both relative to the root). */
 const pathHolds = (path: string, file: string) => file === path || file.startsWith(`${path}/`);
 
-/** The units of either side whose file is within the paths, by path. */
-function unitsWithin(base: ProjectIndex, head: ProjectIndex, within: ImpactPaths): Set<string> {
+/** What impact mode looks at: every unit, or with paths those within them; never one whose file is ignored. */
+export interface ImpactLookAt {
+  /** Paths that narrow impact mode to the units within them. */
+  within?: ImpactPaths;
+  /** The config's `ignore` patterns: the units whose files match are not graded. */
+  ignore?: readonly string[];
+}
+
+/** The units of either side impact mode looks at, by path; undefined when it looks at every unit. */
+function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore = [] }: ImpactLookAt) {
+  if (!within && !ignore.length) return undefined;
   const covered = (file: string) =>
-    within.targets.has(file) || within.paths.some((p) => pathHolds(p.relative, file));
-  return new Set([...base.units(), ...head.units()].filter((u) => covered(u.file)).map((u) => u.path));
+    !within || within.targets.has(file) || within.paths.some((p) => pathHolds(p.relative, file));
+  const ignored = (file: string) => ignore.some((p) => matchesPattern(file, p));
+  return new Set(
+    [...base.units(), ...head.units()].filter((u) => covered(u.file) && !ignored(u.file)).map((u) => u.path),
+  );
 }
 
 /** What the paths narrowed impact mode to, given the published units within them. */
@@ -677,8 +689,8 @@ export interface ImpactResult {
 }
 
 /**
- * Grades the changes and judges the declaration in one step. With paths (`within`), only the published units within
- * them count, so the verdict is about those units alone.
+ * Grades the changes and judges the declaration in one step. Only the published units impact mode looks at count (with
+ * paths, those within them; never one whose file is ignored), so the verdict is about those units alone.
  */
 export function computeImpact(
   base: ProjectIndex,
@@ -686,9 +698,10 @@ export function computeImpact(
   baseline: ImpactResult['baseline'],
   declared: DeclaredInput,
   policy: ImpactPolicy,
-  within?: ImpactPaths,
+  lookAt: ImpactLookAt = {},
 ): ImpactResult {
-  const units = within ? unitsWithin(base, head, within) : undefined;
+  const { within } = lookAt;
+  const units = unitsLookedAt(base, head, lookAt);
   const changes = impactChanges(base, head, policy, undefined, units);
   const published = [...head.units(), ...base.units()].filter(
     (u) => isPublished(u, policy) && (!units || units.has(u.path)),

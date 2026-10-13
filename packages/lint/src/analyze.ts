@@ -33,6 +33,7 @@ import {
 import {
   computeImpact,
   type DeclaredInput,
+  type ImpactLookAt,
   type ImpactPaths,
   type ImpactPolicy,
   type ImpactResult,
@@ -422,17 +423,20 @@ function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | un
   };
 }
 
-/** Impact mode's changes and verdict, when it runs: with paths, about the published units within them. */
+/**
+ * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
+ * them; never one whose file `ignore` matches).
+ */
 function impactOf(
   opts: AnalyzeOptions,
   index: ProjectIndex,
-  within: ImpactPaths | undefined,
+  lookAt: ImpactLookAt,
   logger: Logger,
 ): ImpactResult | undefined {
   const impact = opts.impact;
   if (!impact) return undefined;
   return logger.time('impact', () =>
-    computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, within),
+    computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt),
   );
 }
 
@@ -560,8 +564,9 @@ function judgeOverride(u: OverrideUsage, run: RuleRun, opts: AnalyzeOptions): vo
 }
 
 /**
- * Whether a finding is reported: with paths, it is about a targeted file or a contract in scope, or it is impact mode's
- * (which only grades the published units within the paths), and no `ignore` pattern matches its file.
+ * Whether a finding is reported: impact mode's always (it grades only the published units within the paths whose files
+ * are not ignored, so its findings and its verdict agree); any other with paths when it is about a targeted file or a
+ * contract in scope, and when no `ignore` pattern matches its file.
  */
 function scopeOf(
   index: ProjectIndex,
@@ -579,12 +584,12 @@ function scopeOf(
     scopedEntries.flatMap((e) => (e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])),
   );
   return (f) =>
-    (!scope.narrowed ||
+    IMPACT_CODES.includes(f.code) ||
+    ((!scope.narrowed ||
       targets.has(f.loc.file) ||
       contractFilesInScope.has(f.loc.file) ||
-      (f.category === 'contracts' && contractUnitsInScope.has(f.loc.file)) ||
-      IMPACT_CODES.includes(f.code)) &&
-    !config.ignore.some((p) => matchesPattern(f.loc.file, p));
+      (f.category === 'contracts' && contractUnitsInScope.has(f.loc.file))) &&
+      !config.ignore.some((p) => matchesPattern(f.loc.file, p)));
 }
 
 /** Logs what the scope, generated files and overrides took out of the findings. */
@@ -687,7 +692,7 @@ function prepareRules(
     contractInScope: contractsInScope(index),
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  const impact = impactOf(opts, index, within, logger);
+  const impact = impactOf(opts, index, { ...(within ? { within } : {}), ignore: config.ignore }, logger);
   const run = ruleRun({
     ...base,
     severities,
