@@ -38,7 +38,7 @@ export const impact: typeof Api.impact = (options) => report('impact', options);
 export const generate: typeof Api.generate = async (options = {}) =>
   runGenerate(openSession(options), options);
 
-export const graph: typeof Api.graph = async (options = {}) => callGraph(openSession(options));
+export const graph: typeof Api.graph = async (options = {}) => callGraph(openSession(options), options);
 
 export const trace: typeof Api.trace = async (options) => traceSymbol(openSession(options), options);
 

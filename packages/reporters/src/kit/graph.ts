@@ -202,6 +202,26 @@ export function buildCallGraph(index: ProjectIndex): CallGraph {
   };
 }
 
+/**
+ * The part of the graph `roots` reach: those nodes, what they call and use (and what that calls and uses, all the way
+ * down), and the edges between them. Ordering is kept.
+ */
+export function reachableGraph(graph: CallGraph, roots: Iterable<string>): CallGraph {
+  const outgoing = new Map<string, string[]>();
+  for (const e of graph.edges) outgoing.set(e.from, [...(outgoing.get(e.from) ?? []), e.to]);
+  const reached = new Set<string>();
+  const queue = [...roots];
+  for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+    if (reached.has(id)) continue;
+    reached.add(id);
+    queue.push(...(outgoing.get(id) ?? []));
+  }
+  return {
+    nodes: graph.nodes.filter((n) => reached.has(n.id)),
+    edges: graph.edges.filter((e) => reached.has(e.from)),
+  };
+}
+
 /** The edge annotation shown in every format: `jobs.build ×3 (inherit)`. */
 export function edgeLabel(e: CallGraphEdge, ascii = false): string {
   return `${e.via}${e.matrix !== undefined ? ` ${ascii ? 'x' : '×'}${e.matrix}` : ''}${e.inherits ? ' (inherit)' : ''}${e.notReusable ? ' (not reusable)' : ''}`;

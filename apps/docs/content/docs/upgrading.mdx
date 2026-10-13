@@ -8,7 +8,7 @@ when you move to that release.
 
 ## 0.14 → 0.15
 
-0.15 makes the paths of impact mode mean what they mean in every other command: the workflows and actions to look at.
+0.15 makes paths mean the same in every command: the workflows and actions to look at.
 
 ### Move to the new version
 
@@ -24,6 +24,8 @@ them. Before, it graded every published unit but reported only the findings abou
 breaking change elsewhere could pass silently: the verdict said `required major` and the run passed. Now the verdict
 and the findings agree. If your impact check passes paths, it now guards only the units within them: drop the paths
 to gate every published unit. `flowpact impact` takes paths too, where 0.14 refused them.
+
+`flowpact graph` takes paths as well, and then draws only those workflows and actions and what they call.
 
 ## 0.13 → 0.14
 

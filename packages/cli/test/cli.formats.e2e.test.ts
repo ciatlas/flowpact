@@ -77,6 +77,70 @@ describe('flowpact graph', () => {
     });
   });
 
+  it('draws only the given workflows and actions and what they call, in every format', async () => {
+    const deep = fixture('deep-nesting');
+    const run = (format: string, ...paths: string[]) =>
+      flowpact(['graph', '--root', deep, '--format', format, '-q', ...paths]);
+    const tree = await run('tree', '.github/workflows/package.yml');
+    expect(tree.exitCode).toBe(0);
+    expect(tree.stdout.trimEnd()).toBe(
+      [
+        'Package (.github/workflows/package.yml) · on: workflow_call',
+        '└── jobs.publish → Publish (.github/workflows/publish.yml)',
+      ].join('\n'),
+    );
+    const mermaid = (await run('mermaid', '.github/workflows/build.yml')).stdout;
+    expect(mermaid).toContain('wf_build_yml -->|"jobs.package"| wf_package_yml');
+    expect(mermaid).toContain('wf_package_yml -->|"jobs.publish"| wf_publish_yml');
+    expect(mermaid).not.toContain('pipeline');
+    const dot = (await run('dot', '.github/workflows/build.yml')).stdout;
+    expect(dot).toContain('".github/workflows/build.yml" -> ".github/workflows/package.yml"');
+    expect(dot).not.toContain('pipeline.yml');
+    const json = JSON.parse((await run('json', '.github/workflows/publish.yml')).stdout);
+    expect(json).toEqual({
+      nodes: [
+        {
+          id: '.github/workflows/publish.yml',
+          kind: 'workflow',
+          label: 'Publish',
+          triggers: ['workflow_call'],
+        },
+      ],
+      edges: [],
+    });
+    // Several paths, a directory, and the whole repository.
+    const two = JSON.parse(
+      (await run('json', '.github/workflows/publish.yml', '.github/workflows/package.yml')).stdout,
+    );
+    expect(two.nodes.map((n: { id: string }) => n.id)).toEqual([
+      '.github/workflows/package.yml',
+      '.github/workflows/publish.yml',
+    ]);
+    const whole = (await run('json')).stdout;
+    expect((await run('json', '.github/workflows')).stdout).toBe(whole);
+    expect((await run('json', '.')).stdout).toBe(whole);
+    const actions = JSON.parse(
+      (
+        await flowpact([
+          'graph',
+          '--root',
+          fixture('composite-actions'),
+          '--format',
+          'json',
+          '-q',
+          '.github/actions/install-tools',
+        ])
+      ).stdout,
+    );
+    expect(actions.nodes.map((n: { id: string }) => n.id)).toEqual(['.github/actions/install-tools']);
+  });
+
+  it('refuses graph paths that do not exist', async () => {
+    const missing = await flowpact(['graph', '--root', fixture('deep-nesting'), 'nope.yml']);
+    expect(missing.exitCode).toBe(2);
+    expect(missing.stderr).toContain('Path not found');
+  });
+
   it('rejects unknown formats and empty repositories', async () => {
     expect((await flowpact(['graph', '--root', fixture('cycles'), '--format', 'svg'])).exitCode).not.toBe(0);
     const empty = await flowpact(['graph', '--root', mkdtempSync(join(tmpdir(), 'flowpact-empty-'))]);

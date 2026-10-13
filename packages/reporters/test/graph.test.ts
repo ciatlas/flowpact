@@ -4,6 +4,7 @@ import {
   buildCallGraph,
   edgeLabel,
   type RenderOptions,
+  reachableGraph,
   renderDot,
   renderGraphTree,
   renderMermaid,
@@ -67,6 +68,41 @@ describe('buildCallGraph', () => {
 
   it('is deterministic', () => {
     expect(JSON.stringify(graphOf('deep-nesting'))).toBe(JSON.stringify(graphOf('deep-nesting')));
+  });
+});
+
+describe('reachableGraph', () => {
+  it('keeps the roots and what they reach, through cycles, remote and missing targets, in order', () => {
+    const deep = graphOf('deep-nesting');
+    const fromBuild = reachableGraph(deep, ['.github/workflows/build.yml']);
+    expect(fromBuild.nodes.map((n) => n.id)).toEqual([
+      '.github/workflows/build.yml',
+      '.github/workflows/package.yml',
+      '.github/workflows/publish.yml',
+    ]);
+    expect(fromBuild.edges.map((e) => `${e.from} -> ${e.to}`)).toEqual([
+      '.github/workflows/build.yml -> .github/workflows/package.yml',
+      '.github/workflows/package.yml -> .github/workflows/publish.yml',
+    ]);
+    expect(reachableGraph(deep, ['.github/workflows/publish.yml'])).toEqual({
+      nodes: [deep.nodes.find((n) => n.id === '.github/workflows/publish.yml')],
+      edges: [],
+    });
+    expect(
+      reachableGraph(
+        deep,
+        deep.nodes.map((n) => n.id),
+      ),
+    ).toEqual(deep);
+
+    const cycles = graphOf('cycles');
+    const fromC = reachableGraph(cycles, ['.github/workflows/c.yml']);
+    expect(fromC.nodes.map((n) => n.id)).toEqual(['.github/workflows/b.yml', '.github/workflows/c.yml']);
+    expect(fromC.edges.map((e) => `${e.from} -> ${e.to}`)).toEqual([
+      '.github/workflows/b.yml -> .github/workflows/c.yml',
+      '.github/workflows/c.yml -> .github/workflows/b.yml',
+    ]);
+    expect(reachableGraph(cycles, ['.github/workflows/main.yml'])).toEqual(cycles);
   });
 });
 

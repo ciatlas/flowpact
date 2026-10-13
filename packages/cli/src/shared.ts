@@ -366,8 +366,8 @@ export async function guard(fn: () => Promise<number> | number): Promise<void> {
 export class UsageError extends Error {}
 
 /**
- * Positional paths of `lint`, `check` and `generate`. They are relative to --root; a path that only exists relative to
- * the working directory is taken from there.
+ * Positional paths of `lint`, `check`, `impact`, `generate` and `graph`. They are relative to --root; a path that only
+ * exists relative to the working directory is taken from there.
  */
 export function pathArgs(positionals: string[], command: string, root: string): string[] {
   return positionals

@@ -55,7 +55,7 @@ Every function takes these options:
 | `repositoryPlugins` | `--no-plugins` | `false` skips the plugins the config lists, which run the repository's code. Default: `true`. |
 | `log` | `--debug`, `-v`, `-q` | `{ level, write(record) }`: receives each log record at `level` (default `info`) or above, with its `level`, `scope`, `message`, `data` and `time`. Like an error's, a record's `message` is written for people and can name the CLI's flags. |
 
-`graph` takes only `root`, `config`, `baseConfig` and `log`: it runs no rules.
+`graph` takes only `root`, `config`, `baseConfig`, `log` and `paths`: it runs no rules.
 
 ## lint, check and impact
 
@@ -132,8 +132,8 @@ const enabled = (await rules()).filter((rule) => rule.severity !== 'off');
 const { summary, why, fix, docsUrl } = await explain('FP401');
 ```
 
-- `graph()`: `nodes` (workflows, actions, remote workflows, missing targets) and `edges`, who calls whom `via` which job
-  or step.
+- `graph({ paths })`: `nodes` (workflows, actions, remote workflows, missing targets) and `edges`, who calls whom `via`
+  which job or step; with `paths`, only those workflows and actions and what they call and use.
 - `trace({ symbol, up, depth })`: one tree per matching symbol, as in [`flowpact trace`](/docs/cli#flowpact-trace);
   for a workflow or action without inputs, secrets or outputs, `traces` is empty and `unit` names it.
 - `rules()`: each rule's `code`, `name`, `category`, `defaultSeverity`, `severity` after the config, `summary` and

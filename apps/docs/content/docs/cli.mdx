@@ -184,8 +184,12 @@ in a row changes nothing.
 Shows which workflows call which reusable workflows and local actions.
 
 ```sh
-flowpact graph [--format tree|mermaid|dot|json]
+flowpact graph [paths…] [--format tree|mermaid|dot|json]
 ```
+
+With paths (workflow or action files, or directories), the graph starts from those workflows and actions and shows
+only what they call and use, all the way down; every format draws the same part. Without, it shows the whole
+repository.
 
 | Format | Output |
 | --- | --- |

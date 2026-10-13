@@ -114,7 +114,10 @@ export interface GenerateOptions extends CommonOptions, PluginOptions {
   out?: string;
 }
 
-export interface GraphOptions extends CommonOptions {}
+export interface GraphOptions extends CommonOptions {
+  /** Workflow and action files or directories, relative to the root: only them and what they call and use. Default: all. */
+  paths?: string[];
+}
 
 export interface TraceOptions extends CommonOptions, PluginOptions {
   /** e.g. `pipeline.yml#inputs.config`, `pipeline.yml:config`, or `pipeline.yml` for its whole interface. */

@@ -311,6 +311,27 @@ describe('generate', () => {
 });
 
 describe('graph, trace, rules and explain', () => {
+  it('draws only the given workflows and actions and what they call, as the CLI does', async () => {
+    const deep = fixture('deep-nesting');
+    const r = await api<{ build: unknown; text: string; notAList: { kind: string; message: string } }>(`
+      const root = ${JSON.stringify(deep)};
+      const build = await flowpact.graph({ root, paths: ['.github/workflows/build.yml'] });
+      out({
+        build,
+        text: flowpact.formatGraph(build),
+        notAList: await failure(flowpact.graph({ root, paths: '.github/workflows/build.yml' })),
+      });`);
+    const cliJson = await cli(['graph', '.github/workflows/build.yml', '--root', deep, '--format', 'json']);
+    expect(r.build).toEqual(JSON.parse(cliJson.stdout));
+    expect((r.build as { nodes: { id: string }[] }).nodes.map((n) => n.id)).toEqual([
+      '.github/workflows/build.yml',
+      '.github/workflows/package.yml',
+      '.github/workflows/publish.yml',
+    ]);
+    expect(r.text).toBe((await cli(['graph', '.github/workflows/build.yml', '--root', deep])).stdout);
+    expect(r.notAList).toMatchObject({ kind: 'usage', message: 'paths must be an array of strings' });
+  });
+
   it('return what the CLI prints as JSON', async () => {
     const deep = fixture('deep-nesting');
     const incident = fixture('incident-matrix');
@@ -858,6 +879,7 @@ const graded: string[] | undefined = (await impact({ paths: ['actions/deploy'] }
 const written: string[] = (await generate({ dryRun: true, out: 'x' })).written;
 const preview: boolean = (await generate({ dryRun: true })).dryRun;
 const nodes = (await graph()).nodes.map((n) => n.kind);
+const drawn = (await graph({ paths: ['.github/workflows/ci.yml'] })).edges.length;
 const traced = (await trace({ symbol: 'ci.yml#inputs.x', up: true, depth: 2 })).traces[0]?.children;
 const listed = (await rules({ repositoryPlugins: false })).map((r) => r.severity);
 const why: string = (await explain('FP401', { root: '.' })).why;
@@ -905,7 +927,7 @@ a.exitCode('sometimes');
 // @ts-expect-error: the report is read-only
 a.report = report;
 
-export { VERSION, code, outputs, patch, required, graded, written, nodes, traced, listed, why, rule, where, severity, annotations, texts, unit, preview };
+export { VERSION, code, outputs, patch, required, graded, written, nodes, drawn, traced, listed, why, rule, where, severity, annotations, texts, unit, preview };
 `,
     });
     const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');
