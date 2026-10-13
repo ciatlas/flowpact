@@ -3,7 +3,7 @@ import { didYouMean, resolveSymbols, type TraceDirection, type TraceNode, trace 
 import { analyze, type RuleCategory, resolveSeverities, type SeveritySetting } from '@flowpact/lint';
 import { buildCallGraph, type CallGraph, reachableGraph } from '@flowpact/reporters';
 import { attempt, NoSymbolMatchError, usage } from './errors';
-import { bool, loadRegistry, type Session, stringList } from './session';
+import { analyzeSession, bool, loadRegistry, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets } from './targets';
 
 export interface GraphOptions {
@@ -63,21 +63,7 @@ export async function traceSymbol(session: Session, options: TraceOptions): Prom
   const depth = options.depth ?? 12;
   if (!Number.isInteger(depth) || depth < 1)
     throw usage(`depth must be a positive integer (got ${JSON.stringify(depth)})`);
-  const { root, loaded, logger } = session;
-  const registry = await loadRegistry(session);
-  const analysis = attempt(() =>
-    analyze({
-      root,
-      config: loaded.config,
-      ...(loaded.file ? { configFile: loaded.file } : {}),
-      ...(loaded.text !== undefined ? { configText: loaded.text } : {}),
-      ...(loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {}),
-      logger,
-      registry,
-      validateSchema: false,
-      only: [],
-    }),
-  );
+  const analysis = await analyzeSession(session, { validateSchema: false, only: [] });
   const direction: TraceDirection = bool('up', options.up) ? 'up' : 'down';
   const matches = resolveSymbols(analysis.index, query);
   if (matches.length === 0) {

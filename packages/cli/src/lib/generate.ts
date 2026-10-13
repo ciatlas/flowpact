@@ -2,7 +2,6 @@
 import { resolve } from 'node:path';
 import { nodeFileSystem } from '@ciatlas/core';
 import {
-  analyze,
   type ContractChange,
   type ContractStatus,
   contractPatch,
@@ -12,7 +11,7 @@ import {
   writeContracts,
 } from '@flowpact/lint';
 import { attempt, usage } from './errors';
-import { bool, loadRegistry, type Session, stringList } from './session';
+import { analyzeSession, bool, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, protectedTrees } from './targets';
 
 export interface GenerateOptions {
@@ -61,22 +60,8 @@ export async function runGenerate(
 ): Promise<ContractGeneration> {
   const paths = stringList('paths', options.paths) ?? [];
   if (options.out !== undefined && typeof options.out !== 'string') throw usage('out must be a string');
-  const { root, loaded, logger } = session;
-  const registry = await loadRegistry(session);
-  const result = attempt(() =>
-    analyze({
-      root,
-      config: loaded.config,
-      ...(loaded.file ? { configFile: loaded.file } : {}),
-      ...(loaded.text !== undefined ? { configText: loaded.text } : {}),
-      ...(loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {}),
-      logger,
-      registry,
-      paths,
-      only: [],
-      validateSchema: false,
-    }),
-  );
+  const { root, logger } = session;
+  const result = await analyzeSession(session, { paths, only: [], validateSchema: false });
   checkTargets(result.project, paths, root);
   checkNotEmpty(result.summary, root);
   const all = logger.time('plan contracts', () => planContracts(result.index, nodeFileSystem(root)));

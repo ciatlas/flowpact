@@ -4,7 +4,6 @@ import { neutralizeWorkflowCommands } from '@ciatlas/core';
 import {
   type AnalysisResult,
   type AnalyzeOptions,
-  analyze,
   contractPatch,
   exitCodeFor,
   githubEvent,
@@ -25,7 +24,7 @@ import {
   renderSarif,
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
-import { bool, loadRegistry, oneOf, type Session, stringList } from './session';
+import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets } from './targets';
 import { renderOptions, type TextOptions } from './text';
 
@@ -175,26 +174,14 @@ export async function runReport(
   const labels = stringList('labels', options.labels);
   const expect = oneOf('expect', options.expect, IMPACT_LEVELS);
   if (options.now !== undefined && !(options.now instanceof Date)) throw usage('now must be a Date');
-  const { root, loaded, logger } = session;
+  const { root } = session;
   const notes: string[] = [];
   const impact = impactFor(session, command, options, expect, labels);
   if (impact && 'skip' in impact) {
     notes.push(`impact: skipped (${impact.skip})`);
     if (hooks.impactSkipped?.(impact.skip)) return undefined;
   }
-  const registry = await loadRegistry(session);
-  const result: AnalysisResult = attempt(() =>
-    analyze({
-      root,
-      config: loaded.config,
-      ...(loaded.file ? { configFile: loaded.file } : {}),
-      ...(loaded.text !== undefined ? { configText: loaded.text } : {}),
-      ...(loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {}),
-      logger,
-      registry,
-      ...commandOptions(command, options, paths, only, impact),
-    }),
-  );
+  const result = await analyzeSession(session, commandOptions(command, options, paths, only, impact));
   const baseline = impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : [];
   notes.push(...baseline);
   hooks.analyzed?.(baseline);

@@ -5,6 +5,9 @@
 import { resolve } from 'node:path';
 import { createLogger, type Logger, type LogLevel, type LogSink, silentLogger } from '@ciatlas/core';
 import {
+  type AnalysisResult,
+  type AnalyzeOptions,
+  analyze,
   createRegistry,
   type LoadedConfig,
   loadConfig,
@@ -112,4 +115,25 @@ export async function loadRegistry(session: Session): Promise<RuleRegistry> {
       await loadPlugins(root, { ...loaded.config, plugins: plugins.extra }, registry, logger);
   }, true);
   return registry;
+}
+
+/** Analyzes the session's root with its config, logger and the plugins it loads, and `options` on top. */
+export async function analyzeSession(
+  session: Session,
+  options: Partial<AnalyzeOptions>,
+): Promise<AnalysisResult> {
+  const { root, loaded, logger } = session;
+  const registry = await loadRegistry(session);
+  return attempt(() =>
+    analyze({
+      root,
+      config: loaded.config,
+      ...(loaded.file ? { configFile: loaded.file } : {}),
+      ...(loaded.text !== undefined ? { configText: loaded.text } : {}),
+      ...(loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {}),
+      logger,
+      registry,
+      ...options,
+    }),
+  );
 }
