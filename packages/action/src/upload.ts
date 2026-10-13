@@ -90,37 +90,77 @@ const UNREACHABLE = new Set(['ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUS
 /** A twirp failure that is not retried. */
 class Final extends Error {}
 
+/** A twirp request that did not succeed: why, and how long the service asked to wait before the next attempt. */
+interface TwirpFailure {
+  failure: string;
+  delay: number | undefined;
+}
+
+/** The wait a 429 reply asks for in its Retry-After header (whole seconds), in ms. */
+function retryAfterDelay(status: number, header: string | string[] | undefined): number | undefined {
+  const retryAfter = String(header ?? '').trim();
+  return status === 429 && /^\d+$/.test(retryAfter) && Number(retryAfter) > 0
+    ? Number(retryAfter) * 1000
+    : undefined;
+}
+
+/** Why the service refused a request; throws when that is not retried (quota hit, or a status not retried). */
+function replyFailure(
+  method: string,
+  status: number,
+  statusMessage: string | undefined,
+  reply: { msg?: string },
+) {
+  if (reply.msg?.includes('insufficient usage'))
+    throw new Final('Artifact storage quota has been hit. Unable to upload any new artifacts');
+  const failure = `(${status}) ${statusMessage}${reply.msg ? `: ${reply.msg}` : ''}`;
+  if (!RETRY_STATUS.has(status)) throw new Final(`Failed to ${method}: ${failure}`);
+  return failure;
+}
+
+/** Why a request got no reply, or one that is not JSON: retried, unless the service is out of reach. */
+function requestFailure(method: string, err: unknown): string {
+  const code = (err as NodeJS.ErrnoException).code;
+  if (code && UNREACHABLE.has(code)) throw new Error(`Failed to ${method}: unable to make request: ${code}`);
+  return (err as Error).message;
+}
+
+/** One twirp request: the reply, or a failure to retry; throws when it is not retried. */
+async function twirpAttempt<T>(
+  http: HttpClient,
+  url: string,
+  method: string,
+  body: object,
+): Promise<{ reply: T } | TwirpFailure> {
+  let delay: number | undefined;
+  try {
+    const res = await http.post(url, JSON.stringify(body), { 'Content-Type': 'application/json' });
+    const status = res.message.statusCode ?? 0;
+    delay = retryAfterDelay(status, res.message.headers['retry-after']);
+    const reply = JSON.parse(await res.readBody()) as T & { msg?: string };
+    if (status >= 200 && status < 300) return { reply };
+    return { failure: replyFailure(method, status, res.message.statusMessage, reply), delay };
+  } catch (err) {
+    if (err instanceof Final) throw err;
+    return { failure: requestFailure(method, err), delay };
+  }
+}
+
+/** The library's wait before attempt `attempt + 1`: 8 s, growing by 1.5x, with jitter after the first. */
+function backoff(attempt: number): number {
+  const min = 8000 * 1.5 ** (attempt - 1);
+  return attempt === 1 ? min : Math.trunc(min + Math.random() * min * 0.5);
+}
+
 async function twirp<T>(http: HttpClient, base: string, method: string, body: object): Promise<T> {
   const url = new URL(`/twirp/${SERVICE}/${method}`, base).href;
   let waited = 0;
   for (let attempt = 1; ; attempt++) {
-    let failure: string;
-    let delay: number | undefined;
-    try {
-      const res = await http.post(url, JSON.stringify(body), { 'Content-Type': 'application/json' });
-      const status = res.message.statusCode ?? 0;
-      const retryAfter = String(res.message.headers['retry-after'] ?? '').trim();
-      if (status === 429 && /^\d+$/.test(retryAfter) && Number(retryAfter) > 0)
-        delay = Number(retryAfter) * 1000;
-      const reply = JSON.parse(await res.readBody()) as T & { msg?: string };
-      if (status >= 200 && status < 300) return reply;
-      if (reply.msg?.includes('insufficient usage'))
-        throw new Final('Artifact storage quota has been hit. Unable to upload any new artifacts');
-      failure = `(${status}) ${res.message.statusMessage}${reply.msg ? `: ${reply.msg}` : ''}`;
-      if (!RETRY_STATUS.has(status)) throw new Final(`Failed to ${method}: ${failure}`);
-    } catch (err) {
-      if (err instanceof Final) throw err;
-      // No reply, or one that is not JSON: retried, unless the service is out of reach.
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code && UNREACHABLE.has(code))
-        throw new Error(`Failed to ${method}: unable to make request: ${code}`);
-      failure = (err as Error).message;
-    }
+    const outcome = await twirpAttempt<T>(http, url, method, body);
+    if ('reply' in outcome) return outcome.reply;
+    const { failure } = outcome;
     if (attempt === 5) throw new Error(`Failed to ${method} after 5 attempts: ${failure}`);
-    if (delay === undefined) {
-      const min = 8000 * 1.5 ** (attempt - 1);
-      delay = attempt === 1 ? min : Math.trunc(min + Math.random() * min * 0.5);
-    }
+    const delay = outcome.delay ?? backoff(attempt);
     if (waited + delay > 120_000) throw new Error(`Failed to ${method}: ${failure}`);
     core.info(`${method} attempt ${attempt} of 5 failed: ${failure}. Retrying in ${delay} ms`);
     await retryWait.sleep(delay);
@@ -148,6 +188,53 @@ const BLOB_RETRY_ERRORS = [
 const stallTimeout = () =>
   Number.parseInt(process.env.ACTIONS_ARTIFACT_UPLOAD_TIMEOUT_MS ?? '', 10) || 300_000;
 
+/** A blob request that did not succeed: why, and whether the Azure client would try again. */
+interface BlobFailure {
+  failure: string;
+  retryable: boolean;
+}
+
+/** Why a blob request threw: a stalled upload (not retried), or an error the Azure client retries or not. */
+function blobError(e: NodeJS.ErrnoException, redact: (s: string) => string): BlobFailure {
+  // http-client's socket timeout: "Request timeout: <path and the signed query>".
+  const stalled = e.message.startsWith('Request timeout');
+  const failure = stalled
+    ? `upload stalled: no progress in ${stallTimeout()} ms (${redact(e.message)})`
+    : redact(e.message);
+  const retryable =
+    !stalled && BLOB_RETRY_ERRORS.some((c) => e.code === c || e.message.toUpperCase().includes(c));
+  return { failure, retryable };
+}
+
+/** One try of a blob request: nothing when the blob service accepted it, else why not. */
+async function blobAttempt(
+  http: HttpClient,
+  url: string,
+  body: Buffer,
+  headers: Record<string, string>,
+  redact: (s: string) => string,
+): Promise<BlobFailure | undefined> {
+  try {
+    const res = await http.request('PUT', url, Readable.from([body]), {
+      ...headers,
+      'Content-Length': String(body.length),
+      'x-ms-version': BLOB_VERSION,
+      'x-ms-client-request-id': randomUUID(),
+      Accept: 'application/xml',
+    });
+    const reply = await res.readBody();
+    const status = res.message.statusCode ?? 0;
+    if (status === 201) return undefined;
+    const code = /<Code>([^<]*)<\/Code>/.exec(reply)?.[1];
+    return {
+      failure: `(${status}) ${code ?? res.message.statusMessage}`,
+      retryable: status === 500 || status === 503,
+    };
+  } catch (err) {
+    return blobError(err as NodeJS.ErrnoException, redact);
+  }
+}
+
 /** One request to the signed blob URL; 4 tries, waiting 0, 4 and 12 seconds, like the Azure client. */
 async function blobRequest(
   http: HttpClient,
@@ -159,35 +246,11 @@ async function blobRequest(
 ): Promise<void> {
   const redact = (s: string) => secrets.reduce((out, secret) => out.replaceAll(secret, '***'), s);
   for (let attempt = 1; ; attempt++) {
-    let failure: string;
-    let retryable: boolean;
-    try {
-      const res = await http.request('PUT', url, Readable.from([body]), {
-        ...headers,
-        'Content-Length': String(body.length),
-        'x-ms-version': BLOB_VERSION,
-        'x-ms-client-request-id': randomUUID(),
-        Accept: 'application/xml',
-      });
-      const reply = await res.readBody();
-      const status = res.message.statusCode ?? 0;
-      if (status === 201) return;
-      const code = /<Code>([^<]*)<\/Code>/.exec(reply)?.[1];
-      failure = `(${status}) ${code ?? res.message.statusMessage}`;
-      retryable = status === 500 || status === 503;
-    } catch (err) {
-      const e = err as NodeJS.ErrnoException;
-      // http-client's socket timeout: "Request timeout: <path and the signed query>".
-      const stalled = e.message.startsWith('Request timeout');
-      failure = stalled
-        ? `upload stalled: no progress in ${stallTimeout()} ms (${redact(e.message)})`
-        : redact(e.message);
-      retryable =
-        !stalled && BLOB_RETRY_ERRORS.some((c) => e.code === c || e.message.toUpperCase().includes(c));
-    }
-    if (!retryable || attempt === 4) throw new Error(`${what} failed: ${failure}`);
+    const failed = await blobAttempt(http, url, body, headers, redact);
+    if (!failed) return;
+    if (!failed.retryable || attempt === 4) throw new Error(`${what} failed: ${failed.failure}`);
     const delay = (2 ** (attempt - 1) - 1) * 4000;
-    core.info(`${what} attempt ${attempt} of 4 failed: ${failure}. Retrying in ${delay} ms`);
+    core.info(`${what} attempt ${attempt} of 4 failed: ${failed.failure}. Retrying in ${delay} ms`);
     await retryWait.sleep(delay);
   }
 }

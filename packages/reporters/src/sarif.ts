@@ -3,6 +3,8 @@ import {
   createRegistry,
   DOCS_BASE_URL,
   type Finding,
+  type RuleDefinition,
+  type RuleRegistry,
   type Severity,
   type SuppressedFinding,
 } from '@flowpact/lint';
@@ -27,6 +29,75 @@ export interface SarifOptions {
   pathPrefix?: string;
 }
 
+/** A rule as the analysis ran it: its code, name and configured severity. */
+type ConfiguredRule = AnalysisResult['rules'][number];
+
+/** A rule's name: its definition's, else the configured one's, else its findings'. */
+function ruleName(
+  code: string,
+  def: RuleDefinition | undefined,
+  configured: ConfiguredRule | undefined,
+  sample: Finding | undefined,
+): string {
+  return def?.name ?? configured?.name ?? sample?.name ?? code;
+}
+
+/** Why a rule matters and how to fix what it reports: from its docs, else from its findings. */
+function ruleAdvice(def: RuleDefinition | undefined, sample: Finding | undefined) {
+  return { why: def?.docs.why ?? sample?.why ?? '', fix: def?.docs.fix ?? sample?.fix ?? '' };
+}
+
+/** A rule's docs page: the registry's, else its findings', else flowpact's docs. */
+function ruleHelpUri(registry: RuleRegistry, def: RuleDefinition | undefined, sample: Finding | undefined) {
+  return def ? registry.docsUrl(def) : (sample?.docsUrl ?? DOCS_BASE_URL);
+}
+
+/** The level a rule reports at: as configured when it is on, else its findings' severity. */
+function ruleSeverity(configured: ConfiguredRule | undefined, sample: Finding | undefined): Severity {
+  return configured && configured.severity !== 'off' ? configured.severity : (sample?.severity ?? 'warning');
+}
+
+/** A rule's category as its tags. */
+function ruleTags(def: RuleDefinition | undefined, sample: Finding | undefined): string[] {
+  const category = def?.category ?? sample?.category;
+  return category ? [category] : [];
+}
+
+/** A rule's help, as text and as Markdown: why, the fix, and its docs. */
+function ruleHelp(why: string, fix: string, helpUri: string) {
+  return {
+    text: [why, fix && `Fix: ${fix}`, `Docs: ${helpUri}`].filter(Boolean).join('\n\n'),
+    markdown: [why && `**Why:** ${why}`, fix && `**Fix:** ${fix}`, `[Documentation](${helpUri})`]
+      .filter(Boolean)
+      .join('\n\n'),
+  };
+}
+
+/** The SARIF descriptor of a rule; `sample` is its first finding, if any. */
+function sarifRule(
+  code: string,
+  result: AnalysisResult,
+  registry: RuleRegistry,
+  sample: Finding | undefined,
+): SarifRule {
+  const configured = result.rules.find((r) => r.code === code);
+  const def = registry.get(code);
+  const name = ruleName(code, def, configured, sample);
+  const { why, fix } = ruleAdvice(def, sample);
+  const summary = def?.docs.summary ?? why ?? name;
+  const helpUri = ruleHelpUri(registry, def, sample);
+  return {
+    id: code,
+    name,
+    shortDescription: { text: summary || name },
+    ...(why ? { fullDescription: { text: why } } : {}),
+    helpUri,
+    help: ruleHelp(why, fix, helpUri),
+    defaultConfiguration: { level: LEVEL[ruleSeverity(configured, sample)] },
+    properties: { tags: ruleTags(def, sample) },
+  };
+}
+
 /** SARIF 2.1.0 for GitHub code scanning and other SARIF viewers. */
 export function renderSarif(result: AnalysisResult, opts: SarifOptions = {}): string {
   const registry = createRegistry();
@@ -42,34 +113,7 @@ export function renderSarif(result: AnalysisResult, opts: SarifOptions = {}): st
   for (const code of firstFinding.keys()) if (!codes.includes(code)) codes.push(code);
   codes.sort();
 
-  const rules: SarifRule[] = codes.map((code) => {
-    const configured = result.rules.find((r) => r.code === code);
-    const def = registry.get(code);
-    const sample = firstFinding.get(code);
-    const name = def?.name ?? configured?.name ?? sample?.name ?? code;
-    const why = def?.docs.why ?? sample?.why ?? '';
-    const fix = def?.docs.fix ?? sample?.fix ?? '';
-    const summary = def?.docs.summary ?? why ?? name;
-    const helpUri = def ? registry.docsUrl(def) : (sample?.docsUrl ?? DOCS_BASE_URL);
-    const severity =
-      configured && configured.severity !== 'off' ? configured.severity : (sample?.severity ?? 'warning');
-    const category = def?.category ?? sample?.category;
-    return {
-      id: code,
-      name,
-      shortDescription: { text: summary || name },
-      ...(why ? { fullDescription: { text: why } } : {}),
-      helpUri,
-      help: {
-        text: [why, fix && `Fix: ${fix}`, `Docs: ${helpUri}`].filter(Boolean).join('\n\n'),
-        markdown: [why && `**Why:** ${why}`, fix && `**Fix:** ${fix}`, `[Documentation](${helpUri})`]
-          .filter(Boolean)
-          .join('\n\n'),
-      },
-      defaultConfiguration: { level: LEVEL[severity] },
-      properties: { tags: category ? [category] : [] },
-    };
-  });
+  const rules = codes.map((code) => sarifRule(code, result, registry, firstFinding.get(code)));
   const ruleIndex = new Map(rules.map((r, i) => [r.id, i]));
 
   const results = all.map((f) => ({

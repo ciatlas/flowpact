@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { neutralizeWorkflowCommands } from '@ciatlas/core';
 import {
   type AnalysisResult,
+  type AnalyzeOptions,
   analyze,
   contractPatch,
   exitCodeFor,
@@ -118,6 +119,47 @@ function setupImpact(session: Session, flags: ImpactFlags): PreparedImpact {
   );
 }
 
+/** Impact mode's baseline and declaration, when the command or `--impact` asks for impact mode. */
+function impactFor(
+  session: Session,
+  command: ReportCommand,
+  options: ReportOptions,
+  expect: ImpactLevel | undefined,
+  labels: string[] | undefined,
+): PreparedImpact | undefined {
+  if (command !== 'impact' && !bool('impact', options.impact)) return undefined;
+  return setupImpact(session, {
+    ...(options.base !== undefined ? { base: options.base } : {}),
+    ...(expect ? { expect } : {}),
+    ...(options.title !== undefined ? { title: options.title } : {}),
+    ...(labels ? { labels } : {}),
+  });
+}
+
+/** The rules to run: as `--only` says; impact mode alone runs the impact rules. */
+function onlyRules(command: ReportCommand, only: string[] | undefined): { only?: string[] } {
+  if (command === 'impact' && !only) return { only: [...IMPACT_CODES] };
+  return only ? { only } : {};
+}
+
+/** What analyze() runs with for `command`, besides the session's root, config, logger and rules. */
+function commandOptions(
+  command: ReportCommand,
+  options: ReportOptions,
+  paths: string[],
+  only: string[] | undefined,
+  impact: PreparedImpact | undefined,
+): Partial<AnalyzeOptions> {
+  return {
+    ...(options.now ? { now: options.now } : {}),
+    paths: command === 'impact' ? [] : paths,
+    validateSchema: command === 'impact' ? false : bool('schema', options.schema) !== false,
+    checkContracts: command === 'check',
+    ...onlyRules(command, only),
+    ...(impact && 'options' in impact ? { impact: impact.options } : {}),
+  };
+}
+
 /** Runs `lint`, `check` or `impact`; undefined only when a hook stopped it. */
 export async function runReport(
   session: Session,
@@ -133,18 +175,10 @@ export async function runReport(
   if (options.now !== undefined && !(options.now instanceof Date)) throw usage('now must be a Date');
   const { root, loaded, logger } = session;
   const notes: string[] = [];
-  let impact: PreparedImpact | undefined;
-  if (command === 'impact' || bool('impact', options.impact)) {
-    impact = setupImpact(session, {
-      ...(options.base !== undefined ? { base: options.base } : {}),
-      ...(expect ? { expect } : {}),
-      ...(options.title !== undefined ? { title: options.title } : {}),
-      ...(labels ? { labels } : {}),
-    });
-    if ('skip' in impact) {
-      notes.push(`impact: skipped (${impact.skip})`);
-      if (hooks.impactSkipped?.(impact.skip)) return undefined;
-    }
+  const impact = impactFor(session, command, options, expect, labels);
+  if (impact && 'skip' in impact) {
+    notes.push(`impact: skipped (${impact.skip})`);
+    if (hooks.impactSkipped?.(impact.skip)) return undefined;
   }
   const registry = await loadRegistry(session);
   const result: AnalysisResult = attempt(() =>
@@ -156,12 +190,7 @@ export async function runReport(
       ...(loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {}),
       logger,
       registry,
-      ...(options.now ? { now: options.now } : {}),
-      paths: command === 'impact' ? [] : paths,
-      validateSchema: command === 'impact' ? false : bool('schema', options.schema) !== false,
-      checkContracts: command === 'check',
-      ...(command === 'impact' && !only ? { only: [...IMPACT_CODES] } : only ? { only } : {}),
-      ...(impact && 'options' in impact ? { impact: impact.options } : {}),
+      ...commandOptions(command, options, paths, only, impact),
     }),
   );
   const baseline = impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : [];

@@ -6,6 +6,7 @@ import {
   trimChar,
   type UnitDecl,
   type UsesRef,
+  type WorkflowDecl,
 } from '@ciatlas/core';
 import { createTheme, finalize, type RenderOptions, safe, type Theme } from './theme';
 
@@ -57,92 +58,147 @@ function staticMatrixSize(job: JobDecl): number | undefined {
   return exp.exact && !exp.dynamic && !exp.truncated ? exp.combos.length : undefined;
 }
 
-/** Builds the call graph of the analyzed repository. Ordering is deterministic (by path, then declaration). */
-export function buildCallGraph(index: ProjectIndex): CallGraph {
-  const { project } = index;
-  const nodes = new Map<string, CallGraphNode>();
-  const edges: CallGraphEdge[] = [];
-  // Paths that do not exist (an action in the repository but outside the workspace is still drawn as itself).
+/** The call graph while it is built, and what the project says about the calls it cannot follow. */
+interface GraphBuild {
+  index: ProjectIndex;
+  nodes: Map<string, CallGraphNode>;
+  edges: CallGraphEdge[];
+  /** Paths that do not exist (an action in the repository but outside the workspace is still drawn as itself). */
+  missingTargets: Set<string>;
+  /** `<workflow>#<job>` of the job-level calls to a file outside `.github/workflows`. */
+  invalidCalls: Set<string>;
+}
+
+/** What a job's call edge says besides where it goes: its matrix size and `secrets: inherit`. */
+type CallExtra = Pick<CallGraphEdge, 'matrix' | 'inherits'>;
+
+/** The targets of `uses:` that do not exist; one in the repository but outside the workspace is drawn as itself. */
+function missingTargetsOf(project: ProjectIndex['project']): Set<string> {
   const missingTargets = new Set<string>();
   for (const m of project.missing) {
     const target = m.target ?? m.uses.target;
     if (target !== undefined && !m.inRepository) missingTargets.add(target);
   }
-  const invalidCalls = new Set((project.invalidTargets ?? []).map((m) => `${m.from}#${m.job ?? ''}`));
+  return missingTargets;
+}
+
+/** The node of a `uses:` whose target does not exist, added on first use; undefined when the target exists. */
+function missingNode(g: GraphBuild, uses: UsesRef): string | undefined {
+  if (!uses.target || !g.missingTargets.has(uses.target)) return undefined;
+  if (!g.nodes.has(uses.target))
+    g.nodes.set(uses.target, { id: uses.target, kind: 'missing', label: uses.raw });
+  return uses.target;
+}
+
+/** The steps of a job, or of an action when there is no job. */
+function stepsOf(unit: UnitDecl, job: JobDecl | undefined) {
+  return job ? job.steps : unit.kind === 'action' ? unit.steps : [];
+}
+
+/** An edge for each step of `job` (or of the action `unit`) that uses a local action. */
+function stepEdges(g: GraphBuild, unit: UnitDecl, job: JobDecl | undefined, matrix: number | undefined) {
+  for (const step of stepsOf(unit, job)) {
+    if (step.uses?.kind !== 'local-action') continue;
+    const to = g.index.actionOf(step)?.path ?? missingNode(g, step.uses);
+    if (!to) continue;
+    const via = job ? `jobs.${job.id} › steps[${step.index}]` : `steps[${step.index}]`;
+    g.edges.push({ from: unit.path, to, via, kind: 'uses', ...(matrix !== undefined ? { matrix } : {}) });
+  }
+}
+
+/** A job-level call to a file outside .github/workflows: drawn, so the graph shows every call. */
+function invalidCallNode(g: GraphBuild, uses: UsesRef): string {
+  const to = uses.target ?? uses.raw;
+  if (!g.nodes.has(to) || g.nodes.get(to)!.kind === 'missing')
+    g.nodes.set(to, { id: to, kind: 'invalid', label: uses.raw });
+  return to;
+}
+
+/**
+ * The workflow a job calls in this repository. A call to a workflow that is not reusable gets its edge here, marked so,
+ * and undefined is returned.
+ */
+function localCallTarget(
+  g: GraphBuild,
+  wf: WorkflowDecl,
+  job: JobDecl,
+  uses: UsesRef,
+  extra: CallExtra,
+): string | undefined {
+  const callee = g.index.calleeOf(job);
+  const target = callee ? undefined : g.index.targetOf(job);
+  if (!target) return callee?.path ?? missingNode(g, uses);
+  g.edges.push({
+    from: wf.path,
+    to: target.path,
+    via: `jobs.${job.id}`,
+    kind: 'calls',
+    ...extra,
+    notReusable: true,
+  });
+  return undefined;
+}
+
+/** The node of a reusable workflow in another repository, added on first use. */
+function remoteNode(g: GraphBuild, uses: UsesRef): string {
+  const to = sym.remote(uses.raw);
+  if (!g.nodes.has(to)) g.nodes.set(to, { id: to, kind: 'remote', label: uses.raw });
+  return to;
+}
+
+/** The node a job-level `uses:` calls, adding it when needed; undefined when no `calls` edge is drawn for it. */
+function callTarget(g: GraphBuild, wf: WorkflowDecl, job: JobDecl, uses: UsesRef, extra: CallExtra) {
+  if (uses.kind === 'local-workflow' && g.invalidCalls.has(`${wf.path}#${job.id}`))
+    return invalidCallNode(g, uses);
+  if (uses.kind === 'local-workflow') return localCallTarget(g, wf, job, uses, extra);
+  if (uses.kind === 'remote-workflow') return remoteNode(g, uses);
+  return undefined;
+}
+
+/** The edges of a workflow's job: the workflow it calls, then the local actions its steps use. */
+function jobEdges(g: GraphBuild, wf: WorkflowDecl, job: JobDecl) {
+  const matrix = staticMatrixSize(job);
+  const extra: CallExtra = {
+    ...(matrix !== undefined ? { matrix } : {}),
+    ...(job.secretsInherit ? { inherits: true } : {}),
+  };
+  if (job.uses) {
+    const to = callTarget(g, wf, job, job.uses, extra);
+    if (to) g.edges.push({ from: wf.path, to, via: `jobs.${job.id}`, kind: 'calls', ...extra });
+  }
+  stepEdges(g, wf, job, matrix);
+}
+
+/** Builds the call graph of the analyzed repository. Ordering is deterministic (by path, then declaration). */
+export function buildCallGraph(index: ProjectIndex): CallGraph {
+  const { project } = index;
+  const g: GraphBuild = {
+    index,
+    nodes: new Map(),
+    edges: [],
+    missingTargets: missingTargetsOf(project),
+    invalidCalls: new Set((project.invalidTargets ?? []).map((m) => `${m.from}#${m.job ?? ''}`)),
+  };
 
   const workflows = [...project.workflows.values()].sort((a, b) => a.path.localeCompare(b.path));
   const actions = [...project.actions.values()].sort((a, b) => a.path.localeCompare(b.path));
   for (const wf of workflows)
-    nodes.set(wf.path, {
+    g.nodes.set(wf.path, {
       id: wf.path,
       kind: 'workflow',
       label: wf.name ?? wf.path,
       triggers: [...wf.triggers],
     });
-  for (const a of actions) nodes.set(a.path, { id: a.path, kind: 'action', label: a.name ?? a.path });
+  for (const a of actions) g.nodes.set(a.path, { id: a.path, kind: 'action', label: a.name ?? a.path });
 
-  const missingNode = (uses: UsesRef): string | undefined => {
-    if (!uses.target || !missingTargets.has(uses.target)) return undefined;
-    if (!nodes.has(uses.target))
-      nodes.set(uses.target, { id: uses.target, kind: 'missing', label: uses.raw });
-    return uses.target;
-  };
-
-  const stepEdges = (unit: UnitDecl, job: JobDecl | undefined, matrix: number | undefined) => {
-    for (const step of job ? job.steps : unit.kind === 'action' ? unit.steps : []) {
-      if (step.uses?.kind !== 'local-action') continue;
-      const to = index.actionOf(step)?.path ?? missingNode(step.uses);
-      if (!to) continue;
-      const via = job ? `jobs.${job.id} › steps[${step.index}]` : `steps[${step.index}]`;
-      edges.push({ from: unit.path, to, via, kind: 'uses', ...(matrix !== undefined ? { matrix } : {}) });
-    }
-  };
-
-  for (const wf of workflows) {
-    for (const job of Object.values(wf.jobs)) {
-      const matrix = staticMatrixSize(job);
-      const extra = {
-        ...(matrix !== undefined ? { matrix } : {}),
-        ...(job.secretsInherit ? { inherits: true } : {}),
-      };
-      if (job.uses) {
-        let to: string | undefined;
-        if (job.uses.kind === 'local-workflow' && invalidCalls.has(`${wf.path}#${job.id}`)) {
-          // A job-level call to a file outside .github/workflows: drawn, so the graph shows every call.
-          to = job.uses.target ?? job.uses.raw;
-          if (!nodes.has(to) || nodes.get(to)!.kind === 'missing')
-            nodes.set(to, { id: to, kind: 'invalid', label: job.uses.raw });
-        } else if (job.uses.kind === 'local-workflow') {
-          const callee = index.calleeOf(job);
-          const target = callee ? undefined : index.targetOf(job);
-          to = callee?.path ?? target?.path ?? missingNode(job.uses);
-          if (target) {
-            edges.push({
-              from: wf.path,
-              to: target.path,
-              via: `jobs.${job.id}`,
-              kind: 'calls',
-              ...extra,
-              notReusable: true,
-            });
-            to = undefined;
-          }
-        } else if (job.uses.kind === 'remote-workflow') {
-          to = sym.remote(job.uses.raw);
-          if (!nodes.has(to)) nodes.set(to, { id: to, kind: 'remote', label: job.uses.raw });
-        }
-        if (to) edges.push({ from: wf.path, to, via: `jobs.${job.id}`, kind: 'calls', ...extra });
-      }
-      stepEdges(wf, job, matrix);
-    }
-  }
-  for (const a of actions) stepEdges(a, undefined, undefined);
+  for (const wf of workflows) for (const job of Object.values(wf.jobs)) jobEdges(g, wf, job);
+  for (const a of actions) stepEdges(g, a, undefined, undefined);
 
   return {
-    nodes: [...nodes.values()].sort(
+    nodes: [...g.nodes.values()].sort(
       (a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.id.localeCompare(b.id),
     ),
-    edges,
+    edges: g.edges,
   };
 }
 
@@ -249,16 +305,21 @@ export function renderDot(graph: CallGraph, opts: DotOptions = {}): string {
   return `${lines.join('\n')}\n`;
 }
 
+/** A workflow in the tree: its name, its path when that differs, and its triggers where it is a root. */
+function workflowLabel(t: Theme, n: CallGraphNode, root: boolean): string {
+  const { c } = t;
+  const path = n.label !== n.id ? ` ${c.dim(`(${n.id})`)}` : '';
+  const on = root && n.triggers?.length ? ` ${c.dim(`${t.sym.dot} on: ${n.triggers.join(', ')}`)}` : '';
+  return `${c.bold(c.cyan(n.label))}${path}${on}`;
+}
+
 function treeLabel(t: Theme, raw: CallGraphNode, root: boolean): string {
   const { c } = t;
   // Workflow names come from YAML; never let them carry escape sequences to the terminal.
   const n = { ...raw, label: safe(raw.label), id: safe(raw.id) };
   switch (n.kind) {
-    case 'workflow': {
-      const path = n.label !== n.id ? ` ${c.dim(`(${n.id})`)}` : '';
-      const on = root && n.triggers?.length ? ` ${c.dim(`${t.sym.dot} on: ${n.triggers.join(', ')}`)}` : '';
-      return `${c.bold(c.cyan(n.label))}${path}${on}`;
-    }
+    case 'workflow':
+      return workflowLabel(t, n, root);
     case 'action':
       return `${c.bold(c.magenta(n.label))} ${c.dim(n.label !== n.id ? `(action ${n.id})` : '(action)')}`;
     case 'remote':
@@ -285,6 +346,13 @@ export function renderGraphTree(graph: CallGraph, opts: RenderOptions): string {
   const out: string[] = [];
   const expanded = new Set<string>();
 
+  // Why a node is not expanded again where an edge reaches it: it is on the path (a cycle), or was expanded above.
+  const markOf = (to: string, path: string[]) => {
+    if (path.includes(to)) return ` ${c.yellow(a ? '(cycle)' : '↻ cycle')}`;
+    if (expanded.has(to) && outgoing.has(to)) return ` ${c.dim('(see above)')}`;
+    return '';
+  };
+
   const walk = (id: string, prefix: string, path: string[]) => {
     expanded.add(id);
     const edges = outgoing.get(id) ?? [];
@@ -293,9 +361,7 @@ export function renderGraphTree(graph: CallGraph, opts: RenderOptions): string {
       const target = byId.get(e.to);
       if (!target) return;
       const via = e.kind === 'uses' ? c.dim(`${edgeLabel(e, a)} uses`) : c.dim(edgeLabel(e, a));
-      let mark = '';
-      if (path.includes(e.to)) mark = ` ${c.yellow(a ? '(cycle)' : '↻ cycle')}`;
-      else if (expanded.has(e.to) && outgoing.has(e.to)) mark = ` ${c.dim('(see above)')}`;
+      const mark = markOf(e.to, path);
       out.push(
         `${prefix}${c.dim(last ? g.elbow : g.tee)}${via} ${c.dim(t.sym.arrow)} ${treeLabel(t, target, false)}${mark}`,
       );

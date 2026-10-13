@@ -25098,84 +25098,102 @@ function staticMatrixSize(job) {
   const exp = expandMatrix(job.matrix);
   return exp.exact && !exp.dynamic && !exp.truncated ? exp.combos.length : void 0;
 }
-function buildCallGraph(index) {
-  const { project } = index;
-  const nodes = /* @__PURE__ */ new Map();
-  const edges = [];
+function missingTargetsOf(project) {
   const missingTargets = /* @__PURE__ */ new Set();
   for (const m of project.missing) {
     const target = m.target ?? m.uses.target;
     if (target !== void 0 && !m.inRepository) missingTargets.add(target);
   }
-  const invalidCalls = new Set((project.invalidTargets ?? []).map((m) => `${m.from}#${m.job ?? ""}`));
+  return missingTargets;
+}
+function missingNode(g, uses) {
+  if (!uses.target || !g.missingTargets.has(uses.target)) return void 0;
+  if (!g.nodes.has(uses.target))
+    g.nodes.set(uses.target, { id: uses.target, kind: "missing", label: uses.raw });
+  return uses.target;
+}
+function stepsOf(unit, job) {
+  return job ? job.steps : unit.kind === "action" ? unit.steps : [];
+}
+function stepEdges(g, unit, job, matrix2) {
+  for (const step of stepsOf(unit, job)) {
+    if (step.uses?.kind !== "local-action") continue;
+    const to = g.index.actionOf(step)?.path ?? missingNode(g, step.uses);
+    if (!to) continue;
+    const via = job ? `jobs.${job.id} \u203A steps[${step.index}]` : `steps[${step.index}]`;
+    g.edges.push({ from: unit.path, to, via, kind: "uses", ...matrix2 !== void 0 ? { matrix: matrix2 } : {} });
+  }
+}
+function invalidCallNode(g, uses) {
+  const to = uses.target ?? uses.raw;
+  if (!g.nodes.has(to) || g.nodes.get(to).kind === "missing")
+    g.nodes.set(to, { id: to, kind: "invalid", label: uses.raw });
+  return to;
+}
+function localCallTarget(g, wf, job, uses, extra) {
+  const callee = g.index.calleeOf(job);
+  const target = callee ? void 0 : g.index.targetOf(job);
+  if (!target) return callee?.path ?? missingNode(g, uses);
+  g.edges.push({
+    from: wf.path,
+    to: target.path,
+    via: `jobs.${job.id}`,
+    kind: "calls",
+    ...extra,
+    notReusable: true
+  });
+  return void 0;
+}
+function remoteNode(g, uses) {
+  const to = sym.remote(uses.raw);
+  if (!g.nodes.has(to)) g.nodes.set(to, { id: to, kind: "remote", label: uses.raw });
+  return to;
+}
+function callTarget(g, wf, job, uses, extra) {
+  if (uses.kind === "local-workflow" && g.invalidCalls.has(`${wf.path}#${job.id}`))
+    return invalidCallNode(g, uses);
+  if (uses.kind === "local-workflow") return localCallTarget(g, wf, job, uses, extra);
+  if (uses.kind === "remote-workflow") return remoteNode(g, uses);
+  return void 0;
+}
+function jobEdges(g, wf, job) {
+  const matrix2 = staticMatrixSize(job);
+  const extra = {
+    ...matrix2 !== void 0 ? { matrix: matrix2 } : {},
+    ...job.secretsInherit ? { inherits: true } : {}
+  };
+  if (job.uses) {
+    const to = callTarget(g, wf, job, job.uses, extra);
+    if (to) g.edges.push({ from: wf.path, to, via: `jobs.${job.id}`, kind: "calls", ...extra });
+  }
+  stepEdges(g, wf, job, matrix2);
+}
+function buildCallGraph(index) {
+  const { project } = index;
+  const g = {
+    index,
+    nodes: /* @__PURE__ */ new Map(),
+    edges: [],
+    missingTargets: missingTargetsOf(project),
+    invalidCalls: new Set((project.invalidTargets ?? []).map((m) => `${m.from}#${m.job ?? ""}`))
+  };
   const workflows = [...project.workflows.values()].sort((a, b) => a.path.localeCompare(b.path));
   const actions = [...project.actions.values()].sort((a, b) => a.path.localeCompare(b.path));
   for (const wf of workflows)
-    nodes.set(wf.path, {
+    g.nodes.set(wf.path, {
       id: wf.path,
       kind: "workflow",
       label: wf.name ?? wf.path,
       triggers: [...wf.triggers]
     });
-  for (const a of actions) nodes.set(a.path, { id: a.path, kind: "action", label: a.name ?? a.path });
-  const missingNode = (uses) => {
-    if (!uses.target || !missingTargets.has(uses.target)) return void 0;
-    if (!nodes.has(uses.target))
-      nodes.set(uses.target, { id: uses.target, kind: "missing", label: uses.raw });
-    return uses.target;
-  };
-  const stepEdges = (unit, job, matrix2) => {
-    for (const step of job ? job.steps : unit.kind === "action" ? unit.steps : []) {
-      if (step.uses?.kind !== "local-action") continue;
-      const to = index.actionOf(step)?.path ?? missingNode(step.uses);
-      if (!to) continue;
-      const via = job ? `jobs.${job.id} \u203A steps[${step.index}]` : `steps[${step.index}]`;
-      edges.push({ from: unit.path, to, via, kind: "uses", ...matrix2 !== void 0 ? { matrix: matrix2 } : {} });
-    }
-  };
-  for (const wf of workflows) {
-    for (const job of Object.values(wf.jobs)) {
-      const matrix2 = staticMatrixSize(job);
-      const extra = {
-        ...matrix2 !== void 0 ? { matrix: matrix2 } : {},
-        ...job.secretsInherit ? { inherits: true } : {}
-      };
-      if (job.uses) {
-        let to;
-        if (job.uses.kind === "local-workflow" && invalidCalls.has(`${wf.path}#${job.id}`)) {
-          to = job.uses.target ?? job.uses.raw;
-          if (!nodes.has(to) || nodes.get(to).kind === "missing")
-            nodes.set(to, { id: to, kind: "invalid", label: job.uses.raw });
-        } else if (job.uses.kind === "local-workflow") {
-          const callee = index.calleeOf(job);
-          const target = callee ? void 0 : index.targetOf(job);
-          to = callee?.path ?? target?.path ?? missingNode(job.uses);
-          if (target) {
-            edges.push({
-              from: wf.path,
-              to: target.path,
-              via: `jobs.${job.id}`,
-              kind: "calls",
-              ...extra,
-              notReusable: true
-            });
-            to = void 0;
-          }
-        } else if (job.uses.kind === "remote-workflow") {
-          to = sym.remote(job.uses.raw);
-          if (!nodes.has(to)) nodes.set(to, { id: to, kind: "remote", label: job.uses.raw });
-        }
-        if (to) edges.push({ from: wf.path, to, via: `jobs.${job.id}`, kind: "calls", ...extra });
-      }
-      stepEdges(wf, job, matrix2);
-    }
-  }
-  for (const a of actions) stepEdges(a, void 0, void 0);
+  for (const a of actions) g.nodes.set(a.path, { id: a.path, kind: "action", label: a.name ?? a.path });
+  for (const wf of workflows) for (const job of Object.values(wf.jobs)) jobEdges(g, wf, job);
+  for (const a of actions) stepEdges(g, a, void 0, void 0);
   return {
-    nodes: [...nodes.values()].sort(
+    nodes: [...g.nodes.values()].sort(
       (a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.id.localeCompare(b.id)
     ),
-    edges
+    edges: g.edges
   };
 }
 function edgeLabel(e, ascii = false) {
@@ -25442,68 +25460,68 @@ function renderFinding(f, opts) {
   out.push("</details>");
   return out;
 }
-function renderContracts(plan, opts) {
-  const out = ["### Contracts", ""];
-  const k = plan.counts;
-  if (!plan.drift) {
-    out.push(`\u2705 Contracts are up to date (${plural(plan.entries.length, "file")}).`);
-    return out;
-  }
-  out.push(
-    `${plan.breaking ? "\u274C" : "\u26A0\uFE0F"} Contracts drifted: ${k.create} new \xB7 ${k.update} changed \xB7 ${k.delete} removed \xB7 ${k.unchanged} unchanged${plan.breaking ? ` \u2014 **${plural(plan.breaking, "breaking change")}**` : ""}`
-  );
-  out.push("");
-  out.push("| File | Status | Breaking |");
-  out.push("| --- | --- | ---: |");
-  const limit = Math.max(1, opts.maxFindings ?? 50);
-  const allChanged = plan.entries.filter((e) => e.status !== "unchanged");
-  const changed = allChanged.slice(0, limit);
+function contractRows(changed) {
+  const out = ["| File | Status | Breaking |", "| --- | --- | ---: |"];
   for (const e of changed) {
     const breaking = e.changes.filter((c) => c.breaking).length;
     const status = `${STATUS_LABEL[e.status]}${e.invalid ? " (invalid)" : ""}`;
     out.push(`| ${markdownTableCell(markdownCode(e.file))} | ${status} | ${breaking} |`);
   }
-  const withChanges = changed.filter((e) => e.changes.length > 0 || e.invalid);
-  if (withChanges.length) {
-    out.push("");
-    for (const e of withChanges) {
-      out.push(`- ${markdownCode(e.file)}`);
-      for (const c of [...e.changes].sort((a, b) => Number(b.breaking) - Number(a.breaking))) {
-        out.push(c.breaking ? `  - **${markdownText(c.message)}** (breaking)` : `  - ${markdownText(c.message)}`);
-      }
-      if (e.invalid) out.push(`  - could not be read as a contract: ${markdownText(e.invalid)}`);
-    }
-  }
-  if (allChanged.length > changed.length) {
-    out.push("");
-    out.push(
-      `_\u2026 ${allChanged.length - changed.length} more changed contract files not shown (see the JSON report)._`
-    );
-  }
-  if (opts.artifact) {
-    const patch = opts.artifact.patchFile ?? "flowpact-contracts.patch";
-    out.push("");
-    if (opts.artifact.runId) {
-      out.push("To update the locked contracts, apply the regenerated ones from this run:");
-      out.push("");
-      out.push("```sh");
-      out.push(`gh run download ${opts.artifact.runId} -n ${opts.artifact.name}`);
-    } else {
-      out.push(
-        `To update the locked contracts, download the ${markdownCode(opts.artifact.name)} artifact from this run and apply it:`
-      );
-      out.push("");
-      out.push("```sh");
-    }
-    out.push(`git apply --index ${patch}`);
-    out.push("```");
-    out.push("");
-    out.push(`Or run ${markdownCode("flowpact generate")} locally and commit the result.`);
-  } else {
-    out.push("");
-    out.push(`Run ${markdownCode("flowpact generate")} and commit the result to update the locked contracts.`);
-  }
   return out;
+}
+function contractChanges(e) {
+  const out = [`- ${markdownCode(e.file)}`];
+  for (const c of [...e.changes].sort((a, b) => Number(b.breaking) - Number(a.breaking))) {
+    out.push(c.breaking ? `  - **${markdownText(c.message)}** (breaking)` : `  - ${markdownText(c.message)}`);
+  }
+  if (e.invalid) out.push(`  - could not be read as a contract: ${markdownText(e.invalid)}`);
+  return out;
+}
+function contractInstructions(artifact) {
+  if (!artifact)
+    return [`Run ${markdownCode("flowpact generate")} and commit the result to update the locked contracts.`];
+  const patch = artifact.patchFile ?? "flowpact-contracts.patch";
+  const download = artifact.runId ? [
+    "To update the locked contracts, apply the regenerated ones from this run:",
+    "",
+    "```sh",
+    `gh run download ${artifact.runId} -n ${artifact.name}`
+  ] : [
+    `To update the locked contracts, download the ${markdownCode(artifact.name)} artifact from this run and apply it:`,
+    "",
+    "```sh"
+  ];
+  return [
+    ...download,
+    `git apply --index ${patch}`,
+    "```",
+    "",
+    `Or run ${markdownCode("flowpact generate")} locally and commit the result.`
+  ];
+}
+function renderContracts(plan, opts) {
+  const k = plan.counts;
+  if (!plan.drift)
+    return ["### Contracts", "", `\u2705 Contracts are up to date (${plural(plan.entries.length, "file")}).`];
+  const limit = Math.max(1, opts.maxFindings ?? 50);
+  const allChanged = plan.entries.filter((e) => e.status !== "unchanged");
+  const changed = allChanged.slice(0, limit);
+  const withChanges = changed.filter((e) => e.changes.length > 0 || e.invalid);
+  const notShown = allChanged.length > changed.length;
+  return [
+    "### Contracts",
+    "",
+    `${plan.breaking ? "\u274C" : "\u26A0\uFE0F"} Contracts drifted: ${k.create} new \xB7 ${k.update} changed \xB7 ${k.delete} removed \xB7 ${k.unchanged} unchanged${plan.breaking ? ` \u2014 **${plural(plan.breaking, "breaking change")}**` : ""}`,
+    "",
+    ...contractRows(changed),
+    ...withChanges.length ? ["", ...withChanges.flatMap((e) => contractChanges(e))] : [],
+    ...notShown ? [
+      "",
+      `_\u2026 ${allChanged.length - changed.length} more changed contract files not shown (see the JSON report)._`
+    ] : [],
+    "",
+    ...contractInstructions(opts.artifact)
+  ];
 }
 function renderImpactMarkdown(impact, opts) {
   const v = impact.verdict;
@@ -25533,30 +25551,30 @@ function renderImpactMarkdown(impact, opts) {
   );
   return out;
 }
-function renderMarkdown(result, opts = {}) {
+function headerLines(result, opts) {
   const s = result.summary;
   const m = result.meta;
-  const out = [];
-  out.push(`## ${opts.title ?? "flowpact report"}`);
-  out.push("");
-  out.push(
-    `<sub>${m.tool} v${m.version} \xB7 config schema v${m.schemas.config} \xB7 contract schema v${m.schemas.contract} \xB7 report schema v${m.schemas.report} \xB7 ${result.durationMs} ms</sub>`
-  );
-  out.push("");
-  out.push(statusLine(result));
-  out.push("");
-  out.push("| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |");
-  out.push("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
-  out.push(
+  const out = [
+    `## ${opts.title ?? "flowpact report"}`,
+    "",
+    `<sub>${m.tool} v${m.version} \xB7 config schema v${m.schemas.config} \xB7 contract schema v${m.schemas.contract} \xB7 report schema v${m.schemas.report} \xB7 ${result.durationMs} ms</sub>`,
+    "",
+    statusLine(result),
+    "",
+    "| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |",
+    "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     `| ${s.errors} | ${s.warnings} | ${s.infos} | ${s.suppressed} | ${s.workflows} | ${s.actions} | ${s.jobs} | ${s.matrixCombinations} |`
-  );
+  ];
   if (s.skippedInGenerated) {
     out.push("");
     out.push(
       `<sub>${plural(s.skippedInGenerated, "finding")} about the internals of [generated files](${DOCS_BASE_URL}/docs/configuration#generated-files) ${s.skippedInGenerated === 1 ? "is" : "are"} not reported.</sub>`
     );
   }
-  const max = Math.max(0, opts.maxFindings ?? 50);
+  return out;
+}
+function findingSections(result, opts, max) {
+  const out = [];
   let shown = 0;
   for (const severity of ["error", "warning", "info"]) {
     const findings = result.findings.filter((f) => f.severity === severity);
@@ -25577,43 +25595,50 @@ function renderMarkdown(result, opts = {}) {
       `_\u2026 ${result.findings.length - shown} more ${result.findings.length - shown === 1 ? "finding" : "findings"} not shown \u2014 the JSON and SARIF reports (or \`flowpact lint\` locally) list them all._`
     );
   }
-  if (result.contracts) {
-    out.push("");
-    out.push(...renderContracts(result.contracts, opts));
+  return out;
+}
+function suppressedSection(result, opts, max) {
+  const out = [
+    `<details><summary>${plural(result.suppressed.length, "suppressed finding")}</summary>`,
+    "",
+    "| Code | Location | Reason | Expires | Owner |",
+    "| --- | --- | --- | --- | --- |"
+  ];
+  for (const f of result.suppressed.slice(0, max)) {
+    const o = f.override;
+    out.push(
+      `| [${markdownCode(f.code)}](${f.docsUrl}) | ${markdownTableCell(markdownLocation(f.loc, opts))} | ${markdownCell(o.reason)} | ${o.expires ?? "\u2014"} | ${o.owner ? markdownCell(o.owner) : "\u2014"} |`
+    );
   }
-  if (result.impact) {
+  if (result.suppressed.length > max) {
     out.push("");
-    out.push(...renderImpactMarkdown(result.impact, opts));
+    out.push(`_\u2026 ${result.suppressed.length - max} more suppressed findings (see the JSON report)._`);
   }
-  if (result.suppressed.length) {
-    out.push("");
-    out.push(`<details><summary>${plural(result.suppressed.length, "suppressed finding")}</summary>`);
-    out.push("");
-    out.push("| Code | Location | Reason | Expires | Owner |");
-    out.push("| --- | --- | --- | --- | --- |");
-    for (const f of result.suppressed.slice(0, max)) {
-      const o = f.override;
-      out.push(
-        `| [${markdownCode(f.code)}](${f.docsUrl}) | ${markdownTableCell(markdownLocation(f.loc, opts))} | ${markdownCell(o.reason)} | ${o.expires ?? "\u2014"} | ${o.owner ? markdownCell(o.owner) : "\u2014"} |`
-      );
-    }
-    if (result.suppressed.length > max) {
-      out.push("");
-      out.push(`_\u2026 ${result.suppressed.length - max} more suppressed findings (see the JSON report)._`);
-    }
-    out.push("");
-    out.push("</details>");
-  }
-  if (opts.includeGraph) {
-    out.push("");
-    out.push("<details><summary>Call graph</summary>");
-    out.push("");
-    out.push("```mermaid");
-    out.push(renderMermaid(buildCallGraph(result.index)).trimEnd());
-    out.push("```");
-    out.push("");
-    out.push("</details>");
-  }
+  out.push("");
+  out.push("</details>");
+  return out;
+}
+function graphSection(result) {
+  return [
+    "<details><summary>Call graph</summary>",
+    "",
+    "```mermaid",
+    renderMermaid(buildCallGraph(result.index)).trimEnd(),
+    "```",
+    "",
+    "</details>"
+  ];
+}
+function renderMarkdown(result, opts = {}) {
+  const max = Math.max(0, opts.maxFindings ?? 50);
+  const out = [
+    ...headerLines(result, opts),
+    ...findingSections(result, opts, max),
+    ...result.contracts ? ["", ...renderContracts(result.contracts, opts)] : [],
+    ...result.impact ? ["", ...renderImpactMarkdown(result.impact, opts)] : [],
+    ...result.suppressed.length ? ["", ...suppressedSection(result, opts, max)] : [],
+    ...opts.includeGraph ? ["", ...graphSection(result)] : []
+  ];
   return `${out.join("\n")}
 `;
 }
@@ -25624,6 +25649,46 @@ var LEVEL3 = {
   warning: "warning",
   info: "note"
 };
+function ruleName(code, def, configured, sample) {
+  return def?.name ?? configured?.name ?? sample?.name ?? code;
+}
+function ruleAdvice(def, sample) {
+  return { why: def?.docs.why ?? sample?.why ?? "", fix: def?.docs.fix ?? sample?.fix ?? "" };
+}
+function ruleHelpUri(registry2, def, sample) {
+  return def ? registry2.docsUrl(def) : sample?.docsUrl ?? DOCS_BASE_URL;
+}
+function ruleSeverity(configured, sample) {
+  return configured && configured.severity !== "off" ? configured.severity : sample?.severity ?? "warning";
+}
+function ruleTags(def, sample) {
+  const category = def?.category ?? sample?.category;
+  return category ? [category] : [];
+}
+function ruleHelp(why, fix, helpUri) {
+  return {
+    text: [why, fix && `Fix: ${fix}`, `Docs: ${helpUri}`].filter(Boolean).join("\n\n"),
+    markdown: [why && `**Why:** ${why}`, fix && `**Fix:** ${fix}`, `[Documentation](${helpUri})`].filter(Boolean).join("\n\n")
+  };
+}
+function sarifRule(code, result, registry2, sample) {
+  const configured = result.rules.find((r) => r.code === code);
+  const def = registry2.get(code);
+  const name = ruleName(code, def, configured, sample);
+  const { why, fix } = ruleAdvice(def, sample);
+  const summary2 = def?.docs.summary ?? why ?? name;
+  const helpUri = ruleHelpUri(registry2, def, sample);
+  return {
+    id: code,
+    name,
+    shortDescription: { text: summary2 || name },
+    ...why ? { fullDescription: { text: why } } : {},
+    helpUri,
+    help: ruleHelp(why, fix, helpUri),
+    defaultConfiguration: { level: LEVEL3[ruleSeverity(configured, sample)] },
+    properties: { tags: ruleTags(def, sample) }
+  };
+}
 function renderSarif(result, opts = {}) {
   const registry2 = createRegistry();
   const all = [
@@ -25635,31 +25700,7 @@ function renderSarif(result, opts = {}) {
   const codes = result.rules.filter((r) => r.severity !== "off").map((r) => r.code);
   for (const code of firstFinding.keys()) if (!codes.includes(code)) codes.push(code);
   codes.sort();
-  const rules = codes.map((code) => {
-    const configured = result.rules.find((r) => r.code === code);
-    const def = registry2.get(code);
-    const sample = firstFinding.get(code);
-    const name = def?.name ?? configured?.name ?? sample?.name ?? code;
-    const why = def?.docs.why ?? sample?.why ?? "";
-    const fix = def?.docs.fix ?? sample?.fix ?? "";
-    const summary2 = def?.docs.summary ?? why ?? name;
-    const helpUri = def ? registry2.docsUrl(def) : sample?.docsUrl ?? DOCS_BASE_URL;
-    const severity = configured && configured.severity !== "off" ? configured.severity : sample?.severity ?? "warning";
-    const category = def?.category ?? sample?.category;
-    return {
-      id: code,
-      name,
-      shortDescription: { text: summary2 || name },
-      ...why ? { fullDescription: { text: why } } : {},
-      helpUri,
-      help: {
-        text: [why, fix && `Fix: ${fix}`, `Docs: ${helpUri}`].filter(Boolean).join("\n\n"),
-        markdown: [why && `**Why:** ${why}`, fix && `**Fix:** ${fix}`, `[Documentation](${helpUri})`].filter(Boolean).join("\n\n")
-      },
-      defaultConfiguration: { level: LEVEL3[severity] },
-      properties: { tags: category ? [category] : [] }
-    };
-  });
+  const rules = codes.map((code) => sarifRule(code, result, registry2, firstFinding.get(code)));
   const ruleIndex = new Map(rules.map((r, i) => [r.id, i]));
   const results = all.map((f) => ({
     ruleId: f.code,
@@ -25749,36 +25790,49 @@ var RETRY_STATUS = /* @__PURE__ */ new Set([429, 500, 502, 503, 504]);
 var UNREACHABLE = /* @__PURE__ */ new Set(["ECONNRESET", "ENOTFOUND", "ETIMEDOUT", "ECONNREFUSED", "EHOSTUNREACH"]);
 var Final = class extends Error {
 };
+function retryAfterDelay(status, header) {
+  const retryAfter = String(header ?? "").trim();
+  return status === 429 && /^\d+$/.test(retryAfter) && Number(retryAfter) > 0 ? Number(retryAfter) * 1e3 : void 0;
+}
+function replyFailure(method, status, statusMessage, reply) {
+  if (reply.msg?.includes("insufficient usage"))
+    throw new Final("Artifact storage quota has been hit. Unable to upload any new artifacts");
+  const failure2 = `(${status}) ${statusMessage}${reply.msg ? `: ${reply.msg}` : ""}`;
+  if (!RETRY_STATUS.has(status)) throw new Final(`Failed to ${method}: ${failure2}`);
+  return failure2;
+}
+function requestFailure(method, err) {
+  const code = err.code;
+  if (code && UNREACHABLE.has(code)) throw new Error(`Failed to ${method}: unable to make request: ${code}`);
+  return err.message;
+}
+async function twirpAttempt(http2, url2, method, body) {
+  let delay;
+  try {
+    const res = await http2.post(url2, JSON.stringify(body), { "Content-Type": "application/json" });
+    const status = res.message.statusCode ?? 0;
+    delay = retryAfterDelay(status, res.message.headers["retry-after"]);
+    const reply = JSON.parse(await res.readBody());
+    if (status >= 200 && status < 300) return { reply };
+    return { failure: replyFailure(method, status, res.message.statusMessage, reply), delay };
+  } catch (err) {
+    if (err instanceof Final) throw err;
+    return { failure: requestFailure(method, err), delay };
+  }
+}
+function backoff(attempt) {
+  const min = 8e3 * 1.5 ** (attempt - 1);
+  return attempt === 1 ? min : Math.trunc(min + Math.random() * min * 0.5);
+}
 async function twirp(http2, base, method, body) {
   const url2 = new URL(`/twirp/${SERVICE}/${method}`, base).href;
   let waited = 0;
   for (let attempt = 1; ; attempt++) {
-    let failure2;
-    let delay;
-    try {
-      const res = await http2.post(url2, JSON.stringify(body), { "Content-Type": "application/json" });
-      const status = res.message.statusCode ?? 0;
-      const retryAfter = String(res.message.headers["retry-after"] ?? "").trim();
-      if (status === 429 && /^\d+$/.test(retryAfter) && Number(retryAfter) > 0)
-        delay = Number(retryAfter) * 1e3;
-      const reply = JSON.parse(await res.readBody());
-      if (status >= 200 && status < 300) return reply;
-      if (reply.msg?.includes("insufficient usage"))
-        throw new Final("Artifact storage quota has been hit. Unable to upload any new artifacts");
-      failure2 = `(${status}) ${res.message.statusMessage}${reply.msg ? `: ${reply.msg}` : ""}`;
-      if (!RETRY_STATUS.has(status)) throw new Final(`Failed to ${method}: ${failure2}`);
-    } catch (err) {
-      if (err instanceof Final) throw err;
-      const code = err.code;
-      if (code && UNREACHABLE.has(code))
-        throw new Error(`Failed to ${method}: unable to make request: ${code}`);
-      failure2 = err.message;
-    }
+    const outcome = await twirpAttempt(http2, url2, method, body);
+    if ("reply" in outcome) return outcome.reply;
+    const { failure: failure2 } = outcome;
     if (attempt === 5) throw new Error(`Failed to ${method} after 5 attempts: ${failure2}`);
-    if (delay === void 0) {
-      const min = 8e3 * 1.5 ** (attempt - 1);
-      delay = attempt === 1 ? min : Math.trunc(min + Math.random() * min * 0.5);
-    }
+    const delay = outcome.delay ?? backoff(attempt);
     if (waited + delay > 12e4) throw new Error(`Failed to ${method}: ${failure2}`);
     info(`${method} attempt ${attempt} of 5 failed: ${failure2}. Retrying in ${delay} ms`);
     await retryWait.sleep(delay);
@@ -25797,34 +25851,41 @@ var BLOB_RETRY_ERRORS = [
   "REQUEST_SEND_ERROR"
 ];
 var stallTimeout = () => Number.parseInt(process.env.ACTIONS_ARTIFACT_UPLOAD_TIMEOUT_MS ?? "", 10) || 3e5;
+function blobError(e, redact) {
+  const stalled = e.message.startsWith("Request timeout");
+  const failure2 = stalled ? `upload stalled: no progress in ${stallTimeout()} ms (${redact(e.message)})` : redact(e.message);
+  const retryable = !stalled && BLOB_RETRY_ERRORS.some((c) => e.code === c || e.message.toUpperCase().includes(c));
+  return { failure: failure2, retryable };
+}
+async function blobAttempt(http2, url2, body, headers, redact) {
+  try {
+    const res = await http2.request("PUT", url2, Readable.from([body]), {
+      ...headers,
+      "Content-Length": String(body.length),
+      "x-ms-version": BLOB_VERSION,
+      "x-ms-client-request-id": randomUUID2(),
+      Accept: "application/xml"
+    });
+    const reply = await res.readBody();
+    const status = res.message.statusCode ?? 0;
+    if (status === 201) return void 0;
+    const code = /<Code>([^<]*)<\/Code>/.exec(reply)?.[1];
+    return {
+      failure: `(${status}) ${code ?? res.message.statusMessage}`,
+      retryable: status === 500 || status === 503
+    };
+  } catch (err) {
+    return blobError(err, redact);
+  }
+}
 async function blobRequest(http2, url2, body, headers, what, secrets) {
   const redact = (s) => secrets.reduce((out, secret) => out.replaceAll(secret, "***"), s);
   for (let attempt = 1; ; attempt++) {
-    let failure2;
-    let retryable;
-    try {
-      const res = await http2.request("PUT", url2, Readable.from([body]), {
-        ...headers,
-        "Content-Length": String(body.length),
-        "x-ms-version": BLOB_VERSION,
-        "x-ms-client-request-id": randomUUID2(),
-        Accept: "application/xml"
-      });
-      const reply = await res.readBody();
-      const status = res.message.statusCode ?? 0;
-      if (status === 201) return;
-      const code = /<Code>([^<]*)<\/Code>/.exec(reply)?.[1];
-      failure2 = `(${status}) ${code ?? res.message.statusMessage}`;
-      retryable = status === 500 || status === 503;
-    } catch (err) {
-      const e = err;
-      const stalled = e.message.startsWith("Request timeout");
-      failure2 = stalled ? `upload stalled: no progress in ${stallTimeout()} ms (${redact(e.message)})` : redact(e.message);
-      retryable = !stalled && BLOB_RETRY_ERRORS.some((c) => e.code === c || e.message.toUpperCase().includes(c));
-    }
-    if (!retryable || attempt === 4) throw new Error(`${what} failed: ${failure2}`);
+    const failed = await blobAttempt(http2, url2, body, headers, redact);
+    if (!failed) return;
+    if (!failed.retryable || attempt === 4) throw new Error(`${what} failed: ${failed.failure}`);
     const delay = (2 ** (attempt - 1) - 1) * 4e3;
-    info(`${what} attempt ${attempt} of 4 failed: ${failure2}. Retrying in ${delay} ms`);
+    info(`${what} attempt ${attempt} of 4 failed: ${failed.failure}. Retrying in ${delay} ms`);
     await retryWait.sleep(delay);
   }
 }
@@ -26063,22 +26124,32 @@ function readInputs() {
     debug: bool("debug")
   };
 }
-function fetchRefs(root, refs, token, logger) {
+function fetchEnv(token) {
   const env = { ...process.env, GIT_TERMINAL_PROMPT: "0" };
-  if (token && !token.startsWith("${{")) {
-    const host = new URL(process.env.GITHUB_SERVER_URL || "https://github.com").host;
-    const key = `http.https://${host}/.extraheader`;
-    const n = Number(env.GIT_CONFIG_COUNT) || 0;
-    Object.assign(env, {
-      [`GIT_CONFIG_KEY_${n}`]: key,
-      [`GIT_CONFIG_VALUE_${n}`]: "",
-      [`GIT_CONFIG_KEY_${n + 1}`]: key,
-      [`GIT_CONFIG_VALUE_${n + 1}`]: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
-      GIT_CONFIG_COUNT: String(n + 2)
-    });
-  }
+  if (!token || token.startsWith("${{")) return env;
+  const host = new URL(process.env.GITHUB_SERVER_URL || "https://github.com").host;
+  const key = `http.https://${host}/.extraheader`;
+  const n = Number(env.GIT_CONFIG_COUNT) || 0;
+  Object.assign(env, {
+    [`GIT_CONFIG_KEY_${n}`]: key,
+    [`GIT_CONFIG_VALUE_${n}`]: "",
+    [`GIT_CONFIG_KEY_${n + 1}`]: key,
+    [`GIT_CONFIG_VALUE_${n + 1}`]: `AUTHORIZATION: basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`,
+    GIT_CONFIG_COUNT: String(n + 2)
+  });
+  return env;
+}
+function refspecOf(ref) {
+  if (/^[0-9a-f]{7,64}$/i.test(ref)) return ref;
+  return ref.startsWith("origin/") ? `+refs/heads/${ref.slice("origin/".length)}:refs/remotes/${ref}` : ref;
+}
+function gitFailure(err) {
+  return String(err.stderr ?? "").replace(/AUTHORIZATION: [^\s]+ [^\s]+/gi, "AUTHORIZATION: ***").trim().split("\n").slice(-2).join(" ");
+}
+function fetchRefs(root, refs, token, logger) {
+  const env = fetchEnv(token);
   for (const ref of refs) {
-    const spec = /^[0-9a-f]{7,64}$/i.test(ref) ? ref : ref.startsWith("origin/") ? `+refs/heads/${ref.slice("origin/".length)}:refs/remotes/${ref}` : ref;
+    const spec = refspecOf(ref);
     try {
       execFileSync2("git", ["-C", root, "fetch", "--no-tags", "--depth=1", "origin", spec], {
         env,
@@ -26086,19 +26157,17 @@ function fetchRefs(root, refs, token, logger) {
       });
       logger.debug(`fetched ${spec}`);
     } catch (err) {
-      const stderr = String(err.stderr ?? "").replace(/AUTHORIZATION: [^\s]+ [^\s]+/gi, "AUTHORIZATION: ***").trim().split("\n").slice(-2).join(" ");
+      const stderr = gitFailure(err);
       logger.warn(`could not fetch ${spec}${stderr ? `: ${stderr}` : ""}`);
     }
   }
 }
-function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
-  if (inputs.impact === "off") return {};
-  const event = githubEvent();
-  const auto = inputs.impact === "auto";
-  if (auto && event?.name === "pull_request_target")
-    return { note: "impact: auto skips pull_request_target" };
-  if (auto && event?.name !== "pull_request" && !inputs.baseRef)
-    return { note: "impact: auto runs on pull requests" };
+function autoSkipNote(event, baseRef) {
+  if (event?.name === "pull_request_target") return "impact: auto skips pull_request_target";
+  if (event?.name !== "pull_request" && !baseRef) return "impact: auto runs on pull requests";
+  return void 0;
+}
+function baselineRef(root, baseRef) {
   const resolves = (ref) => {
     try {
       resolveCommit(root, ref);
@@ -26107,45 +26176,55 @@ function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
       return false;
     }
   };
-  let base = inputs.baseRef;
-  if (base && !/^[0-9a-f]{7,64}$/i.test(base) && !base.startsWith("refs/")) {
-    const tracking = `origin/${base.replace(/^origin\//, "")}`;
-    if (resolves(tracking) || !resolves(base)) base = tracking;
-  }
-  let prepared;
+  if (!baseRef || /^[0-9a-f]{7,64}$/i.test(baseRef) || baseRef.startsWith("refs/")) return baseRef;
+  const tracking = `origin/${baseRef.replace(/^origin\//, "")}`;
+  return resolves(tracking) || !resolves(baseRef) ? tracking : baseRef;
+}
+function impactRequest(root, base, event, configs, inputs, logger) {
+  const { configPath, baseConfig } = configs;
+  return {
+    ...base ? { base } : {},
+    ...inputs.expectedImpact ? { expect: inputs.expectedImpact } : {},
+    ...event ? { event } : {},
+    ...process.env.GITHUB_REPOSITORY ? { repository: process.env.GITHUB_REPOSITORY } : {},
+    ...configPath ? { configPath } : {},
+    ...baseConfig ? { baseConfig: baseConfig.data, baseConfigFile: baseConfig.file } : {},
+    fetch: (refs) => fetchRefs(root, refs, getInput("token"), logger)
+  };
+}
+function prepareInputImpact(root, config2, request, logger) {
   try {
-    prepared = prepareImpact(
-      root,
-      config2,
-      {
-        ...base ? { base } : {},
-        ...inputs.expectedImpact ? { expect: inputs.expectedImpact } : {},
-        ...event ? { event } : {},
-        ...process.env.GITHUB_REPOSITORY ? { repository: process.env.GITHUB_REPOSITORY } : {},
-        ...configPath ? { configPath } : {},
-        ...baseConfig ? { baseConfig: baseConfig.data, baseConfigFile: baseConfig.file } : {},
-        fetch: (refs) => fetchRefs(root, refs, getInput("token"), logger)
-      },
-      logger
-    );
+    return prepareImpact(root, config2, request, logger);
   } catch (err) {
     if (err instanceof ImpactSetupError) throw new InputError(`impact: ${err.message}`);
     throw err;
   }
+}
+function nothingPublishedNote(root, logger, options) {
+  if (options.publishedFiles?.length !== 0) return void 0;
+  const { policy } = options;
+  const project = loadProject({
+    root,
+    logger,
+    ...policy.publish ? { publish: policy.publish } : {}
+  });
+  const units = [...project.workflows.values(), ...project.actions.values()];
+  if (units.some((u) => isPublished(u, policy))) return void 0;
+  return "impact: no published workflows or actions (see impact.publish)";
+}
+function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
+  if (inputs.impact === "off") return {};
+  const event = githubEvent();
+  const auto = inputs.impact === "auto";
+  const skip = auto ? autoSkipNote(event, inputs.baseRef) : void 0;
+  if (skip) return { note: skip };
+  const base = baselineRef(root, inputs.baseRef);
+  const request = impactRequest(root, base, event, { configPath, baseConfig }, inputs, logger);
+  const prepared = prepareInputImpact(root, config2, request, logger);
   if ("skip" in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
-  if (auto && prepared.options.publishedFiles?.length === 0) {
-    const project = loadProject({
-      root,
-      logger,
-      ...prepared.options.policy.publish ? { publish: prepared.options.policy.publish } : {}
-    });
-    const units = [...project.workflows.values(), ...project.actions.values()];
-    if (!units.some((u) => isPublished(u, prepared.options.policy))) {
-      return { note: "impact: no published workflows or actions (see impact.publish)" };
-    }
-  }
-  return { options: prepared.options };
+  const unpublished = auto ? nothingPublishedNote(root, logger, prepared.options) : void 0;
+  return unpublished ? { note: unpublished } : { options: prepared.options };
 }
 function pluginsAllowed(value) {
   if (value !== "auto") return value === "true";
@@ -26311,6 +26390,181 @@ function summaryWithinLimit(result, opts) {
 The report is too large for a job summary. Use the \`report-json\` or \`report-sarif\` inputs.
 `;
 }
+function logging(debug2, envLevel) {
+  const level = debug2 ? envLevel === "trace" ? "trace" : "debug" : "info";
+  const groups = { depth: 0 };
+  const logger = createLogger({ level, sink: actionsSink(isDebug(), groups) });
+  const group2 = async (title, fn) => {
+    groups.depth++;
+    try {
+      return await group(title, async () => fn());
+    } finally {
+      groups.depth--;
+    }
+  };
+  const loggedGroup = (title, fn) => {
+    groups.depth++;
+    groups.pending = title;
+    try {
+      return fn();
+    } finally {
+      groups.depth--;
+      if (groups.pending === void 0) endGroup();
+      delete groups.pending;
+    }
+  };
+  return { logger, group: group2, loggedGroup };
+}
+function placeOf(workingDirectory) {
+  const workspace = resolve6(process.env.GITHUB_WORKSPACE || process.cwd());
+  const root = resolve6(workspace, workingDirectory);
+  const rel = toPosix2(relative6(workspace, root));
+  return { workspace, root, prefix: rel === "" || rel === "." ? "" : rel };
+}
+function loadInputConfig(inputs, { root, prefix }) {
+  const loaded = loadConfig(root, inputs.config ? resolve6(root, inputs.config) : void 0, {
+    ...inputs.baseConfig ? { base: inputs.baseConfig } : {}
+  });
+  info(
+    `mode ${inputs.mode} \xB7 root ${prefix || "."} \xB7 config ${loaded.file ?? "(defaults)"}${loaded.base ? ` \xB7 base ${loaded.base.file}` : ""}`
+  );
+  return loaded;
+}
+function checkoutPluginsOff() {
+  return getInput("plugins").trim().toLowerCase() === "false" ? "the plugins input is false" : `plugins run code from the checkout and are disabled on ${process.env.GITHUB_EVENT_NAME} events; set the plugins input to true to allow them`;
+}
+function inputPlugins(inputs, { workspace, root }, pluginsOff) {
+  const inCheckout = (p) => pathInside(workspace, p) || pathInside(root, p);
+  const extraPlugins = inputs.extraPlugins.filter((p) => inputs.plugins || !inCheckout(p));
+  const skippedPlugins = inputs.extraPlugins.filter((p) => !extraPlugins.includes(p));
+  if (skippedPlugins.length) {
+    const names = skippedPlugins.map((p) => toPosix2(relative6(workspace, p))).join(", ");
+    warning(`Not loading the plugin input's ${names} from the checkout: ${pluginsOff}.`);
+  }
+  return extraPlugins;
+}
+async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
+  const { logger } = log;
+  const impact = log.loggedGroup(
+    "flowpact: impact baseline",
+    () => impactSetup(root, loaded.config, inputs.config || void 0, loaded.base, inputs, logger)
+  );
+  if (impact.note) info(impact.note);
+  return log.group(`flowpact ${inputs.mode}: analyze`, async () => {
+    const registry2 = createRegistry();
+    if (inputs.plugins) await loadPlugins(root, loaded.config, registry2, logger);
+    if (extraPlugins.length)
+      await loadPlugins(root, { ...loaded.config, plugins: extraPlugins }, registry2, logger);
+    return analyze({
+      root,
+      config: loaded.config,
+      ...inputs.paths.length ? { paths: inputs.paths } : {},
+      ...loaded.file ? { configFile: loaded.file } : {},
+      ...loaded.text !== void 0 ? { configText: loaded.text } : {},
+      ...loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {},
+      logger,
+      registry: registry2,
+      checkContracts: inputs.mode === "check",
+      ...impact.options ? { impact: impact.options } : {}
+    });
+  });
+}
+function nothingAnalyzed(result, inputs, prefix) {
+  const where = prefix || ".";
+  const missing = result.project.missingTargets ?? [];
+  if (missing.length) return `paths not found under ${where}: ${missing.join(", ")}`;
+  if (inputs.paths.length && result.project.targets.size === 0 && !result.project.wholeRepository)
+    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${inputs.paths.join(", ")}`;
+  if (result.summary.workflows === 0 && result.summary.actions === 0)
+    return `No workflows found under ${where}/.github/workflows. Set working-directory to the repository that holds them.`;
+  return void 0;
+}
+function markdownOptionsOf(inputs, prefix, drift, runId) {
+  const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_SHA } = process.env;
+  return {
+    title: `flowpact ${inputs.mode}`,
+    maxFindings: inputs.maxFindings,
+    includeGraph: inputs.summaryGraph,
+    ...GITHUB_SERVER_URL && GITHUB_REPOSITORY && GITHUB_SHA ? (
+      // Links are `<repo>/blob/<sha>/<file>`; files are relative to working-directory, so it joins the sha.
+      {
+        repoUrl: `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}`,
+        sha: prefix ? `${GITHUB_SHA}/${prefix}` : GITHUB_SHA
+      }
+    ) : {},
+    ...drift?.uploaded ? { artifact: { name: inputs.artifactName, ...runId ? { runId } : {}, patchFile: PATCH_FILE } } : {}
+  };
+}
+async function writeSummary(result, markdownOptions) {
+  try {
+    await summary.addRaw(summaryWithinLimit(result, markdownOptions)).write();
+  } catch (err) {
+    warning(`Could not write the job summary: ${err.message}`);
+  }
+}
+async function writeReports(result, inputs, { workspace, prefix }, markdownOptions, log) {
+  const reports = {};
+  if (!inputs.reportJson && !inputs.reportSarif && !inputs.reportMarkdown) return reports;
+  await log.group("flowpact: reports", () => {
+    if (inputs.reportJson) reports.json = writeReport(workspace, inputs.reportJson, renderJson(result));
+    if (inputs.reportSarif)
+      reports.sarif = writeReport(workspace, inputs.reportSarif, renderSarif(result, { pathPrefix: prefix }));
+    if (inputs.reportMarkdown)
+      writeReport(workspace, inputs.reportMarkdown, renderMarkdown(result, markdownOptions));
+  });
+  return reports;
+}
+function setResultOutputs(s, plan) {
+  setOutput("errors", s.errors);
+  setOutput("warnings", s.warnings);
+  setOutput("infos", s.infos);
+  setOutput("suppressed", s.suppressed);
+  setOutput("findings", s.total);
+  setOutput("drift", plan?.drift ? "true" : "false");
+  setOutput("breaking", plan?.breaking ?? 0);
+}
+function setFileOutputs(exitCode, reports, drift) {
+  setOutput("exit-code", exitCode);
+  setOutput("report-json", reports.json ?? "");
+  setOutput("report-sarif", reports.sarif ?? "");
+  setOutput("patch", drift?.patch ?? "");
+  setOutput("artifact-id", drift?.uploaded?.id ?? "");
+}
+function setImpactOutputs(impact) {
+  setOutput("required-impact", impact?.verdict.required ?? "");
+  setOutput("declared-impact", impact?.verdict.declared?.level ?? "");
+  setOutput("impact-ok", impact ? String(impact.verdict.ok) : "");
+}
+async function report(result, inputs, place, log) {
+  const { prefix } = place;
+  const s = result.summary;
+  if (inputs.annotations) for (const f of result.findings) annotate(f, prefix);
+  const runId = process.env.GITHUB_RUN_ID || void 0;
+  const plan = result.contracts;
+  const drift = plan?.drift ? await log.group("flowpact: contract drift artifact", () => driftArtifact(plan, prefix, inputs, runId)) : void 0;
+  const markdownOptions = markdownOptionsOf(inputs, prefix, drift, runId);
+  if (inputs.summary) await writeSummary(result, markdownOptions);
+  const reports = await writeReports(result, inputs, place, markdownOptions, log);
+  const exitCode = exitCodeFor(s, inputs.failOn);
+  setResultOutputs(s, plan);
+  setFileOutputs(exitCode, reports, drift);
+  setImpactOutputs(result.impact);
+  info(
+    `flowpact ${inputs.mode}: ${plural2(s.errors, "error")}, ${plural2(s.warnings, "warning")}, ${s.infos} info, ${s.suppressed} suppressed \xB7 ${plural2(s.workflows, "workflow")} \xB7 ${result.durationMs} ms`
+  );
+  if (exitCode !== 0) setFailed(failureMessage(result, inputs, drift));
+}
+function failWith(err, debug2) {
+  if (err instanceof ConfigError) {
+    const where = err.file ? ` (${err.file})` : "";
+    setFailed([`${err.message}${where}`, ...err.issues.map((i) => `  - ${i}`)].join("\n"));
+  } else if (err instanceof InputError || err instanceof UnsafePathError) {
+    setFailed(err.message);
+  } else {
+    const e = err instanceof Error ? err : new Error(String(err));
+    setFailed(debug2 && e.stack ? e.stack : `${e.message} (set the debug input for a stack trace)`);
+  }
+}
 async function run() {
   let debug2 = false;
   initOutputs();
@@ -26318,168 +26572,30 @@ async function run() {
     const inputs = readInputs();
     const envLevel = resolveLogLevel({}, process.env);
     debug2 = inputs.debug || isDebug() || envLevel !== "info";
-    const level = debug2 ? envLevel === "trace" ? "trace" : "debug" : "info";
-    const groups = { depth: 0 };
-    const logger = createLogger({ level, sink: actionsSink(isDebug(), groups) });
-    const group2 = async (title, fn) => {
-      groups.depth++;
-      try {
-        return await group(title, async () => fn());
-      } finally {
-        groups.depth--;
-      }
-    };
-    const loggedGroup = (title, fn) => {
-      groups.depth++;
-      groups.pending = title;
-      try {
-        return fn();
-      } finally {
-        groups.depth--;
-        if (groups.pending === void 0) endGroup();
-        delete groups.pending;
-      }
-    };
+    const log = logging(debug2, envLevel);
     info(bannerText());
-    const workspace = resolve6(process.env.GITHUB_WORKSPACE || process.cwd());
-    const root = resolve6(workspace, inputs.workingDirectory);
-    const rel = toPosix2(relative6(workspace, root));
-    const prefix = rel === "" || rel === "." ? "" : rel;
-    const loaded = loadConfig(root, inputs.config ? resolve6(root, inputs.config) : void 0, {
-      ...inputs.baseConfig ? { base: inputs.baseConfig } : {}
-    });
-    info(
-      `mode ${inputs.mode} \xB7 root ${prefix || "."} \xB7 config ${loaded.file ?? "(defaults)"}${loaded.base ? ` \xB7 base ${loaded.base.file}` : ""}`
-    );
-    const checkoutPluginsOff = getInput("plugins").trim().toLowerCase() === "false" ? "the plugins input is false" : `plugins run code from the checkout and are disabled on ${process.env.GITHUB_EVENT_NAME} events; set the plugins input to true to allow them`;
-    const inCheckout = (p) => pathInside(workspace, p) || pathInside(root, p);
-    const extraPlugins = inputs.extraPlugins.filter((p) => inputs.plugins || !inCheckout(p));
-    const skippedPlugins = inputs.extraPlugins.filter((p) => !extraPlugins.includes(p));
-    if (skippedPlugins.length) {
-      const names = skippedPlugins.map((p) => toPosix2(relative6(workspace, p))).join(", ");
-      warning(`Not loading the plugin input's ${names} from the checkout: ${checkoutPluginsOff}.`);
-    }
-    if (!getInput("artifact-name").trim() && prefix)
-      inputs.artifactName = `flowpact-contracts-${slug(prefix)}`;
+    const place = placeOf(inputs.workingDirectory);
+    const loaded = loadInputConfig(inputs, place);
+    const pluginsOff = checkoutPluginsOff();
+    const extraPlugins = inputPlugins(inputs, place, pluginsOff);
+    if (!getInput("artifact-name").trim() && place.prefix)
+      inputs.artifactName = `flowpact-contracts-${slug(place.prefix)}`;
     if (loaded.config.plugins.length && !inputs.plugins)
-      warning(
-        `Not loading ${loaded.config.plugins.length} plugin(s) from the config: ${checkoutPluginsOff}.`
-      );
-    const impact = loggedGroup(
-      "flowpact: impact baseline",
-      () => impactSetup(root, loaded.config, inputs.config || void 0, loaded.base, inputs, logger)
-    );
-    if (impact.note) info(impact.note);
-    const result = await group2(`flowpact ${inputs.mode}: analyze`, async () => {
-      const registry2 = createRegistry();
-      if (inputs.plugins) await loadPlugins(root, loaded.config, registry2, logger);
-      if (extraPlugins.length)
-        await loadPlugins(root, { ...loaded.config, plugins: extraPlugins }, registry2, logger);
-      return analyze({
-        root,
-        config: loaded.config,
-        ...inputs.paths.length ? { paths: inputs.paths } : {},
-        ...loaded.file ? { configFile: loaded.file } : {},
-        ...loaded.text !== void 0 ? { configText: loaded.text } : {},
-        ...loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {},
-        logger,
-        registry: registry2,
-        checkContracts: inputs.mode === "check",
-        ...impact.options ? { impact: impact.options } : {}
-      });
-    });
+      warning(`Not loading ${loaded.config.plugins.length} plugin(s) from the config: ${pluginsOff}.`);
+    const result = await analyzeRoot(inputs, place.root, loaded, extraPlugins, log);
     if (result.unloadedRules?.length) {
       warning(
         `Ignoring config entries for rules that are not loaded: ${result.unloadedRules.join("; ")}`
       );
     }
-    const s = result.summary;
-    const missing = result.project.missingTargets ?? [];
-    if (missing.length) {
-      setFailed(`paths not found under ${prefix || "."}: ${missing.join(", ")}`);
+    const failure2 = nothingAnalyzed(result, inputs, place.prefix);
+    if (failure2) {
+      setFailed(failure2);
       return;
     }
-    if (inputs.paths.length && result.project.targets.size === 0 && !result.project.wholeRepository) {
-      setFailed(
-        `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${inputs.paths.join(", ")}`
-      );
-      return;
-    }
-    if (s.workflows === 0 && s.actions === 0) {
-      setFailed(
-        `No workflows found under ${prefix || "."}/.github/workflows. Set working-directory to the repository that holds them.`
-      );
-      return;
-    }
-    if (inputs.annotations) for (const f of result.findings) annotate(f, prefix);
-    const runId = process.env.GITHUB_RUN_ID || void 0;
-    const plan = result.contracts;
-    const drift = plan?.drift ? await group2("flowpact: contract drift artifact", () => driftArtifact(plan, prefix, inputs, runId)) : void 0;
-    const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_SHA } = process.env;
-    const markdownOptions = {
-      title: `flowpact ${inputs.mode}`,
-      maxFindings: inputs.maxFindings,
-      includeGraph: inputs.summaryGraph,
-      ...GITHUB_SERVER_URL && GITHUB_REPOSITORY && GITHUB_SHA ? (
-        // Links are `<repo>/blob/<sha>/<file>`; files are relative to working-directory, so it joins the sha.
-        {
-          repoUrl: `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}`,
-          sha: prefix ? `${GITHUB_SHA}/${prefix}` : GITHUB_SHA
-        }
-      ) : {},
-      ...drift?.uploaded ? { artifact: { name: inputs.artifactName, ...runId ? { runId } : {}, patchFile: PATCH_FILE } } : {}
-    };
-    const markdown = () => renderMarkdown(result, markdownOptions);
-    if (inputs.summary) {
-      try {
-        await summary.addRaw(summaryWithinLimit(result, markdownOptions)).write();
-      } catch (err) {
-        warning(`Could not write the job summary: ${err.message}`);
-      }
-    }
-    const reports = {};
-    if (inputs.reportJson || inputs.reportSarif || inputs.reportMarkdown) {
-      await group2("flowpact: reports", () => {
-        if (inputs.reportJson) reports.json = writeReport(workspace, inputs.reportJson, renderJson(result));
-        if (inputs.reportSarif)
-          reports.sarif = writeReport(
-            workspace,
-            inputs.reportSarif,
-            renderSarif(result, { pathPrefix: prefix })
-          );
-        if (inputs.reportMarkdown) writeReport(workspace, inputs.reportMarkdown, markdown());
-      });
-    }
-    const exitCode = exitCodeFor(s, inputs.failOn);
-    setOutput("errors", s.errors);
-    setOutput("warnings", s.warnings);
-    setOutput("infos", s.infos);
-    setOutput("suppressed", s.suppressed);
-    setOutput("findings", s.total);
-    setOutput("drift", plan?.drift ? "true" : "false");
-    setOutput("breaking", plan?.breaking ?? 0);
-    setOutput("exit-code", exitCode);
-    setOutput("report-json", reports.json ?? "");
-    setOutput("report-sarif", reports.sarif ?? "");
-    setOutput("patch", drift?.patch ?? "");
-    setOutput("artifact-id", drift?.uploaded?.id ?? "");
-    setOutput("required-impact", result.impact?.verdict.required ?? "");
-    setOutput("declared-impact", result.impact?.verdict.declared?.level ?? "");
-    setOutput("impact-ok", result.impact ? String(result.impact.verdict.ok) : "");
-    info(
-      `flowpact ${inputs.mode}: ${plural2(s.errors, "error")}, ${plural2(s.warnings, "warning")}, ${s.infos} info, ${s.suppressed} suppressed \xB7 ${plural2(s.workflows, "workflow")} \xB7 ${result.durationMs} ms`
-    );
-    if (exitCode !== 0) setFailed(failureMessage(result, inputs, drift));
+    await report(result, inputs, place, log);
   } catch (err) {
-    if (err instanceof ConfigError) {
-      const where = err.file ? ` (${err.file})` : "";
-      setFailed([`${err.message}${where}`, ...err.issues.map((i) => `  - ${i}`)].join("\n"));
-    } else if (err instanceof InputError || err instanceof UnsafePathError) {
-      setFailed(err.message);
-    } else {
-      const e = err instanceof Error ? err : new Error(String(err));
-      setFailed(debug2 && e.stack ? e.stack : `${e.message} (set the debug input for a stack trace)`);
-    }
+    failWith(err, debug2);
   }
 }
 

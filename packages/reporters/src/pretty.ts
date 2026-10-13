@@ -107,9 +107,24 @@ export interface PrettyOptions extends RenderOptions {
   hideInfo?: boolean;
 }
 
+/** The rule of dashes that opens a file's findings, with their counts on the right. */
+function fileHeading(t: Theme, file: string, findings: Finding[], width: number): string {
+  const { c, sym } = t;
+  const counts = countBySeverity(findings);
+  const right = [
+    counts.error ? t.severity.error(`${counts.error} error${counts.error > 1 ? 's' : ''}`) : '',
+    counts.warning ? t.severity.warning(`${counts.warning} warning${counts.warning > 1 ? 's' : ''}`) : '',
+    counts.info ? t.severity.info(`${counts.info} info`) : '',
+  ]
+    .filter(Boolean)
+    .join(c.dim(', '));
+  const head = `${c.dim(sym.h.repeat(2))} ${c.bold(c.underline(file))} `;
+  const fill = Math.max(2, width - visibleWidth(head) - visibleWidth(right) - 2);
+  return `${head}${c.dim(sym.h.repeat(fill))} ${right}`;
+}
+
 export function renderPretty(result: AnalysisResult, opts: PrettyOptions): string {
   const t = createTheme(opts);
-  const { c, sym } = t;
   const sources = sourceMap(result);
   const out: string[] = [];
   const shown = result.findings.filter((f) => !(opts.hideInfo && f.severity === 'info'));
@@ -118,18 +133,8 @@ export function renderPretty(result: AnalysisResult, opts: PrettyOptions): strin
   for (const f of shown) byFile.set(f.loc.file, [...(byFile.get(f.loc.file) ?? []), f]);
 
   for (const [file, findings] of byFile) {
-    const counts = countBySeverity(findings);
-    const right = [
-      counts.error ? t.severity.error(`${counts.error} error${counts.error > 1 ? 's' : ''}`) : '',
-      counts.warning ? t.severity.warning(`${counts.warning} warning${counts.warning > 1 ? 's' : ''}`) : '',
-      counts.info ? t.severity.info(`${counts.info} info`) : '',
-    ]
-      .filter(Boolean)
-      .join(c.dim(', '));
-    const head = `${c.dim(sym.h.repeat(2))} ${c.bold(c.underline(file))} `;
-    const fill = Math.max(2, opts.width - visibleWidth(head) - visibleWidth(right) - 2);
     out.push('');
-    out.push(`${head}${c.dim(sym.h.repeat(fill))} ${right}`);
+    out.push(fileHeading(t, file, findings, opts.width));
     for (const f of findings) {
       out.push('');
       out.push(renderFinding(t, f, sources));
@@ -179,30 +184,27 @@ function countBySeverity(findings: Finding[]) {
   };
 }
 
-export function renderSummary(result: AnalysisResult, opts: RenderOptions, infoHidden = false): string {
-  const t = createTheme(opts);
+/** The counts of findings by severity, or that there are none. */
+function countsLine(t: Theme, s: AnalysisResult['summary'], infoHidden: boolean): string {
+  const { c, sym } = t;
+  if (s.total === 0) return `${c.green(sym.ok)} ${c.green(c.bold('No problems found'))}`;
+  return [
+    t.severity.error(`${sym.error} ${s.errors} error${s.errors === 1 ? '' : 's'}`),
+    t.severity.warning(`${sym.warning} ${s.warnings} warning${s.warnings === 1 ? '' : 's'}`),
+    t.severity.info(`${sym.info} ${s.infos} info${infoHidden ? ' (hidden)' : ''}`),
+  ].join('   ');
+}
+
+/** What was analyzed, and the findings that are not reported (accepted by overrides, or in generated files). */
+function scopeLines(t: Theme, result: AnalysisResult): string[] {
   const { c, sym } = t;
   const s = result.summary;
-  const lines: string[] = [];
-  if (s.total === 0) {
-    lines.push(`${c.green(sym.ok)} ${c.green(c.bold('No problems found'))}`);
-  } else {
-    lines.push(
-      [
-        t.severity.error(`${sym.error} ${s.errors} error${s.errors === 1 ? '' : 's'}`),
-        t.severity.warning(`${sym.warning} ${s.warnings} warning${s.warnings === 1 ? '' : 's'}`),
-        t.severity.info(`${sym.info} ${s.infos} info${infoHidden ? ' (hidden)' : ''}`),
-      ].join('   '),
-    );
-  }
-  lines.push(
+  const lines = [
     c.dim(
       `${s.workflows} workflow${s.workflows === 1 ? '' : 's'} ${sym.dot} ${s.actions} action${s.actions === 1 ? '' : 's'} ${sym.dot} ${s.jobs} jobs ${sym.dot} ${s.matrixCombinations} matrix combinations`,
     ),
-  );
-  lines.push(
     c.dim(`graph: ${s.graph.nodes} symbols, ${s.graph.edges} edges ${sym.dot} ${result.durationMs} ms`),
-  );
+  ];
   if (s.suppressed) {
     lines.push(
       c.dim(
@@ -217,36 +219,56 @@ export function renderSummary(result: AnalysisResult, opts: RenderOptions, infoH
       ),
     );
   }
-  if (result.contracts) {
-    const k = result.contracts.counts;
+  return lines;
+}
+
+/** Whether the locked contracts are up to date, or how they drifted. */
+function contractsLine(t: Theme, contracts: NonNullable<AnalysisResult['contracts']>): string {
+  const { c, sym } = t;
+  const k = contracts.counts;
+  return contracts.drift
+    ? `${c.yellow('contracts:')} ${k.update} outdated, ${k.create} missing, ${k.delete} orphaned${contracts.breaking ? c.red(` ${sym.dot} ${contracts.breaking} breaking`) : ''} ${c.dim(`${sym.arrow} flowpact generate`)}`
+    : c.green(`contracts: ${k.unchanged} up to date`);
+}
+
+/** Each code's rule name and the most severe level it reported at. */
+function codeNames(findings: Finding[]): Map<string, { name: string; severity: Severity }> {
+  // A rule can report some findings below its severity (FP503: keys GitHub ignores); show the most severe.
+  const rank: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
+  const nameOf = new Map<string, { name: string; severity: Severity }>();
+  for (const f of findings) {
+    const seen = nameOf.get(f.code);
+    if (!seen || rank[f.severity] < rank[seen.severity])
+      nameOf.set(f.code, { name: f.name, severity: f.severity });
+  }
+  return nameOf;
+}
+
+/** The codes reported most often, with their counts, and how to explain them. */
+function codeLines(t: Theme, result: AnalysisResult): string[] {
+  const { c, sym } = t;
+  const codes = Object.entries(result.summary.byCode).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (!codes.length) return [];
+  const lines = [''];
+  const nameOf = codeNames(result.findings);
+  const nameW = Math.max(...codes.map(([code]) => visibleWidth(nameOf.get(code)?.name ?? '')));
+  for (const [code, n] of codes.slice(0, 10)) {
+    const info = nameOf.get(code)!;
     lines.push(
-      result.contracts.drift
-        ? `${c.yellow('contracts:')} ${k.update} outdated, ${k.create} missing, ${k.delete} orphaned${result.contracts.breaking ? c.red(` ${sym.dot} ${result.contracts.breaking} breaking`) : ''} ${c.dim(`${sym.arrow} flowpact generate`)}`
-        : c.green(`contracts: ${k.unchanged} up to date`),
+      `${t.severity[info.severity](sym[info.severity])} ${c.bold(code)}  ${padEnd(info.name, nameW)}  ${c.bold(String(n).padStart(3))}`,
     );
   }
-  const codes = Object.entries(s.byCode).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  if (codes.length) {
-    lines.push('');
-    // A rule can report some findings below its severity (FP503: keys GitHub ignores); show the most severe.
-    const rank: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
-    const nameOf = new Map<string, { name: string; severity: Severity }>();
-    for (const f of result.findings) {
-      const seen = nameOf.get(f.code);
-      if (!seen || rank[f.severity] < rank[seen.severity])
-        nameOf.set(f.code, { name: f.name, severity: f.severity });
-    }
-    const nameW = Math.max(...codes.map(([code]) => visibleWidth(nameOf.get(code)?.name ?? '')));
-    for (const [code, n] of codes.slice(0, 10)) {
-      const info = nameOf.get(code)!;
-      lines.push(
-        `${t.severity[info.severity](sym[info.severity])} ${c.bold(code)}  ${padEnd(info.name, nameW)}  ${c.bold(String(n).padStart(3))}`,
-      );
-    }
-    if (codes.length > 10) lines.push(c.dim(`… ${codes.length - 10} more codes`));
-    lines.push('');
-    lines.push(c.dim(`Explain any code: flowpact explain <code>`));
-  }
+  if (codes.length > 10) lines.push(c.dim(`… ${codes.length - 10} more codes`));
+  lines.push('');
+  lines.push(c.dim(`Explain any code: flowpact explain <code>`));
+  return lines;
+}
+
+export function renderSummary(result: AnalysisResult, opts: RenderOptions, infoHidden = false): string {
+  const t = createTheme(opts);
+  const lines = [countsLine(t, result.summary, infoHidden), ...scopeLines(t, result)];
+  if (result.contracts) lines.push(contractsLine(t, result.contracts));
+  lines.push(...codeLines(t, result));
   return box(t, 'Summary', lines, opts.width);
 }
 

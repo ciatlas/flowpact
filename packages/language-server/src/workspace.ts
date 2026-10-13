@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
+  type FileSystem,
   type Logger,
   nodeFileSystem,
   type Occurrence,
@@ -19,6 +20,7 @@ import {
   type LoadedConfig,
   loadPlugins,
   parseConfigText,
+  type RuleRegistry,
   RuleRegistryError,
 } from '@flowpact/lint';
 import type { Diagnostic } from 'vscode-languageserver';
@@ -87,6 +89,73 @@ export interface WorkspaceHost {
 interface ConfigProblem {
   file: string;
   message: string;
+}
+
+/** A config or plugin error as a problem on the config file, or on the file it would be when there is none. */
+function configProblem(configFile: string | undefined, err: Error): ConfigProblem {
+  return {
+    file: configFile ?? `${CONFIG_DIR}/${CONFIG_FILES[0]}`,
+    message: [err.message, ...(err instanceof ConfigError ? err.issues : []).map((i) => `- ${i}`)].join('\n'),
+  };
+}
+
+/** The config file as written; when it does not parse, the last good config, else the defaults. */
+function readConfig(
+  fs: FileSystem,
+  configFile: string | undefined,
+  goodConfig: LoadedConfig | undefined,
+  problem: (err: Error) => void,
+): LoadedConfig {
+  const defaults: LoadedConfig = { config: defaultConfig() };
+  if (!configFile) return defaults;
+  const text = fs.read(configFile)!;
+  try {
+    return { ...parseConfigText(text, configFile), file: configFile, text };
+  } catch (err) {
+    if (!(err instanceof ConfigError)) throw err;
+    problem(err);
+    return goodConfig ?? defaults;
+  }
+}
+
+/** What an analysis of a root runs with, besides its config. */
+interface AnalysisInput {
+  dir: string;
+  fs: FileSystem;
+  registry: RuleRegistry;
+  logger: Logger;
+  checkContracts: boolean;
+}
+
+/**
+ * The analysis with the first of `candidates` that it accepts (it rejects, for example, an unknown rule), and that
+ * config; `rejected` hears of each config it rejects. Undefined when it rejects them all.
+ */
+function analyzeFirst(
+  input: AnalysisInput,
+  candidates: LoadedConfig[],
+  rejected: (candidate: LoadedConfig, err: ConfigError) => void,
+): { result: AnalysisResult; candidate: LoadedConfig } | undefined {
+  for (const candidate of candidates) {
+    try {
+      const result = analyze({
+        root: input.dir,
+        fs: input.fs,
+        config: candidate.config,
+        ...(candidate.file ? { configFile: candidate.file } : {}),
+        ...(candidate.text !== undefined ? { configText: candidate.text } : {}),
+        ...(candidate.overrideLocs ? { overrideLocs: candidate.overrideLocs } : {}),
+        registry: input.registry,
+        logger: input.logger,
+        checkContracts: input.checkContracts,
+      });
+      return { result, candidate };
+    } catch (err) {
+      if (!(err instanceof ConfigError)) throw err;
+      rejected(candidate, err);
+    }
+  }
+  return undefined;
 }
 
 /** Delay after the last edit before analyzing. */
@@ -218,88 +287,83 @@ export class Workspace {
     return root.running;
   }
 
-  private async analyze(root: Root): Promise<void> {
-    const logger = this.host.logger;
+  /** The open documents of a root that the analysis reads, with their (possibly unsaved) text. */
+  private openFiles(root: Root): Map<string, string> {
     const files = new Map<string, string>();
     for (const doc of this.host.documents()) {
       const rel = root.rel(doc.path);
       if (rel && isRelevant(rel)) files.set(rel, doc.text);
     }
-    const fs = overlayFileSystem(nodeFileSystem(root.dir), files);
-    const problems: ConfigProblem[] = [];
-    const configFile = CONFIG_FILES.map((f) => `${CONFIG_DIR}/${f}`).find((f) => fs.read(f) !== undefined);
-    const problem = (err: Error) =>
-      problems.push({
-        file: configFile ?? `${CONFIG_DIR}/${CONFIG_FILES[0]}`,
-        message: [err.message, ...(err instanceof ConfigError ? err.issues : []).map((i) => `- ${i}`)].join(
-          '\n',
-        ),
-      });
+    return files;
+  }
 
-    let loaded: LoadedConfig = { config: defaultConfig() };
-    if (configFile) {
-      const text = fs.read(configFile)!;
-      try {
-        loaded = { ...parseConfigText(text, configFile), file: configFile, text };
-      } catch (err) {
-        if (!(err instanceof ConfigError)) throw err;
-        problem(err);
-        loaded = root.goodConfig ?? loaded;
-      }
-    }
-
-    // Plugins run JavaScript from the repository: only when the editor trusts the workspace, and only for repositories
-    // in its folders (a file opened from elsewhere, or a repository above an opened folder, was not trusted).
-    let registry = createRegistry();
+  /**
+   * Whether the config's plugins may run. Plugins run JavaScript from the repository: only when the editor trusts the
+   * workspace, and only for repositories in its folders (a file opened from elsewhere, or a repository above an opened
+   * folder, was not trusted).
+   */
+  private pluginsAllowed(root: Root, loaded: LoadedConfig): boolean {
+    if (loaded.config.plugins.length === 0) return false;
     const inFolders = this.folders.some((f) => {
       const r = relative(f, root.dir);
       return r === '' || (r !== '..' && !r.startsWith(`..${sep}`) && !isAbsolute(r));
     });
-    const loadable = this.settings.plugins && inFolders;
-    const pluginsSkipped = loaded.config.plugins.length > 0 && !loadable;
-    if (pluginsSkipped && !root.pluginsNoted) {
-      const why = this.settings.plugins
-        ? 'the repository is outside the workspace folders'
-        : 'plugins are off';
-      logger.info(`${root.dir}: the config lists plugins; they are not loaded (${why})`);
-      root.pluginsNoted = true;
+    if (this.settings.plugins && inFolders) return true;
+    this.notePluginsSkipped(root);
+    return false;
+  }
+
+  /** The built-in rules and the config's plugins; only the built-in ones when the plugins fail to load. */
+  private async registryWithPlugins(
+    root: Root,
+    loaded: LoadedConfig,
+    problem: (err: Error) => void,
+  ): Promise<RuleRegistry> {
+    const registry = createRegistry();
+    try {
+      await loadPlugins(root.dir, loaded.config, registry, this.host.analysisLogger);
+      return registry;
+    } catch (err) {
+      if (!(err instanceof ConfigError || err instanceof RuleRegistryError)) throw err;
+      problem(err);
+      return createRegistry();
     }
-    if (loaded.config.plugins.length > 0 && loadable) {
-      try {
-        await loadPlugins(root.dir, loaded.config, registry, this.host.analysisLogger);
-      } catch (err) {
-        if (!(err instanceof ConfigError || err instanceof RuleRegistryError)) throw err;
-        problem(err);
-        registry = createRegistry();
-      }
-    }
+  }
+
+  /** Says once per root that its config's plugins are not loaded, and why. */
+  private notePluginsSkipped(root: Root): void {
+    if (root.pluginsNoted) return;
+    const why = this.settings.plugins ? 'the repository is outside the workspace folders' : 'plugins are off';
+    this.host.logger.info(`${root.dir}: the config lists plugins; they are not loaded (${why})`);
+    root.pluginsNoted = true;
+  }
+
+  private async analyze(root: Root): Promise<void> {
+    const logger = this.host.logger;
+    const fs = overlayFileSystem(nodeFileSystem(root.dir), this.openFiles(root));
+    const problems: ConfigProblem[] = [];
+    const configFile = CONFIG_FILES.map((f) => `${CONFIG_DIR}/${f}`).find((f) => fs.read(f) !== undefined);
+    const problem = (err: Error) => problems.push(configProblem(configFile, err));
+    const loaded = readConfig(fs, configFile, root.goodConfig, problem);
+    // Without plugins to load the analysis starts in the same turn, with no await in between.
+    const registry = this.pluginsAllowed(root, loaded)
+      ? await this.registryWithPlugins(root, loaded, problem)
+      : createRegistry();
 
     const checkContracts =
       this.settings.contracts === 'on' || (this.settings.contracts === 'auto' && fs.isDir(CONTRACTS_DIR));
     // The config as written; if the analysis rejects it (e.g. an unknown rule), the last good one, then the defaults.
     const candidates = [...new Set([loaded, root.goodConfig ?? loaded, { config: defaultConfig() }])];
-    let result: AnalysisResult | undefined;
-    for (const candidate of candidates) {
-      try {
-        result = analyze({
-          root: root.dir,
-          fs,
-          config: candidate.config,
-          ...(candidate.file ? { configFile: candidate.file } : {}),
-          ...(candidate.text !== undefined ? { configText: candidate.text } : {}),
-          ...(candidate.overrideLocs ? { overrideLocs: candidate.overrideLocs } : {}),
-          registry,
-          logger: this.host.analysisLogger,
-          checkContracts,
-        });
-        if (candidate === loaded && problems.length === 0) root.goodConfig = loaded;
-        break;
-      } catch (err) {
-        if (!(err instanceof ConfigError)) throw err;
+    const analyzed = analyzeFirst(
+      { dir: root.dir, fs, registry, logger: this.host.analysisLogger, checkContracts },
+      candidates,
+      (candidate, err) => {
         if (candidate === loaded) problem(err);
-      }
-    }
-    if (!result) return;
+      },
+    );
+    if (!analyzed) return;
+    const { result } = analyzed;
+    if (analyzed.candidate === loaded && problems.length === 0) root.goodConfig = loaded;
     root.result = result;
     root.locator = new SymbolLocator(result.index);
     logger.debug(`analyzed ${root.dir}`, {

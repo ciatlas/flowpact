@@ -15,29 +15,55 @@ export const defaultRenderOptions = (): RenderOptions => ({ color: false, width:
 
 export type Theme = ReturnType<typeof createTheme>;
 
+/** The symbols a theme draws with: box-drawing characters and typographic marks. */
+const UNICODE_SYMBOLS = {
+  error: '✖',
+  warning: '▲',
+  info: '●',
+  ok: '✔',
+  bar: '│',
+  arrow: '→',
+  pointer: '▶',
+  corner: '╭',
+  cornerEnd: '╰',
+  h: '─',
+  caret: '━',
+  tee: '├─',
+  elbow: '└─',
+  dot: '·',
+  tl: '╭',
+  tr: '╮',
+  bl: '╰',
+  br: '╯',
+};
+
+/** The same symbols in ASCII, for limited terminals. */
+const ASCII_SYMBOLS: typeof UNICODE_SYMBOLS = {
+  error: 'x',
+  warning: '!',
+  info: 'i',
+  ok: 'v',
+  bar: '|',
+  arrow: '->',
+  pointer: '>',
+  corner: '+',
+  cornerEnd: '+',
+  h: '-',
+  caret: '^',
+  tee: '|-',
+  elbow: '`-',
+  dot: '-',
+  tl: '+',
+  tr: '+',
+  bl: '+',
+  br: '+',
+};
+
 export function createTheme(opts: RenderOptions) {
   const c = pc.createColors(opts.color);
   const a = opts.ascii ?? false;
-  const sym = {
-    error: a ? 'x' : '✖',
-    warning: a ? '!' : '▲',
-    info: a ? 'i' : '●',
-    ok: a ? 'v' : '✔',
-    bar: a ? '|' : '│',
-    arrow: a ? '->' : '→',
-    pointer: a ? '>' : '▶',
-    corner: a ? '+' : '╭',
-    cornerEnd: a ? '+' : '╰',
-    h: a ? '-' : '─',
-    caret: a ? '^' : '━',
-    tee: a ? '|-' : '├─',
-    elbow: a ? '`-' : '└─',
-    dot: a ? '-' : '·',
-    tl: a ? '+' : '╭',
-    tr: a ? '+' : '╮',
-    bl: a ? '+' : '╰',
-    br: a ? '+' : '╯',
-  };
+  // A copy, so that a caller changing its theme's symbols changes no other theme's.
+  const sym = { ...(a ? ASCII_SYMBOLS : UNICODE_SYMBOLS) };
   const severity = {
     error: (s: string) => c.red(s),
     warning: (s: string) => c.yellow(s),

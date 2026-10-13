@@ -90,21 +90,66 @@ export interface CliContext {
   stderr: (s: string) => void;
 }
 
+/** A flag's aliases (citty's `alias`: one, several or none), as a list. */
+function aliasesOf(arg: ArgsDef[string]): string[] {
+  const alias = 'alias' in arg ? (arg.alias as string | string[] | undefined) : undefined;
+  return alias === undefined ? [] : Array.isArray(alias) ? alias : [alias];
+}
+
+/** `base-config` → `baseConfig`: citty also accepts a flag's camelCase. */
+const camelCase = (key: string) => key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+
 /** How a command's string flags can be written: `--name`, its camelCase, long aliases, and `-x` for one-letter aliases. */
 function flagSpellings(def: ArgsDef) {
   const strings = new Map<string, string>(); // spelling without dashes → flag name
   const shortStrings = new Map<string, string>();
   for (const [key, arg] of Object.entries(def)) {
-    if (arg.type === 'positional') continue;
-    const alias = 'alias' in arg ? (arg.alias as string | string[] | undefined) : undefined;
-    const aliases = alias === undefined ? [] : Array.isArray(alias) ? alias : [alias];
-    const camel = key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-    if (arg.type === 'boolean') continue;
+    if (arg.type === 'positional' || arg.type === 'boolean') continue;
+    const aliases = aliasesOf(arg);
     // citty makes every alias an option of its own, so a one-letter alias also works as `--o`.
-    for (const long of [key, camel, ...aliases]) strings.set(long, key);
+    for (const long of [key, camelCase(key), ...aliases]) strings.set(long, key);
     for (const a of aliases) if (a.length === 1) shortStrings.set(a, key);
   }
   return { strings, shortStrings };
+}
+
+/** The spellings of a command's string flags (see flagSpellings). */
+type FlagSpellings = ReturnType<typeof flagSpellings>;
+
+/**
+ * `--name X` for a string flag as `--name=X`; `-qo X` (a cluster of short flags ending with a string flag) as `-qoX`.
+ * Undefined when `a` takes no value, or has none after it.
+ */
+function attachValue(a: string, next: string | undefined, { strings, shortStrings }: FlagSpellings) {
+  if (next === undefined) return undefined;
+  const long = /^--([^=]+)$/.exec(a)?.[1];
+  if (long !== undefined && strings.has(long)) return [`--${long}=${next}`];
+  if (!/^-[A-Za-z]+$/.test(a)) return undefined;
+  // A cluster of short flags (`-qo`): a string flag takes the rest of it, or the next argument when it is last.
+  const at = [...a.slice(1)].findIndex((c) => shortStrings.has(c));
+  if (at !== a.length - 2) return undefined;
+  // An empty value cannot be attached to a short flag; the long form keeps it.
+  return next === '' ? [...(at ? [a.slice(0, -1)] : []), `--${shortStrings.get(a.at(-1)!)}=`] : [a + next];
+}
+
+/** The arguments after the command, with the value of each string flag attached to it (see normalizeArgv). */
+function attachValues(rest: string[], spellings: FlagSpellings): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]!;
+    if (a === '--') {
+      out.push(...rest.slice(i));
+      break;
+    }
+    const attached = attachValue(a, rest[i + 1], spellings);
+    if (attached) {
+      out.push(...attached);
+      i++;
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
 }
 
 /**
@@ -128,38 +173,32 @@ export function normalizeArgv(argv: string[], commands: Record<string, { args?: 
   const args = commands[first]?.args;
   // The language server reads its own arguments (--socket <port>) the way editors pass them.
   if (first === 'lsp' || !args || typeof args !== 'object') return argv;
-  const { strings, shortStrings } = flagSpellings(args as ArgsDef);
-  const out = [first];
-  for (let i = 0; i < rest.length; i++) {
-    const a = rest[i]!;
-    const next = rest[i + 1];
-    if (a === '--') {
-      out.push(...rest.slice(i));
-      break;
+  return [first, ...attachValues(rest, flagSpellings(args as ArgsDef))];
+}
+
+/** A flag as node:util's parseArgs takes it. */
+type ParseOption = { type: 'string' | 'boolean'; short?: string };
+
+/**
+ * A command's flags as citty hands them to parseArgs (each flag, its camelCase and its aliases), and the spellings of
+ * the flag `name`.
+ */
+function parseOptions(def: ArgsDef, name: string) {
+  const options: Record<string, ParseOption> = {};
+  const names = new Set<string>([name]);
+  for (const [key, arg] of Object.entries(def)) {
+    if (arg.type === 'positional') continue;
+    const type = arg.type === 'boolean' ? 'boolean' : 'string';
+    const aliases = aliasesOf(arg);
+    const short = aliases.find((a) => a.length === 1);
+    options[key] = { type, ...(short ? { short } : {}) };
+    for (const long of [camelCase(key), ...aliases]) {
+      if (long === key) continue;
+      options[long] ??= { type };
+      if (key === name) names.add(long);
     }
-    const long = /^--([^=]+)$/.exec(a)?.[1];
-    if (long !== undefined && strings.has(long) && next !== undefined) {
-      out.push(`--${long}=${next}`);
-      i++;
-      continue;
-    }
-    if (/^-[A-Za-z]+$/.test(a)) {
-      // A cluster of short flags (`-qo`): a string flag takes the rest of it, or the next argument when it is last.
-      const at = [...a.slice(1)].findIndex((c) => shortStrings.has(c));
-      if (at === a.length - 2 && next !== undefined) {
-        // An empty value cannot be attached to a short flag; the long form keeps it.
-        out.push(
-          ...(next === ''
-            ? [...(at ? [a.slice(0, -1)] : []), `--${shortStrings.get(a.at(-1)!)}=`]
-            : [a + next]),
-        );
-        i++;
-        continue;
-      }
-    }
-    out.push(a);
   }
-  return out;
+  return { options, names };
 }
 
 /**
@@ -169,23 +208,7 @@ export function normalizeArgv(argv: string[], commands: Record<string, { args?: 
  * `--plugin=x` is the title. A flag without a value (`-o` at the end) is '', as in citty; callers skip it.
  */
 export function repeatedFlag(rawArgs: string[], def: ArgsDef, name: string): string[] {
-  type Option = { type: 'string' | 'boolean'; short?: string };
-  const options: Record<string, Option> = {};
-  const names = new Set<string>([name]);
-  for (const [key, arg] of Object.entries(def)) {
-    if (arg.type === 'positional') continue;
-    const type = arg.type === 'boolean' ? 'boolean' : 'string';
-    const alias = 'alias' in arg ? (arg.alias as string | string[] | undefined) : undefined;
-    const aliases = alias === undefined ? [] : Array.isArray(alias) ? alias : [alias];
-    const short = aliases.find((a) => a.length === 1);
-    options[key] = { type, ...(short ? { short } : {}) };
-    const camel = key.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
-    for (const long of [camel, ...aliases]) {
-      if (long === key) continue;
-      options[long] ??= { type };
-      if (key === name) names.add(long);
-    }
-  }
+  const { options, names } = parseOptions(def, name);
   const end = rawArgs.indexOf('--');
   const args = rawArgs.filter((a, i) => !(a.startsWith('--no-') && (end < 0 || i < end)));
   let tokens: ReturnType<typeof parseArgs>['tokens'];

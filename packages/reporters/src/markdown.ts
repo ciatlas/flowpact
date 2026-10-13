@@ -95,68 +95,78 @@ function renderFinding(f: Finding, opts: MarkdownOptions): string[] {
   return out;
 }
 
-function renderContracts(plan: ContractPlan, opts: MarkdownOptions): string[] {
-  const out: string[] = ['### Contracts', ''];
-  const k = plan.counts;
-  if (!plan.drift) {
-    out.push(`✅ Contracts are up to date (${plural(plan.entries.length, 'file')}).`);
-    return out;
-  }
-  out.push(
-    `${plan.breaking ? '❌' : '⚠️'} Contracts drifted: ${k.create} new · ${k.update} changed · ${k.delete} removed · ${k.unchanged} unchanged${plan.breaking ? ` — **${plural(plan.breaking, 'breaking change')}**` : ''}`,
-  );
-  out.push('');
-  out.push('| File | Status | Breaking |');
-  out.push('| --- | --- | ---: |');
-  const limit = Math.max(1, opts.maxFindings ?? 50);
-  const allChanged = plan.entries.filter((e) => e.status !== 'unchanged');
-  const changed = allChanged.slice(0, limit);
+/** The changed contract files with their status and how many of their changes break callers. */
+function contractRows(changed: ContractPlan['entries']): string[] {
+  const out = ['| File | Status | Breaking |', '| --- | --- | ---: |'];
   for (const e of changed) {
     const breaking = e.changes.filter((c) => c.breaking).length;
     const status = `${STATUS_LABEL[e.status]}${e.invalid ? ' (invalid)' : ''}`;
     out.push(`| ${tableCell(code(e.file))} | ${status} | ${breaking} |`);
   }
-  const withChanges = changed.filter((e) => e.changes.length > 0 || e.invalid);
-  if (withChanges.length) {
-    out.push('');
-    for (const e of withChanges) {
-      out.push(`- ${code(e.file)}`);
-      for (const c of [...e.changes].sort((a, b) => Number(b.breaking) - Number(a.breaking))) {
-        out.push(c.breaking ? `  - **${text(c.message)}** (breaking)` : `  - ${text(c.message)}`);
-      }
-      if (e.invalid) out.push(`  - could not be read as a contract: ${text(e.invalid)}`);
-    }
-  }
-  if (allChanged.length > changed.length) {
-    out.push('');
-    out.push(
-      `_… ${allChanged.length - changed.length} more changed contract files not shown (see the JSON report)._`,
-    );
-  }
-  if (opts.artifact) {
-    const patch = opts.artifact.patchFile ?? 'flowpact-contracts.patch';
-    out.push('');
-    if (opts.artifact.runId) {
-      out.push('To update the locked contracts, apply the regenerated ones from this run:');
-      out.push('');
-      out.push('```sh');
-      out.push(`gh run download ${opts.artifact.runId} -n ${opts.artifact.name}`);
-    } else {
-      out.push(
-        `To update the locked contracts, download the ${code(opts.artifact.name)} artifact from this run and apply it:`,
-      );
-      out.push('');
-      out.push('```sh');
-    }
-    out.push(`git apply --index ${patch}`);
-    out.push('```');
-    out.push('');
-    out.push(`Or run ${code('flowpact generate')} locally and commit the result.`);
-  } else {
-    out.push('');
-    out.push(`Run ${code('flowpact generate')} and commit the result to update the locked contracts.`);
-  }
   return out;
+}
+
+/** A contract file's changes, breaking ones first, and why it could not be read. */
+function contractChanges(e: ContractPlan['entries'][number]): string[] {
+  const out = [`- ${code(e.file)}`];
+  for (const c of [...e.changes].sort((a, b) => Number(b.breaking) - Number(a.breaking))) {
+    out.push(c.breaking ? `  - **${text(c.message)}** (breaking)` : `  - ${text(c.message)}`);
+  }
+  if (e.invalid) out.push(`  - could not be read as a contract: ${text(e.invalid)}`);
+  return out;
+}
+
+/** How to update the locked contracts: from the run's artifact when there is one, else with `flowpact generate`. */
+function contractInstructions(artifact: MarkdownOptions['artifact']): string[] {
+  if (!artifact)
+    return [`Run ${code('flowpact generate')} and commit the result to update the locked contracts.`];
+  const patch = artifact.patchFile ?? 'flowpact-contracts.patch';
+  const download = artifact.runId
+    ? [
+        'To update the locked contracts, apply the regenerated ones from this run:',
+        '',
+        '```sh',
+        `gh run download ${artifact.runId} -n ${artifact.name}`,
+      ]
+    : [
+        `To update the locked contracts, download the ${code(artifact.name)} artifact from this run and apply it:`,
+        '',
+        '```sh',
+      ];
+  return [
+    ...download,
+    `git apply --index ${patch}`,
+    '```',
+    '',
+    `Or run ${code('flowpact generate')} locally and commit the result.`,
+  ];
+}
+
+function renderContracts(plan: ContractPlan, opts: MarkdownOptions): string[] {
+  const k = plan.counts;
+  if (!plan.drift)
+    return ['### Contracts', '', `✅ Contracts are up to date (${plural(plan.entries.length, 'file')}).`];
+  const limit = Math.max(1, opts.maxFindings ?? 50);
+  const allChanged = plan.entries.filter((e) => e.status !== 'unchanged');
+  const changed = allChanged.slice(0, limit);
+  const withChanges = changed.filter((e) => e.changes.length > 0 || e.invalid);
+  const notShown = allChanged.length > changed.length;
+  return [
+    '### Contracts',
+    '',
+    `${plan.breaking ? '❌' : '⚠️'} Contracts drifted: ${k.create} new · ${k.update} changed · ${k.delete} removed · ${k.unchanged} unchanged${plan.breaking ? ` — **${plural(plan.breaking, 'breaking change')}**` : ''}`,
+    '',
+    ...contractRows(changed),
+    ...(withChanges.length ? ['', ...withChanges.flatMap((e) => contractChanges(e))] : []),
+    ...(notShown
+      ? [
+          '',
+          `_… ${allChanged.length - changed.length} more changed contract files not shown (see the JSON report)._`,
+        ]
+      : []),
+    '',
+    ...contractInstructions(opts.artifact),
+  ];
 }
 
 function renderImpactMarkdown(impact: ImpactResult, opts: MarkdownOptions): string[] {
@@ -188,32 +198,33 @@ function renderImpactMarkdown(impact: ImpactResult, opts: MarkdownOptions): stri
   return out;
 }
 
-/** GitHub-flavored Markdown for job summaries and pull request comments. */
-export function renderMarkdown(result: AnalysisResult, opts: MarkdownOptions = {}): string {
+/** The title, the tool and schema versions, the verdict and the counts. */
+function headerLines(result: AnalysisResult, opts: MarkdownOptions): string[] {
   const s = result.summary;
   const m = result.meta;
-  const out: string[] = [];
-  out.push(`## ${opts.title ?? 'flowpact report'}`);
-  out.push('');
-  out.push(
+  const out = [
+    `## ${opts.title ?? 'flowpact report'}`,
+    '',
     `<sub>${m.tool} v${m.version} · config schema v${m.schemas.config} · contract schema v${m.schemas.contract} · report schema v${m.schemas.report} · ${result.durationMs} ms</sub>`,
-  );
-  out.push('');
-  out.push(statusLine(result));
-  out.push('');
-  out.push('| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |');
-  out.push('| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
-  out.push(
+    '',
+    statusLine(result),
+    '',
+    '| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |',
+    '| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
     `| ${s.errors} | ${s.warnings} | ${s.infos} | ${s.suppressed} | ${s.workflows} | ${s.actions} | ${s.jobs} | ${s.matrixCombinations} |`,
-  );
+  ];
   if (s.skippedInGenerated) {
     out.push('');
     out.push(
       `<sub>${plural(s.skippedInGenerated, 'finding')} about the internals of [generated files](${DOCS_BASE_URL}/docs/configuration#generated-files) ${s.skippedInGenerated === 1 ? 'is' : 'are'} not reported.</sub>`,
     );
   }
+  return out;
+}
 
-  const max = Math.max(0, opts.maxFindings ?? 50);
+/** The findings by severity, the first `max` of them in full, then how many more there are. */
+function findingSections(result: AnalysisResult, opts: MarkdownOptions, max: number): string[] {
+  const out: string[] = [];
   let shown = 0;
   for (const severity of ['error', 'warning', 'info'] as const) {
     const findings = result.findings.filter((f) => f.severity === severity);
@@ -234,46 +245,55 @@ export function renderMarkdown(result: AnalysisResult, opts: MarkdownOptions = {
       `_… ${result.findings.length - shown} more ${result.findings.length - shown === 1 ? 'finding' : 'findings'} not shown — the JSON and SARIF reports (or \`flowpact lint\` locally) list them all._`,
     );
   }
+  return out;
+}
 
-  if (result.contracts) {
-    out.push('');
-    out.push(...renderContracts(result.contracts, opts));
+/** The findings accepted by overrides, the first `max` of them, in a collapsed table. */
+function suppressedSection(result: AnalysisResult, opts: MarkdownOptions, max: number): string[] {
+  const out = [
+    `<details><summary>${plural(result.suppressed.length, 'suppressed finding')}</summary>`,
+    '',
+    '| Code | Location | Reason | Expires | Owner |',
+    '| --- | --- | --- | --- | --- |',
+  ];
+  for (const f of result.suppressed.slice(0, max)) {
+    const o = f.override;
+    out.push(
+      `| [${code(f.code)}](${f.docsUrl}) | ${tableCell(locLink(f.loc, opts))} | ${cell(o.reason)} | ${o.expires ?? '—'} | ${o.owner ? cell(o.owner) : '—'} |`,
+    );
   }
+  if (result.suppressed.length > max) {
+    out.push('');
+    out.push(`_… ${result.suppressed.length - max} more suppressed findings (see the JSON report)._`);
+  }
+  out.push('');
+  out.push('</details>');
+  return out;
+}
 
-  if (result.impact) {
-    out.push('');
-    out.push(...renderImpactMarkdown(result.impact, opts));
-  }
+/** The call graph as a Mermaid diagram in a collapsed section. */
+function graphSection(result: AnalysisResult): string[] {
+  return [
+    '<details><summary>Call graph</summary>',
+    '',
+    '```mermaid',
+    renderMermaid(buildCallGraph(result.index)).trimEnd(),
+    '```',
+    '',
+    '</details>',
+  ];
+}
 
-  if (result.suppressed.length) {
-    out.push('');
-    out.push(`<details><summary>${plural(result.suppressed.length, 'suppressed finding')}</summary>`);
-    out.push('');
-    out.push('| Code | Location | Reason | Expires | Owner |');
-    out.push('| --- | --- | --- | --- | --- |');
-    for (const f of result.suppressed.slice(0, max)) {
-      const o = f.override;
-      out.push(
-        `| [${code(f.code)}](${f.docsUrl}) | ${tableCell(locLink(f.loc, opts))} | ${cell(o.reason)} | ${o.expires ?? '—'} | ${o.owner ? cell(o.owner) : '—'} |`,
-      );
-    }
-    if (result.suppressed.length > max) {
-      out.push('');
-      out.push(`_… ${result.suppressed.length - max} more suppressed findings (see the JSON report)._`);
-    }
-    out.push('');
-    out.push('</details>');
-  }
-
-  if (opts.includeGraph) {
-    out.push('');
-    out.push('<details><summary>Call graph</summary>');
-    out.push('');
-    out.push('```mermaid');
-    out.push(renderMermaid(buildCallGraph(result.index)).trimEnd());
-    out.push('```');
-    out.push('');
-    out.push('</details>');
-  }
+/** GitHub-flavored Markdown for job summaries and pull request comments. */
+export function renderMarkdown(result: AnalysisResult, opts: MarkdownOptions = {}): string {
+  const max = Math.max(0, opts.maxFindings ?? 50);
+  const out = [
+    ...headerLines(result, opts),
+    ...findingSections(result, opts, max),
+    ...(result.contracts ? ['', ...renderContracts(result.contracts, opts)] : []),
+    ...(result.impact ? ['', ...renderImpactMarkdown(result.impact, opts)] : []),
+    ...(result.suppressed.length ? ['', ...suppressedSection(result, opts, max)] : []),
+    ...(opts.includeGraph ? ['', ...graphSection(result)] : []),
+  ];
   return `${out.join('\n')}\n`;
 }
