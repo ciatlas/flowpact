@@ -28,48 +28,62 @@ says what to do about it.
   - in a workflow or composite action that reads `toJSON(github.event)`, `toJSON(github.event.inputs)` or
     `github.event.inputs[<expression>]`, any input other than a `workflow_dispatch` input that nothing else reads (0.15
     skipped every input of such a workflow or action);
-  - a dispatch input read only in the workflow's own input defaults or `workflow_call` outputs, which GitHub evaluates
-    only when the workflow is called.
+  - a dispatch input read only through `github` in the workflow's own input defaults or `workflow_call` outputs, which
+    GitHub evaluates only when the workflow is called.
 
-  Remove the input, or read it as `inputs.<name>`, which holds it whether the workflow is dispatched or called.
+  Remove the input, or read it as `inputs.<name>`, which holds a workflow's `workflow_dispatch` inputs when it is
+  dispatched and its `workflow_call` inputs when it is called (and an action's own inputs). An input default or
+  `workflow_call` output is evaluated only when the workflow is called, so to read a dispatch input there, also declare
+  it under `workflow_call`.
 - [FP105](/docs/rules/fp105) now reports a condition that reads an optional dispatch input without a default as
-  `github.Event.Inputs.<name>`, in any letter case, as it did for `github.event.inputs.<name>`. It no longer reports a
-  condition that reads, as `github.event.inputs.<name>`, an input that only `workflow_call` declares: FP104 reports
-  that input instead.
-- [FP106](/docs/rules/fp106) now also reports a passed input that the called workflow reads only through `github` in a
-  step's own `env:` value, or only through `toJSON(github.event)`, `toJSON(github.event.inputs)`, `github.event[x]` or
-  `github.event.inputs[x]`, and a passed input that such a workflow never reads (0.15 skipped those workflows). An
-  input read only through `github`, including `toJSON(github)`, which 0.15 reported as never read, is now described as
-  read "only through the github context, the caller's when it is called". An input that only `workflow_call` declares,
-  or that the workflow reads only in its `workflow_call` outputs, is now reported as never read. Read the input as
-  `inputs.<name>` in the called workflow, or stop passing it.
-- [FP401](/docs/rules/fp401) no longer reports an input passed to a workflow that can be called when the conditions
-  that read it read it only through `github`, which never holds what the caller passes.
+  `github.Event.Inputs.<name>`, in any letter case, as it did for `github.event.inputs.<name>`: give the input a
+  default, or compare it explicitly, as for `inputs.<name>`. It no longer reports a condition that reads, as
+  `github.event.inputs.<name>`, an input that only `workflow_call` declares, since the condition never reads that input:
+  FP104 reports the input if nothing else reads it.
+- [FP106](/docs/rules/fp106) now also reports a passed input that the called workflow reads only through a step's own
+  `env:` value that reads `github`, where the step reads that value as `env.<name>`, or only through
+  `toJSON(github.event)`, `toJSON(github.event.inputs)` or `github.event.inputs[x]`, and a passed input that such a
+  workflow never reads (0.15 skipped those workflows). For an input read only through `github`, the message now says it
+  is read "only through the github context, the caller's when it is called". 0.15 said "only through
+  github.event.inputs, the caller's event when it is called" for `github.event.inputs.<name>`, and "never reads it" for
+  `toJSON(github)`, `github.event[x]` and `github.Event.Inputs.<name>` in another letter case. In a called workflow that
+  can also be dispatched, an input that only `workflow_call` declares and that is read as
+  `github.event.inputs.<name>`, or one read through `github` only in the workflow's own input defaults or
+  `workflow_call` outputs, is now reported as never read. Read the input as `inputs.<name>` in the called workflow, or
+  stop passing it.
+- [FP401](/docs/rules/fp401) no longer reports an optional input with an empty default (none, or `default: ''`)
+  passed to a workflow that can be called when the conditions that read it read it only through `github`, which never
+  holds what the caller passes. A required input, or one whose non-empty default the empty value replaces, is still
+  reported.
 
 Delete the overrides that [FP902](/docs/rules/fp902) now reports: FP105 and FP401 findings that are gone leave their
-overrides matching nothing. The reworded FP106 findings keep their overrides, but code scanning closes their alerts and
-opens new ones once, because an alert's fingerprint includes its message.
+overrides matching nothing. The reworded FP106 findings keep their overrides, which match the rule, target and file,
+not the message. Code scanning closes the alerts of reworded findings and opens new ones once, because an alert's
+fingerprint includes its message.
 
 ### `flowpact trace`, the editor and custom rules
 
-`flowpact trace` and the editor's hover, go-to-definition and references follow reads of `github` the way the findings
-do. They now follow `toJSON(github)`, `github.event[x]`, and reads written in any letter case
-(`github.Event.Inputs.<name>`, `steps.<id>.Outputs.<name>`). They no longer follow `github` in a workflow's own input
-defaults and `workflow_call` outputs, nor `github.event.inputs.<name>` for an input that no `workflow_dispatch`
-declares. The JSON report's graph, and the symbol and edge counts in the summary, change with them.
+`flowpact trace` and the editor follow reads of `github` the way the findings do. `flowpact trace` now follows
+`toJSON(github)` and `github.event[x]`, and the editor lists them among a dispatch input's references. Trace, hover,
+go-to-definition and references now follow `github` reads and step outputs written in another letter case
+(`github.Event.Inputs.<name>`, `steps.<id>.Outputs.<name>`), and the editor resolves `needs.<job>.Outputs.<name>` to
+the output rather than the job. They no longer follow `github` in a workflow's own input defaults and `workflow_call`
+outputs, nor `github.event.inputs.<name>` for an input that no `workflow_dispatch` declares. The JSON report's graph,
+and the symbol and edge counts in the summary, change with them.
 
 **Custom rules:** in a workflow that can be dispatched, `usagesOf` for a `workflow_dispatch` input now also lists:
 - whole or computed `github` reads (`toJSON(github)`, `github.event[x]`), marked `whole`, also through a step's own
   `env:` value;
 - `github.Event.Inputs.<name>`, in any letter case.
 
-It no longer lists:
-- `github.event.inputs.<name>` for an input that only `workflow_call` declares, or that no trigger declares;
-- `github` in the workflow's own input defaults and `workflow_call` outputs.
+`usagesOf` no longer lists:
+- `github.event.inputs.<name>` as a usage of an input that only `workflow_call` declares, or of a name that no trigger
+  declares;
+- for a `workflow_dispatch` input, reads of `github` in the workflow's own input defaults and `workflow_call` outputs.
 
-A read of one output written in another letter case (`needs.<job>.Outputs.<name>`) is no longer marked `whole`, and a
-`run:` step's output read that way is now a usage. A rule about the value a caller passes should skip usages through
-`github` (see `Usage.whole` in the API types).
+A read of one output written in another letter case (`needs.<job>.Outputs.<name>`, `steps.<id>.Outputs.<name>`) is no
+longer marked `whole`, and a `run:` step's output read that way is now a usage. A rule about the value a caller passes
+should skip usages through `github` (see `Usage.whole` in the API types).
 
 ## 0.14 → 0.15
 
