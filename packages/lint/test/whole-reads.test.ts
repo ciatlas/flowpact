@@ -288,4 +288,26 @@ describe('github.event.inputs in a called workflow (FP106)', () => {
     expect(fp106('${{ github.event.inputs.target }} ${{ inputs.target }}')).toEqual([]);
     expect(fp106('${{ inputs.target }}')).toEqual([]);
   });
+
+  describe('written in any case (#128)', () => {
+    // GitHub looks context properties up ignoring case, so github.Event.Inputs is the caller's event as well. Until
+    // core counts such a read as one of the input (ciatlas/core#28), the finding says the callee never reads it;
+    // either way the call's value is dropped.
+    const dropped = new RegExp(
+      `^jobs\\.c passes "target" to ${WF}/callee\\.yml, which (reads it only|never reads)`,
+    );
+
+    it.each([
+      '${{ github.Event.Inputs.target }}',
+      '${{ GitHub.EVENT.inputs.target }}',
+      '${{ github.event.INPUTS.target }}',
+      '${{ github.Event.Inputs.* }}',
+    ])('reports a value the callee reads only through %s', (read) => {
+      expect(fp106(read)).toEqual([expect.stringMatching(dropped)]);
+    });
+
+    it('does not report a value the callee also reads through inputs', () => {
+      expect(fp106('${{ github.Event.Inputs.target }} ${{ inputs.target }}')).toEqual([]);
+    });
+  });
 });

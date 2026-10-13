@@ -623,4 +623,47 @@ describe('FP108 undefined-input-ref', () => {
     });
     expect(codes(r)).toEqual(['FP108']);
   });
+
+  describe('github.event.inputs written in any case (#128)', () => {
+    // GitHub looks context properties up ignoring case (`@actions/expressions` lower-cases its Dictionary keys, the
+    // runner's DictionaryContextData compares them with OrdinalIgnoreCase): github.Event.Inputs is github.event.inputs.
+    const workflow = (on: string, read: string) => yaml`
+      on:
+        ${on}:
+          inputs:
+            target: { type: string, required: false }
+      jobs:
+        j:
+          runs-on: x
+          steps:
+            - run: echo "\${{ ${read} }}"
+    `;
+    const fp108 = (on: string, read: string) =>
+      byCode(lint({ [`${WF}/w.yml`]: workflow(on, read) }), 'FP108').map((f) => `${f.message} @${at(f)}`);
+
+    it.each([
+      'github.event.inputs.nope',
+      'github.Event.Inputs.nope',
+      'github.EVENT.inputs.nope',
+      'github.event.INPUTS.nope',
+      'GitHub.Event.Inputs.nope',
+      "github['Event']['Inputs'].nope",
+    ])('flags %s in a workflow that can be dispatched', (read) => {
+      expect(fp108('workflow_dispatch', read)).toEqual([`${WF}/w.yml has no input "nope" @${WF}/w.yml:9:24`]);
+    });
+
+    it.each(['github.event.inputs.target', 'github.Event.Inputs.target', 'github.event.inputs.TARGET'])(
+      'is quiet for %s, a declared input',
+      (read) => {
+        expect(fp108('workflow_dispatch', read)).toEqual([]);
+      },
+    );
+
+    it.each(['github.event.inputs.nope', 'github.Event.Inputs.nope'])(
+      'is quiet for %s in a workflow that can only be called, whose event is its caller’s',
+      (read) => {
+        expect(fp108('workflow_call', read)).toEqual([]);
+      },
+    );
+  });
 });

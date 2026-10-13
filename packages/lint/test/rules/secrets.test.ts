@@ -69,6 +69,105 @@ describe('FP203 unused-secret', () => {
   });
 });
 
+/** ciatlas/core#20: mid.yml declares `deploy` and hands every secret to leaf.yml, which reads them with `read`. */
+const everySecret = (read: string, pass = 'secrets: inherit') => ({
+  [`${WF}/leaf.yml`]: `on: { workflow_call: }\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo "\${{ ${read} }}"\n`,
+  [`${WF}/mid.yml`]: yaml`
+    on:
+      workflow_call:
+        secrets:
+          deploy: { required: true }
+    jobs:
+      call:
+        uses: ./.github/workflows/leaf.yml
+        ${pass}
+  `,
+  [`${WF}/top.yml`]:
+    'on: push\njobs:\n  call:\n    uses: ./.github/workflows/mid.yml\n    secrets: { deploy: x }\n',
+});
+
+describe('FP203 and FP204: a callee behind secrets: inherit that reads every secret (ciatlas/core#20)', () => {
+  it.each(['toJSON(secrets)', 'secrets.*', 'secrets[github.event.action]'])(
+    'counts %s as a read of every secret the caller hands on, and keeps secrets: inherit',
+    (read) => {
+      const r = lint(everySecret(read));
+      expect(byCode(r, 'FP203')).toEqual([]);
+      expect(byCode(r, 'FP204')).toEqual([]);
+    },
+  );
+
+  it('also through a callee that hands every secret on in turn', () => {
+    const files = everySecret('toJSON(secrets)');
+    const r = lint({
+      ...files,
+      [`${WF}/mid.yml`]: files[`${WF}/mid.yml`]!.replace('leaf.yml', 'pass.yml'),
+      [`${WF}/pass.yml`]:
+        'on: workflow_call\njobs:\n  j:\n    uses: ./.github/workflows/leaf.yml\n    secrets: inherit\n',
+    });
+    expect(byCode(r, 'FP203')).toEqual([]);
+    expect(byCode(r, 'FP204')).toEqual([]);
+  });
+
+  it('still reports a secret that reaches such a callee through secrets: only by name, and a callee reading none', () => {
+    const r = lint(everySecret('toJSON(secrets)', 'secrets: {}'));
+    expect(byCode(r, 'FP203').map((f) => f.message)).toEqual([
+      'Secret "deploy" of .github/workflows/mid.yml is never read',
+    ]);
+    const none = lint(everySecret("'no secret'"));
+    expect(byCode(none, 'FP204').map((f) => [f.message, f.fix])).toEqual([
+      [
+        'jobs.call inherits all secrets; .github/workflows/leaf.yml and its callees read none',
+        'Remove `secrets: inherit`; the callee reads no secrets.',
+      ],
+    ]);
+  });
+});
+
+/** top.yml hands every secret to mid.yml, which declares `deploy` and hands every secret on to `uses` with `pass`. */
+const handsOn = (uses: string, files: Record<string, string> = {}, pass = 'secrets: inherit') => ({
+  ...files,
+  [`${WF}/mid.yml`]: yaml`
+    on:
+      workflow_call:
+        secrets:
+          deploy: { required: true }
+    jobs:
+      call:
+        uses: ${uses}
+        ${pass}
+  `,
+  [`${WF}/top.yml`]:
+    'on: push\njobs:\n  call:\n    uses: ./.github/workflows/mid.yml\n    secrets: inherit\n',
+});
+const REMOTE = 'acme/infra/.github/workflows/deploy.yml@v1';
+
+describe('FP203 and FP204: a callee behind secrets: inherit whose reads are unknown', () => {
+  it.each([
+    ['a remote workflow', REMOTE, {}],
+    ['a local workflow that is missing', './.github/workflows/nowhere.yml', {}],
+    [
+      'a callee with an expression that does not parse',
+      './.github/workflows/leaf.yml',
+      { [`${WF}/leaf.yml`]: everySecret('fromJSON(secrets[')[`${WF}/leaf.yml`]! },
+    ],
+  ])('keeps the secrets mid.yml hands on to %s, and secrets: inherit into mid.yml', (_, uses, files) => {
+    const r = lint(handsOn(uses, files));
+    expect(byCode(r, 'FP203')).toEqual([]);
+    expect(byCode(r, 'FP204')).toEqual([]);
+  });
+
+  it('still lists the secrets mid.yml reads when it passes them to the remote workflow by name', () => {
+    const r = lint(handsOn(REMOTE, {}, "secrets: { token: '${{ secrets.deploy }}' }"));
+    expect(byCode(r, 'FP203')).toEqual([]);
+    expect(byCode(r, 'FP204').map((f) => [f.message, f.fix])).toEqual([
+      [
+        'jobs.call inherits all secrets; .github/workflows/mid.yml and its callees read deploy',
+        'Replace with:\nsecrets:\n  deploy: ${{ secrets.deploy }}',
+      ],
+    ]);
+  });
+});
+
 describe('FP204 secrets-inherit', () => {
   it('lists the secrets the callee tree actually reads and suggests an explicit mapping', () => {
     const r = lint({

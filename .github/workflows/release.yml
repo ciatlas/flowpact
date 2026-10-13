@@ -237,7 +237,8 @@ jobs:
           BOT: ${{ steps.app.outputs.app-slug }}[bot]
         run: |
           git fetch --force --tags origin
-          # Before 1.0 a minor release may be breaking, so each minor line gets its own tag (v0.2); from 1.0, the major (v1).
+          # Before 1.0 each minor line gets its own tag (v0.2), as a minor release can change what is reported; from 1.0, the
+          # major (v1).
           major="${TAG%%.*}"
           if [ "$major" = v0 ]; then
             rest="${TAG#v0.}"

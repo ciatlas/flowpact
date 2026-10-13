@@ -14,7 +14,7 @@ import {
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
-import { didYouMeanNote, listNames, namesKey, quote } from './util';
+import { didYouMeanNote, isProperty, listNames, namesKey, quote } from './util';
 
 /** FP303's fix for an output of a unit that other repositories might use: published units are not judged. */
 function publishedFix(kind: 'workflow' | 'action', file: string, publish: string[] | undefined): string {
@@ -69,12 +69,12 @@ const undefinedOutputRef = defineRule({
 
 /**
  * The output a job output read names: `needs.<job>.outputs.<name>`, or `jobs.<job>.outputs.<name>` in a workflow
- * output (the only place `jobs` holds them). Undefined for other reads and for computed names.
+ * output (the only place `jobs` holds them), `outputs` in any case. Undefined for other reads and for computed names.
  */
 function jobOutputRead(site: ExprSite, ref: LocatedRef): string | undefined {
   if (ref.context === 'jobs' && site.field !== 'workflow.output') return undefined;
   const output = ref.path[2];
-  return ref.path[1] === 'outputs' && namesKey(output) ? output : undefined;
+  return isProperty(ref.path[1], 'outputs') && namesKey(output) ? output : undefined;
 }
 
 /** Where a job's outputs are declared: in the reusable workflow it calls, or on the job itself. */
@@ -154,7 +154,7 @@ function checkStepOutputRef(
 function checkActionOutputRef(ctx: RuleContext, step: StepDecl, ref: LocatedRef): void {
   const [, b, c] = ref.path;
   const action = ctx.index.actionOf(step);
-  if (b !== 'outputs' || !namesKey(c) || !action) return;
+  if (!isProperty(b, 'outputs') || !namesKey(c) || !action) return;
   // JavaScript and Docker actions may set outputs they do not declare; only composite outputs are fixed.
   if (action.using !== 'composite') return;
   if (lookup(action.outputs, c)) return;
@@ -412,7 +412,7 @@ function writesAreKnown(step: StepDecl): boolean {
 /** FP304 for one `steps.<id>.outputs.<name>` read: a step whose writes are known must write `<name>`. */
 function checkStepOutputWritten(ctx: RuleContext, unit: UnitDecl, site: ExprSite, ref: LocatedRef): void {
   const [a, b, c] = ref.path;
-  if (b !== 'outputs' || !a || !namesKey(c)) return;
+  if (!isProperty(b, 'outputs') || !a || !namesKey(c)) return;
   const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
   if (!step || !writesAreKnown(step)) return;
   const w = step.writesOutputs;

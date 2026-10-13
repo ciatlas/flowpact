@@ -11277,7 +11277,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11382,13 +11382,17 @@ function parseExpression(source) {
   return result;
 }
 function offsetOf(source, line, column) {
-  let offset = 0;
-  for (let l = 0; l < line; l++) {
-    const nl = source.indexOf("\n", offset);
-    if (nl < 0) break;
-    offset = nl + 1;
+  let lineStart = 0;
+  let newlines = 0;
+  let inString = false;
+  for (let i = 0; i < source.length && newlines < line; i++) {
+    if (source[i] === "'") inString = !inString;
+    else if (source[i] === "\n") {
+      newlines++;
+      if (!inString) lineStart = i + 1;
+    }
   }
-  return offset + column;
+  return lineStart + column;
 }
 function collectRefs(root, source) {
   const refs = [];
@@ -11835,7 +11839,7 @@ function evaluateTemplate(text2, resolve8) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11846,7 +11850,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12048,7 +12052,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12189,11 +12193,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12260,7 +12264,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12396,7 +12400,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12409,7 +12413,7 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/graph.ts
 var computed = (s) => s === void 0 || s === "*" || s === "?";
 function wholeReads(reads) {
   return [...new Set(reads.map((r) => r.symbol))].map((symbol) => ({ symbol, whole: true }));
@@ -12964,7 +12968,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -12991,7 +12995,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -13045,7 +13049,7 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { posix as posix2 } from "path";
 function createParseContext(repository) {
@@ -13230,14 +13234,38 @@ function locateExpression(s, from, expr, closes) {
   const scan = scanExpression(s.raw, from, s.quote, closes);
   const at = s.start + from;
   let cursor = from;
-  const refs = expr.refs.map((r) => {
+  const locs = /* @__PURE__ */ new Map();
+  for (const r of expr.refs.toSorted((a, b) => a.start - b.start)) {
     const written = expr.source.slice(r.start, r.end).replaceAll("'", s.quote);
-    const found = written ? indexOutside(s, written, cursor, scan) : -1;
-    if (found < 0) return { ...r, loc: s.source.loc(at + r.start, at + r.end) };
-    cursor = found + written.length;
-    return { ...r, loc: s.source.loc(s.start + found, s.start + cursor) };
-  });
+    const span = written ? spanOf(s, written, cursor, scan) : void 0;
+    if (span) cursor = span[0] + 1;
+    const [start, end] = span ? [s.start + span[0], s.start + span[1]] : [at + r.start, at + r.end];
+    locs.set(r, s.source.loc(start, end));
+  }
+  const refs = expr.refs.map((r) => ({ ...r, loc: locs.get(r) }));
   return { segment: { expr, loc: s.source.loc(at, at + expr.source.length), refs }, end: scan.end };
+}
+function spanOf(s, written, from, scan) {
+  const found = indexOutside(s, written, from, scan);
+  if (found >= 0) return [found, found + written.length];
+  const [first = "", ...rest] = written.split(/\s+/);
+  if (rest.length === 0) return void 0;
+  let start = indexOutside(s, first, from, scan);
+  while (start >= 0) {
+    const end = wordsEnd(s, rest, start + first.length);
+    if (end !== void 0 && end <= scan.end) return [start, end];
+    start = indexOutside(s, first, start + 1, scan);
+  }
+  return void 0;
+}
+function wordsEnd(s, words, from) {
+  let end = from;
+  for (const word of words) {
+    const at = skipSpace(s, end);
+    if (at === end || !s.raw.startsWith(word, at)) return void 0;
+    end = at + word.length;
+  }
+  return end;
 }
 function scanExpression(raw, from, quote2, closes) {
   const strings = [];
@@ -13819,7 +13847,7 @@ function parseActionFile(dir, file, text2, ctx) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/project.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
@@ -16384,10 +16412,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml4 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16460,7 +16488,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -16749,7 +16777,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/script-writes.ts
 import { posix as posix3 } from "path";
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
@@ -17020,7 +17048,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17272,7 +17300,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
@@ -17529,22 +17557,25 @@ function loadProject(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
 }
 function readsContextDynamically(unit, context) {
-  if (unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error)))
-    return true;
+  if (mayReadAnything(unit)) return true;
   for (const { ref } of refsOf(unit)) {
     if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
-    if (context === "inputs" && ref.context === "github" && ref.path[0] === "event") {
-      if (ref.path.length === 1 || ref.path[1] === "inputs" && (ref.path.length === 2 || ref.path[2] === "?"))
-        return true;
-    }
+    if (context === "inputs" && readsEveryEventInput(ref)) return true;
   }
   return false;
+}
+function readsEveryEventInput(ref) {
+  if (ref.context !== "github" || ref.path[0] !== "event") return false;
+  return ref.path.length === 1 || ref.path[1] === "inputs" && (ref.path.length === 2 || ref.path[2] === "?");
+}
+function mayReadAnything(unit) {
+  return unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error));
 }
 function namesOwner(ref) {
   const owner = ref.path[0];
@@ -17572,24 +17603,33 @@ function isCallOnly(wf) {
 }
 var BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
 function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
-  const out = /* @__PURE__ */ new Set();
-  if (seen.has(wf.path)) return out;
+  if (seen.has(wf.path)) return { names: /* @__PURE__ */ new Set(), all: false };
   seen.add(wf.path);
-  for (const { ref } of refsOf(wf)) {
-    const name = ref.path[0];
-    if (ref.context === "secrets" && name && name !== "*" && name !== "?" && !BUILTIN_SECRETS.has(name.toLowerCase())) {
-      out.add(name);
-    }
-  }
-  for (const job of Object.values(wf.jobs)) {
-    if (!job.secretsInherit) continue;
-    const callee = index.calleeOf(job);
-    if (callee) for (const s of secretsNeededBy(index, callee, seen)) out.add(s);
-  }
+  const out = { names: /* @__PURE__ */ new Set(), all: mayReadAnything(wf) };
+  for (const { ref } of refsOf(wf)) addSecretRead(out, ref);
+  for (const job of Object.values(wf.jobs)) addInherited(index, out, job, seen);
   return out;
 }
+function addSecretRead(out, ref) {
+  if (ref.context !== "secrets") return;
+  const name = ref.path[0];
+  if (!name || name === "*" || name === "?") out.all = true;
+  else if (!BUILTIN_SECRETS.has(name.toLowerCase())) out.names.add(name);
+}
+function addInherited(index, out, job, seen) {
+  if (!job.secretsInherit || !job.uses) return;
+  const callee = index.calleeOf(job);
+  const inner = callee ? secretsNeededBy(index, callee, seen) : { names: [], all: true };
+  for (const name of inner.names) out.names.add(name);
+  if (inner.all) out.all = true;
+}
+function needsSecret(needed, name) {
+  const lower = name.toLowerCase();
+  if (BUILTIN_SECRETS.has(lower)) return false;
+  return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
+}
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a3f79df31f8ea154909e3daff120e2d06806da8a/node_modules/@ciatlas/core/src/trace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a6367f6a7f3c155a4837bd794832eba9ff2d4783/node_modules/@ciatlas/core/src/trace.ts
 var CONTEXT_FUNCTION_NAMES = new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLowerCase()));
 
 // ../lint/src/analyze.ts
@@ -21989,6 +22029,9 @@ var didYouMeanNote = (guess) => guess ? ` \u2014 did you mean ${quote(guess)}?` 
 function namesKey(segment) {
   return !!segment && segment !== "*" && segment !== "?";
 }
+function isProperty(segment, name) {
+  return segment?.toLowerCase() === name;
+}
 function listNames(names, max = 6) {
   if (names.length === 0) return "(none)";
   const shown = names.slice(0, max).join(", ");
@@ -22965,7 +23008,7 @@ var passthroughDropped = defineRule({
   }
 });
 function isEventInputs(ref) {
-  return ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs";
+  return ref.context === "github" && isProperty(ref.path[0], "event") && isProperty(ref.path[1], "inputs");
 }
 var optionalForwardedToRequired = defineRule({
   code: "FP107",
@@ -23064,9 +23107,7 @@ function checkInputRead(ctx, unit, inputs, names, ref) {
 function inputReadName(unit, ref) {
   if (ref.context === "inputs") return ref.path[0];
   const dispatched = unit.kind === "workflow" && unit.dispatch;
-  if (ref.context === "github" && ref.path[0] === "event" && ref.path[1] === "inputs" && dispatched)
-    return ref.path[2];
-  return void 0;
+  return dispatched && isEventInputs(ref) ? ref.path[2] : void 0;
 }
 var inputRules = [
   missingRequiredInput,
@@ -23600,7 +23641,7 @@ var undefinedOutputRef = defineRule({
 function jobOutputRead(site, ref) {
   if (ref.context === "jobs" && site.field !== "workflow.output") return void 0;
   const output = ref.path[2];
-  return ref.path[1] === "outputs" && namesKey(output) ? output : void 0;
+  return isProperty(ref.path[1], "outputs") && namesKey(output) ? output : void 0;
 }
 function jobOutputsDeclared(ctx, job, names) {
   const callee = ctx.index.calleeOf(job);
@@ -23660,7 +23701,7 @@ function checkStepOutputRef(ctx, unit, site, ref, a) {
 function checkActionOutputRef(ctx, step, ref) {
   const [, b, c] = ref.path;
   const action = ctx.index.actionOf(step);
-  if (b !== "outputs" || !namesKey(c) || !action) return;
+  if (!isProperty(b, "outputs") || !namesKey(c) || !action) return;
   if (action.using !== "composite") return;
   if (lookup(action.outputs, c)) return;
   const names = Object.keys(action.outputs);
@@ -23854,7 +23895,7 @@ function writesAreKnown(step) {
 }
 function checkStepOutputWritten(ctx, unit, site, ref) {
   const [a, b, c] = ref.path;
-  if (b !== "outputs" || !a || !namesKey(c)) return;
+  if (!isProperty(b, "outputs") || !a || !namesKey(c)) return;
   const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
   if (!step || !writesAreKnown(step)) return;
   const w = step.writesOutputs;
@@ -24111,19 +24152,17 @@ var unusedSecret = defineRule({
   docs: {
     summary: "A `workflow_call` secret is declared but never read.",
     why: "Every caller must still wire the secret, widening its exposure for nothing.",
-    fix: "Remove the declaration and the callers\u2019 `secrets:` bindings, or use the secret where intended."
+    fix: "Remove the declaration and the callers\u2019 `secrets:` bindings, or use the secret where intended.",
+    scope: "A secret counts as read when the workflow reads it by name or reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), or hands every secret through `secrets: inherit` to a callee that reads it by name or reads every secret it gets, itself or further down. An expression that does not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not reusable), may read any secret, so they count as reading every secret."
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
       if (!wf.call) continue;
       if (readsContextDynamically(wf, "secrets")) continue;
+      const needed = secretsNeededBy(ctx.index, wf);
       for (const s of Object.values(wf.call.secrets)) {
         if (ctx.index.usagesOf(sym.secret(wf.path, s.name)).length > 0) continue;
-        const inherited = Object.values(wf.jobs).some((j) => {
-          const callee = j.secretsInherit ? ctx.index.calleeOf(j) : void 0;
-          return callee ? [...secretsNeededBy(ctx.index, callee)].some((n) => n.toLowerCase() === s.name.toLowerCase()) : false;
-        });
-        if (inherited) continue;
+        if (needsSecret(needed, s.name)) continue;
         ctx.report({
           message: `Secret ${quote(s.name)} of ${wf.path} is never read`,
           loc: s.loc,
@@ -24143,6 +24182,7 @@ var secretsInherit = defineRule({
     summary: "`secrets: inherit` hands every repository secret to the callee; flowpact lists what is actually needed.",
     why: "Inherit makes the secret flow invisible: nobody can tell from the caller which secrets reach which job, and every nested workflow gets all of them.",
     fix: "Replace `secrets: inherit` with an explicit `secrets:` mapping of the secrets listed in the message.",
+    scope: "Not reported when the callee, or a callee it hands every secret to, reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), has an expression that does not parse, or hands every secret on to a workflow flowpact cannot read (a remote workflow, or a local one that is missing or not reusable): it then reads, or may read, every secret the caller has, which no explicit mapping can list.",
     examples: {
       bad: `uses: ./.github/workflows/deploy.yml
 secrets: inherit`,
@@ -24154,7 +24194,9 @@ secrets:
   check(ctx) {
     for (const call of ctx.index.callSites) {
       if (!call.job.secretsInherit) continue;
-      const needed = [...secretsNeededBy(ctx.index, call.callee)].sort();
+      const reads = secretsNeededBy(ctx.index, call.callee);
+      if (reads.all) continue;
+      const needed = [...reads.names].sort();
       ctx.report({
         message: `jobs.${call.job.id} inherits all secrets; ${call.callee.path} and its callees read ${needed.length ? listNames(needed, 10) : "none"}`,
         loc: call.job.secretsLoc ?? call.job.loc,

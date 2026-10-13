@@ -234,9 +234,9 @@ Symbols can be written in several ways:
 <Screenshot name="trace-up" alt="flowpact trace --up showing the matrix values feeding an input, with one combination missing" caption="Upstream: the input is fed by matrix.config, which one combination does not define." />
 
 Under each branch, `via` shows how the value gets there: the expression it passes through, `workflow output` or
-`secrets: inherit`. A note in parentheses qualifies it where that matters: `(jobs.deploy)` names the job whose
-`secrets: inherit` passes a secret on, `(exposed to the caller)` marks an output of a reusable workflow or action that
-becomes the output of the job or step that uses it, and `(the default of inputs.<name>)` and `(when dispatched)` are
+`action output`, or `secrets: inherit`. A note in parentheses qualifies it where that matters: `(jobs.deploy)` names the
+job whose `secrets: inherit` passes a secret on, `(exposed to the caller)` marks an output of a reusable workflow or
+action that becomes the output of the job or step that uses it, and `(the default of inputs.<name>)` and `(when dispatched)` are
 described below.
 
 Upstream, each `◀` branch is a value the symbol is computed from, traced further up in turn. Where the trace ends, the
@@ -321,11 +321,14 @@ $ flowpact trace ship:environment --up
 
 A whole object or a computed key reads every member: `toJSON(inputs)`, `inputs[inputs.which]`, `toJSON(matrix)`,
 `secrets[inputs.name]` and `toJSON(env)` are a `◀` branch for each input, matrix key, secret or env variable the files
-declare, and downstream a use of each. Where the object can hold members the files do not declare, it also stays a
-`context` leaf: `env` (written at runtime), `secrets` (`GITHUB_TOKEN`, `secrets: inherit`), an action's `inputs` (the
-runner passes every `with:` key) and a matrix computed at runtime, in whole or in its `include`. Variables are set in
-the repository's settings, so a whole `vars` is only a `context` leaf. Here a reusable workflow passes all its inputs
-to an action, and the caller omits `profile`:
+declare, and downstream a use of each. A workflow that callers hand every secret to through `secrets: inherit` gets
+every secret they have, so there a whole `secrets` is also a `◀` branch for each secret those callers declare or read by
+name, and downstream a caller's secret goes through `secrets: inherit` into it, as into a workflow that may read every
+secret: one with an expression that does not parse, or that hands every secret on to a remote workflow. Where the
+object can hold members the files do not declare, it also stays a `context` leaf: `env` (written at runtime), `secrets`
+(`GITHUB_TOKEN`, `secrets: inherit`), an action's `inputs` (the runner passes every `with:` key) and a matrix computed
+at runtime, in whole or in its `include`. Variables are set in the repository's settings, so a whole `vars` is only a
+`context` leaf. Here a reusable workflow passes all its inputs to an action, and the caller omits `profile`:
 
 ```text
 $ flowpact trace report:settings --up

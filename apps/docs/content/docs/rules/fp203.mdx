@@ -19,7 +19,7 @@ Remove the declaration and the callers’ `secrets:` bindings, or use the secret
 
 ## Scope
 
-Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
+A secret counts as read when the workflow reads it by name or reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), or hands every secret through `secrets: inherit` to a callee that reads it by name or reads every secret it gets, itself or further down. An expression that does not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not reusable), may read any secret, so they count as reading every secret. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
 
 ## Configure
 

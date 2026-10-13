@@ -449,8 +449,8 @@ export interface TraceNode {
   unit?: string;
   loc?: Loc;
   /**
-   * How the value got here from the parent node: the expression (`text`) at `loc`, or `workflow output` or
-   * `secrets: inherit`. `note` qualifies it:
+   * How the value got here from the parent node: the expression (`text`) at `loc`, or `workflow output` (a reusable
+   * workflow's), `action output` (an action's) or `secrets: inherit`. `note` qualifies it:
    * - `when dispatched`: upstream, a workflow input read through `github.event.inputs` in a workflow that can also be
    *   called. The input holds the value only when the workflow is dispatched (a called workflow gets its caller's
    *   event), so it is not traced further up; a `context` leaf stands for the called case;
@@ -463,7 +463,10 @@ export interface TraceNode {
   /**
    * Downstream, the symbols the value flows to; upstream, the symbols it is computed from. A whole or computed read
    * (`toJSON(inputs)`, `matrix[inputs.key]`, `secrets[inputs.name]`, `toJSON(env)`) reads every member the files
-   * declare: one child each.
+   * declare: one child each. In a workflow that callers hand every secret to through `secrets: inherit`, a whole
+   * `secrets` also reads each secret those callers declare or read by name; downstream, a caller's secret goes through
+   * `secrets: inherit` into a callee that reads, or may read, every secret, itself or further down (an expression that
+   * does not parse, or a remote workflow it hands every secret on to, may).
    */
   children: TraceNode[];
   /**

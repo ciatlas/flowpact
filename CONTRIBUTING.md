@@ -149,8 +149,8 @@ Retitle GitHub's `Revert "…"` pull requests as `revert: …`.
 | `perf` | a faster analysis | patch |
 | `docs`, `refactor`, `test`, `build`, `ci`, `chore`, `style` | everything else | none |
 
-Mark a breaking change with `!` (`feat(config)!: …`) or a `BREAKING CHANGE:` footer. Before 1.0 a breaking change
-bumps the minor version. Useful scopes: `core`, `lint`, `rules`, `contracts`, `config`, `cli`, `action`, `reporters`, `docs`.
+Mark a breaking change with `!` (`feat(config)!: …`) or a `BREAKING CHANGE:` footer. A breaking change bumps the major
+version, also before 1.0: the next one releases 1.0.0. Useful scopes: `core`, `lint`, `rules`, `contracts`, `config`, `cli`, `action`, `reporters`, `docs`.
 
 ## Releases
 
@@ -177,8 +177,8 @@ then delete the old key; the app accepts both until then.
    `scripts/action-archive.sh`), each with its Sigstore bundle and in-toto provenance, and a CycloneDX SBOM of each,
    attested against it. Only when every one of them is on the release does it publish the release (a failed extension
    build keeps it a draft too), and only after that does it move the floating tag used by
-   `uses: ciatlas/flowpact@v0.14` (before 1.0 one tag per minor line, because a 0.x minor may be breaking; from 1.0
-   the major, `v1`). **Immutable releases** are enabled in the repository settings (since 0.9.0 went out), so a
+   `uses: ciatlas/flowpact@v0.14` (before 1.0 one tag per minor line, because a minor release can change what is
+   reported; from 1.0 the major, `v1`). **Immutable releases** are enabled in the repository settings (since 0.9.0 went out), so a
    published release's tag and assets cannot change, and what a mirror verified stays what was released.
 
 If publishing fails after the tag exists, run the **Release** workflow manually with that tag, or re-run the failed
