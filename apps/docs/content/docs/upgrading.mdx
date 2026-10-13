@@ -6,6 +6,25 @@ description: What changes between flowpact releases, and what to do when you mov
 flowpact is before 1.0: a minor release (0.7 → 0.8) can change what is reported. Each section below lists what to do
 when you move to that release.
 
+## 0.14 → 0.15
+
+0.15 makes the paths of impact mode mean what they mean in every other command: the workflows and actions to look at.
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.15`.
+- **CLI:** `npx flowpact@0.15`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Impact mode honours paths
+
+[Impact mode](/docs/impact-mode#only-some-units) with paths (`lint --impact <paths>`, `check --impact <paths>`, the
+action's `paths` input with `impact`, the API's `paths`) now grades only the published workflows and actions within
+them. Before, it graded every published unit but reported only the findings about files within the paths, so a
+breaking change elsewhere could pass silently: the verdict said `required major` and the run passed. Now the verdict
+and the findings agree. If your impact check passes paths, it now guards only the units within them: drop the paths
+to gate every published unit. `flowpact impact` takes paths too, where 0.14 refused them.
+
 ## 0.13 → 0.14
 
 0.14 reads more of what workflows write: a read of a whole object or through a computed key (`toJSON(inputs)`,

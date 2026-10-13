@@ -764,6 +764,31 @@
             ],
             "additionalProperties": false
           }
+        },
+        "scope": {
+          "description": "Only when paths were given: impact mode graded only the published units within them, and the verdict is about those alone.",
+          "type": "object",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The paths given, relative to the root."
+            },
+            "units": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The published workflows and actions within them, in the baseline or the working tree: the only ones graded."
+            }
+          },
+          "required": [
+            "paths",
+            "units"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [

@@ -43,7 +43,7 @@ flowpact lint [paths…] [options]
 
 | Option | Description |
 | --- | --- |
-| `[paths…]` | Files or directories to report on. Everything is still analyzed. |
+| `[paths…]` | Files or directories to report on. Everything is still analyzed. With `--impact`, impact mode grades only the published workflows and actions within them (see [`flowpact impact`](#flowpact-impact)). |
 | `--root <dir>` | Repository root (default: current directory). |
 | `--config <file>` | Config file (default: `.github/flowpact/flowpact.config.yml`). |
 | `--base-config <file>` | Defaults under the repository's config, such as an organization's, relative to the working directory. See [Base config](/docs/configuration#base-config). |
@@ -131,7 +131,8 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
   over time.
 - `rules` lists every rule with its code, name and effective severity (`off` included).
 - With `--impact` (or `flowpact impact`), `impact` holds the verdict: the `baseline`, the `required` and `declared`
-  impact, `ok`, and every graded change. See [Impact mode](/docs/impact-mode).
+  impact, `ok`, and every graded change. With paths, `impact.scope` lists the `paths` and the published `units`
+  within them, the only ones graded. See [Impact mode](/docs/impact-mode).
 
 ## `flowpact check`
 
@@ -341,12 +342,17 @@ For publishers of reusable workflows and actions: checks that the release impact
 changes to published units since its base. See [Impact mode](/docs/impact-mode).
 
 ```sh
-flowpact impact --base origin/main --title "fix: tidy the test job"
+flowpact impact [paths…] --base origin/main --title "fix: tidy the test job"
 ```
 
 It runs only the impact rules (`FP810`–`FP814`), so its exit code reflects only the verdict. `flowpact lint --impact`
 and `flowpact check --impact` add the verdict to everything else they report. Options: `--base`, `--expect`,
 `--title`, `--labels` and the output options of `lint`.
+
+With paths (workflow or action files, or directories), impact mode grades only the published workflows and actions
+within them, and the verdict is about those alone: the paths narrow the gate, so a change to a published unit
+outside them is not checked. A path the pull request removed counts when the baseline has a workflow or action there.
+The same holds for `lint --impact` and `check --impact` with paths. See [Impact mode](/docs/impact-mode#only-some-units).
 
 ## `flowpact explain`
 

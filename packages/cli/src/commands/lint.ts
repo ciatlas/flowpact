@@ -70,7 +70,7 @@ export const reportArgs = {
   impact: {
     type: 'boolean',
     description:
-      'Also check the release impact of changes to published workflows and actions against the declared impact',
+      'Also check the release impact of changes to published workflows and actions (with paths, those within them) against the declared impact',
   },
   ...impactArgs(),
 } satisfies ArgsDef;

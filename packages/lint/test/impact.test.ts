@@ -461,3 +461,75 @@ describe('review fixes', () => {
     expect(v.ok).toBe(true);
   });
 });
+
+describe('paths narrow impact mode', () => {
+  const action = (name: string, inputs = '') =>
+    `name: ${name}\ndescription: d\n${inputs}runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "${inputs ? '${{ inputs.token }}' : 'hi'}"\n`;
+  const token = 'inputs:\n  token: { description: t, required: false }\n';
+  const publish = ['*/action.yml'];
+  const config = parseConfig({ impact: { publish } });
+  /** Base: actions a and b, both with an input; the head removes b's input (a major change), or b itself. */
+  const base = { 'a/action.yml': action('a', token), 'b/action.yml': action('b', token) };
+  const changed = { 'a/action.yml': action('a', token), 'b/action.yml': action('b') };
+  const run = (head: Record<string, string>, paths?: string[]) =>
+    analyze({
+      root: '/v',
+      fs: memoryFileSystem(head),
+      config,
+      validateSchema: false,
+      repository: 'a/b',
+      ...(paths ? { paths } : {}),
+      impact: {
+        base: index(base, publish),
+        baseline: { kind: 'ref', ref: 'main', commit: 'abc' },
+        declared: { explicit: 'patch' },
+        policy: { ...DEFAULT_IMPACT_POLICY, publish },
+      },
+    });
+
+  it('grades only the published units within the paths, so the verdict and the findings agree', () => {
+    const a = run(changed, ['a']);
+    expect(a.impact?.changes).toEqual([]);
+    expect(a.impact?.verdict).toMatchObject({ required: 'none', ok: true });
+    expect(a.impact?.scope).toEqual({ paths: ['a'], units: ['a'], fromBaseline: ['a'] });
+    expect(a.impact?.publishedFiles).toEqual(['a/action.yml']);
+    expect(codes(a)).toEqual(['FP812']);
+
+    const b = run(changed, ['b/action.yml']);
+    expect(b.impact?.verdict).toMatchObject({ required: 'major', ok: false });
+    expect(b.impact?.scope).toMatchObject({ paths: ['b/action.yml'], units: ['b'] });
+    expect(codes(b)).toContain('FP810');
+  });
+
+  it('grades every published unit without paths, or with the whole repository', () => {
+    for (const r of [run(changed), run(changed, ['.']), run(changed, ['/v'])]) {
+      expect(r.impact?.scope).toBeUndefined();
+      expect(r.impact?.verdict.required).toBe('major');
+      expect(r.impact?.publishedFiles).toEqual(['a/action.yml', 'b/action.yml']);
+    }
+  });
+
+  it('grades a unit the head removed when its baseline path is within the paths, and reports nothing else', () => {
+    const removed = run({ 'a/action.yml': action('a', token) }, ['b']);
+    expect(removed.impact?.changes.map((c) => [c.unit, c.kind, c.level])).toEqual([['b', 'unit', 'major']]);
+    expect(removed.impact?.scope).toEqual({ paths: ['b'], units: ['b'], fromBaseline: ['b'] });
+    // The working tree has nothing at the path, so only impact mode reports: FP810, about b.
+    expect(removed.findings.map((f) => [f.code, f.loc.file])).toEqual([['FP810', 'b/action.yml']]);
+  });
+
+  it('does not grade units within the paths that are not published', () => {
+    const ci = `on: push\njobs:\n${job('t')}`;
+    const r = run({ ...changed, [`${WF}/ci.yml`]: ci }, [`${WF}/ci.yml`]);
+    expect(r.impact?.scope).toEqual({ paths: [`${WF}/ci.yml`], units: [], fromBaseline: [] });
+    expect(r.impact?.verdict).toMatchObject({ required: 'none', ok: true });
+    expect(r.impact?.changes).toEqual([]);
+  });
+
+  it('grades only the given units in impactChanges', () => {
+    const all = impactChanges(index(base, publish), index(changed, publish), { publish });
+    expect(all.map((c) => c.unit)).toEqual(['b']);
+    expect(
+      impactChanges(index(base, publish), index(changed, publish), { publish }, undefined, new Set(['a'])),
+    ).toEqual([]);
+  });
+});

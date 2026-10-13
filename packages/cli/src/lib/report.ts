@@ -48,7 +48,10 @@ export interface ImpactFlags {
 }
 
 export interface ReportOptions extends ImpactFlags {
-  /** Workflow and action files or directories to report on, relative to the root. Default: all. */
+  /**
+   * Workflow and action files or directories to report on, relative to the root; impact mode judges only the published
+   * ones within them. Default: all.
+   */
   paths?: string[];
   /** Rule codes or names to run. */
   only?: string[];
@@ -152,7 +155,7 @@ function commandOptions(
 ): Partial<AnalyzeOptions> {
   return {
     ...(options.now ? { now: options.now } : {}),
-    paths: command === 'impact' ? [] : paths,
+    paths,
     validateSchema: command === 'impact' ? false : bool('schema', options.schema) !== false,
     checkContracts: command === 'check',
     ...onlyRules(command, only),
@@ -167,7 +170,6 @@ export async function runReport(
   options: ReportOptions = {},
   hooks: ReportHooks = {},
 ): Promise<Analysis | undefined> {
-  // `impact` analyzes the whole repository; paths given anyway are refused below, as for `lint`.
   const paths = stringList('paths', options.paths) ?? [];
   const only = stringList('only', options.only);
   const labels = stringList('labels', options.labels);
@@ -196,7 +198,8 @@ export async function runReport(
   const baseline = impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : [];
   notes.push(...baseline);
   hooks.analyzed?.(baseline);
-  checkTargets(result.project, paths, root);
+  // In impact mode, a path the change removed (one that names a workflow or action of the baseline) is not missing.
+  checkTargets(result.project, paths, root, result.impact?.scope?.fromBaseline);
   if (command !== 'impact') checkNotEmpty(result.summary, root);
   return analysisOf(result, notes);
 }

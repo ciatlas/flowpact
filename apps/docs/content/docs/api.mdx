@@ -67,7 +67,7 @@ const analysis = await check({ paths: ['.github/workflows/deploy.yml'], only: ['
 
 | Option | Flag | Description |
 | --- | --- | --- |
-| `paths` | `[paths…]` | Workflow and action files or directories to report on, relative to the root. Default: all. Not for `impact`. |
+| `paths` | `[paths…]` | Workflow and action files or directories to report on, relative to the root. Default: all. In impact mode, only the published ones within them are graded ([Only some units](/docs/impact-mode#only-some-units)). |
 | `only` | `--only` | Rule codes or names to run. |
 | `schema` | `--no-schema` | `false` skips the validation against GitHub's workflow schema. Not for `impact`. |
 | `impact` | `--impact` | `lint` and `check`: also check the [release impact](/docs/impact-mode) of the changes. |
@@ -90,7 +90,7 @@ Impact mode compares with the baseline commit, which must be in the clone: check
 | `json({ includeGraph }?)` | The JSON report as `--format json` prints it. |
 | `pretty(options?)` | The terminal report. Options: `color`, `width` (default 100), `ascii`, `hideInfo`, `hyperlinks`. |
 | `contracts` | `check` only: `drift`, `breaking`, and `patch()`, the regenerated contracts as a patch for `git apply` when they drifted (`--patch`). |
-| `impact` | Impact mode's verdict, as in the report: `required`, `declared`, `ok`, `changes` and `baseline`. |
+| `impact` | Impact mode's verdict, as in the report: `required`, `declared`, `ok`, `changes` and `baseline`, and with `paths`, `scope`. |
 | `notes` | What the CLI prints as `impact: …` lines: impact mode skipped, or notes about its baseline. |
 
 `pathPrefix` is the root relative to the repository, when the root is a subdirectory of it. GitHub resolves annotation

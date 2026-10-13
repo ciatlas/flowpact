@@ -331,3 +331,124 @@ describe('flowpact impact baselines and policy', () => {
     expect(impact.changes.length).toBeGreaterThan(0);
   });
 });
+
+describe('flowpact impact with paths', () => {
+  const CONFIG = '.github/flowpact/flowpact.config.yml';
+  const action = (name: string, input: boolean) =>
+    `name: ${name}\ndescription: action ${name}\ninputs:\n${input ? '  token: { description: t, required: false }\n' : ''}runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "${input ? '${{ inputs.token }}' : '${{ github.token }}'}"\n`;
+  /** Two published actions; the change removes b's input (major) and leaves an empty `inputs:` (FP503 in b). */
+  const twoActions = () =>
+    repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      { 'b/action.yml': action('b', false) },
+    );
+  const json = async (root: string, args: string[]) => {
+    const r = await flowpact(root, [...args, '--base', 'main', '--expect', 'patch', '--format', 'json']);
+    const report = JSON.parse(r.stdout);
+    return {
+      exit: r.exitCode,
+      impact: report.impact,
+      codes: report.findings.map((f: { code: string }) => f.code),
+    };
+  };
+
+  it('judges only the published units within the paths, so a change elsewhere neither fails nor shows', async () => {
+    const root = twoActions();
+    // The bug: lint --impact a printed "required MAJOR ✖" (about b) and exited 0, the FP810 about b hidden.
+    const a = await json(root, ['lint', '--impact', 'a']);
+    expect(a).toEqual({
+      exit: 0,
+      impact: expect.objectContaining({
+        required: 'none',
+        ok: true,
+        changes: [],
+        scope: { paths: ['a'], units: ['a'] },
+      }),
+      codes: ['FP812'],
+    });
+    const b = await json(root, ['lint', '--impact', 'b']);
+    expect(b.exit).toBe(1);
+    expect(b.impact).toMatchObject({ required: 'major', ok: false, scope: { paths: ['b'], units: ['b'] } });
+    expect(b.codes.sort()).toEqual(['FP503', 'FP810']);
+    // Without paths, every published unit, as before.
+    const all = await json(root, ['lint', '--impact']);
+    expect(all.exit).toBe(1);
+    expect(all.impact.required).toBe('major');
+    expect(all.impact.scope).toBeUndefined();
+  });
+
+  it('takes paths in flowpact impact and check --impact, and says so in every report', async () => {
+    const root = twoActions();
+    expect(await json(root, ['impact', 'a/action.yml'])).toMatchObject({ exit: 0, codes: ['FP812'] });
+    expect(await json(root, ['impact', 'b/action.yml'])).toMatchObject({ exit: 1, codes: ['FP810'] });
+    expect(await json(root, ['impact', 'a', 'b'])).toMatchObject({
+      exit: 1,
+      impact: { required: 'major', scope: { paths: ['a', 'b'], units: ['a', 'b'] } },
+    });
+    expect((await json(root, ['check', '--impact', 'a'])).impact).toMatchObject({
+      required: 'none',
+      ok: true,
+    });
+    const pretty = await flowpact(root, ['impact', 'a', '--base', 'main', '--expect', 'patch']);
+    expect(pretty.stdout).toContain('only within a: graded a');
+    expect(pretty.stdout).toContain('no changes to the published workflows or actions within the paths');
+    const markdown = await flowpact(root, [
+      'impact',
+      'b',
+      '--base',
+      'main',
+      '--expect',
+      'patch',
+      '--format',
+      'markdown',
+    ]);
+    expect(markdown.stdout).toContain('<sub>Only within `b`: graded `b`</sub>');
+  });
+
+  it('grades a unit the change removed through its baseline path, and still refuses unknown paths', async () => {
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      { 'notes.txt': 'b goes\n' },
+    );
+    git(root, 'rm', '-rq', 'b');
+    git(root, 'commit', '-qm', 'remove b');
+    for (const path of ['b', 'b/action.yml']) {
+      const removed = await json(root, ['impact', path]);
+      expect(removed.exit).toBe(1);
+      expect(removed.codes).toEqual(['FP810']);
+      expect(removed.impact.changes).toMatchObject([{ unit: 'b', kind: 'unit', level: 'major' }]);
+    }
+    expect((await json(root, ['lint', '--impact', 'b'])).codes).toEqual(['FP810']);
+    const unknown = await flowpact(root, ['impact', 'b', 'nope', '--base', 'main']);
+    expect(unknown.exitCode).toBe(2);
+    expect(unknown.stderr).toContain('Path not found under .: nope');
+    // Without impact mode, the removed path is just missing.
+    expect((await flowpact(root, ['lint', 'b'])).exitCode).toBe(2);
+  });
+
+  it('grades nothing within paths that hold no published unit', async () => {
+    const root = repo(
+      {
+        [WF]: reusable('Test'),
+        '.github/workflows/ci.yml':
+          'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "true" }]\n',
+      },
+      { [WF]: reusable('Unit tests') },
+    );
+    const r = await json(root, ['impact', '.github/workflows/ci.yml']);
+    expect(r.exit).toBe(0);
+    expect(r.impact).toMatchObject({ required: 'none', ok: true, changes: [], scope: { units: [] } });
+    expect((await json(root, ['impact', '.github/workflows'])).impact).toMatchObject({
+      required: 'major',
+      scope: { units: [WF] },
+    });
+  });
+});

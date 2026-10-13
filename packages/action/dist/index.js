@@ -8683,7 +8683,7 @@ var require_cronstrue = __commonJS({
 import { execFileSync as execFileSync2 } from "child_process";
 import { mkdirSync as mkdirSync2, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname3, isAbsolute as isAbsolute6, join as join6, relative as relative6, resolve as resolve6, sep as sep3 } from "path";
+import { dirname as dirname3, isAbsolute as isAbsolute6, join as join6, relative as relative7, resolve as resolve7, sep as sep3 } from "path";
 import { fileURLToPath } from "url";
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -8883,11 +8883,11 @@ var ProxyAgent = class {
 // ../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/index.js
 var __awaiter = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve7) {
-      resolve7(value);
+    return value instanceof P ? value : new P(function(resolve8) {
+      resolve8(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve7, reject) {
+  return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -8903,7 +8903,7 @@ var __awaiter = function(thisArg, _arguments, P, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve7(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -8976,26 +8976,26 @@ var HttpClientResponse = class {
   }
   readBody() {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve7) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve8) => __awaiter(this, void 0, void 0, function* () {
         let output = Buffer.alloc(0);
         this.message.on("data", (chunk) => {
           output = Buffer.concat([output, chunk]);
         });
         this.message.on("end", () => {
-          resolve7(output.toString());
+          resolve8(output.toString());
         });
       }));
     });
   }
   readBodyBuffer() {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve7) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve8) => __awaiter(this, void 0, void 0, function* () {
         const chunks = [];
         this.message.on("data", (chunk) => {
           chunks.push(chunk);
         });
         this.message.on("end", () => {
-          resolve7(Buffer.concat(chunks));
+          resolve8(Buffer.concat(chunks));
         });
       }));
     });
@@ -9198,14 +9198,14 @@ var HttpClient = class {
    */
   requestRaw(info2, data) {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve7, reject) => {
+      return new Promise((resolve8, reject) => {
         function callbackForResult(err, res) {
           if (err) {
             reject(err);
           } else if (!res) {
             reject(new Error("Unknown error"));
           } else {
-            resolve7(res);
+            resolve8(res);
           }
         }
         this.requestRawWithCallback(info2, data, callbackForResult);
@@ -9449,12 +9449,12 @@ var HttpClient = class {
     return __awaiter(this, void 0, void 0, function* () {
       retryNumber = Math.min(ExponentialBackoffCeiling, retryNumber);
       const ms = ExponentialBackoffTimeSlice * Math.pow(2, retryNumber);
-      return new Promise((resolve7) => setTimeout(() => resolve7(), ms));
+      return new Promise((resolve8) => setTimeout(() => resolve8(), ms));
     });
   }
   _processResponse(res, options) {
     return __awaiter(this, void 0, void 0, function* () {
-      return new Promise((resolve7, reject) => __awaiter(this, void 0, void 0, function* () {
+      return new Promise((resolve8, reject) => __awaiter(this, void 0, void 0, function* () {
         const statusCode = res.message.statusCode || 0;
         const response = {
           statusCode,
@@ -9462,7 +9462,7 @@ var HttpClient = class {
           headers: {}
         };
         if (statusCode === HttpCodes.NotFound) {
-          resolve7(response);
+          resolve8(response);
         }
         function dateTimeDeserializer(key, value) {
           if (typeof value === "string") {
@@ -9501,7 +9501,7 @@ var HttpClient = class {
           err.result = response.result;
           reject(err);
         } else {
-          resolve7(response);
+          resolve8(response);
         }
       }));
     });
@@ -9512,11 +9512,11 @@ var lowercaseKeys = (obj) => Object.keys(obj).reduce((c, k) => (c[k.toLowerCase(
 // ../../node_modules/.pnpm/@actions+http-client@4.0.1/node_modules/@actions/http-client/lib/auth.js
 var __awaiter2 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve7) {
-      resolve7(value);
+    return value instanceof P ? value : new P(function(resolve8) {
+      resolve8(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve7, reject) {
+  return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -9532,7 +9532,7 @@ var __awaiter2 = function(thisArg, _arguments, P, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve7(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -9565,11 +9565,11 @@ import { EOL as EOL3 } from "os";
 import { constants, promises } from "fs";
 var __awaiter3 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve7) {
-      resolve7(value);
+    return value instanceof P ? value : new P(function(resolve8) {
+      resolve8(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve7, reject) {
+  return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -9585,7 +9585,7 @@ var __awaiter3 = function(thisArg, _arguments, P, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve7(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -9864,11 +9864,11 @@ var arch = os3.arch();
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/core.js
 var __awaiter4 = function(thisArg, _arguments, P, generator) {
   function adopt(value) {
-    return value instanceof P ? value : new P(function(resolve7) {
-      resolve7(value);
+    return value instanceof P ? value : new P(function(resolve8) {
+      resolve8(value);
     });
   }
-  return new (P || (P = Promise))(function(resolve7, reject) {
+  return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
         step(generator.next(value));
@@ -9884,7 +9884,7 @@ var __awaiter4 = function(thisArg, _arguments, P, generator) {
       }
     }
     function step(result) {
-      result.done ? resolve7(result.value) : adopt(result.value).then(fulfilled, rejected);
+      result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
     step((generator = generator.apply(thisArg, _arguments || [])).next());
   });
@@ -11543,32 +11543,32 @@ function literalToJson(lit) {
       return null;
   }
 }
-function evaluate(e, resolve7) {
+function evaluate(e, resolve8) {
   if (e instanceof Literal) return known(literalToJson(e));
-  if (e instanceof Grouping) return evaluate(e.group, resolve7);
+  if (e instanceof Grouping) return evaluate(e.group, resolve8);
   if (e instanceof ContextAccess || e instanceof IndexAccess) {
-    const chain = refChain(e, resolve7);
+    const chain = refChain(e, resolve8);
     if (chain) {
-      const resolved = resolve7(chain);
+      const resolved = resolve8(chain);
       return resolved ?? UNKNOWN;
     }
     if (e instanceof IndexAccess) {
-      const base = evaluate(e.expr, resolve7);
-      const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve7);
+      const base = evaluate(e.expr, resolve8);
+      const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve8);
       if (!base.known || !idx?.known) return { known: false, taint: mergeTaint(base, ...idx ? [idx] : []) };
       return known(indexInto(base.value, idx.value), mergeTaint(base, idx));
     }
     return UNKNOWN;
   }
   if (e instanceof Unary) {
-    const v = evaluate(e.expr, resolve7);
+    const v = evaluate(e.expr, resolve8);
     return v.known ? known(!truthy2(v.value)) : UNKNOWN;
   }
   if (e instanceof Logical) {
     const isAnd = e.operator.type === TokenType.AND;
     let last = UNKNOWN;
     for (const [i, arg] of e.args.entries()) {
-      const v = evaluate(arg, resolve7);
+      const v = evaluate(arg, resolve8);
       last = v;
       if (!v.known) return v;
       if (isAnd ? !truthy2(v.value) : truthy2(v.value)) {
@@ -11578,8 +11578,8 @@ function evaluate(e, resolve7) {
     return last;
   }
   if (e instanceof Binary) {
-    const l = evaluate(e.left, resolve7);
-    const r = evaluate(e.right, resolve7);
+    const l = evaluate(e.left, resolve8);
+    const r = evaluate(e.right, resolve8);
     const taint = [];
     if (!l.known || !r.known) return UNKNOWN;
     switch (e.operator.type) {
@@ -11603,17 +11603,17 @@ function evaluate(e, resolve7) {
         return { known: false, taint };
     }
   }
-  if (e instanceof FunctionCall) return evalCall(e, resolve7);
+  if (e instanceof FunctionCall) return evalCall(e, resolve8);
   return UNKNOWN;
 }
-function refChain(e, resolve7) {
+function refChain(e, resolve8) {
   if (e instanceof ContextAccess) return { context: e.name.lexeme.toLowerCase(), path: [] };
   if (e instanceof IndexAccess) {
-    const base = refChain(e.expr, resolve7);
+    const base = refChain(e.expr, resolve8);
     if (!base) return void 0;
     if (e.index instanceof Star) return void 0;
     if (e.index instanceof Literal) return { ...base, path: [...base.path, toStr(literalToJson(e.index))] };
-    const idx = evaluate(e.index, resolve7);
+    const idx = evaluate(e.index, resolve8);
     if (idx.known && (typeof idx.value === "string" || typeof idx.value === "number")) {
       return { ...base, path: [...base.path, String(idx.value)] };
     }
@@ -11634,9 +11634,9 @@ function indexInto(base, idx) {
   return null;
 }
 var RUNTIME_FUNCTIONS = /* @__PURE__ */ new Set(["success", "failure", "cancelled", "hashfiles"]);
-function evalCall(e, resolve7) {
+function evalCall(e, resolve8) {
   const name = e.functionName.lexeme.toLowerCase();
-  const args = e.args.map((a) => evaluate(a, resolve7));
+  const args = e.args.map((a) => evaluate(a, resolve8));
   const taint = mergeTaint(...args);
   const allKnown = args.every((a) => a.known);
   const vals = args.map((a) => a.known ? a.value : null);
@@ -11795,37 +11795,37 @@ function fallbacksOf(expr) {
   visit2(expr.ast);
   return out;
 }
-function definitelyFalsy(e, resolve7) {
-  if (e instanceof Grouping) return definitelyFalsy(e.group, resolve7);
+function definitelyFalsy(e, resolve8) {
+  if (e instanceof Grouping) return definitelyFalsy(e.group, resolve8);
   if (e instanceof Logical) {
-    return e.operator.type === TokenType.AND ? e.args.some((a) => definitelyFalsy(a, resolve7)) : e.args.every((a) => definitelyFalsy(a, resolve7));
+    return e.operator.type === TokenType.AND ? e.args.some((a) => definitelyFalsy(a, resolve8)) : e.args.every((a) => definitelyFalsy(a, resolve8));
   }
-  if (e instanceof Unary) return definitelyTruthy(e.expr, resolve7);
-  const v = evaluate(e, resolve7);
+  if (e instanceof Unary) return definitelyTruthy(e.expr, resolve8);
+  const v = evaluate(e, resolve8);
   return v.known && !truthy2(v.value);
 }
-function definitelyTruthy(e, resolve7) {
-  if (e instanceof Grouping) return definitelyTruthy(e.group, resolve7);
+function definitelyTruthy(e, resolve8) {
+  if (e instanceof Grouping) return definitelyTruthy(e.group, resolve8);
   if (e instanceof Logical) {
-    return e.operator.type === TokenType.AND ? e.args.every((a) => definitelyTruthy(a, resolve7)) : e.args.some((a) => definitelyTruthy(a, resolve7));
+    return e.operator.type === TokenType.AND ? e.args.every((a) => definitelyTruthy(a, resolve8)) : e.args.some((a) => definitelyTruthy(a, resolve8));
   }
-  if (e instanceof Unary) return definitelyFalsy(e.expr, resolve7);
-  const v = evaluate(e, resolve7);
+  if (e instanceof Unary) return definitelyFalsy(e.expr, resolve8);
+  const v = evaluate(e, resolve8);
   return v.known && truthy2(v.value);
 }
-function evaluateTemplate(text2, resolve7) {
+function evaluateTemplate(text2, resolve8) {
   const segments = findTemplateSegments(text2);
   if (segments.length === 0) return known(text2);
   const first = segments[0];
   if (segments.length === 1 && first.start === 0 && first.end === text2.length) {
-    return first.expr.ast ? evaluate(first.expr.ast, resolve7) : UNKNOWN;
+    return first.expr.ast ? evaluate(first.expr.ast, resolve8) : UNKNOWN;
   }
   let out = "";
   let cursor = 0;
   const parts = [];
   for (const seg of segments) {
     out += text2.slice(cursor, seg.start);
-    const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve7) : UNKNOWN;
+    const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve8) : UNKNOWN;
     parts.push(v);
     if (!v.known) return { known: false, taint: mergeTaint(...parts) };
     out += toStr(v.value);
@@ -12317,7 +12317,7 @@ function gitFileSystem(root, commit) {
       targets.set(link, git(root, ["cat-file", "blob", `${commit}:${link}`]).toString());
     return targets.get(link);
   };
-  const resolve7 = (path) => {
+  const resolve8 = (path) => {
     let p = path;
     for (let followed = 0; ; followed++) {
       const parts = p.split("/");
@@ -12357,7 +12357,7 @@ function gitFileSystem(root, commit) {
     const d = dir ? `${dir}/` : "";
     for (const f of within2(sortedBlobs, d)) files.set(`${as}${f.slice(d.length)}`, f);
     for (const link of within2(sortedLinks, d)) {
-      const to = resolve7(link);
+      const to = resolve8(link);
       if (to === void 0 || !inRoot(to)) continue;
       const at = `${as}${link.slice(d.length)}`;
       const chain = [...via, link];
@@ -17104,7 +17104,7 @@ function workspaceResolver(opts) {
     }
     return best;
   };
-  const resolve7 = (uses, ws) => {
+  const resolve8 = (uses, ws) => {
     const target = uses.target;
     if (uses.selfRef !== void 0) return { kind: "invalid" };
     if (uses.workspacePath === void 0) {
@@ -17172,7 +17172,7 @@ function workspaceResolver(opts) {
         continue;
       }
       if (uses.kind !== "local-action" || uses.target === void 0) continue;
-      const outcome = resolve7(uses, ws);
+      const outcome = resolve8(uses, ws);
       record2(unit, job, step, outcome, rooted, via);
       const action = outcome.kind === "local" && outcome.found ? opts.loadAction(outcome.target) : void 0;
       if (action) {
@@ -17594,6 +17594,7 @@ var CONTEXT_FUNCTION_NAMES = new Set(CONTEXT_FUNCTIONS.map((f) => f.name.toLower
 
 // ../lint/src/analyze.ts
 import { createHash } from "crypto";
+import { relative as relative4, resolve as resolve4 } from "path";
 
 // ../lint/src/config.ts
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
@@ -21801,10 +21802,15 @@ function newUnits(out, baseUnits, headUnits, policy) {
     });
   }
 }
-function impactChanges(base, head, policy, headExists = () => false) {
+function impactChanges(base, head, policy, headExists = () => false, units) {
   const out = [];
-  const baseUnits = new Map(base.units().map((u) => [u.path, u]));
-  const headUnits = new Map(head.units().map((u) => [u.path, u]));
+  const graded = (u) => !units || units.has(u.path);
+  const baseUnits = new Map(
+    base.units().filter(graded).map((u) => [u.path, u])
+  );
+  const headUnits = new Map(
+    head.units().filter(graded).map((u) => [u.path, u])
+  );
   for (const [path, b] of baseUnits) {
     if (!isPublished(b, policy)) continue;
     const h = headUnits.get(path);
@@ -21873,12 +21879,33 @@ function impactVerdict(changes, input2, policy) {
     ok: !under && !conflict
   };
 }
-function computeImpact(base, head, baseline, declared, policy, headExists) {
-  const changes = impactChanges(base, head, policy, headExists);
-  const publishedFiles = [
-    ...new Set([...head.units(), ...base.units()].filter((u) => isPublished(u, policy)).map((u) => u.file))
-  ].sort();
-  return { baseline, changes, verdict: impactVerdict(changes, declared, policy), policy, publishedFiles };
+var pathHolds = (path, file) => file === path || file.startsWith(`${path}/`);
+function unitsWithin(base, head, within2) {
+  const covered = (file) => within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
+  return new Set([...base.units(), ...head.units()].filter((u) => covered(u.file)).map((u) => u.path));
+}
+function scopeOf(base, within2, published) {
+  const baseFiles = base.units().map((u) => u.file);
+  return {
+    paths: [...new Set(within2.paths.map((p) => p.relative))],
+    units: [...new Set(published.map((u) => u.path))].sort(),
+    fromBaseline: within2.paths.filter((p) => baseFiles.some((f) => pathHolds(p.relative, f))).map((p) => p.given)
+  };
+}
+function computeImpact(base, head, baseline, declared, policy, within2) {
+  const units = within2 ? unitsWithin(base, head, within2) : void 0;
+  const changes = impactChanges(base, head, policy, void 0, units);
+  const published = [...head.units(), ...base.units()].filter(
+    (u) => isPublished(u, policy) && (!units || units.has(u.path))
+  );
+  return {
+    baseline,
+    changes,
+    verdict: impactVerdict(changes, declared, policy),
+    policy,
+    publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
+    ...within2 ? { scope: scopeOf(base, within2, published) } : {}
+  };
 }
 
 // ../lint/src/rules/types.ts
@@ -23394,7 +23421,7 @@ function combosOf(exp) {
   const values = Object.fromEntries((exp?.keys ?? []).map((k) => [k, { known: false }]));
   return [{ values, origin: "product", includes: [] }];
 }
-var unknownKey = (resolve7, key) => (ref) => ref.context === "matrix" && ref.path[0]?.toLowerCase() === key ? UNKNOWN : resolve7(ref);
+var unknownKey = (resolve8, key) => (ref) => ref.context === "matrix" && ref.path[0]?.toLowerCase() === key ? UNKNOWN : resolve8(ref);
 function onlyFallbacks(site, key, job, exp) {
   if (exp && didYouMean(key, exp.keys)) return false;
   const lower = key.toLowerCase();
@@ -23409,8 +23436,8 @@ function neverTrue(site, lower, combos) {
   const ast = site.segments[0].expr.ast;
   if (!ast) return true;
   return combos.every((c) => {
-    const resolve7 = matrixResolver(c);
-    return definitelyFalsy(ast, resolve7) && !definitelyFalsy(ast, unknownKey(resolve7, lower));
+    const resolve8 = matrixResolver(c);
+    return definitelyFalsy(ast, resolve8) && !definitelyFalsy(ast, unknownKey(resolve8, lower));
   });
 }
 function readsFallBack(seg, lower, combos) {
@@ -24170,10 +24197,10 @@ function guardsOf2(wf, site) {
     (g) => g !== void 0 && g !== site
   );
 }
-function isFalse(guard, resolve7) {
+function isFalse(guard, resolve8) {
   if (guard === false) return true;
   const ast = isWholeExpression(guard) ? guard.segments[0].expr.ast : void 0;
-  return ast !== void 0 && definitelyFalsy(ast, resolve7);
+  return ast !== void 0 && definitelyFalsy(ast, resolve8);
 }
 var secretRules = [
   missingRequiredSecret,
@@ -24875,25 +24902,33 @@ function selectRules(registry2, config2, only, unloaded) {
   }
   return { severities, only: only?.map((o) => registry2.get(o).code) };
 }
-function compareContracts(opts, index, contractInScope, logger) {
+function compareContracts(opts, index, scope, logger) {
   if (!opts.checkContracts) return void 0;
   let contracts = logger.time(
     "compare contracts",
     () => planContracts(index, opts.fs ?? nodeFileSystem(opts.root))
   );
-  if (index.project.targets.size > 0) contracts = scopePlan(contracts, contractInScope);
+  if (scope.narrowed) contracts = scopePlan(contracts, scope.contractInScope);
   logger.info(
     `contracts: ${contracts.counts.unchanged} unchanged, ${contracts.counts.update} outdated, ${contracts.counts.create} missing, ${contracts.counts.delete} orphaned`,
     { breaking: contracts.breaking }
   );
   return contracts;
 }
-function impactOf(opts, index, logger) {
+var rootRelative = (root, path) => relative4(root, resolve4(root, path)).split("\\").join("/") || ".";
+function impactPathsOf(opts, project) {
+  if (!opts.impact || !opts.paths?.length || project.wholeRepository) return void 0;
+  return {
+    paths: opts.paths.map((given) => ({ given, relative: rootRelative(opts.root, given) })),
+    targets: project.targets
+  };
+}
+function impactOf(opts, index, within2, logger) {
   const impact = opts.impact;
   if (!impact) return void 0;
   return logger.time(
     "impact",
-    () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy)
+    () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, within2)
   );
 }
 function ruleRun(fields) {
@@ -24968,14 +25003,14 @@ function judgeOverride(u, run2, opts) {
   if (severity === "off" || run2.only && !run2.only.includes(code) || notRun) u.inactive = true;
   if (!u.matched && rule) countSkipped(u, rule.code, run2.skipped);
 }
-function scopeOf(index, config2, contracts, contractInScope) {
+function scopeOf2(index, config2, contracts, scope) {
   const { targets } = index.project;
-  const scopedEntries = (contracts?.entries ?? []).filter(contractInScope);
+  const scopedEntries = (contracts?.entries ?? []).filter(scope.contractInScope);
   const contractFilesInScope = new Set(scopedEntries.map((e) => e.file));
   const contractUnitsInScope = new Set(
     scopedEntries.flatMap((e) => e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])
   );
-  return (f) => (targets.size === 0 || targets.has(f.loc.file) || contractFilesInScope.has(f.loc.file) || f.category === "contracts" && contractUnitsInScope.has(f.loc.file)) && !config2.ignore.some((p) => matchesPattern(f.loc.file, p));
+  return (f) => (!scope.narrowed || targets.has(f.loc.file) || contractFilesInScope.has(f.loc.file) || f.category === "contracts" && contractUnitsInScope.has(f.loc.file) || IMPACT_CODES.includes(f.code)) && !config2.ignore.some((p) => matchesPattern(f.loc.file, p));
 }
 function logFiltered(logger, config2, f) {
   if (f.skippedInScope.length > 0) {
@@ -25033,9 +25068,13 @@ function prepareRules(opts, logger, base, unloaded) {
   const ruleLog = logger.child("rules");
   const generatedFiles = generatedFilesOf(index.project, config2);
   for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
-  const contractInScope = contractsInScope(index);
-  const contracts = compareContracts(opts, index, contractInScope, logger);
-  const impact = impactOf(opts, index, logger);
+  const within2 = impactPathsOf(opts, index.project);
+  const scope = {
+    narrowed: index.project.targets.size > 0 || within2 !== void 0,
+    contractInScope: contractsInScope(index)
+  };
+  const contracts = compareContracts(opts, index, scope, logger);
+  const impact = impactOf(opts, index, within2, logger);
   const run2 = ruleRun({
     ...base,
     severities,
@@ -25046,9 +25085,9 @@ function prepareRules(opts, logger, base, unloaded) {
     impact,
     generatedFiles
   });
-  return { run: run2, contractInScope };
+  return { run: run2, scope };
 }
-function runPhases(run2, opts, logger, contractInScope, unloaded) {
+function runPhases(run2, opts, logger, scope, unloaded) {
   const { config: config2 } = run2;
   const findings = dedupe2(runRules(run2, "main", {}));
   const applied = applyOverrides(
@@ -25062,7 +25101,7 @@ function runPhases(run2, opts, logger, contractInScope, unloaded) {
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join("; ")}`);
   for (const u of applied.usage) judgeOverride(u, run2, opts);
-  const inScope = scopeOf(run2.index, config2, run2.contracts, contractInScope);
+  const inScope = scopeOf2(run2.index, config2, run2.contracts, scope);
   const accepted = applied.kept.filter(inScope);
   const suppressed = applied.suppressed.filter(inScope);
   const skippedInScope = dedupe2(run2.skipped).filter(inScope);
@@ -25089,8 +25128,8 @@ function analyze(opts) {
   );
   const { matrix: matrix2, combinations } = expandMatrices(project, config2, logger);
   const unloaded = [];
-  const { run: run2, contractInScope } = prepareRules(opts, logger, { registry: registry2, index, config: config2, matrix: matrix2 }, unloaded);
-  const { kept, suppressed, skippedInScope } = runPhases(run2, opts, logger, contractInScope, unloaded);
+  const { run: run2, scope } = prepareRules(opts, logger, { registry: registry2, index, config: config2, matrix: matrix2 }, unloaded);
+  const { kept, suppressed, skippedInScope } = runPhases(run2, opts, logger, scope, unloaded);
   const summary2 = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
   const durationMs = Math.round(performance.now() - started);
   logger.info(
@@ -25238,7 +25277,7 @@ function exitCodeFor(summary2, failOn) {
 
 // ../lint/src/impact-run.ts
 import { readFileSync as readFileSync3 } from "fs";
-import { join as join5, relative as relative4 } from "path";
+import { join as join5, relative as relative5 } from "path";
 var ImpactSetupError = class extends Error {
 };
 function githubEvent(env = process.env) {
@@ -25420,7 +25459,7 @@ function baseConfigInRepository(root, req) {
   return top !== void 0 && pathInside(top, req.baseConfigFile);
 }
 function baselinePolicy(root, fs3, req, headConfig, notes) {
-  const configPath = req.configPath ? relative4(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
+  const configPath = req.configPath ? relative5(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
   const baseInRepository = baseConfigInRepository(root, req);
   if (baseInRepository) {
     notes.push(
@@ -25489,13 +25528,13 @@ function prepareImpact(root, headConfig, req, logger) {
 
 // ../lint/src/plugins.ts
 import { existsSync as existsSync5 } from "fs";
-import { isAbsolute as isAbsolute4, resolve as resolve4 } from "path";
+import { isAbsolute as isAbsolute4, resolve as resolve5 } from "path";
 import { pathToFileURL } from "url";
 var isRule = (v) => typeof v === "object" && v !== null && typeof v.code === "string" && typeof v.check === "function";
 async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   const loaded = [];
   for (const spec of config2.plugins) {
-    const abs = isAbsolute4(spec) ? spec : resolve4(root, spec);
+    const abs = isAbsolute4(spec) ? spec : resolve5(root, spec);
     if (!existsSync5(abs))
       throw new ConfigError(`Plugin not found: ${spec}`, void 0, [`plugins: ${abs} does not exist`]);
     let mod;
@@ -25627,6 +25666,18 @@ var reportSchema = object({
           message: string2(),
           loc: locSchema
         })
+      ),
+      scope: described(
+        optional(
+          object({
+            paths: described(array(string2()), "The paths given, relative to the root."),
+            units: described(
+              array(string2()),
+              "The published workflows and actions within them, in the baseline or the working tree: the only ones graded."
+            )
+          })
+        ),
+        "Only when paths were given: impact mode graded only the published units within them, and the verdict is about those alone."
       )
     })
   ),
@@ -25678,7 +25729,8 @@ function toJsonReport(result, opts = {}) {
         required: result.impact.verdict.required,
         ...result.impact.verdict.declared ? { declared: result.impact.verdict.declared } : {},
         ok: result.impact.verdict.ok,
-        changes: result.impact.changes
+        changes: result.impact.changes,
+        ...result.impact.scope ? { scope: { paths: result.impact.scope.paths, units: result.impact.scope.units } } : {}
       }
     } : {},
     rules: result.rules,
@@ -26039,6 +26091,12 @@ function listedChanges(impact) {
   return [...impact.changes].filter((c) => c.level !== "none").sort((a, b) => ORDER2.indexOf(a.level) - ORDER2.indexOf(b.level) || a.unit.localeCompare(b.unit));
 }
 var shortCommit = (sha) => sha.slice(0, 7);
+var MAX_LISTED = 10;
+function describeScope(scope, quote2) {
+  const list = (items) => `${items.slice(0, MAX_LISTED).map(quote2).join(", ")}${items.length > MAX_LISTED ? ` and ${items.length - MAX_LISTED} more` : ""}`;
+  return `within ${list(scope.paths)}: graded ${scope.units.length ? list(scope.units) : "nothing published"}`;
+}
+var ungraded = (impact) => impact.scope ? "the published workflows or actions within the paths" : "published workflows or actions";
 
 // ../reporters/src/markdown.ts
 var SEVERITY = {
@@ -26156,33 +26214,33 @@ function renderContracts(plan, opts) {
     ...contractInstructions(opts.artifact)
   ];
 }
+function impactChangeLines(impact, opts) {
+  const changes = listedChanges(impact);
+  if (!changes.length) return [`No changes to ${ungraded(impact)}.`];
+  const out = ["| Impact | Unit | Change |", "| --- | --- | --- |"];
+  const limit = Math.max(1, opts.maxFindings ?? 50);
+  for (const c of changes.slice(0, limit)) {
+    out.push(
+      `| ${c.level === "major" ? "**major**" : c.level}${c.certain ? "" : " (uncertain)"} | ${markdownTableCell(markdownCode(c.unit))} | ${markdownCell(c.message)} |`
+    );
+  }
+  if (changes.length > limit)
+    out.push("", `_\u2026 ${changes.length - limit} more changes (see the JSON report)._`);
+  return out;
+}
 function renderImpactMarkdown(impact, opts) {
   const v = impact.verdict;
   const icon = v.ok ? "\u2705" : "\u274C";
-  const out = [
+  return [
     "### Impact",
     "",
-    `${icon} Declared **${markdownText(describeDeclared(impact))}** \xB7 required **${v.required}**`
-  ];
-  const changes = listedChanges(impact);
-  if (changes.length) {
-    out.push("", "| Impact | Unit | Change |", "| --- | --- | --- |");
-    const limit = Math.max(1, opts.maxFindings ?? 50);
-    for (const c of changes.slice(0, limit)) {
-      out.push(
-        `| ${c.level === "major" ? "**major**" : c.level}${c.certain ? "" : " (uncertain)"} | ${markdownTableCell(markdownCode(c.unit))} | ${markdownCell(c.message)} |`
-      );
-    }
-    if (changes.length > limit)
-      out.push("", `_\u2026 ${changes.length - limit} more changes (see the JSON report)._`);
-  } else {
-    out.push("", "No changes to published workflows or actions.");
-  }
-  out.push(
+    `${icon} Declared **${markdownText(describeDeclared(impact))}** \xB7 required **${v.required}**`,
+    "",
+    ...impactChangeLines(impact, opts),
+    ...impact.scope ? ["", `<sub>Only ${describeScope(impact.scope, markdownCode)}</sub>`] : [],
     "",
     `<sub>Baseline: ${impact.baseline.kind === "release" ? "last release " : ""}${markdownCode(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})</sub>`
-  );
-  return out;
+  ];
 }
 function headerLines(result, opts) {
   const s = result.summary;
@@ -26367,7 +26425,7 @@ var import_yaml7 = __toESM(require_dist(), 1);
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
 import { readFileSync as readFileSync4, statSync as statSync2 } from "fs";
-import { isAbsolute as isAbsolute5, relative as relative5, resolve as resolve5, sep as sep2 } from "path";
+import { isAbsolute as isAbsolute5, relative as relative6, resolve as resolve6, sep as sep2 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
 var SERVICE = "github.actions.results.api.v1.ArtifactService";
@@ -26614,9 +26672,9 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
       `The artifact name "${name}" is empty or contains one of " : < > | * ? \\ / or a line break`
     );
   if (!files.length) throw new Error("No files were found to upload");
-  const root = resolve5(rootDirectory);
+  const root = resolve6(rootDirectory);
   const entries2 = files.map((file) => {
-    const path = relative5(root, resolve5(file));
+    const path = relative6(root, resolve6(file));
     if (!path || path === ".." || path.startsWith(`..${sep2}`) || isAbsolute5(path))
       throw new Error(`${file} is not inside the artifact's root directory ${root}`);
     const entry = path.split(sep2).join("/");
@@ -26682,7 +26740,7 @@ var DEFAULTS2 = {
   token: "${{ github.token }}",
   debug: "false"
 };
-var ACTION_DIR = resolve6(dirname3(fileURLToPath(import.meta.url)), "../../..");
+var ACTION_DIR = resolve7(dirname3(fileURLToPath(import.meta.url)), "../../..");
 var UNTRUSTED_EVENTS = /* @__PURE__ */ new Set(["pull_request_target", "workflow_run"]);
 var SUMMARY_LIMIT = 1e6;
 var PATCH_FILE = "flowpact-contracts.patch";
@@ -26710,7 +26768,7 @@ function int3(name) {
     throw new InputError(`Input ${name} must be a non-negative integer (got "${value}")`);
   return Number(value);
 }
-var fromActionDir = (p) => isAbsolute6(p) ? p : resolve6(ACTION_DIR, p);
+var fromActionDir = (p) => isAbsolute6(p) ? p : resolve7(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
@@ -26920,11 +26978,11 @@ function annotate(f, prefix) {
   else notice(message, props);
 }
 function writeReport(workspace, file, content) {
-  const abs = resolve6(workspace, file);
+  const abs = resolve7(workspace, file);
   assertSafeWritePath(abs, [workspace]);
   mkdirSync2(dirname3(abs), { recursive: true });
   writeFileSync2(abs, content);
-  const shown = toPosix2(relative6(workspace, abs));
+  const shown = toPosix2(relative7(workspace, abs));
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
   return abs;
 }
@@ -27049,13 +27107,13 @@ function logging(debug2, envLevel) {
   return { logger, group: group2, loggedGroup };
 }
 function placeOf(workingDirectory) {
-  const workspace = resolve6(process.env.GITHUB_WORKSPACE || process.cwd());
-  const root = resolve6(workspace, workingDirectory);
-  const rel = toPosix2(relative6(workspace, root));
+  const workspace = resolve7(process.env.GITHUB_WORKSPACE || process.cwd());
+  const root = resolve7(workspace, workingDirectory);
+  const rel = toPosix2(relative7(workspace, root));
   return { workspace, root, prefix: rel === "" || rel === "." ? "" : rel };
 }
 function loadInputConfig(inputs, { root, prefix }) {
-  const loaded = loadConfig(root, inputs.config ? resolve6(root, inputs.config) : void 0, {
+  const loaded = loadConfig(root, inputs.config ? resolve7(root, inputs.config) : void 0, {
     ...inputs.baseConfig ? { base: inputs.baseConfig } : {}
   });
   info(
@@ -27071,7 +27129,7 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
   const extraPlugins = inputs.extraPlugins.filter((p) => inputs.plugins || !inCheckout(p));
   const skippedPlugins = inputs.extraPlugins.filter((p) => !extraPlugins.includes(p));
   if (skippedPlugins.length) {
-    const names = skippedPlugins.map((p) => toPosix2(relative6(workspace, p))).join(", ");
+    const names = skippedPlugins.map((p) => toPosix2(relative7(workspace, p))).join(", ");
     warning(`Not loading the plugin input's ${names} from the checkout: ${pluginsOff}.`);
   }
   return extraPlugins;
@@ -27102,12 +27160,19 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
     });
   });
 }
+function badPaths(result, paths, where) {
+  const fromBaseline = result.impact?.scope?.fromBaseline ?? [];
+  const missing = (result.project.missingTargets ?? []).filter((p) => !fromBaseline.includes(p));
+  if (missing.length) return `paths not found under ${where}: ${missing.join(", ")}`;
+  const { targets, wholeRepository } = result.project;
+  if (paths.length && targets.size === 0 && !wholeRepository && !fromBaseline.length)
+    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${paths.join(", ")}`;
+  return void 0;
+}
 function nothingAnalyzed(result, inputs, prefix) {
   const where = prefix || ".";
-  const missing = result.project.missingTargets ?? [];
-  if (missing.length) return `paths not found under ${where}: ${missing.join(", ")}`;
-  if (inputs.paths.length && result.project.targets.size === 0 && !result.project.wholeRepository)
-    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${inputs.paths.join(", ")}`;
+  const paths = badPaths(result, inputs.paths, where);
+  if (paths) return paths;
   if (result.summary.workflows === 0 && result.summary.actions === 0)
     return `No workflows found under ${where}/.github/workflows. Set working-directory to the repository that holds them.`;
   return void 0;

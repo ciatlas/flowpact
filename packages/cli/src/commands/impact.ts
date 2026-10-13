@@ -2,7 +2,17 @@ import { type ArgsDef, defineCommand } from 'citty';
 import { guard } from '../shared';
 import { type ReportArgs, reportArgs, runReportCommand } from './lint';
 
-const { paths: _paths, impact: _impact, ...args } = reportArgs;
+const { paths: _paths, impact: _impact, ...rest } = reportArgs;
+
+const args = {
+  paths: {
+    type: 'positional',
+    description:
+      'Workflow/action files or directories: judge only the published ones within them (default: every published one)',
+    required: false,
+  },
+  ...rest,
+} satisfies ArgsDef;
 
 export const impactCommand = defineCommand({
   meta: {

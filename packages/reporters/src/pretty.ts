@@ -9,7 +9,7 @@ import {
   type Severity,
   type ToolMeta,
 } from '@flowpact/lint';
-import { describeDeclared, listedChanges, shortCommit } from './impact';
+import { describeDeclared, describeScope, listedChanges, shortCommit, ungraded } from './impact';
 import {
   box,
   codeFrame,
@@ -167,13 +167,17 @@ export function renderImpact(t: Theme, impact: ImpactResult): string {
   }
   const more = listedChanges(impact).length - 30;
   if (more > 0) lines.push(c.dim(`  … ${more} more (see --format json)`));
-  if (listedChanges(impact).length === 0) lines.push(c.dim('  no changes to published workflows or actions'));
-  lines.push(
-    c.dim(
-      `  baseline: ${impact.baseline.kind === 'release' ? 'last release ' : ''}${safe(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})`,
-    ),
-  );
+  lines.push(...impactFooter(t, impact));
   return lines.join('\n');
+}
+
+/** The lines under the changes: that there are none, what paths narrowed impact mode to, and the baseline. */
+function impactFooter(t: Theme, impact: ImpactResult): string[] {
+  return [
+    ...(listedChanges(impact).length === 0 ? [`  no changes to ${ungraded(impact)}`] : []),
+    ...(impact.scope ? [`  only ${describeScope(impact.scope, safe)}`] : []),
+    `  baseline: ${impact.baseline.kind === 'release' ? 'last release ' : ''}${safe(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})`,
+  ].map((line) => t.c.dim(line));
 }
 
 function countBySeverity(findings: Finding[]) {

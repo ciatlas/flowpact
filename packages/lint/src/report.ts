@@ -113,6 +113,18 @@ export const reportSchema = z.object({
           loc: locSchema,
         }),
       ),
+      scope: described(
+        z.optional(
+          z.object({
+            paths: described(z.array(z.string()), 'The paths given, relative to the root.'),
+            units: described(
+              z.array(z.string()),
+              'The published workflows and actions within them, in the baseline or the working tree: the only ones graded.',
+            ),
+          }),
+        ),
+        'Only when paths were given: impact mode graded only the published units within them, and the verdict is about those alone.',
+      ),
     }),
   ),
   rules: z.array(
@@ -170,6 +182,9 @@ export function toJsonReport(result: AnalysisResult, opts: { includeGraph?: bool
             ...(result.impact.verdict.declared ? { declared: result.impact.verdict.declared } : {}),
             ok: result.impact.verdict.ok,
             changes: result.impact.changes,
+            ...(result.impact.scope
+              ? { scope: { paths: result.impact.scope.paths, units: result.impact.scope.units } }
+              : {}),
           },
         }
       : {}),

@@ -731,13 +731,25 @@ async function analyzeRoot(
   });
 }
 
+/**
+ * Why the paths give nothing to report on: some do not exist, or none names a workflow or action. In impact mode, a
+ * path that names a workflow or action of the baseline stands for what the change removed, so it is neither.
+ */
+function badPaths(result: AnalysisResult, paths: string[], where: string): string | undefined {
+  const fromBaseline = result.impact?.scope?.fromBaseline ?? [];
+  const missing = (result.project.missingTargets ?? []).filter((p) => !fromBaseline.includes(p));
+  if (missing.length) return `paths not found under ${where}: ${missing.join(', ')}`;
+  const { targets, wholeRepository } = result.project;
+  if (paths.length && targets.size === 0 && !wholeRepository && !fromBaseline.length)
+    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${paths.join(', ')}`;
+  return undefined;
+}
+
 /** Why the step fails without a report: paths that do not exist or name no workflow or action, or no workflows at all. */
 function nothingAnalyzed(result: AnalysisResult, inputs: Inputs, prefix: string): string | undefined {
   const where = prefix || '.';
-  const missing = result.project.missingTargets ?? [];
-  if (missing.length) return `paths not found under ${where}: ${missing.join(', ')}`;
-  if (inputs.paths.length && result.project.targets.size === 0 && !result.project.wholeRepository)
-    return `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${inputs.paths.join(', ')}`;
+  const paths = badPaths(result, inputs.paths, where);
+  if (paths) return paths;
   if (result.summary.workflows === 0 && result.summary.actions === 0)
     return `No workflows found under ${where}/.github/workflows. Set working-directory to the repository that holds them.`;
   return undefined;

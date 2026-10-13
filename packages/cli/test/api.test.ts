@@ -586,6 +586,51 @@ describe('impact', () => {
       findings: 0,
     });
   });
+
+  it('grades only the published units within paths, in impact() and lint({ impact })', async () => {
+    const root = renamed();
+    write(root, {
+      '.github/workflows/ci.yml': 'on: push\njobs:\n  t:\n    runs-on: x\n    steps: [{ run: x }]\n',
+    });
+    type Run = { impact: { required: string; ok: boolean; scope?: unknown }; exit: number };
+    const r = await api<Record<'ci' | 'reusable' | 'lint' | 'all', Run>>(`
+      const root = ${JSON.stringify(root)};
+      const of = (a) => ({ impact: a.impact, exit: a.exitCode() });
+      out({
+        ci: of(await flowpact.impact({ root, base: 'main', expect: 'patch', paths: ['.github/workflows/ci.yml'] })),
+        reusable: of(await flowpact.impact({ root, base: 'main', expect: 'patch', paths: ['.github/workflows/ci-reusable.yml'] })),
+        lint: of(await flowpact.lint({ root, impact: true, base: 'main', expect: 'patch', paths: ['.github/workflows/ci.yml'] })),
+        all: of(await flowpact.impact({ root, base: 'main', expect: 'patch' })),
+      });`);
+    expect(r.ci).toEqual({
+      impact: expect.objectContaining({
+        required: 'none',
+        ok: true,
+        scope: { paths: ['.github/workflows/ci.yml'], units: [] },
+      }),
+      exit: 0,
+    });
+    expect(r.reusable).toMatchObject({
+      impact: { required: 'major', ok: false, scope: { units: ['.github/workflows/ci-reusable.yml'] } },
+      exit: 1,
+    });
+    expect(r.lint).toMatchObject({ impact: { required: 'none', ok: true }, exit: 0 });
+    expect(r.all).toMatchObject({ impact: { required: 'major', ok: false }, exit: 1 });
+    expect(r.all.impact.scope).toBeUndefined();
+    const cliReport = await cli([
+      'impact',
+      '.github/workflows/ci.yml',
+      '--root',
+      root,
+      '--base',
+      'main',
+      '--expect',
+      'patch',
+      '--format',
+      'json',
+    ]);
+    expect(r.ci.impact).toEqual(JSON.parse(cliReport.stdout).impact);
+  });
 });
 
 describe('plugins and base config', () => {
@@ -809,6 +854,7 @@ const outputs: string[] = [a.json({ includeGraph: true }), a.sarif(), a.markdown
   a.pretty({ color: false, width: 80, ascii: true, hideInfo: true })];
 const patch: string | undefined = (await check()).contracts?.patch();
 const required = (await impact({ base: 'main', expect: 'patch', title: 'fix: x', labels: ['a'] })).impact?.required;
+const graded: string[] | undefined = (await impact({ paths: ['actions/deploy'] })).impact?.scope?.units;
 const written: string[] = (await generate({ dryRun: true, out: 'x' })).written;
 const preview: boolean = (await generate({ dryRun: true })).dryRun;
 const nodes = (await graph()).nodes.map((n) => n.kind);
@@ -859,7 +905,7 @@ a.exitCode('sometimes');
 // @ts-expect-error: the report is read-only
 a.report = report;
 
-export { VERSION, code, outputs, patch, required, written, nodes, traced, listed, why, rule, where, severity, annotations, texts, unit, preview };
+export { VERSION, code, outputs, patch, required, graded, written, nodes, traced, listed, why, rule, where, severity, annotations, texts, unit, preview };
 `,
     });
     const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');

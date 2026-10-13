@@ -598,6 +598,64 @@ describe('impact mode', () => {
     expect(off.outputs['impact-ok']).toBe('');
   });
 
+  it('grades only the published workflows within paths, and a path the change removed', async () => {
+    const workspace = renamedRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    // Two more reusable workflows on main: one the branch keeps unchanged, one it deletes.
+    g('checkout', '-q', 'main');
+    const other =
+      'on: workflow_call\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "true" }]\n';
+    writeFileSync(join(workspace, '.github/workflows/other.yml'), other);
+    writeFileSync(join(workspace, '.github/workflows/gone.yml'), other);
+    g('add', '-A');
+    g('commit', '-q', '-m', 'more');
+    g('checkout', '-q', 'change');
+    g('merge', '-q', '--no-edit', 'main');
+    g('rm', '-q', '.github/workflows/gone.yml');
+    g('commit', '-q', '-m', 'gone');
+    const inputs = (paths: string) => ({
+      impact: 'on',
+      'base-ref': 'main',
+      'expected-impact': 'patch',
+      paths,
+    });
+    /** A run of its own: what the runs before it reported is cleared. */
+    const fresh = (given: Record<string, string>) => {
+      Object.assign(state, { outputs: {}, annotations: [], summary: '', failed: [] });
+      return action(workspace, given);
+    };
+
+    const unchanged = await fresh(inputs('.github/workflows/other.yml'));
+    expect(unchanged.outputs['required-impact']).toBe('none');
+    expect(unchanged.outputs['impact-ok']).toBe('true');
+    expect(unchanged.failed).toEqual([]);
+    expect(unchanged.summary).toContain(
+      '<sub>Only within `.github/workflows/other.yml`: graded `.github/workflows/other.yml`</sub>',
+    );
+
+    const renamed = await fresh(inputs('.github/workflows/ci-reusable.yml'));
+    expect(renamed.outputs['required-impact']).toBe('major');
+    expect(renamed.outputs['impact-ok']).toBe('false');
+    expect(renamed.failed).toHaveLength(1);
+
+    const removed = await fresh(inputs('.github/workflows/gone.yml'));
+    expect(removed.outputs['required-impact']).toBe('major');
+    expect(removed.outputs['exit-code']).toBe('1');
+    expect(removed.annotations.map((a) => String(a.props?.title ?? '').split(' ')[0])).toEqual(['FP810']);
+    expect(removed.annotations[0]?.message).toContain('was removed or moved');
+
+    const report = join(temp, 'impact.json');
+    await fresh({ ...inputs('.github/workflows/other.yml'), 'report-json': report });
+    expect(JSON.parse(readFileSync(report, 'utf8')).impact.scope).toEqual({
+      paths: ['.github/workflows/other.yml'],
+      units: ['.github/workflows/other.yml'],
+    });
+    // Without impact mode, the removed path is just missing.
+    const lint = await fresh({ paths: '.github/workflows/gone.yml' });
+    expect(lint.failed[0]).toContain('paths not found');
+    expect(lint.outputs['exit-code']).toBe('2');
+  });
+
   it('opens the impact baseline group only when something is logged in it', async () => {
     const off = await action(renamedRepo(), { impact: 'off' });
     expect(off.groups).not.toContain('flowpact: impact baseline');

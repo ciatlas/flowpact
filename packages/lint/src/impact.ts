@@ -459,17 +459,30 @@ function newUnits(
 
 /**
  * Every graded change to a published unit between `base` and `head`. `headExists` tells whether a unit's file is still
- * in the working tree (a unit can exist without being loaded, e.g. an action nothing here uses any more).
+ * in the working tree (a unit can exist without being loaded, e.g. an action nothing here uses any more). With `units`,
+ * only the units of those paths are graded.
  */
 export function impactChanges(
   base: ProjectIndex,
   head: ProjectIndex,
   policy: Pick<ImpactPolicy, 'publish'>,
   headExists: (file: string) => boolean = () => false,
+  units?: ReadonlySet<string>,
 ): ImpactChange[] {
   const out: ImpactChange[] = [];
-  const baseUnits = new Map(base.units().map((u) => [u.path, u]));
-  const headUnits = new Map(head.units().map((u) => [u.path, u]));
+  const graded = (u: UnitDecl) => !units || units.has(u.path);
+  const baseUnits = new Map(
+    base
+      .units()
+      .filter(graded)
+      .map((u) => [u.path, u]),
+  );
+  const headUnits = new Map(
+    head
+      .units()
+      .filter(graded)
+      .map((u) => [u.path, u]),
+  );
   for (const [path, b] of baseUnits) {
     if (!isPublished(b, policy)) continue;
     const h = headUnits.get(path);
@@ -603,28 +616,89 @@ export function impactVerdict(
   };
 }
 
+/**
+ * Paths that narrow impact mode to the published units within them, as `lint`, `check` and `impact` were given them.
+ */
+export interface ImpactPaths {
+  /** Each path as given, and relative to the root with `/` separators. */
+  paths: { given: string; relative: string }[];
+  /** The workflow and action files of the working tree the paths name (the project's targets). */
+  targets: ReadonlySet<string>;
+}
+
+/** What paths narrowed impact mode to. */
+export interface ImpactScope {
+  /** The paths, relative to the root. */
+  paths: string[];
+  /** The published units within them, in the baseline or the working tree: the only units graded. */
+  units: string[];
+  /**
+   * The paths, as given, that name a workflow or action of the baseline, or a directory holding one. Such a path is
+   * not missing when the working tree no longer has it: the change removed what it names.
+   */
+  fromBaseline: string[];
+}
+
+/** Whether `file` is the file `path` names, or lies in the directory it names (both relative to the root). */
+const pathHolds = (path: string, file: string) => file === path || file.startsWith(`${path}/`);
+
+/** The units of either side whose file is within the paths, by path. */
+function unitsWithin(base: ProjectIndex, head: ProjectIndex, within: ImpactPaths): Set<string> {
+  const covered = (file: string) =>
+    within.targets.has(file) || within.paths.some((p) => pathHolds(p.relative, file));
+  return new Set([...base.units(), ...head.units()].filter((u) => covered(u.file)).map((u) => u.path));
+}
+
+/** What the paths narrowed impact mode to, given the published units within them. */
+function scopeOf(base: ProjectIndex, within: ImpactPaths, published: UnitDecl[]): ImpactScope {
+  const baseFiles = base.units().map((u) => u.file);
+  return {
+    paths: [...new Set(within.paths.map((p) => p.relative))],
+    units: [...new Set(published.map((u) => u.path))].sort(),
+    fromBaseline: within.paths
+      .filter((p) => baseFiles.some((f) => pathHolds(p.relative, f)))
+      .map((p) => p.given),
+  };
+}
+
 /** Impact mode's result: where the baseline came from, every graded change and the verdict. */
 export interface ImpactResult {
   baseline: { kind: 'ref' | 'release'; ref: string; commit: string };
   changes: ImpactChange[];
   verdict: ImpactVerdict;
   policy: ImpactPolicy;
-  /** Files of the published units (base and head), e.g. to place findings that are not about one change. */
+  /**
+   * Files of the published units (base and head) that were graded, e.g. to place findings that are not about one
+   * change.
+   */
   publishedFiles: string[];
+  /** With paths: what they narrowed impact mode to. Without, every published unit is graded. */
+  scope?: ImpactScope;
 }
 
-/** Grades the changes and judges the declaration in one step. */
+/**
+ * Grades the changes and judges the declaration in one step. With paths (`within`), only the published units within
+ * them count, so the verdict is about those units alone.
+ */
 export function computeImpact(
   base: ProjectIndex,
   head: ProjectIndex,
   baseline: ImpactResult['baseline'],
   declared: DeclaredInput,
   policy: ImpactPolicy,
-  headExists?: (file: string) => boolean,
+  within?: ImpactPaths,
 ): ImpactResult {
-  const changes = impactChanges(base, head, policy, headExists);
-  const publishedFiles = [
-    ...new Set([...head.units(), ...base.units()].filter((u) => isPublished(u, policy)).map((u) => u.file)),
-  ].sort();
-  return { baseline, changes, verdict: impactVerdict(changes, declared, policy), policy, publishedFiles };
+  const units = within ? unitsWithin(base, head, within) : undefined;
+  const changes = impactChanges(base, head, policy, undefined, units);
+  const published = [...head.units(), ...base.units()].filter(
+    (u) => isPublished(u, policy) && (!units || units.has(u.path)),
+  );
+  return {
+    baseline,
+    changes,
+    verdict: impactVerdict(changes, declared, policy),
+    policy,
+    publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
+    ...(within ? { scope: scopeOf(base, within, published) } : {}),
+  };
 }

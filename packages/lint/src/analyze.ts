@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { relative, resolve } from 'node:path';
 import {
   compareLoc,
   declaredMatrix,
@@ -29,7 +30,13 @@ import {
   planContracts,
   scopePlan,
 } from './contracts';
-import { computeImpact, type DeclaredInput, type ImpactPolicy, type ImpactResult } from './impact';
+import {
+  computeImpact,
+  type DeclaredInput,
+  type ImpactPaths,
+  type ImpactPolicy,
+  type ImpactResult,
+} from './impact';
 import { createRegistry, IMPACT_CODES } from './rules/index';
 import { CODE_PATTERN, type RuleRegistry } from './rules/registry';
 import type {
@@ -371,11 +378,22 @@ function selectRules(
   return { severities, only: only?.map((o) => registry.get(o)!.code) };
 }
 
+/**
+ * What paths narrow the report to. Without impact mode, they narrow it when they name workflows or actions (paths that
+ * name none are refused). In impact mode, they narrow it too when they only cover what the baseline had: the
+ * workflows and actions the change removed.
+ */
+interface ReportScope {
+  narrowed: boolean;
+  /** Whether a contract is in scope (with paths: of a target, or listing one as a consumer). */
+  contractInScope: (e: ContractPlanEntry) => boolean;
+}
+
 /** Check mode: the contracts on disk compared with the current ones (with paths, only the contracts in scope). */
 function compareContracts(
   opts: AnalyzeOptions,
   index: ProjectIndex,
-  contractInScope: (e: ContractPlanEntry) => boolean,
+  scope: ReportScope,
   logger: Logger,
 ): ContractPlan | undefined {
   if (!opts.checkContracts) return undefined;
@@ -383,7 +401,7 @@ function compareContracts(
     planContracts(index, opts.fs ?? nodeFileSystem(opts.root)),
   );
   // With paths, only the contracts in scope count (drift output, patch, summary).
-  if (index.project.targets.size > 0) contracts = scopePlan(contracts, contractInScope);
+  if (scope.narrowed) contracts = scopePlan(contracts, scope.contractInScope);
   logger.info(
     `contracts: ${contracts.counts.unchanged} unchanged, ${contracts.counts.update} outdated, ${contracts.counts.create} missing, ${contracts.counts.delete} orphaned`,
     { breaking: contracts.breaking },
@@ -391,12 +409,30 @@ function compareContracts(
   return contracts;
 }
 
-/** Impact mode's changes and verdict, when it runs. */
-function impactOf(opts: AnalyzeOptions, index: ProjectIndex, logger: Logger): ImpactResult | undefined {
+/** A path relative to the root, with `/` separators. */
+const rootRelative = (root: string, path: string) =>
+  relative(root, resolve(root, path)).split('\\').join('/') || '.';
+
+/** Impact mode's paths: the paths given, unless there are none or one is the whole repository. */
+function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | undefined {
+  if (!opts.impact || !opts.paths?.length || project.wholeRepository) return undefined;
+  return {
+    paths: opts.paths.map((given) => ({ given, relative: rootRelative(opts.root, given) })),
+    targets: project.targets,
+  };
+}
+
+/** Impact mode's changes and verdict, when it runs: with paths, about the published units within them. */
+function impactOf(
+  opts: AnalyzeOptions,
+  index: ProjectIndex,
+  within: ImpactPaths | undefined,
+  logger: Logger,
+): ImpactResult | undefined {
   const impact = opts.impact;
   if (!impact) return undefined;
   return logger.time('impact', () =>
-    computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy),
+    computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, within),
   );
 }
 
@@ -524,29 +560,30 @@ function judgeOverride(u: OverrideUsage, run: RuleRun, opts: AnalyzeOptions): vo
 }
 
 /**
- * Whether a finding is reported: with paths, it is about a targeted file or a contract in scope, and no `ignore`
- * pattern matches its file.
+ * Whether a finding is reported: with paths, it is about a targeted file or a contract in scope, or it is impact mode's
+ * (which only grades the published units within the paths), and no `ignore` pattern matches its file.
  */
 function scopeOf(
   index: ProjectIndex,
   config: FlowpactConfig,
   contracts: ContractPlan | undefined,
-  contractInScope: (e: ContractPlanEntry) => boolean,
+  scope: ReportScope,
 ): (f: Finding) => boolean {
   const { targets } = index.project;
   // The contract of a targeted workflow belongs to it (e.g. a conflicted contract, FP805), and so do the contracts
   // that list it as a consumer.
-  const scopedEntries = (contracts?.entries ?? []).filter(contractInScope);
+  const scopedEntries = (contracts?.entries ?? []).filter(scope.contractInScope);
   const contractFilesInScope = new Set(scopedEntries.map((e) => e.file));
   // Contract findings are reported on the workflow they describe; they follow their contract into scope.
   const contractUnitsInScope = new Set(
     scopedEntries.flatMap((e) => (e.unit ? [index.unit(e.unit)?.file ?? e.unit] : [])),
   );
   return (f) =>
-    (targets.size === 0 ||
+    (!scope.narrowed ||
       targets.has(f.loc.file) ||
       contractFilesInScope.has(f.loc.file) ||
-      (f.category === 'contracts' && contractUnitsInScope.has(f.loc.file))) &&
+      (f.category === 'contracts' && contractUnitsInScope.has(f.loc.file)) ||
+      IMPACT_CODES.includes(f.code)) &&
     !config.ignore.some((p) => matchesPattern(f.loc.file, p));
 }
 
@@ -636,7 +673,7 @@ function prepareRules(
   logger: Logger,
   base: Pick<RuleRun, 'registry' | 'index' | 'config' | 'matrix'>,
   unloaded: string[],
-): { run: RuleRun; contractInScope: (e: ContractPlanEntry) => boolean } {
+): { run: RuleRun; scope: ReportScope } {
   const { registry, index, config } = base;
   const { severities, only } = selectRules(registry, config, opts.only, unloaded);
   const ruleLog = logger.child('rules');
@@ -644,9 +681,13 @@ function prepareRules(
   // internals (`generatedFiles: 'skip'`) stay quiet: nobody can act on them in the file itself.
   const generatedFiles = generatedFilesOf(index.project, config);
   for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
-  const contractInScope = contractsInScope(index);
-  const contracts = compareContracts(opts, index, contractInScope, logger);
-  const impact = impactOf(opts, index, logger);
+  const within = impactPathsOf(opts, index.project);
+  const scope: ReportScope = {
+    narrowed: index.project.targets.size > 0 || within !== undefined,
+    contractInScope: contractsInScope(index),
+  };
+  const contracts = compareContracts(opts, index, scope, logger);
+  const impact = impactOf(opts, index, within, logger);
   const run = ruleRun({
     ...base,
     severities,
@@ -657,7 +698,7 @@ function prepareRules(
     impact,
     generatedFiles,
   });
-  return { run, contractInScope };
+  return { run, scope };
 }
 
 /**
@@ -668,7 +709,7 @@ function runPhases(
   run: RuleRun,
   opts: AnalyzeOptions,
   logger: Logger,
-  contractInScope: (e: ContractPlanEntry) => boolean,
+  scope: ReportScope,
   unloaded: string[],
 ): { kept: Finding[]; suppressed: SuppressedFinding[]; skippedInScope: Finding[] } {
   const { config } = run;
@@ -686,7 +727,7 @@ function runPhases(
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join('; ')}`);
   for (const u of applied.usage) judgeOverride(u, run, opts);
-  const inScope = scopeOf(run.index, config, run.contracts, contractInScope);
+  const inScope = scopeOf(run.index, config, run.contracts, scope);
   const accepted = applied.kept.filter(inScope);
   const suppressed = applied.suppressed.filter(inScope);
   const skippedInScope = dedupe(run.skipped).filter(inScope);
@@ -716,8 +757,8 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
   const { matrix, combinations } = expandMatrices(project, config, logger);
 
   const unloaded: string[] = [];
-  const { run, contractInScope } = prepareRules(opts, logger, { registry, index, config, matrix }, unloaded);
-  const { kept, suppressed, skippedInScope } = runPhases(run, opts, logger, contractInScope, unloaded);
+  const { run, scope } = prepareRules(opts, logger, { registry, index, config, matrix }, unloaded);
+  const { kept, suppressed, skippedInScope } = runPhases(run, opts, logger, scope, unloaded);
 
   const summary = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
   const durationMs = Math.round(performance.now() - started);

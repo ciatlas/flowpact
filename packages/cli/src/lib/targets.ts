@@ -9,15 +9,23 @@ export function displayPath(abs: string): string {
   return rel.startsWith('..') || isAbsolute(rel) ? abs : rel;
 }
 
-/** Refuses paths that do not exist, or that name no workflow or action. */
-export function checkTargets(project: Project, paths: string[], root: string): void {
-  const missing = project.missingTargets ?? [];
+/**
+ * Refuses paths that do not exist, or that name no workflow or action. `fromBaseline` are paths that name a workflow
+ * or action of impact mode's baseline: they stand for what the change removed, so they are neither.
+ */
+export function checkTargets(
+  project: Project,
+  paths: string[],
+  root: string,
+  fromBaseline: string[] = [],
+): void {
+  const missing = (project.missingTargets ?? []).filter((p) => !fromBaseline.includes(p));
   if (missing.length) {
     throw usage(
       `Path${missing.length > 1 ? 's' : ''} not found under ${displayPath(root)}: ${missing.join(', ')}`,
     );
   }
-  if (paths.length && project.targets.size === 0 && !project.wholeRepository) {
+  if (paths.length && project.targets.size === 0 && !project.wholeRepository && !fromBaseline.length) {
     throw usage(
       `None of the paths is a workflow (.github/workflows/*.yml) or an action (action.yml): ${(project.ignoredTargets ?? paths).join(', ')}`,
     );

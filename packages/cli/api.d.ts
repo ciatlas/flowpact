@@ -75,7 +75,10 @@ export interface ImpactModeOptions {
 }
 
 export interface LintOptions extends CommonOptions, PluginOptions, ImpactModeOptions {
-  /** Workflow and action files or directories to report on, relative to the root. Default: all. */
+  /**
+   * Workflow and action files or directories to report on, relative to the root. Default: all. With `impact`, impact
+   * mode grades only the published workflows and actions within them.
+   */
   paths?: string[];
   /** Run only these rules (codes or names). */
   only?: string[];
@@ -90,6 +93,12 @@ export interface LintOptions extends CommonOptions, PluginOptions, ImpactModeOpt
 export interface CheckOptions extends LintOptions {}
 
 export interface ImpactOptions extends CommonOptions, PluginOptions, ImpactModeOptions {
+  /**
+   * Workflow and action files or directories, relative to the root: grade only the published ones within them, so the
+   * verdict is about those alone. A path the change removed counts when the baseline has a workflow or action there.
+   * Default: every published workflow and action.
+   */
+  paths?: string[];
   /** Run only these rules. Default: the impact rules. */
   only?: string[];
   /** The current time, for the expiry of overrides. Default: now. */
@@ -198,6 +207,16 @@ export interface ImpactVerdict {
     message: string;
     loc: Loc;
   }[];
+  /**
+   * Only when paths were given: impact mode graded only the published units within them, and the verdict is about
+   * those alone.
+   */
+  scope?: {
+    /** The paths given, relative to the root. */
+    paths: string[];
+    /** The published workflows and actions within them, in the baseline or the working tree: the only ones graded. */
+    units: string[];
+  };
 }
 
 /** The JSON report, schema v1: what `flowpact lint --format json` prints. */
@@ -708,6 +727,8 @@ export interface RuleContext {
     baseline: ImpactVerdict['baseline'];
     changes: ImpactVerdict['changes'];
     verdict: { required: ImpactLevel; declared?: ImpactVerdict['declared']; ok: boolean };
+    /** With paths: the only units graded, so `changes` and `verdict` are about them alone. */
+    scope?: ImpactVerdict['scope'];
   };
   /** How each override was used; only for `post` rules. */
   readonly overrides?: {

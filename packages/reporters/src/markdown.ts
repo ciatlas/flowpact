@@ -6,7 +6,7 @@ import {
   type ImpactResult,
   type Severity,
 } from '@flowpact/lint';
-import { describeDeclared, listedChanges, shortCommit } from './impact';
+import { describeDeclared, describeScope, listedChanges, shortCommit, ungraded } from './impact';
 import {
   buildCallGraph,
   markdownCell as cell,
@@ -169,33 +169,35 @@ function renderContracts(plan: ContractPlan, opts: MarkdownOptions): string[] {
   ];
 }
 
+/** The graded changes as a table, biggest first, cut at `maxFindings`; a line instead when there are none. */
+function impactChangeLines(impact: ImpactResult, opts: MarkdownOptions): string[] {
+  const changes = listedChanges(impact);
+  if (!changes.length) return [`No changes to ${ungraded(impact)}.`];
+  const out = ['| Impact | Unit | Change |', '| --- | --- | --- |'];
+  const limit = Math.max(1, opts.maxFindings ?? 50);
+  for (const c of changes.slice(0, limit)) {
+    out.push(
+      `| ${c.level === 'major' ? '**major**' : c.level}${c.certain ? '' : ' (uncertain)'} | ${tableCell(code(c.unit))} | ${cell(c.message)} |`,
+    );
+  }
+  if (changes.length > limit)
+    out.push('', `_… ${changes.length - limit} more changes (see the JSON report)._`);
+  return out;
+}
+
 function renderImpactMarkdown(impact: ImpactResult, opts: MarkdownOptions): string[] {
   const v = impact.verdict;
   const icon = v.ok ? '✅' : '❌';
-  const out = [
+  return [
     '### Impact',
     '',
     `${icon} Declared **${text(describeDeclared(impact))}** · required **${v.required}**`,
-  ];
-  const changes = listedChanges(impact);
-  if (changes.length) {
-    out.push('', '| Impact | Unit | Change |', '| --- | --- | --- |');
-    const limit = Math.max(1, opts.maxFindings ?? 50);
-    for (const c of changes.slice(0, limit)) {
-      out.push(
-        `| ${c.level === 'major' ? '**major**' : c.level}${c.certain ? '' : ' (uncertain)'} | ${tableCell(code(c.unit))} | ${cell(c.message)} |`,
-      );
-    }
-    if (changes.length > limit)
-      out.push('', `_… ${changes.length - limit} more changes (see the JSON report)._`);
-  } else {
-    out.push('', 'No changes to published workflows or actions.');
-  }
-  out.push(
+    '',
+    ...impactChangeLines(impact, opts),
+    ...(impact.scope ? ['', `<sub>Only ${describeScope(impact.scope, code)}</sub>`] : []),
     '',
     `<sub>Baseline: ${impact.baseline.kind === 'release' ? 'last release ' : ''}${code(impact.baseline.ref)} (${shortCommit(impact.baseline.commit)})</sub>`,
-  );
-  return out;
+  ];
 }
 
 /** The title, the tool and schema versions, the verdict and the counts. */
