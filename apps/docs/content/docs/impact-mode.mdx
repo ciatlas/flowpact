@@ -114,7 +114,9 @@ graded.
 - The reports say so: the terminal and Markdown reports add `only within <paths>: graded <units>`, and the JSON
   report's `impact.scope` lists the `paths` and the `units` graded. When `ignore` left out published units, they add
   `left out by ignore: <units>` (and say `no changes to the published workflows or actions that ignore leaves in`
-  where nothing graded changed), and the JSON report's `impact.ignored` lists them.
+  where nothing graded changed), and the JSON report's `impact.ignored` lists them. A unit moved to a file that
+  `ignore` does not match (`b/action.yml` to `b/action.yaml` under `ignore: [b/action.yml]`) is graded, so it is not
+  among them.
 
 ## Where the declared impact comes from
 

@@ -21914,13 +21914,13 @@ function anchorOf(head, { within: within2, ignore }, published) {
   const others = (within2 ? [...within2.targets] : headFiles).filter((f) => !leftOut(f));
   return graded.sort()[0] ?? others.sort()[0];
 }
-function narrowedOf(base, head, policy, lookAt, published) {
+function narrowedOf(base, head, policy, lookAt, graded) {
   const covered = coveredBy(lookAt.within);
   const leftOut = leftOutBy(lookAt.ignore);
   const ignored = [...base.units(), ...head.units()].filter(
-    (u) => isPublished(u, policy) && covered(u.file) && leftOut(u.file)
+    (u) => isPublished(u, policy) && covered(u.file) && leftOut(u.file) && !graded.units.has(u.path)
   );
-  const anchor2 = anchorOf(head, lookAt, published);
+  const anchor2 = anchorOf(head, lookAt, graded.published);
   return { ignored: [...new Set(ignored.map((u) => u.path))].sort(), ...anchor2 ? { anchor: anchor2 } : {} };
 }
 function scopeOf(within2, published) {
@@ -21944,7 +21944,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
     ...within2 ? { scope: scopeOf(within2, published) } : {},
-    ...units ? { narrowed: narrowedOf(base, head, policy, lookAt, published) } : {},
+    ...units ? { narrowed: narrowedOf(base, head, policy, lookAt, { units, published }) } : {},
     ...ignoreAdded.length ? { ignoreAdded } : {}
   };
 }

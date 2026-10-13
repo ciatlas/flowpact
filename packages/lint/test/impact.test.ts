@@ -680,6 +680,30 @@ describe('ignore leaves units out of impact mode', () => {
     expect(run([], { explicit: 'patch' }, ['a'], ['b/**']).impactNotes).toBeUndefined();
   });
 
+  it('names a unit as left out by ignore only when no file of it is graded', () => {
+    // b/action.yml becomes b/action.yaml and loses its input; both sides ignore b/action.yml, which no longer matches.
+    const both = ['*/action.yml', '*/action.yaml'];
+    const r = analyze({
+      root: '/v',
+      fs: memoryFileSystem({ 'a/action.yml': action('a', token), 'b/action.yaml': action('b') }),
+      config: parseConfig({ ignore: ['b/action.yml'], impact: { publish: both } }),
+      validateSchema: false,
+      repository: 'a/b',
+      impact: {
+        base: index(base, both),
+        baseline: { kind: 'ref', ref: 'main', commit: 'abc' },
+        declared: { explicit: 'patch' },
+        policy: { ...DEFAULT_IMPACT_POLICY, publish: both },
+        ignore: ['b/action.yml'],
+      },
+    });
+    expect(r.impact?.verdict).toMatchObject({ required: 'major', ok: false });
+    expect(r.impact?.changes.map((c) => c.unit)).toContain('b');
+    expect(located(r)).toEqual(['FP810@b/action.yaml']);
+    // Before: ['b'] as well, so the report said both "major b" and "left out by ignore: b".
+    expect(r.impact?.narrowed?.ignored).toEqual([]);
+  });
+
   it('reports a failing verdict on a file ignore leaves in when it leaves out every published unit', () => {
     // Nothing graded: a conflict between the declarations still fails, and its finding must say so, on a file that
     // exists. Before: on the root action.yml, which this repository does not have.

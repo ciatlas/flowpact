@@ -636,7 +636,10 @@ export interface ImpactScope {
 
 /** What paths or `ignore` left out of impact mode, when they leave out anything. */
 export interface ImpactNarrowed {
-  /** The published units (within the paths) that `ignore` leaves out: both the baseline's and the pull request's match. */
+  /**
+   * The published units (within the paths) that `ignore` leaves out, so they are not graded: both the baseline's and the
+   * pull request's match each file of them within the paths.
+   */
   ignored: string[];
   /**
    * Where findings about the verdict go when no change is there to place them on: the first published file graded in
@@ -714,20 +717,24 @@ function anchorOf(head: ProjectIndex, { within, ignore }: ImpactLookAt, publishe
   return graded.sort()[0] ?? others.sort()[0];
 }
 
-/** What paths or `ignore` left out, given the published units impact mode looks at. */
+/**
+ * What paths or `ignore` left out, given the units impact mode looks at (`units`, by path) and the published ones among
+ * them. A unit with a file `ignore` leaves out is graded all the same when another file of it is looked at (after a move
+ * `ignore` does not follow, from `action.yml` to `action.yaml`), so it is not named as left out.
+ */
 function narrowedOf(
   base: ProjectIndex,
   head: ProjectIndex,
   policy: Pick<ImpactPolicy, 'publish'>,
   lookAt: ImpactLookAt,
-  published: UnitDecl[],
+  graded: { units: ReadonlySet<string>; published: UnitDecl[] },
 ): ImpactNarrowed {
   const covered = coveredBy(lookAt.within);
   const leftOut = leftOutBy(lookAt.ignore);
   const ignored = [...base.units(), ...head.units()].filter(
-    (u) => isPublished(u, policy) && covered(u.file) && leftOut(u.file),
+    (u) => isPublished(u, policy) && covered(u.file) && leftOut(u.file) && !graded.units.has(u.path),
   );
-  const anchor = anchorOf(head, lookAt, published);
+  const anchor = anchorOf(head, lookAt, graded.published);
   return { ignored: [...new Set(ignored.map((u) => u.path))].sort(), ...(anchor ? { anchor } : {}) };
 }
 
@@ -787,7 +794,7 @@ export function computeImpact(
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
     ...(within ? { scope: scopeOf(within, published) } : {}),
-    ...(units ? { narrowed: narrowedOf(base, head, policy, lookAt, published) } : {}),
+    ...(units ? { narrowed: narrowedOf(base, head, policy, lookAt, { units, published }) } : {}),
     ...(ignoreAdded.length ? { ignoreAdded } : {}),
   };
 }
