@@ -78,6 +78,10 @@ graded.
   move from `actions/old` to `actions/new`, `flowpact impact actions/new` grades only the new unit (minor), not the
   removal (major): give both paths, or their parent `actions/`. Prefer directory paths, above all in the action's
   `paths` input: a pull request that deletes a unit and drops its path from the input is never graded for the removal.
+- A path that names only a removed unit (`actions/old/action.yml`, or `actions/old`) serves the pull request that
+  removes it, not later ones: once the removal is merged, the baseline lacks the unit too, so the path names nothing
+  any more, and the runs of later pull requests fail on it until it is taken out of the paths. A directory that also
+  holds other units, such as `actions/`, keeps working: another reason to prefer it.
 - When impact mode is skipped (`merge_group`, a push without a commit before it, `impact: auto` outside pull
   requests), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks, or one
   left without a workflow or action (a removed action's directory that keeps its README or `dist/`), is a warning
