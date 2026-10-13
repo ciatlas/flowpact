@@ -336,7 +336,10 @@ export type FailOn = 'error' | 'warning' | 'never';
 export interface Analysis {
   /** The JSON report: what `--format json` prints, parsed. */
   readonly report: Report;
-  /** What the CLI prints as `impact: …` lines: impact mode skipped, or notes about its baseline. */
+  /**
+   * What the CLI prints as `impact: …` lines: impact mode skipped, notes about its baseline and how it graded, and the
+   * paths it does not refuse though they name no workflow or action.
+   */
   readonly notes: string[];
   /** `check` only: the comparison with the locked contracts. */
   readonly contracts?: {

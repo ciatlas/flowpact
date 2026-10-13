@@ -604,11 +604,12 @@ describe('ignore leaves units out of impact mode', () => {
   /** Base: published actions a and b with an input; the head removes b's input, a major change. */
   const base = { 'a/action.yml': action('a', token), 'b/action.yml': action('b', token) };
   const head = { 'a/action.yml': action('a', token), 'b/action.yml': action('b') };
-  const run = (ignore: string[], declared: DeclaredInput, paths?: string[]) =>
+  /** `ignore` is the baseline config's, which impact mode reads; `own` the pull request's (the checked-out config). */
+  const run = (ignore: string[], declared: DeclaredInput, paths?: string[], own: string[] = ignore) =>
     analyze({
       root: '/v',
       fs: memoryFileSystem(head),
-      config: parseConfig({ ignore, impact: { publish } }),
+      config: parseConfig({ ignore: own, impact: { publish } }),
       validateSchema: false,
       repository: 'a/b',
       ...(paths ? { paths } : {}),
@@ -617,6 +618,7 @@ describe('ignore leaves units out of impact mode', () => {
         baseline: { kind: 'ref', ref: 'main', commit: 'abc' },
         declared,
         policy: { ...DEFAULT_IMPACT_POLICY, publish },
+        ignore,
       },
     });
   const located = (r: ReturnType<typeof run>) => r.findings.map((f) => `${f.code}@${f.loc.file}`);
@@ -635,6 +637,23 @@ describe('ignore leaves units out of impact mode', () => {
     expect(run(['b/**'], { explicit: 'patch' }, ['b']).impactSkipped).toBeDefined();
     // Not ignored, b is graded as before.
     expect(run([], { explicit: 'patch' }).impact?.verdict).toMatchObject({ required: 'major', ok: false });
+  });
+
+  it("reads ignore from the baseline: the pull request's own edit applies once it is merged", () => {
+    // Before: a pull request that broke b and added b/** to ignore graded nothing: "required none, ok: true".
+    const added = run([], { explicit: 'patch' }, undefined, ['b/**']);
+    expect(added.impact?.verdict).toMatchObject({ required: 'major', ok: false });
+    expect(located(added)).toEqual(['FP810@b/action.yml']);
+    expect(added.impactNotes).toEqual([
+      'this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
+    ]);
+    // Taking b out of the baseline's ignore puts it back only once merged.
+    const removed = run(['b/**'], { explicit: 'patch' }, undefined, []);
+    expect(removed.impact?.verdict).toMatchObject({ required: 'none', ok: true });
+    expect(removed.impactNotes).toHaveLength(1);
+    // Only an edit that changes what is graded is noted: here b, within the paths, is not ignored either way.
+    expect(run([], { explicit: 'patch' }, ['a'], ['x/**']).impactNotes).toBeUndefined();
+    expect(run([], { explicit: 'patch' }, ['a'], ['b/**']).impactNotes).toBeUndefined();
   });
 
   it('reports a failing verdict even when ignore matches the file it is placed on', () => {

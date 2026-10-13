@@ -748,6 +748,7 @@ async function analyzeRoot(
     });
   });
   if (result.impactSkipped) core.info(`impact: skipped (${result.impactSkipped})`);
+  for (const n of result.impactNotes ?? []) core.info(`impact: ${n}`);
   return result;
 }
 

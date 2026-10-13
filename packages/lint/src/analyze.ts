@@ -77,6 +77,11 @@ export interface AnalyzeOptions {
     /** Files of the units the baseline published; their head versions are loaded even when nothing uses them. */
     publishedFiles?: string[];
     /**
+     * The baseline config's `ignore`: impact mode does not grade the units whose files match, and the pull request's own
+     * `ignore` applies once it is merged, like the policy. Without it, every published unit is graded.
+     */
+    ignore?: readonly string[];
+    /**
      * Run only when the paths hold a published unit, in the baseline or the working tree (the action's `impact: auto`).
      * Without paths, the caller decides that beforehand.
      */
@@ -145,6 +150,8 @@ export interface AnalysisResult {
    * directory that held one): what the change removed. Such a path is not missing.
    */
   removedPaths?: string[];
+  /** Notes about how impact mode graded, which callers print as `impact: <note>`. */
+  impactNotes?: string[];
   /**
    * Config entries naming rules that are not loaded, such as the rules of a plugin that this run does not load. They
    * are ignored for this run, and logged as a warning.
@@ -688,6 +695,26 @@ function metaOf(opts: AnalyzeOptions, repository: string | undefined): AnalysisR
   };
 }
 
+/** Impact mode's part of the result: its verdict or why it was skipped, notes on how it graded, the removed paths. */
+function impactFieldsOf(
+  run: RuleRun,
+  removedPaths: string[] | undefined,
+): Pick<AnalysisResult, 'impact' | 'impactSkipped' | 'impactNotes' | 'removedPaths'> {
+  const edited = run.impact?.ignoreEdited;
+  return {
+    ...(run.impact ? { impact: run.impact } : {}),
+    ...(run.impactSkipped ? { impactSkipped: run.impactSkipped } : {}),
+    ...(edited
+      ? {
+          impactNotes: [
+            `this pull request changes what ignore leaves out of impact mode (${edited.join(', ')}); that applies after it is merged`,
+          ],
+        }
+      : {}),
+    ...(removedPaths?.length ? { removedPaths } : {}),
+  };
+}
+
 /** The analysis result, from what the run produced. */
 function resultOf(
   opts: AnalyzeOptions,
@@ -714,9 +741,7 @@ function resultOf(
     suppressed: r.suppressed,
     ...(run.contracts ? { contracts: run.contracts } : {}),
     ...(r.unloaded.length ? { unloadedRules: r.unloaded } : {}),
-    ...(run.impact ? { impact: run.impact } : {}),
-    ...(run.impactSkipped ? { impactSkipped: run.impactSkipped } : {}),
-    ...(r.removedPaths?.length ? { removedPaths: r.removedPaths } : {}),
+    ...impactFieldsOf(run, r.removedPaths),
     ...(opts.configFile && opts.configText !== undefined
       ? { configSource: new SourceFile(opts.configFile, opts.configText) }
       : {}),
@@ -744,7 +769,13 @@ function prepareRules(
     contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] }),
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  const impact = impactOf(opts, index, { ...(within ? { within } : {}), ignore: config.ignore }, logger);
+  // `ignore` is the baseline's, as the policy is; the pull request's own applies to impact mode once merged.
+  const baselineIgnore = opts.impact?.ignore;
+  const lookAt: ImpactLookAt = {
+    ...(within ? { within } : {}),
+    ...(baselineIgnore ? { ignore: baselineIgnore, pending: config.ignore } : {}),
+  };
+  const impact = impactOf(opts, index, lookAt, logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
   const run = ruleRun({
     ...base,

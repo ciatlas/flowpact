@@ -91,7 +91,7 @@ Impact mode compares with the baseline commit, which must be in the clone: check
 | `pretty(options?)` | The terminal report. Options: `color`, `width` (default 100), `ascii`, `hideInfo`, `hyperlinks`. |
 | `contracts` | `check` only: `drift`, `breaking`, and `patch()`, the regenerated contracts as a patch for `git apply` when they drifted (`--patch`). |
 | `impact` | Impact mode's verdict, as in the report: `required`, `declared`, `ok`, `changes` and `baseline`, and with `paths`, `scope`. |
-| `notes` | What the CLI prints as `impact: …` lines: impact mode skipped, or notes about its baseline. |
+| `notes` | What the CLI prints as `impact: …` lines: impact mode skipped, notes about its baseline and how it graded, and the paths it does not refuse though they name no workflow or action. |
 
 `pathPrefix` is the root relative to the repository, when the root is a subdirectory of it. GitHub resolves annotation
 and SARIF paths against the repository; flowpact reports them relative to the root. `pretty()` and `markdown()` are safe

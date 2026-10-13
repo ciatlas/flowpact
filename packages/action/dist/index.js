@@ -21885,18 +21885,27 @@ function impactVerdict(changes, input2, policy) {
     ok: !under && !conflict
   };
 }
+var matchesAny = (patterns, file) => patterns.some((p) => matchesPattern(file, p));
+var coveredBy = (within2) => (file) => !within2 || within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
 function unitsLookedAt(base, head, { within: within2, ignore = [] }) {
   if (!within2 && !ignore.length) return void 0;
-  const covered = (file) => !within2 || within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
-  const ignored = (file) => ignore.some((p) => matchesPattern(file, p));
+  const covered = coveredBy(within2);
   return new Set(
-    [...base.units(), ...head.units()].filter((u) => covered(u.file) && !ignored(u.file)).map((u) => u.path)
+    [...base.units(), ...head.units()].filter((u) => covered(u.file) && !matchesAny(ignore, u.file)).map((u) => u.path)
   );
+}
+function ignoreEditOf(base, head, policy, { within: within2, ignore = [], pending }) {
+  if (!pending) return [];
+  const covered = coveredBy(within2);
+  const edited = [...base.units(), ...head.units()].filter(
+    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file) !== matchesAny(pending, u.file)
+  );
+  return [...new Set(edited.map((u) => u.path))].sort();
 }
 function anchorOf(head, { within: within2, ignore = [] }, published) {
   const headFiles = new Set(head.units().map((u) => u.file));
   const graded = published.map((u) => u.file).filter((f) => headFiles.has(f));
-  const targets = [...within2?.targets ?? []].filter((f) => !ignore.some((p) => matchesPattern(f, p)));
+  const targets = [...within2?.targets ?? []].filter((f) => !matchesAny(ignore, f));
   return graded.sort()[0] ?? targets.sort()[0];
 }
 function scopeOf(head, lookAt, published) {
@@ -21914,13 +21923,15 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
   const published = [...head.units(), ...base.units()].filter(
     (u) => isPublished(u, policy) && (!units || units.has(u.path))
   );
+  const ignoreEdited = ignoreEditOf(base, head, policy, lookAt);
   return {
     baseline,
     changes,
     verdict: impactVerdict(changes, declared, policy),
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
-    ...within2 ? { scope: scopeOf(head, lookAt, published) } : {}
+    ...within2 ? { scope: scopeOf(head, lookAt, published) } : {},
+    ...ignoreEdited.length ? { ignoreEdited } : {}
   };
 }
 
@@ -25071,6 +25082,19 @@ function metaOf(opts, repository) {
     ...repository ? { repository } : {}
   };
 }
+function impactFieldsOf(run2, removedPaths) {
+  const edited = run2.impact?.ignoreEdited;
+  return {
+    ...run2.impact ? { impact: run2.impact } : {},
+    ...run2.impactSkipped ? { impactSkipped: run2.impactSkipped } : {},
+    ...edited ? {
+      impactNotes: [
+        `this pull request changes what ignore leaves out of impact mode (${edited.join(", ")}); that applies after it is merged`
+      ]
+    } : {},
+    ...removedPaths?.length ? { removedPaths } : {}
+  };
+}
 function resultOf(opts, run2, r) {
   return {
     meta: metaOf(opts, r.repository),
@@ -25086,9 +25110,7 @@ function resultOf(opts, run2, r) {
     suppressed: r.suppressed,
     ...run2.contracts ? { contracts: run2.contracts } : {},
     ...r.unloaded.length ? { unloadedRules: r.unloaded } : {},
-    ...run2.impact ? { impact: run2.impact } : {},
-    ...run2.impactSkipped ? { impactSkipped: run2.impactSkipped } : {},
-    ...r.removedPaths?.length ? { removedPaths: r.removedPaths } : {},
+    ...impactFieldsOf(run2, r.removedPaths),
     ...opts.configFile && opts.configText !== void 0 ? { configSource: new SourceFile(opts.configFile, opts.configText) } : {},
     durationMs: r.durationMs
   };
@@ -25105,7 +25127,12 @@ function prepareRules(opts, logger, base, unloaded) {
     contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] })
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  const impact = impactOf(opts, index, { ...within2 ? { within: within2 } : {}, ignore: config2.ignore }, logger);
+  const baselineIgnore = opts.impact?.ignore;
+  const lookAt = {
+    ...within2 ? { within: within2 } : {},
+    ...baselineIgnore ? { ignore: baselineIgnore, pending: config2.ignore } : {}
+  };
+  const impact = impactOf(opts, index, lookAt, logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
   const run2 = ruleRun({
     ...base,
@@ -25538,10 +25565,11 @@ function prepareImpact(root, headConfig, req, logger) {
   const fs3 = baselineFiles(root, commit);
   const { config: baseConfig, policy } = baselinePolicy(root, fs3, req, headConfig, notes);
   logger?.debug("impact baseline", { ref: baseRef, commit, kind });
+  const config2 = baseConfig ?? defaultConfig();
   const base = analyze({
     root,
     fs: fs3,
-    config: baseConfig ?? defaultConfig(),
+    config: config2,
     validateSchema: false,
     only: [],
     ...req.repository ? { repository: req.repository } : {},
@@ -25554,7 +25582,9 @@ function prepareImpact(root, headConfig, req, logger) {
       declared: declaredOf(req, title, labels, release),
       policy,
       // Load the head's copies of what the baseline published, so a unit that still exists is compared, not "removed".
-      publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file)
+      publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file),
+      // Like the policy, so a pull request cannot take a published unit out of its own check by ignoring it.
+      ignore: config2.ignore
     },
     notes
   };
@@ -27199,6 +27229,7 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
     });
   });
   if (result.impactSkipped) info(`impact: skipped (${result.impactSkipped})`);
+  for (const n of result.impactNotes ?? []) info(`impact: ${n}`);
   return result;
 }
 function unrefused(result, inputs, where) {

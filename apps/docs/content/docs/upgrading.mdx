@@ -45,6 +45,11 @@ findings, so the verdict could say `required major` while the run passed. Now th
 impact mode's findings are never dropped by `ignore`. If an ignored unit is one you publish, remove it from `ignore` to
 gate its changes.
 
+Impact mode reads `ignore` from the baseline's config, as it reads `impact.publish`, so a pull request's own `ignore`
+edit applies to impact mode once it is merged. A pull request that adds a published unit to `ignore` is still graded
+for it: where it under-declares, it now fails with `FP810`, where 0.14 dropped the finding and passed with
+`impact-ok: false`. Every other finding follows the pull request's own `ignore`, as before.
+
 ## 0.13 → 0.14
 
 0.14 reads more of what workflows write: a read of a whole object or through a computed key (`toJSON(inputs)`,

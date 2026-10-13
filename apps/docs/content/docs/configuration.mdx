@@ -282,7 +282,7 @@ point at a base config itself; see [why](/docs/integrating#why-not-extends).
 | `rules` | map of code or name → `error` \| `warning` \| `info` \| `off` | `{}` | Severity per rule. |
 | `limits.nestingDepth` | positive integer | `10` | Maximum workflows in one call chain (FP602). |
 | `limits.maxInputs` | positive integer | `30` | `workflow_call` inputs before FP605. |
-| `ignore` | list of paths or globs | `[]` | Findings in matching files are suppressed, and [impact mode](/docs/impact-mode#only-some-units) does not grade the published units in them. |
+| `ignore` | list of paths or globs | `[]` | Findings in matching files are suppressed, and [impact mode](/docs/impact-mode#only-some-units) does not grade the published units in them; impact mode reads it from the baseline, so a pull request's edit applies to it once merged. |
 | `overrides` | list of `{rule, target?, file?, reason, expires?, owner?}` | `[]` | Accepted findings, each with a reason and an optional expiry date ([details](#overrides)). |
 | `matrixShapes` | map of `<workflow path>#<job id>` → `{ keys: [...] }` | `{}` | Declared keys of runtime-computed matrices ([details](#matrix-shapes)). |
 | `generated.include` | list of paths or globs | `[]` | Workflows and actions that are generated, even without a marker ([details](#generated-files)). |

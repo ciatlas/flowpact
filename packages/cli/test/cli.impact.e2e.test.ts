@@ -689,3 +689,45 @@ describe('check with paths and the contracts of what the change removed', () => 
     expect(dry.stdout).toContain('actions__old.contract.yml');
   });
 });
+
+describe('ignore and impact mode', () => {
+  const CONFIG = '.github/flowpact/flowpact.config.yml';
+  const action = (name: string, input: boolean) =>
+    `name: ${name}\ndescription: action ${name}\ninputs:\n${input ? '  token: { description: t, required: false }\n' : ''}runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: echo "${input ? '${{ inputs.token }}' : '${{ github.token }}'}"\n`;
+
+  it('reads ignore from the baseline, so a pull request cannot ignore its way past the gate', async () => {
+    // The pull request removes b's input (major, and an empty `inputs:`, FP503) and adds b to ignore.
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      {
+        [CONFIG]: 'ignore: ["b/**"]\nimpact:\n  publish: ["*/action.yml"]\n',
+        'b/action.yml': action('b', false),
+      },
+    );
+    const r = await flowpact(root, [
+      'lint',
+      '--impact',
+      '--base',
+      'main',
+      '--expect',
+      'patch',
+      '--format',
+      'json',
+    ]);
+    // Before: "required none, ok: true" and exit 0; 0.14 said "required major, ok: false" and exit 0.
+    expect(r.exitCode).toBe(1);
+    const report = JSON.parse(r.stdout);
+    expect(report.impact).toMatchObject({ required: 'major', ok: false });
+    // The other findings follow the pull request's ignore: b's FP503 is left out.
+    expect(
+      report.findings.map((f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`),
+    ).toEqual(['FP810@b/action.yml']);
+    expect(r.stderr).toContain(
+      'impact: this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
+    );
+  });
+});

@@ -821,6 +821,28 @@ describe('impact mode', () => {
     );
   });
 
+  it("reads ignore from the baseline, so a pull request's own ignore edit does not change the impact outputs", async () => {
+    const workspace = renamedRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    // The branch that renames the reusable workflow's check also ignores the workflow.
+    mkdirSync(join(workspace, '.github/flowpact'), { recursive: true });
+    writeFileSync(
+      join(workspace, '.github/flowpact/flowpact.config.yml'),
+      'ignore: [".github/workflows/ci-reusable.yml"]\n',
+    );
+    g('add', '-A');
+    g('commit', '-q', '-m', 'ignore it');
+    const s = await action(workspace, { impact: 'on', 'base-ref': 'main', 'expected-impact': 'patch' });
+    // Before: required-impact none and impact-ok true; 0.14 said major and false, but passed the step.
+    expect(s.outputs['required-impact']).toBe('major');
+    expect(s.outputs['impact-ok']).toBe('false');
+    expect(s.outputs['exit-code']).toBe('1');
+    expect(s.annotations.map((a) => String(a.props?.title).split(' ')[0])).toEqual(['FP810']);
+    expect(s.infos).toContain(
+      'impact: this pull request changes what ignore leaves out of impact mode (.github/workflows/ci-reusable.yml); that applies after it is merged',
+    );
+  });
+
   it('skips impact: auto when nothing within the paths is published', async () => {
     const workspace = renamedRepo();
     const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });

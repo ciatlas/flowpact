@@ -389,11 +389,12 @@ export function prepareImpact(
   const fs = baselineFiles(root, commit);
   const { config: baseConfig, policy } = baselinePolicy(root, fs, req, headConfig, notes);
   logger?.debug('impact baseline', { ref: baseRef, commit, kind });
+  const config = baseConfig ?? defaultConfig();
   // No rules run on the baseline (only: []), so its rule settings cannot fail it.
   const base = analyze({
     root,
     fs,
-    config: baseConfig ?? defaultConfig(),
+    config,
     validateSchema: false,
     only: [],
     ...(req.repository ? { repository: req.repository } : {}),
@@ -410,6 +411,8 @@ export function prepareImpact(
         .units()
         .filter((u) => isPublished(u, policy))
         .map((u) => u.file),
+      // Like the policy, so a pull request cannot take a published unit out of its own check by ignoring it.
+      ignore: config.ignore,
     },
     notes,
   };

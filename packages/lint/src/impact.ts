@@ -644,26 +644,57 @@ export interface ImpactScope {
 export interface ImpactLookAt {
   /** Paths that narrow impact mode to the units within them. */
   within?: ImpactPaths;
-  /** The config's `ignore` patterns: the units whose files match are not graded. */
+  /**
+   * The `ignore` patterns of the baseline's config, like the impact settings: the units whose files match are not
+   * graded.
+   */
   ignore?: readonly string[];
+  /**
+   * The pull request's own `ignore` patterns, which impact mode applies once it is merged: the published units they
+   * would leave out or put back are listed in the result (`ignoreEdited`).
+   */
+  pending?: readonly string[];
 }
+
+const matchesAny = (patterns: readonly string[], file: string) =>
+  patterns.some((p) => matchesPattern(file, p));
+
+/** Whether a file is within the paths; every file is without them. */
+const coveredBy = (within: ImpactPaths | undefined) => (file: string) =>
+  !within || within.targets.has(file) || within.paths.some((p) => pathHolds(p.relative, file));
 
 /** The units of either side impact mode looks at, by path; undefined when it looks at every unit. */
 function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore = [] }: ImpactLookAt) {
   if (!within && !ignore.length) return undefined;
-  const covered = (file: string) =>
-    !within || within.targets.has(file) || within.paths.some((p) => pathHolds(p.relative, file));
-  const ignored = (file: string) => ignore.some((p) => matchesPattern(file, p));
+  const covered = coveredBy(within);
   return new Set(
-    [...base.units(), ...head.units()].filter((u) => covered(u.file) && !ignored(u.file)).map((u) => u.path),
+    [...base.units(), ...head.units()]
+      .filter((u) => covered(u.file) && !matchesAny(ignore, u.file))
+      .map((u) => u.path),
   );
+}
+
+/** The published units (within the paths) that the pull request's own `ignore` leaves out or puts back. */
+function ignoreEditOf(
+  base: ProjectIndex,
+  head: ProjectIndex,
+  policy: Pick<ImpactPolicy, 'publish'>,
+  { within, ignore = [], pending }: ImpactLookAt,
+): string[] {
+  if (!pending) return [];
+  const covered = coveredBy(within);
+  const edited = [...base.units(), ...head.units()].filter(
+    (u) =>
+      isPublished(u, policy) && covered(u.file) && matchesAny(ignore, u.file) !== matchesAny(pending, u.file),
+  );
+  return [...new Set(edited.map((u) => u.path))].sort();
 }
 
 /** The file of the working tree to place findings about the verdict on, when no change is there (see `anchor`). */
 function anchorOf(head: ProjectIndex, { within, ignore = [] }: ImpactLookAt, published: UnitDecl[]) {
   const headFiles = new Set(head.units().map((u) => u.file));
   const graded = published.map((u) => u.file).filter((f) => headFiles.has(f));
-  const targets = [...(within?.targets ?? [])].filter((f) => !ignore.some((p) => matchesPattern(f, p)));
+  const targets = [...(within?.targets ?? [])].filter((f) => !matchesAny(ignore, f));
   return graded.sort()[0] ?? targets.sort()[0];
 }
 
@@ -690,6 +721,11 @@ export interface ImpactResult {
   publishedFiles: string[];
   /** With paths: what they narrowed impact mode to. Without, every published unit is graded. */
   scope?: ImpactScope;
+  /**
+   * The published units the pull request's own `ignore` leaves out or puts back (see `ImpactLookAt.pending`): graded as
+   * the baseline's `ignore` says until it is merged.
+   */
+  ignoreEdited?: string[];
 }
 
 /**
@@ -710,6 +746,7 @@ export function computeImpact(
   const published = [...head.units(), ...base.units()].filter(
     (u) => isPublished(u, policy) && (!units || units.has(u.path)),
   );
+  const ignoreEdited = ignoreEditOf(base, head, policy, lookAt);
   return {
     baseline,
     changes,
@@ -717,5 +754,6 @@ export function computeImpact(
     policy,
     publishedFiles: [...new Set(published.map((u) => u.file))].sort(),
     ...(within ? { scope: scopeOf(head, lookAt, published) } : {}),
+    ...(ignoreEdited.length ? { ignoreEdited } : {}),
   };
 }

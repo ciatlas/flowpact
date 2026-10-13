@@ -70,7 +70,10 @@ export interface PrettyOptions extends TextOptions {
 export interface Analysis {
   /** The JSON report (schema v1): what `--format json` prints, parsed. */
   readonly report: JsonReport;
-  /** What the CLI prints as `impact: …` lines: impact mode skipped, or notes about its baseline. */
+  /**
+   * What the CLI prints as `impact: …` lines: impact mode skipped, notes about its baseline and how it graded, and the
+   * paths it does not refuse though they name no workflow or action.
+   */
   readonly notes: string[];
   /** The comparison with the locked contracts (`check` only). */
   readonly contracts?: { drift: boolean; breaking: number; patch(): string | undefined };
@@ -94,8 +97,8 @@ export interface ReportHooks {
    */
   impactSkipped?(reason: string): boolean;
   /**
-   * The analysis ran, before its paths are checked; `notes` are impact mode's notes about its baseline, and about the
-   * paths it does not refuse though they name no workflow or action of the working tree.
+   * The analysis ran, before its paths are checked; `notes` are impact mode's notes about its baseline and how it
+   * graded, and about the paths it does not refuse though they name no workflow or action of the working tree.
    */
   analyzed?(notes: string[]): void;
   /**
@@ -219,9 +222,18 @@ function skipped(reason: string, notes: string[], hooks: ReportHooks): boolean {
   return hooks.impactSkipped?.(reason) === true;
 }
 
-/** Impact mode's notes once the analysis ran: about its baseline, and about the paths it does not refuse. */
-function analyzedNotes(impact: PreparedImpact | undefined, unrefusedNotes: string[]): string[] {
-  return [...(impact && 'notes' in impact ? impact.notes.map((n) => `impact: ${n}`) : []), ...unrefusedNotes];
+/**
+ * Impact mode's notes once the analysis ran: about its baseline, about how it graded, and about the paths it does not
+ * refuse.
+ */
+function analyzedNotes(
+  impact: PreparedImpact | undefined,
+  result: AnalysisResult,
+  unrefusedNotes: string[],
+): string[] {
+  return [...(impact && 'notes' in impact ? impact.notes : []), ...(result.impactNotes ?? [])]
+    .map((n) => `impact: ${n}`)
+    .concat(unrefusedNotes);
 }
 
 /** Runs `lint`, `check` or `impact`; undefined only when a hook stopped it. */
@@ -245,7 +257,7 @@ export async function runReport(
   const result = await analyzeSession(session, commandOptions(command, options, paths, only, impact));
   // In impact mode, a path the change removed (one that names a workflow or action of the baseline) is not missing.
   const accepted = unrefused(result, impact);
-  const analyzed = analyzedNotes(impact, accepted.notes);
+  const analyzed = analyzedNotes(impact, result, accepted.notes);
   notes.push(...analyzed);
   hooks.analyzed?.(analyzed);
   checkTargets(result.project, paths, root, accepted.paths);
