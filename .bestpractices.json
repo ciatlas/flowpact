@@ -42,7 +42,7 @@
   "version_unique_status": "Met",
   "version_unique_justification": "Every release has its own version number (vX.Y.Z), and the npm package, the VS Code Marketplace and Open VSX use the same numbers. npm never accepts a version number twice, and since 0.10.0 every GitHub release is immutable, so its tag and files cannot change.",
   "version_semver_status": "Met",
-  "version_semver_justification": "Releases use Semantic Versioning, as stated at the top of https://github.com/ciatlas/flowpact/blob/main/CHANGELOG.md. release-please computes each version from Conventional Commit titles: fix means patch, feat means minor, and breaking means major (minor before 1.0).",
+  "version_semver_justification": "Releases use Semantic Versioning, as stated at the top of https://github.com/ciatlas/flowpact/blob/main/CHANGELOG.md. release-please computes each version from Conventional Commit titles: fix means patch, feat means minor, and breaking means major, also before 1.0.",
   "version_tags_status": "Met",
   "version_tags_justification": "Each release has a Git tag vX.Y.Z; from 0.1.1 on, the release automation creates them. A ruleset lets only the release bot and repository admins create, move or delete v* tags.",
   "release_notes_status": "Met",

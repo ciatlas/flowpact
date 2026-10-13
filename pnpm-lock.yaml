@@ -170,8 +170,8 @@ importers:
         specifier: ^2.5.15
         version: 2.5.15
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v0.3.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a
+        specifier: github:ciatlas/core#v0.4.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783
       '@flowpact/lint':
         specifier: workspace:*
         version: link:packages/lint
@@ -262,8 +262,8 @@ importers:
         version: 4.0.1
     devDependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v0.3.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a
+        specifier: github:ciatlas/core#v0.4.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783
       '@flowpact/lint':
         specifier: workspace:*
         version: link:../lint
@@ -280,8 +280,8 @@ importers:
   packages/cli:
     devDependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v0.3.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a
+        specifier: github:ciatlas/core#v0.4.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783
       '@flowpact/language-server':
         specifier: workspace:*
         version: link:../language-server
@@ -313,8 +313,8 @@ importers:
   packages/language-server:
     dependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v0.3.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a
+        specifier: github:ciatlas/core#v0.4.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783
       '@flowpact/lint':
         specifier: workspace:*
         version: link:../lint
@@ -331,8 +331,8 @@ importers:
   packages/lint:
     dependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v0.3.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a
+        specifier: github:ciatlas/core#v0.4.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783
       diff:
         specifier: ^9.0.0
         version: 9.0.0
@@ -346,8 +346,8 @@ importers:
   packages/reporters:
     dependencies:
       '@ciatlas/core':
-        specifier: github:ciatlas/core#v0.3.0
-        version: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a
+        specifier: github:ciatlas/core#v0.4.0
+        version: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783
       '@flowpact/lint':
         specifier: workspace:*
         version: link:../lint
@@ -582,9 +582,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a':
-    resolution: {gitHosted: true, integrity: sha512-U7LiTApQPAPHz+5gr3YyHNELEuylFCUJu275Kx6gvE4rpwF6QtK2aMU3vZW6UWgFJqVsBvmEeyFSim76DiUE+w==, tarball: https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a}
-    version: 0.3.0
+  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783':
+    resolution: {gitHosted: true, integrity: sha512-+tE74b3ohbLThJPSD+3kn2JhCispK8TaSFD63H50NF951gTSAGW5Vh3zPyN8CbPI4srrRHFirH/MYreHCOxZUg==, tarball: https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783}
+    version: 0.4.0
     engines: {node: '>=22'}
 
   '@emnapi/runtime@1.11.3':
@@ -5209,7 +5209,7 @@ snapshots:
   '@biomejs/cli-win32-x64@2.5.15':
     optional: true
 
-  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/a3f79df31f8ea154909e3daff120e2d06806da8a':
+  '@ciatlas/core@https://codeload.github.com/ciatlas/core/tar.gz/a6367f6a7f3c155a4837bd794832eba9ff2d4783':
     dependencies:
       '@actions/expressions': 0.3.61
       '@actions/workflow-parser': 0.3.61
