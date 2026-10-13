@@ -23,6 +23,17 @@ jobs:
       contents: read
       id-token: write
     steps:
+      # Before signing in, so a malformed id never reaches a step that holds a credential. The pattern is vsce's own
+      # rule for publisher names. The message leaves the value out, so it cannot inject a workflow command.
+      - name: Check the publisher id
+        if: inputs.publisher != ''
+        env:
+          PUBLISHER: ${{ inputs.publisher }}
+        run: |
+          if ! [[ "$PUBLISHER" =~ ^[A-Za-z0-9][A-Za-z0-9-]*$ ]]; then
+            echo "::error::the publisher input is not a Marketplace publisher id (letters, digits and hyphens)"
+            exit 1
+          fi
       - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
