@@ -24945,9 +24945,10 @@ function impactPathsOf(opts, project) {
     targets: project.targets
   };
 }
-function impactSkip(scope) {
-  if (!scope || scope.units.length || scope.anchor) return void 0;
-  return "nothing within the paths to grade or to report on";
+function impactSkip(scope, onlyIfPublished) {
+  if (!scope || scope.units.length) return void 0;
+  if (onlyIfPublished) return "no published workflow or action within the paths; see impact.publish";
+  return scope.anchor ? void 0 : "nothing within the paths to grade or to report on";
 }
 function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
@@ -24956,7 +24957,7 @@ function impactOf(opts, index, lookAt, logger) {
     "impact",
     () => computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt)
   );
-  const skipped = impactSkip(result.scope);
+  const skipped = impactSkip(result.scope, impact.onlyIfPublished);
   return skipped ? { impact: void 0, impactSkipped: skipped } : { impact: result };
 }
 function ruleRun(fields) {
@@ -26949,7 +26950,8 @@ function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
   if ("skip" in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
   const unpublished = auto ? nothingPublishedNote(root, logger, prepared.options) : void 0;
-  return unpublished ? { note: unpublished } : { options: prepared.options };
+  if (unpublished) return { note: unpublished };
+  return { options: { ...prepared.options, ...auto ? { onlyIfPublished: true } : {} } };
 }
 function pluginsAllowed(value) {
   if (value !== "auto") return value === "true";

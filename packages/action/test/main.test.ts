@@ -730,6 +730,40 @@ describe('impact mode', () => {
     expect((await fresh('push', {})).failed[0]).toContain('paths not found');
   });
 
+  it('skips impact: auto when nothing within the paths is published', async () => {
+    const workspace = renamedRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    g('checkout', '-q', 'main');
+    writeFileSync(
+      join(workspace, '.github/workflows/ci.yml'),
+      'on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "true" }]\n',
+    );
+    g('add', '-A');
+    g('commit', '-q', '-m', 'ci');
+    g('checkout', '-q', 'change');
+    g('merge', '-q', '--no-edit', 'main');
+    const fresh = (given: Record<string, string>) => {
+      Object.assign(state, { outputs: {}, annotations: [], infos: [], summary: '', failed: [] });
+      return action(workspace, { impact: 'auto', 'base-ref': 'main', ...given });
+    };
+
+    // Before: the repository publishes ci-reusable.yml, so auto ran and annotated an FP813 about nothing.
+    const ci = await fresh({ paths: '.github/workflows/ci.yml' });
+    expect(ci.infos).toContain(
+      'impact: skipped (no published workflow or action within the paths; see impact.publish)',
+    );
+    expect(ci.annotations).toEqual([]);
+    expect(ci.outputs['required-impact']).toBe('');
+    expect(ci.summary).not.toContain('### Impact');
+    // A published unit within the paths, or no paths: it runs.
+    expect((await fresh({ paths: '.github/workflows' })).outputs['required-impact']).toBe('major');
+    expect((await fresh({})).outputs['required-impact']).toBe('major');
+    // impact: on still reports the verdict within the paths.
+    expect(
+      (await fresh({ impact: 'on', paths: '.github/workflows/ci.yml' })).outputs['required-impact'],
+    ).toBe('none');
+  });
+
   it('opens the impact baseline group only when something is logged in it', async () => {
     const off = await action(renamedRepo(), { impact: 'off' });
     expect(off.groups).not.toContain('flowpact: impact baseline');

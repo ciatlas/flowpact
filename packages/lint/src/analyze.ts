@@ -76,6 +76,11 @@ export interface AnalyzeOptions {
     policy: ImpactPolicy;
     /** Files of the units the baseline published; their head versions are loaded even when nothing uses them. */
     publishedFiles?: string[];
+    /**
+     * Run only when the paths hold a published unit, in the baseline or the working tree (the action's `impact: auto`).
+     * Without paths, the caller decides that beforehand.
+     */
+    onlyIfPublished?: boolean;
   };
   /** Compare against the contracts in `.github/flowpact/` (`flowpact check`). */
   checkContracts?: boolean;
@@ -131,7 +136,8 @@ export interface AnalysisResult {
   impact?: ImpactResult;
   /**
    * Why impact mode did not run although it was set up: the paths hold nothing published and no workflow or action of
-   * the working tree that is not ignored (say, only what the change removed), so nothing to grade or to report on.
+   * the working tree that is not ignored (say, only what the change removed), so nothing to grade or to report on; or
+   * nothing published, when it runs only then (`onlyIfPublished`).
    */
   impactSkipped?: string;
   /**
@@ -447,12 +453,17 @@ function impactPathsOf(opts: AnalyzeOptions, project: Project): ImpactPaths | un
 }
 
 /**
- * Why impact mode does not run with these paths: they hold nothing to grade or to report on, i.e. nothing published
- * and no workflow or action of the working tree that is not ignored (say, only what the change removed).
+ * Why impact mode does not run with these paths: nothing published within them when it runs only then (`impact:
+ * auto`), or nothing to grade or to report on, i.e. nothing published and no workflow or action of the working tree
+ * that is not ignored (say, only what the change removed).
  */
-function impactSkip(scope: ImpactScope | undefined): string | undefined {
-  if (!scope || scope.units.length || scope.anchor) return undefined;
-  return 'nothing within the paths to grade or to report on';
+function impactSkip(
+  scope: ImpactScope | undefined,
+  onlyIfPublished: boolean | undefined,
+): string | undefined {
+  if (!scope || scope.units.length) return undefined;
+  if (onlyIfPublished) return 'no published workflow or action within the paths; see impact.publish';
+  return scope.anchor ? undefined : 'nothing within the paths to grade or to report on';
 }
 
 /**
@@ -470,7 +481,7 @@ function impactOf(
   const result = logger.time('impact', () =>
     computeImpact(impact.base, index, impact.baseline, impact.declared, impact.policy, lookAt),
   );
-  const skipped = impactSkip(result.scope);
+  const skipped = impactSkip(result.scope, impact.onlyIfPublished);
   return skipped ? { impact: undefined, impactSkipped: skipped } : { impact: result };
 }
 

@@ -79,7 +79,7 @@ inputs:
     required: false
     default: ''
   impact:
-    description: 'Check the release impact of changes to published workflows and actions against the impact the pull request declares (title, labels or expected-impact): off, auto (on pull requests, or on any event when base-ref is set, in repositories that publish workflows or actions; never on pull_request_target) or on.'
+    description: 'Check the release impact of changes to published workflows and actions against the impact the pull request declares (title, labels or expected-impact): off, auto (on pull requests, or on any event when base-ref is set, in repositories that publish workflows or actions, and with paths when one is within them; never on pull_request_target) or on.'
     required: false
     default: 'off'
   expected-impact:

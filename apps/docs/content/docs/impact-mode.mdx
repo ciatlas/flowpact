@@ -172,7 +172,7 @@ authorization header — `persist-credentials: false` works, and `contents: read
 **Impact** section, and the outputs `required-impact`, `declared-impact` and `impact-ok` let later steps react.
 Use `pull_request`, not `pull_request_target`: the latter checks out the default branch, so flowpact refuses it.
 With the `paths` input, impact mode grades only the published workflows and actions within those paths
-([Only some units](#only-some-units)).
+([Only some units](#only-some-units)), and `auto` skips a run when none is within them.
 
 ### CLI
 

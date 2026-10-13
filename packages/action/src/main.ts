@@ -353,7 +353,8 @@ function prepareInputImpact(
 
 /**
  * Why `impact: auto` stops when nothing is published. Decided on both sides: a pull request that deletes or
- * unpublishes the only published unit is still checked.
+ * unpublishes the only published unit is still checked. With paths, the analysis decides the same from the units
+ * within them (`onlyIfPublished`).
  */
 function nothingPublishedNote(
   root: string,
@@ -392,7 +393,9 @@ function impactSetup(
   if ('skip' in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
   const unpublished = auto ? nothingPublishedNote(root, logger, prepared.options) : undefined;
-  return unpublished ? { note: unpublished } : { options: prepared.options };
+  if (unpublished) return { note: unpublished };
+  // With paths, `auto` also stops when nothing within them is published; the analysis knows what is within them.
+  return { options: { ...prepared.options, ...(auto ? { onlyIfPublished: true } : {}) } };
 }
 
 function pluginsAllowed(value: 'auto' | 'true' | 'false'): boolean {
