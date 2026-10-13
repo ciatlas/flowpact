@@ -955,7 +955,8 @@ export interface Usage {
    * `toJSON(github)`, `github.event[x]`) is a usage of its `workflow_dispatch` inputs, which `github.event.inputs` holds
    * when it is dispatched. In a workflow that can also be called, `github` is then the caller's, so such a usage never
    * takes in what a caller passes in `with:` (`ref.context` is `github`, or the usage reads a step's own `env:` value
-   * that reads `github`).
+   * that reads `github`). A read in the workflow's own input defaults or `workflow_call` outputs is no usage: GitHub
+   * evaluates them only when the workflow is called.
    */
   whole?: true;
 }

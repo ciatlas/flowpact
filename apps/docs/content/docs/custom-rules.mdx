@@ -80,7 +80,8 @@ reserves the `FP` prefix for built-in rules, and requires third-party rules to b
   a read of a whole object or through a computed key or `*` (`toJSON(inputs)`, `matrix[inputs.key]`,
   `needs.build.outputs`, `steps.*.outputs`) is a usage of each member, marked `whole`: it names none of them. In a
   workflow that can be dispatched, a read through `github` (`github.event.inputs.<name>`, `toJSON(github)`) is a usage
-  of its `workflow_dispatch` inputs; in one that can also be called, `github` is then the caller's, so such a usage
+  of its `workflow_dispatch` inputs, except in its own input defaults and `workflow_call` outputs, which GitHub
+  evaluates only when it is called. In one that can also be called, `github` is then the caller's, so such a usage
   never takes in what a caller passes in `with:`;
 - `ctx.matrix(unit, job)` — the expanded matrix (combinations, keys, exactness);
 - `ctx.config` — the resolved configuration;
