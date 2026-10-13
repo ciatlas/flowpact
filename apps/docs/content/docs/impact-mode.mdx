@@ -85,10 +85,13 @@ graded.
 - When impact mode is skipped on `merge_group` or `push` (a push without a commit before it, or `impact: auto`
   without `base-ref`), there is no baseline to tell a removed path from a mistake, so a path the working tree lacks,
   or one left without a workflow or action (a removed action's directory that keeps its README or `dist/`), is a
-  warning there, not an error: the pull request's run, which has the baseline, came first and refused a path that
-  never held one. Where no such run comes first (`pull_request_target`, `schedule` or `workflow_dispatch` without a
-  baseline, or a local run whose baseline is the checked-out commit), a skipped impact mode refuses such a path, as
-  a run without impact mode does.
+  warning there, not an error, and so is a mistyped path. These events usually follow a pull request's run, which has
+  the baseline and refuses a path that never held one, but not always: the first push of a new branch comes before any
+  pull request, and a workflow that runs only on `push` with `impact: auto` never refuses a mistyped path. To have it
+  refused there, use `impact: on`, which compares each push with the commit before it (a new branch's first push,
+  which has none, still only warns). On the other events (`pull_request_target`, `schedule` or `workflow_dispatch`
+  without a baseline, or a local run whose baseline is the checked-out commit), a skipped impact mode refuses such a
+  path, as a run without impact mode does.
 - Units within the paths that are not published (an internal workflow, an action `impact.publish` does not list) are not
   graded. With no published unit there, the required impact is `none`.
 - Files [`ignore`](/docs/configuration#reference) matches are left out the same way, with or without paths, when both

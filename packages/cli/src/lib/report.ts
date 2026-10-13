@@ -157,7 +157,7 @@ function impactFor(
   );
 }
 
-/** Whether this run follows a pull request's run, which has the baseline (`merge_group`, `push` in GitHub Actions). */
+/** Whether this run usually follows a pull request's run, which has the baseline (`merge_group`, `push` in Actions). */
 const afterPullRequest = () =>
   process.env.GITHUB_ACTIONS === 'true' && followsPullRequest(process.env.GITHUB_EVENT_NAME);
 
@@ -166,7 +166,8 @@ const afterPullRequest = () =>
  * mode, what the change removed; when impact mode was asked for but skipped on `merge_group` or `push`, every such path
  * that would be refused (one the working tree lacks, or one that holds no workflow or action, such as a removed
  * action's directory that keeps its README), since without a baseline a path the change removed cannot be told from a
- * mistake, and the pull request's run, which has one, came first. Anywhere else, a skipped impact mode refuses them.
+ * mistake, and a pull request's run, which has one, usually came first (a new branch's first push comes before any).
+ * Anywhere else, a skipped impact mode refuses them.
  */
 function unrefused(
   result: AnalysisResult,

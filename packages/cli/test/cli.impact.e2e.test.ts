@@ -573,7 +573,10 @@ describe('flowpact impact with paths the change removed', () => {
     const report = JSON.parse(merge.stdout);
     expect(report.impact).toBeUndefined();
     expect(report.findings).toEqual([]);
-    // So on a push that impact mode skips (a new branch): a pull request's run came before it too.
+    // So on a push that impact mode skips (here a new branch's first push). A push usually follows a pull request's
+    // run, which has the baseline and refuses a mistake, but not always: a new branch's first push comes before any.
+    // The behaviour is kept there; a workflow that runs only on push refuses a mistake with impact: on instead (which
+    // compares a later push with the commit before it).
     const push = await flowpact(
       root,
       ['lint', '--impact', 'b', 'a'],

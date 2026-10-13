@@ -27,9 +27,14 @@ to gate every published unit. `flowpact impact` takes paths too, where 0.14 refu
 
 A removed or renamed unit is graded only when its old path, or a directory holding it, is among the paths, so prefer
 directory paths (`actions/`) in the action's `paths` input; a path that names only the removed unit fails later pull
-requests once the removal is merged. A path the change removed is no longer refused as missing in impact mode, and
-only warned about where impact mode is skipped on `merge_group` or `push`, which follow the pull request's run, as is
-a removed action's directory that keeps other files. On other events, a skipped impact mode still refuses them.
+requests once the removal is merged. A path the change removed is no longer refused as missing in impact mode. Where
+impact mode is skipped on `merge_group` or `push`, such a path is only warned about, as is a removed action's directory
+that keeps other files, and so is a mistyped path: without a baseline the two cannot be told apart. These events
+usually follow a pull request's run, which has the baseline and refuses a mistyped path, but not always: the first
+push of a new branch comes before any pull request, and a workflow that runs only on `push` with `impact: auto` never
+refuses one, where 0.14 failed. To have such a workflow refuse it, use `impact: on`, which compares each push with the
+commit before it (a new branch's first push, which has none, still only warns). On other events, a skipped impact mode
+still refuses these paths.
 
 `flowpact graph` takes paths as well, and then draws only those workflows and actions and what they call.
 

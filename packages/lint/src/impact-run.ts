@@ -71,9 +71,11 @@ export type PreparedImpact =
   | { options: NonNullable<AnalyzeOptions['impact']>; notes: string[] };
 
 /**
- * Whether a run on this GitHub event follows the run of a pull request, which has the baseline: `merge_group` and
- * `push`. Only there may a path that names no workflow or action of the working tree go unrefused while impact mode is
- * skipped, as the change may have removed what it named and that run has refused a mistake. Elsewhere
+ * Whether a run on this GitHub event usually follows the run of a pull request, which has the baseline: `merge_group`
+ * and `push`. Only there may a path that names no workflow or action of the working tree go unrefused while impact mode
+ * is skipped, as the change may have removed what it named and that run, when there was one, has refused a mistake. Not
+ * every push follows one (a new branch's first push comes before any pull request); a workflow that runs only on push
+ * refuses a mistake with `impact: on`, which compares a later push with the commit before it. Elsewhere
  * (`pull_request_target`, `schedule`, `workflow_dispatch`, a run outside GitHub Actions) no such run comes first.
  */
 export const followsPullRequest = (event: string | undefined): boolean =>

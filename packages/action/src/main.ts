@@ -772,9 +772,10 @@ async function analyzeRoot(
  * names a workflow or action of the baseline stands for what the change removed. When impact mode was asked for but
  * skipped on `merge_group` or `push`, there is no baseline to tell a removed path from a mistake, so a path that would
  * fail the step (one the working tree lacks, or one that holds no workflow or action, such as a removed action's
- * directory that keeps its README) is a warning: the pull request's run, which has the baseline, came first and refused
- * a mistake. On other events (`pull_request_target`, `schedule`, `workflow_dispatch`) no such run comes first, so a
- * skipped impact mode fails the step on such a path, as 0.14 did.
+ * directory that keeps its README) is a warning: these events usually follow a pull request's run, which has the
+ * baseline and refuses a mistake, though not always (a new branch's first push comes before any; `impact: on` compares
+ * a later push with the commit before it). On other events (`pull_request_target`, `schedule`, `workflow_dispatch`) no
+ * such run comes first, so a skipped impact mode fails the step on such a path, as 0.14 did.
  */
 function unrefused(result: AnalysisResult, inputs: Inputs, where: string): string[] {
   const skipped =
