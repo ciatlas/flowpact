@@ -4,6 +4,13 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.14.1](https://github.com/ciatlas/flowpact/compare/v0.14.0...v0.14.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* **rules:** FP104 counts a whole github.event.inputs read in a callee as reading the root's dispatch inputs ([#129](https://github.com/ciatlas/flowpact/issues/129)) ([d81d713](https://github.com/ciatlas/flowpact/commit/d81d71360e3b44cbdd5fb50df01ef7ab74bf59e5))
+
 ## [0.14.0](https://github.com/ciatlas/flowpact/compare/v0.13.0...v0.14.0) (2026-10-13)
 
 
