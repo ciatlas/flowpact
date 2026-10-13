@@ -352,9 +352,8 @@ function prepareInputImpact(
 }
 
 /**
- * Why `impact: auto` stops when nothing is published. Decided on both sides: a pull request that deletes or
- * unpublishes the only published unit is still checked. With paths, the analysis decides the same from the units
- * within them (`onlyIfPublished`).
+ * Why `impact: auto` stops when nothing is published, without paths. Decided on both sides: a pull request that
+ * deletes or unpublishes the only published unit is still checked.
  */
 function nothingPublishedNote(
   root: string,
@@ -371,6 +370,22 @@ function nothingPublishedNote(
   const units = [...project.workflows.values(), ...project.actions.values()];
   if (units.some((u) => isPublished(u, policy))) return undefined;
   return 'impact: no published workflows or actions (see impact.publish)';
+}
+
+/**
+ * `impact: auto` runs only where something is published. Without paths, that is decided here; with paths, the analysis
+ * decides it from the units within them (`onlyIfPublished`), and keeps the baseline that tells a path the change
+ * removed from a mistake.
+ */
+function autoImpact(
+  root: string,
+  logger: Logger,
+  options: NonNullable<AnalyzeOptions['impact']>,
+  withPaths: boolean,
+): { options?: NonNullable<AnalyzeOptions['impact']>; note?: string } {
+  if (withPaths) return { options: { ...options, onlyIfPublished: true } };
+  const note = nothingPublishedNote(root, logger, options);
+  return note ? { note } : { options };
 }
 
 /** Impact mode's options for analyze(), or why it does not run. */
@@ -392,10 +407,9 @@ function impactSetup(
   const prepared = prepareInputImpact(root, config, request, logger);
   if ('skip' in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
-  const unpublished = auto ? nothingPublishedNote(root, logger, prepared.options) : undefined;
-  if (unpublished) return { note: unpublished };
-  // With paths, `auto` also stops when nothing within them is published; the analysis knows what is within them.
-  return { options: { ...prepared.options, ...(auto ? { onlyIfPublished: true } : {}) } };
+  return auto
+    ? autoImpact(root, logger, prepared.options, inputs.paths.length > 0)
+    : { options: prepared.options };
 }
 
 function pluginsAllowed(value: 'auto' | 'true' | 'false'): boolean {

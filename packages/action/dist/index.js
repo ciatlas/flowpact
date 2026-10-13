@@ -26938,6 +26938,11 @@ function nothingPublishedNote(root, logger, options) {
   if (units.some((u) => isPublished(u, policy))) return void 0;
   return "impact: no published workflows or actions (see impact.publish)";
 }
+function autoImpact(root, logger, options, withPaths) {
+  if (withPaths) return { options: { ...options, onlyIfPublished: true } };
+  const note = nothingPublishedNote(root, logger, options);
+  return note ? { note } : { options };
+}
 function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
   if (inputs.impact === "off") return {};
   const event = githubEvent();
@@ -26949,9 +26954,7 @@ function impactSetup(root, config2, configPath, baseConfig, inputs, logger) {
   const prepared = prepareInputImpact(root, config2, request, logger);
   if ("skip" in prepared) return { note: `impact: skipped (${prepared.skip})` };
   for (const n of prepared.notes) logger.info(`impact: ${n}`);
-  const unpublished = auto ? nothingPublishedNote(root, logger, prepared.options) : void 0;
-  if (unpublished) return { note: unpublished };
-  return { options: { ...prepared.options, ...auto ? { onlyIfPublished: true } : {} } };
+  return auto ? autoImpact(root, logger, prepared.options, inputs.paths.length > 0) : { options: prepared.options };
 }
 function pluginsAllowed(value) {
   if (value !== "auto") return value === "true";

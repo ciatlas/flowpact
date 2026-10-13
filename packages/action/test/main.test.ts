@@ -780,6 +780,47 @@ describe('impact mode', () => {
     expect((await fresh('push', {})).failed[0]).toContain('None of the paths is a workflow');
   });
 
+  it('refuses a path that never existed on a pull request in a repository that publishes nothing', async () => {
+    const workspace = mkdtempSync(join(temp, 'nopub-'));
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    g('config', 'commit.gpgsign', 'false');
+    const ci = (run: string) =>
+      `on: push\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps: [{ run: "${run}" }]\n`;
+    mkdirSync(join(workspace, '.github/workflows'), { recursive: true });
+    writeFileSync(join(workspace, '.github/workflows/ci.yml'), ci('true'));
+    writeFileSync(join(workspace, '.github/workflows/old.yml'), ci('true'));
+    g('add', '-A');
+    g('commit', '-q', '-m', 'base');
+    g('checkout', '-q', '-b', 'change');
+    writeFileSync(join(workspace, '.github/workflows/ci.yml'), ci('false'));
+    g('rm', '-q', '.github/workflows/old.yml');
+    g('commit', '-q', '-am', 'change');
+    const fresh = (paths: string) => {
+      Object.assign(state, { outputs: {}, annotations: [], infos: [], summary: '', failed: [] });
+      return action(workspace, { impact: 'auto', 'base-ref': 'main', paths });
+    };
+
+    // Before: a warning, exit-code 0 and nothing linted; impact: auto had dropped the baseline that tells them apart.
+    const typo = await fresh('.github/workflows/typo.yml');
+    expect(typo.failed).toEqual(['paths not found under .: .github/workflows/typo.yml']);
+    expect(typo.outputs['exit-code']).toBe('2');
+    // A path the change removed is still accepted, and nothing within the paths is published.
+    const removed = await fresh('.github/workflows/old.yml');
+    expect(removed.failed).toEqual([]);
+    expect(removed.outputs['exit-code']).toBe('0');
+    expect(removed.annotations).toEqual([]);
+    expect(removed.infos).toContain(
+      'impact: skipped (no published workflow or action within the paths; see impact.publish)',
+    );
+    // Without paths, as before.
+    expect((await fresh('')).infos).toContain(
+      'impact: no published workflows or actions (see impact.publish)',
+    );
+  });
+
   it('skips impact: auto when nothing within the paths is published', async () => {
     const workspace = renamedRepo();
     const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
