@@ -197,6 +197,22 @@ describe('the sources cache', () => {
     expect(env.stdout).toContain(`sources: ${join(cache, 'remotes')} (1 new)`);
   });
 
+  it('keeps nothing with --no-cache, which neither --cache-dir nor remotes download takes', async () => {
+    rmSync(cache, { recursive: true, force: true });
+    const root = repo();
+    const r = await run(root, ['update', '--no-cache']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).not.toContain('sources:');
+    expect(existsSync(cache)).toBe(false);
+    expect(readFileSync(join(root, LOCK), 'utf8')).toContain('octo/setup@v2');
+    const both = await run(root, ['update', '--no-cache', '--cache-dir', cache]);
+    expect(both.exitCode).toBe(2);
+    expect(both.stderr).toContain('give --no-cache or --cache-dir, not both');
+    const download = await run(root, ['download', '--no-cache']);
+    expect(download.exitCode).toBe(2);
+    expect(download.stderr).toContain('--no-cache is for `flowpact remotes update`');
+  });
+
   it('remotes download takes --cache-dir, and caches in CI too: downloading is all it does', async () => {
     const root = repo();
     await run(root, ['update']);

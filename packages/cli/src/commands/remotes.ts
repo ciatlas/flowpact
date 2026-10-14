@@ -49,6 +49,11 @@ export const remotesCommand = defineCommand({
       description:
         'flowpact’s cache directory: keep the sources (for go to definition in the editor) in its remotes directory. Default: FLOWPACT_CACHE_DIR, else the per-user cache; `update` keeps none in CI (CI is set) unless given',
     },
+    cache: {
+      type: 'boolean',
+      default: true,
+      description: '`update` only: keep the files read in the sources cache (--no-cache keeps none)',
+    },
     'dry-run': {
       type: 'boolean',
       description: '`update` only: show what would change without writing the lockfile or the cache',
@@ -57,7 +62,7 @@ export const remotesCommand = defineCommand({
   run: ({ args, rawArgs, cmd }) =>
     guard(async () => {
       const action = actionOf(args.action);
-      const dryRun = Boolean(args['dry-run']);
+      const flags = flagsOf(args);
       const ctx = createContext(args, rawArgs, cmd.args as ArgsDef);
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
       const counter = counterFor(ctx.level, action === 'update' ? 'remote interfaces' : 'remote sources');
@@ -67,8 +72,8 @@ export const remotesCommand = defineCommand({
       };
       try {
         return action === 'download'
-          ? await download(ctx, options, dryRun)
-          : await update(ctx, { ...options, dryRun });
+          ? await download(ctx, options, flags)
+          : await update(ctx, options, flags);
       } finally {
         counter?.clear();
       }
@@ -88,6 +93,14 @@ function optionsOf(
   };
 }
 
+/** `--dry-run` and `--no-cache`; `--no-cache` with `--cache-dir` is refused. */
+function flagsOf(args: { 'dry-run'?: boolean; cache?: boolean; 'cache-dir'?: string }) {
+  const noCache = args.cache === false;
+  if (noCache && args['cache-dir'] !== undefined)
+    throw new UsageError('give --no-cache or --cache-dir, not both');
+  return { dryRun: Boolean(args['dry-run']), noCache };
+}
+
 /** The action asked for; another one is refused. */
 function actionOf(action: string): 'update' | 'download' {
   if (action === 'update' || action === 'download') return action;
@@ -96,14 +109,30 @@ function actionOf(action: string): 'update' | 'download' {
   );
 }
 
-async function update(ctx: CliContext, options: RemotesUpdateOptions): Promise<number> {
-  const r = await runRemotesUpdate(ctx.session, options);
+async function update(
+  ctx: CliContext,
+  options: RemotesUpdateOptions,
+  flags: { dryRun: boolean; noCache: boolean },
+): Promise<number> {
+  const r = await runRemotesUpdate(ctx.session, {
+    ...options,
+    dryRun: flags.dryRun,
+    ...(flags.noCache ? { cacheDir: false } : {}),
+  });
   ctx.stdout(remotesText(r, ctx.render));
   return r.failed.length ? EXIT.findings : EXIT.ok;
 }
 
-async function download(ctx: CliContext, options: RemotesDownloadOptions, dryRun: boolean): Promise<number> {
-  if (dryRun) throw new UsageError('--dry-run is for `flowpact remotes update`');
+async function download(
+  ctx: CliContext,
+  options: RemotesDownloadOptions,
+  flags: { dryRun: boolean; noCache: boolean },
+): Promise<number> {
+  if (flags.dryRun) throw new UsageError('--dry-run is for `flowpact remotes update`');
+  if (flags.noCache)
+    throw new UsageError(
+      '--no-cache is for `flowpact remotes update`: `remotes download` only fills the cache',
+    );
   const r = await runRemotesDownload(ctx.session, options);
   ctx.stdout(remotesDownloadText(r, ctx.render));
   return r.failed.length ? EXIT.findings : EXIT.ok;

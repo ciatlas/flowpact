@@ -145,7 +145,9 @@ export function cacheSource(
   if (existsSync(path)) return 'present';
   const tmp = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
   try {
-    // For your user alone: the files of private repositories land here too, wherever the cache is.
+    // The text is a file another repository serves (CodeQL's "network data written to a file"), kept on purpose: never
+    // run, at most 1 MB (the fetcher refuses more), under a path whose every part was checked above, read-only and not
+    // executable. For your user alone: the files of private repositories land here too, wherever the cache is.
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     writeFileSync(tmp, text, { mode: 0o400, flag: 'wx' });
     renameSync(tmp, path);
