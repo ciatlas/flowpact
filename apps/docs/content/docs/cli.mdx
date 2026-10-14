@@ -9,6 +9,7 @@ description: Every flowpact command, flag, output format and environment variabl
 | [`flowpact check`](#flowpact-check) | `lint` plus a comparison with the committed [contracts](/docs/contracts). |
 | [`flowpact impact`](#flowpact-impact) | Check that the release impact a pull request declares covers its changes to published workflows and actions. |
 | [`flowpact generate`](#flowpact-generate) | Write (or preview) the contracts. |
+| [`flowpact remotes update`](#flowpact-remotes-update) | Fetch the interfaces of the remote workflows and actions this repository uses into the [remote interfaces lockfile](/docs/remote-interfaces). |
 | [`flowpact graph`](#flowpact-graph) | Show the call graph of workflows and actions. |
 | [`flowpact trace`](#flowpact-trace) | Follow a value down to where it is used, or up to where it comes from. |
 | [`flowpact explain`](#flowpact-explain) | Print the docs for a rule. |
@@ -180,6 +181,28 @@ changed, removed or unchanged, with the semantic changes underneath; breaking ch
 in a row changes nothing.
 
 <Screenshot name="generate-dry-run" alt="flowpact generate --dry-run listing new contract files and a unified diff of their contents" />
+
+## `flowpact remotes update`
+
+Fetches the interface of every remote reusable workflow and action the repository uses, and writes
+`.github/flowpact/remotes.lock.yaml` (see [Remote interfaces](/docs/remote-interfaces)).
+
+```sh
+flowpact remotes update [--dry-run]
+```
+
+| Option | Description |
+| --- | --- |
+| `--dry-run` | Fetch and say what would change; write nothing. |
+
+It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
+through the GitHub API, and its workflow file or `action.yml` is read at that commit. Entries of references nothing uses
+any more are dropped. A reference that cannot be fetched (it does not exist, or the token cannot read it) is listed as
+failed, keeps its previous entry, and makes the command exit `1`.
+
+The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`). It is sent only to the GitHub
+API (`GITHUB_API_URL` on GitHub Enterprise Server) and never printed. Public repositories can be read without one, at
+GitHub's low rate limit for anonymous requests; private and internal ones need a token that can read their contents.
 
 ## `flowpact graph`
 
@@ -427,4 +450,6 @@ exits `0` too, or `1` when a file with YAML syntax errors could not be regenerat
 | `FLOWPACT_DEBUG` | `1` for debug logs, `trace` for trace logs. |
 | `FLOWPACT_NO_HYPERLINKS` | Disable clickable docs links (OSC 8). |
 | `GITHUB_REPOSITORY` | `owner/repo`, used to resolve same-repository `uses:` references (also read from `.git/config` or the `repository` config key). |
+| `GH_TOKEN` / `GITHUB_TOKEN` | The token `flowpact remotes update` reads remote repositories with (else `gh auth token`). |
+| `GITHUB_API_URL` | The GitHub API `flowpact remotes update` uses (GitHub Enterprise Server); `https://api.github.com` by default. |
 | `COLUMNS` | Output width when not attached to a terminal. |

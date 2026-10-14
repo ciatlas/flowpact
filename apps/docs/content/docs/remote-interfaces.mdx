@@ -27,6 +27,18 @@ stay quiet about it.
 Findings point at your call; the message names the remote reference, whose file is in another repository. Nothing is
 fetched during a run: flowpact reads only the committed lockfile, so results do not depend on the network.
 
+## Writing it
+
+```sh
+flowpact remotes update
+```
+
+[`flowpact remotes update`](/docs/cli#flowpact-remotes-update) resolves every remote reference the repository uses to
+a commit, reads its workflow file or `action.yml` there through the GitHub API, and writes the lockfile. Commit it, and
+run it again when you move a reference to another version, or on a schedule to notice a tag that moved. It reads with
+`GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token: public repositories need none, private and internal ones a token
+that can read their contents.
+
 ## The lockfile
 
 `.github/flowpact/remotes.lock.yaml` (or `remotes.lock.yml`), one entry per `uses:` reference:
