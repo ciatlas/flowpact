@@ -106,8 +106,24 @@ function interfaceYaml(e: RemoteEntry): string {
 }
 
 /** The remote interfaces of a lockfile, for `loadProject`. */
+/**
+ * The remote interfaces of a lockfile, for `loadProject`. An entry that records another commit than the one its
+ * reference pins in full is left out: it describes other code than what runs, so its calls are not verified (FP612
+ * reports it).
+ */
 export const remoteInterfaces = (lock: RemotesLock | undefined): RemoteInterface[] =>
-  Object.entries(lock?.remotes ?? {}).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
+  Object.entries(lock?.remotes ?? {})
+    .filter(([ref, e]) => !pinMismatch(ref, e))
+    .map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
+
+/**
+ * Whether a lockfile entry records another commit than the full commit SHA its reference pins (`octo/setup@<sha>`).
+ * `flowpact remotes update` resolves such a reference to that commit, so only an edited entry differs.
+ */
+export function pinMismatch(ref: string, entry: Pick<RemoteEntry, 'sha' | 'kind'>): boolean {
+  const r = parseRemoteRef(ref, entry.kind);
+  return r !== undefined && commitOf(r, entry) !== entry.sha;
+}
 
 /**
  * What the lockfile says about a reference, matched as GitHub matches it (owner and repository in any case): its entry,

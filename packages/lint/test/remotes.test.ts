@@ -182,6 +182,50 @@ describe('fetched remote interfaces and an outdated lockfile', () => {
     ]);
   });
 
+  it('reports an entry that records another commit than its full-SHA reference pins, and does not use it (FP612)', () => {
+    const pinned = 'd'.repeat(40);
+    const pinnedCi = yaml`
+      on: push
+      jobs:
+        deploy:
+          uses: octo/ship/.github/workflows/deploy.yml@${pinned}
+        build:
+          runs-on: x
+          steps:
+            - uses: octo/setup@${pinned}
+    `;
+    const forged = yaml`
+      version: 1
+      remotes:
+        octo/ship/.github/workflows/deploy.yml@${pinned}:
+          sha: ${SHA}
+          kind: workflow
+          inputs:
+            env: { type: string, required: true }
+        octo/setup@${pinned}:
+          sha: ${SHA}
+          kind: action
+          inputs:
+            version: { required: true }
+    `;
+    const files = { [`${WF}/ci.yml`]: pinnedCi, [LOCK]: forged };
+    expect(messages(files, 'FP612')).toEqual([
+      `.github/flowpact/remotes.lock.yaml is out of date: it records another commit than the one pinned for octo/ship/.github/workflows/deploy.yml@${pinned} (it records aaaaaaa), octo/setup@${pinned} (it records aaaaaaa). Run \`flowpact remotes update\``,
+    ]);
+    // The entries describe other code than what runs: no call is checked against them.
+    expect([...messages(files, 'FP101'), ...messages(files, 'FP102')]).toEqual([]);
+    expect(messages(files, 'FP603')).toEqual([
+      `jobs.deploy calls remote workflow octo/ship/.github/workflows/deploy.yml@${pinned}; its interface is not verified`,
+    ]);
+    // Recording the pinned commit is in order.
+    const honest = { [`${WF}/ci.yml`]: pinnedCi, [LOCK]: forged.replaceAll(`sha: ${SHA}`, `sha: ${pinned}`) };
+    expect(messages(honest, 'FP612')).toEqual([]);
+    expect(messages(honest, 'FP101')).toEqual([
+      `jobs.deploy calls octo/ship/.github/workflows/deploy.yml@${pinned} without required input "env"`,
+      `Step #1 uses octo/setup@${pinned} without required input "version" — GitHub will run it with an empty value`,
+    ]);
+  });
+
   it('stays quiet without a lockfile, with an unusable one, and when it matches', () => {
     expect(messages({ [`${WF}/ci.yml`]: ci }, 'FP612')).toEqual([]);
     expect(messages({ [`${WF}/ci.yml`]: ci, [LOCK]: 'version: [' }, 'FP612')).toEqual([]);

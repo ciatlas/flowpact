@@ -12,7 +12,7 @@ import {
   type UnverifiedUse,
   type WorkflowDecl,
 } from '@ciatlas/core';
-import { remoteRefsOf } from '../remotes';
+import { pinMismatch, remoteRefsOf } from '../remotes';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote } from './util';
 
@@ -339,8 +339,11 @@ const remotesLockInvalid = defineRule({
   },
 });
 
-/** The remote references the lockfile file lacks, and its entries nothing uses (entries fetched for the run aside). */
-function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[] } {
+/**
+ * The remote references the lockfile file lacks, its entries nothing uses, and those that record another commit than
+ * the one their reference pins (entries fetched for the run aside).
+ */
+function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[]; mismatched: string[] } {
   const { lock, fetched = [] } = ctx.remotes ?? {};
   // A reference the lockfile records as unreadable is accounted for, though not checked.
   const locked = [...Object.keys(lock?.remotes ?? {}), ...Object.keys(lock?.unreadable ?? {})].filter(
@@ -349,10 +352,24 @@ function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[] } {
   const lockedKeys = new Set(locked.map(remoteKey));
   const used = remoteRefsOf(ctx.index).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
+  const mismatched = Object.entries(lock?.remotes ?? {})
+    .filter(([ref, e]) => !fetched.includes(ref) && pinMismatch(ref, e))
+    .map(([ref, e]) => `${ref} (it records ${e.sha.slice(0, 7)})`);
   return {
     missing: used.filter((r) => !lockedKeys.has(remoteKey(r))),
     unused: locked.filter((r) => !usedKeys.has(remoteKey(r))),
+    mismatched,
   };
+}
+
+/** What is out of date in the lockfile, in words: each kind of drift it has. */
+function driftParts(drift: ReturnType<typeof lockDrift>): string[] {
+  const parts: [string[], string][] = [
+    [drift.missing, 'lacks'],
+    [drift.unused, 'no longer needs'],
+    [drift.mismatched, 'records another commit than the one pinned for'],
+  ];
+  return parts.filter(([refs]) => refs.length).map(([refs, what]) => `${what} ${refs.join(', ')}`);
 }
 
 const remotesLockOutdated = defineRule({
@@ -362,22 +379,21 @@ const remotesLockOutdated = defineRule({
   defaultSeverity: 'warning',
   docs: {
     summary:
-      'The remote interfaces lockfile lacks a remote workflow or action the repository uses, or has one it no longer uses.',
+      'The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, ' +
+      'or records another commit than the one a reference pins.',
     why:
       'A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action’s `remotes: fetch` fetches it ' +
       'for the run). It happens when a reference moves to another version, for example in a pull request from Renovate ' +
-      'or Dependabot, until the lockfile is updated.',
+      'or Dependabot, until the lockfile is updated. A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs ' +
+      'that commit, so an entry that records another one describes other code: it is not used, and the calls are not ' +
+      'checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did.',
     fix: 'Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs).',
   },
   check(ctx) {
     const { file, error } = ctx.remotes ?? {};
     if (!file || error) return;
-    const { missing, unused } = lockDrift(ctx);
-    if (!missing.length && !unused.length) return;
-    const parts = [
-      ...(missing.length ? [`lacks ${missing.join(', ')}`] : []),
-      ...(unused.length ? [`no longer needs ${unused.join(', ')}`] : []),
-    ];
+    const parts = driftParts(lockDrift(ctx));
+    if (!parts.length) return;
     ctx.report({
       message: `${file} is out of date: it ${parts.join('; it ')}. Run \`flowpact remotes update\``,
       loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
