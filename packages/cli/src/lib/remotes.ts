@@ -5,20 +5,23 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { type Logger, nodeFileSystem } from '@ciatlas/core';
+import { escapeControl, type Logger, nodeFileSystem } from '@ciatlas/core';
 import {
   assertSafeWritePath,
   cacheSource,
   downloadRemoteSources,
+  envCacheDir,
   type FetchedSource,
   type FetchProgress,
   hostOf,
+  inCi,
   REMOTES_LOCK_FILES,
   type RemotesDownload,
   type RemotesLock,
   type RemotesUpdate,
   readRemotesLock,
   remotesCacheDir,
+  remotesCacheIn,
   serializeRemotesLock,
   updateRemotesLock,
 } from '@flowpact/lint';
@@ -46,10 +49,11 @@ export interface RemotesUpdateOptions {
   /** Called as each reference is fetched (or not), after its debug log line; for a progress display. */
   onProgress?: (p: FetchProgress) => void;
   /**
-   * Where to keep the files read, for the editor to open (see `remotesCacheDir`, the default); `false` keeps none.
-   * Nothing is kept with `dryRun`.
+   * flowpact's cache directory, whose `remotes` directory keeps the files read for the editor (`--cache-dir`, relative to
+   * where flowpact runs); `false` keeps none. By default `FLOWPACT_CACHE_DIR`, else none in CI, else the platform's
+   * per-user cache (see `remotesCacheDir`). Nothing is kept with `dryRun`.
    */
-  sourcesCache?: string | false;
+  cacheDir?: string | false;
 }
 
 /** A debug log line per reference as it is done (`what`: a remote interface, or source), then `then`, if given. */
@@ -63,7 +67,7 @@ function logProgress(
       p.outcome === 'fetched' || p.outcome === 'cached'
         ? `${p.outcome === 'cached' ? 'cached ' : ''}at ${p.detail.slice(0, 7)}`
         : `${p.outcome}: ${p.detail}`;
-    logger.debug(`${what} ${p.done}/${p.total}: ${p.ref} ${how}`);
+    logger.debug(`${what} ${p.done}/${p.total}: ${escapeControl(p.ref)} ${escapeControl(how)}`);
     then?.(p);
   };
 }
@@ -78,12 +82,15 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
   tokenSource?: string;
   /** The sources cache, unless none was kept: how many files were written to it, and why one could not be. */
   sources?: SourcesKept;
+  /** Why no file was kept, when that was not asked for: in CI. */
+  sourcesNotKept?: string;
 }
 
 export interface SourcesKept {
   dir: string;
   written: number;
-  /** Why a file could not be written (the first such reason); the lockfile is written all the same. */
+  /** How many files could not be written, and why the first one could not; the lockfile is written all the same. */
+  notKept: number;
   failed?: string;
 }
 
@@ -184,48 +191,72 @@ export async function runRemotesUpdate(
   const file = read.file ?? REMOTES_LOCK_FILES[0];
   const { fetch, source } = fetchOptions(logger, options);
   const dryRun = bool('dryRun', options.dryRun) ?? false;
-  const keep = dryRun ? undefined : sourcesKeeper(options.sourcesCache, logger);
+  const keep = sourcesKeeper(dryRun ? {} : updateCacheDir(options.cacheDir), logger);
   const update = await timed(logger, () =>
-    updateRemotesLock(result.index, read.lock, { ...fetch, ...(keep ? { onSource: keep.add } : {}) }),
+    updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch }),
   );
   const text = serializeRemotesLock(update.lock);
   const changes = fs.read(file) !== text;
   if (changes && !dryRun) writeLock(root, file, text);
   const { lock: _, ...rest } = update;
-  const extra = { ...(source ? { tokenSource: source } : {}), ...(keep ? { sources: keep.kept } : {}) };
+  const extra = { ...(source ? { tokenSource: source } : {}), ...keep.result };
   return { ...rest, file, changes, dryRun, ...extra };
 }
 
-/** The sources cache's directory: the option (a string), else the default; undefined for `false`. */
-function cacheDirOf(option: string | false | undefined): string | undefined {
-  if (option === false) return undefined;
-  if (option !== undefined && typeof option !== 'string')
-    throw usage('sourcesCache must be a directory or false');
-  return option ?? remotesCacheDir();
+/** The sources cache in the `cacheDir` option, refusing anything but a directory's path. */
+function cacheDirIn(option: unknown): string {
+  if (typeof option !== 'string' || option.trim() === '') throw usage('cacheDir must be a directory');
+  return remotesCacheIn(option);
 }
 
-/** Keeps each fetched file in the sources cache, counting what it wrote; a failure is logged, never thrown. */
-function sourcesKeeper(option: string | false | undefined, logger: Logger) {
-  const dir = cacheDirOf(option);
-  if (!dir) return undefined;
-  const kept: SourcesKept = { dir, written: 0 };
-  const add = (s: FetchedSource) => {
+/**
+ * Where `remotes update` keeps the files it reads: the `cacheDir` option, else `FLOWPACT_CACHE_DIR`, else the platform's
+ * per-user cache, but nowhere in CI (or for `false`), with why when nobody asked for that.
+ */
+function updateCacheDir(option: string | false | undefined): { dir?: string; why?: string } {
+  if (option === false) return {};
+  if (option !== undefined) return { dir: cacheDirIn(option) };
+  if (!envCacheDir() && inCi()) return { why: 'not kept in CI (CI is set): --cache-dir keeps them' };
+  const dir = remotesCacheDir();
+  return dir ? { dir } : { why: `not kept: ${NO_CACHE_DIR}` };
+}
+
+/** Why there is no default cache directory, and how to give one. */
+const NO_CACHE_DIR =
+  'no home directory to keep a per-user cache in: --cache-dir or FLOWPACT_CACHE_DIR gives one';
+
+/**
+ * Keeps each fetched file in the sources cache, when there is one, counting what it wrote (a failure is logged, never
+ * thrown): the option to fetch with, and the result's fields to report it.
+ */
+function sourcesKeeper(
+  cache: { dir?: string; why?: string },
+  logger: Logger,
+): { fetch: { onSource?: (s: FetchedSource) => void }; result: Partial<RemotesUpdateResult> } {
+  if (!cache.dir) return { fetch: {}, result: cache.why ? { sourcesNotKept: cache.why } : {} };
+  const dir = cache.dir;
+  const kept: SourcesKept = { dir, written: 0, notKept: 0 };
+  const onSource = (s: FetchedSource) => {
     const outcome = cacheSource(dir, s.ref, s.sha, s.file, s.text);
     if (outcome === 'written') kept.written++;
     else if (outcome === 'unsafe')
-      logger.debug(`source not cached: ${s.ref.raw}: its path cannot be a file name`);
+      logger.debug(`source not cached: ${escapeControl(s.ref.raw)}: its path cannot be a file name`);
     else if (typeof outcome === 'object') {
-      logger.debug(`source not cached: ${s.ref.raw}: ${outcome.failed}`);
+      logger.debug(`source not cached: ${escapeControl(s.ref.raw)}: ${outcome.failed}`);
+      kept.notKept++;
       kept.failed ??= outcome.failed;
     }
   };
-  return { add, kept };
+  return { fetch: { onSource }, result: { sources: kept } };
 }
 
 export interface RemotesDownloadOptions
   extends Pick<RemotesUpdateOptions, 'paths' | 'token' | 'apiUrl' | 'githubCom' | 'onProgress'> {
-  /** The sources cache's directory (see `remotesCacheDir`, the default). */
-  sourcesCache?: string;
+  /**
+   * flowpact's cache directory, whose `remotes` directory the sources go to (`--cache-dir`, relative to where flowpact
+   * runs); by default `FLOWPACT_CACHE_DIR`, else the platform's per-user cache, also in CI: downloading is all it does.
+   */
+  cacheDir?: string;
 }
 
 export interface RemotesDownloadResult extends RemotesDownload {
@@ -244,7 +275,8 @@ export async function runRemotesDownload(
   options: RemotesDownloadOptions = {},
 ): Promise<RemotesDownloadResult> {
   const { root, logger } = session;
-  const dir = cacheDirOf(options.sourcesCache)!;
+  const dir = options.cacheDir !== undefined ? cacheDirIn(options.cacheDir) : remotesCacheDir();
+  if (!dir) throw usage(`nowhere to download to: ${NO_CACHE_DIR}`);
   const { file, lock } = requireLock(root);
   const result = await analyzeTargets(session, options);
   const { fetch, source } = fetchOptions(logger, options, 'remote source');

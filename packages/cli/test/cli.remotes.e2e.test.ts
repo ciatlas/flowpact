@@ -99,7 +99,14 @@ describe('flowpact remotes update', () => {
 
   it('lint --fetch-remotes checks what the lockfile lacks for this run, writes nothing, and warns what it could not fetch', async () => {
     const root = repo();
-    const env = { NO_COLOR: '1', GITHUB_API_URL: api, PATH: process.env.PATH ?? '', HOME: home };
+    rmSync(cache, { recursive: true, force: true });
+    const env = {
+      NO_COLOR: '1',
+      GITHUB_API_URL: api,
+      PATH: process.env.PATH ?? '',
+      HOME: home,
+      FLOWPACT_CACHE_DIR: cache,
+    };
     const plain = await execa('node', [BIN, 'lint', '--root', root, '--format', 'json'], {
       reject: false,
       extendEnv: false,
@@ -117,6 +124,8 @@ describe('flowpact remotes update', () => {
     ]);
     expect(r.stderr).toContain('remote interface not fetched: octo/missing@v1');
     expect(() => readFileSync(join(root, LOCK))).toThrow();
+    // Fetched for this run only: nothing goes to the sources cache either.
+    expect(existsSync(cache)).toBe(false);
   });
 
   it('fetches only what the given paths use, and refuses a path that does not exist', async () => {
@@ -174,10 +183,106 @@ describe('the sources cache', () => {
     expect(again.stdout).toContain('1 source already there');
   });
 
-  it('remotes download needs a lockfile, and takes no --dry-run', async () => {
+  it('keeps nothing in CI unless asked, with --cache-dir or FLOWPACT_CACHE_DIR', async () => {
+    const root = repo();
+    const ci = await run(root, ['update'], { CI: 'true', FLOWPACT_CACHE_DIR: '' });
+    expect(ci.exitCode).toBe(0);
+    expect(ci.stdout).toContain('sources: not kept in CI (CI is set): --cache-dir keeps them');
+    const given = join(home, 'given');
+    const asked = await run(root, ['update', '--cache-dir', given], { CI: 'true', FLOWPACT_CACHE_DIR: '' });
+    expect(asked.stdout).toContain(`sources: ${join(given, 'remotes')} (1 new)`);
+    expect(existsSync(join(given, 'remotes', 'octo', 'setup', SHA, 'action.yml'))).toBe(true);
+    rmSync(cache, { recursive: true, force: true });
+    const env = await run(root, ['update'], { CI: 'true' });
+    expect(env.stdout).toContain(`sources: ${join(cache, 'remotes')} (1 new)`);
+  });
+
+  it('remotes download takes --cache-dir, and caches in CI too: downloading is all it does', async () => {
+    const root = repo();
+    await run(root, ['update']);
+    const given = join(home, 'download-given');
+    const r = await run(root, ['download', '--cache-dir', given], { CI: 'true' });
+    expect(r.stdout).toContain(`downloaded 1 source to ${join(given, 'remotes')}`);
+  });
+
+  it('keeps going when the cache cannot be written, and counts what it could not keep', async () => {
+    rmSync(cache, { recursive: true, force: true });
+    mkdirSync(cache, { recursive: true });
+    writeFileSync(join(cache, 'remotes'), '');
+    const root = repo();
+    const r = await run(root, ['update']);
+    expect(r.exitCode).toBe(0);
+    expect(readFileSync(join(root, LOCK), 'utf8')).toContain('octo/setup@v2');
+    expect(r.stdout).toContain(`sources: ${join(cache, 'remotes')} (0 new, 1 not kept: `);
+    rmSync(cache, { recursive: true, force: true });
+  });
+
+  it('remotes download lists what it cannot download as failed, says so in its headline, and exits 1', async () => {
+    const root = repo();
+    await run(root, ['update']);
+    writeFileSync(join(root, LOCK), readFileSync(join(root, LOCK), 'utf8').replaceAll(SHA, 'b'.repeat(40)));
+    const r = await run(root, ['download']);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toContain(`downloaded 0 of 1 source to ${join(cache, 'remotes')}`);
+    expect(r.stdout).toContain(
+      'failed   octo/setup@v2: no action.yml in the repository root at bbbbbbb, or not readable with this token',
+    );
+  });
+
+  it('shows control characters from the lockfile and the YAML instead of sending them to the terminal', async () => {
+    rmSync(cache, { recursive: true, force: true });
+    const root = repo();
+    writeFileSync(
+      join(root, '.github/workflows/ci.yml'),
+      'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n      - uses: "octo/esc\\e]0;T\\a@v1"\n',
+    );
+    mkdirSync(join(root, '.github/flowpact'), { recursive: true });
+    writeFileSync(
+      join(root, LOCK),
+      [
+        'version: 1',
+        'remotes:',
+        '  octo/setup@v2:',
+        `    sha: ${SHA}`,
+        '    kind: action',
+        '    host: "evil\\e]0;PWNED\\a\\e[2J"',
+        'unreadable:',
+        '  "octo/esc\\e]0;T\\a@v1": "gone\\e[31m"',
+        '',
+      ].join('\n'),
+    );
+    const r = await run(root, ['download', '-d']);
+    const out = `${r.stdout}${r.stderr}`;
+    expect(out).not.toContain('\u001b');
+    expect(out).not.toContain('\u0007');
+    expect(r.stdout).toContain('on evil\\x1b]0;PWNED\\x07\\x1b[2J, which this run does not read');
+    expect(r.stdout).toContain(
+      'octo/esc\\x1b]0;T\\x07@v1: the lockfile records it as not readable (gone\\x1b[31m)',
+    );
+  });
+
+  it('remotes download looks on github.com only with --github-com', async () => {
+    const root = repo();
+    await run(root, ['update']);
+    const on = await run(root, ['download', '--github-com', '-d']);
+    expect(on.stderr).toContain('also looking on github.com, with no token');
+    const off = await run(root, ['download', '-d']);
+    expect(off.stderr).not.toContain('also looking on github.com');
+  });
+
+  it('remotes download needs a lockfile it can use, and takes no --dry-run', async () => {
     const none = await run(repo(), ['download']);
     expect(none.exitCode).toBe(2);
     expect(none.stderr).toContain('no remotes lockfile: run `flowpact remotes update`');
+    const broken = repo();
+    mkdirSync(join(broken, '.github/flowpact'), { recursive: true });
+    writeFileSync(
+      join(broken, LOCK),
+      'version: 1\nremotes:\n  octo/setup@v2:\n    sha: nope\n    kind: action\n',
+    );
+    const bad = await run(broken, ['download']);
+    expect(bad.exitCode).toBe(2);
+    expect(bad.stderr).toContain(`${LOCK} cannot be used: remotes.octo/setup@v2.sha`);
     const dry = await run(repo(), ['download', '--dry-run']);
     expect(dry.exitCode).toBe(2);
     expect(dry.stderr).toContain('--dry-run is for `flowpact remotes update`');

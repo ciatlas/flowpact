@@ -43,6 +43,12 @@ export const remotesCommand = defineCommand({
       description:
         'On GitHub Enterprise Server or GHE.com (GITHUB_API_URL), also look on github.com for the remote references the enterprise server lacks, as GitHub Connect does; token: GITHUB_COM_TOKEN or none, never the enterprise token. Sends their names to github.com',
     },
+    'cache-dir': {
+      type: 'string',
+      valueHint: 'dir',
+      description:
+        'flowpact’s cache directory: keep the sources (for go to definition in the editor) in its remotes directory. Default: FLOWPACT_CACHE_DIR, else the per-user cache; `update` keeps none in CI (CI is set) unless given',
+    },
     'dry-run': {
       type: 'boolean',
       description: '`update` only: show what would change without writing the lockfile or the cache',
@@ -56,8 +62,7 @@ export const remotesCommand = defineCommand({
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
       const counter = counterFor(ctx.level, action === 'update' ? 'remote interfaces' : 'remote sources');
       const options = {
-        paths: pathArgs(remotesPaths(args._, action), 'remotes', ctx.root),
-        githubCom: Boolean(args['github-com']),
+        ...optionsOf(args, action, ctx.root),
         ...(counter ? { onProgress: counter.update } : {}),
       };
       try {
@@ -69,6 +74,19 @@ export const remotesCommand = defineCommand({
       }
     }),
 });
+
+/** The options both actions take, from the command line. */
+function optionsOf(
+  args: { _: string[]; 'github-com'?: boolean; 'cache-dir'?: string },
+  action: string,
+  root: string,
+) {
+  return {
+    paths: pathArgs(remotesPaths(args._, action), 'remotes', root),
+    githubCom: Boolean(args['github-com']),
+    ...(args['cache-dir'] !== undefined ? { cacheDir: args['cache-dir'] } : {}),
+  };
+}
 
 /** The action asked for; another one is refused. */
 function actionOf(action: string): 'update' | 'download' {
