@@ -25856,10 +25856,15 @@ var realpathOr = (p) => {
 function repositoryPathOf(top, file) {
   const dirs = [];
   for (let dir = dirname3(file); dir !== dirname3(dir); dir = dirname3(dir)) dirs.unshift(dir);
-  for (const dir of dirs) if (realpathOr(dir) === top) return relative5(dir, file).split(sep2).join("/");
+  const reals = dirs.map(realpathOr);
+  const atTop = reals.indexOf(top);
+  if (atTop >= 0) return toPosix2(relative5(dirs[atTop], file));
+  const inside = reals.findIndex((real2) => real2 !== void 0 && pathInside(top, real2));
+  if (inside >= 0) return toPosix2(join5(relative5(top, reals[inside]), relative5(dirs[inside], file)));
   const real = realpathOr(file);
-  return real !== void 0 && pathInside(top, real) ? relative5(top, real).split(sep2).join("/") : void 0;
+  return real !== void 0 && pathInside(top, real) ? toPosix2(relative5(top, real)) : void 0;
 }
+var toPosix2 = (path) => path.split(sep2).join("/");
 var NONE = { kind: "none" };
 var MAX_LINKS3 = 40;
 function enter(w, dir, commit, head, shown) {
@@ -27589,7 +27594,7 @@ function actionsSink(runnerDebug, groups) {
     }
   };
 }
-var toPosix2 = (p) => p.split(sep4).join("/");
+var toPosix3 = (p) => p.split(sep4).join("/");
 var plural2 = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function annotate(f, prefix) {
   const { level, message, ...props } = githubAnnotation(f, { pathPrefix: prefix });
@@ -27602,7 +27607,7 @@ function writeReport(workspace, file, content) {
   assertSafeWritePath(abs, [workspace]);
   mkdirSync2(dirname4(abs), { recursive: true });
   writeFileSync2(abs, content);
-  const shown = toPosix2(relative7(workspace, abs));
+  const shown = toPosix3(relative7(workspace, abs));
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
   return abs;
 }
@@ -27729,7 +27734,7 @@ function logging(debug2, envLevel) {
 function placeOf(workingDirectory) {
   const workspace = resolve7(process.env.GITHUB_WORKSPACE || process.cwd());
   const root = resolve7(workspace, workingDirectory);
-  const rel = toPosix2(relative7(workspace, root));
+  const rel = toPosix3(relative7(workspace, root));
   return { workspace, root, prefix: rel === "" || rel === "." ? "" : rel };
 }
 function loadInputConfig(inputs, { root, prefix }) {
@@ -27749,7 +27754,7 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
   const extraPlugins = inputs.extraPlugins.filter((p) => inputs.plugins || !inCheckout(p));
   const skippedPlugins = inputs.extraPlugins.filter((p) => !extraPlugins.includes(p));
   if (skippedPlugins.length) {
-    const names = skippedPlugins.map((p) => toPosix2(relative7(workspace, p))).join(", ");
+    const names = skippedPlugins.map((p) => toPosix3(relative7(workspace, p))).join(", ");
     warning(`Not loading the plugin input's ${names} from the checkout: ${pluginsOff}.`);
   }
   return extraPlugins;
