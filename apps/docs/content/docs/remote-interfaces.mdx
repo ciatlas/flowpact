@@ -39,6 +39,91 @@ run it again when you move a reference to another version, or on a schedule to n
 `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token: public repositories need none, private and internal ones a token
 that can read their contents.
 
+## In CI
+
+The [action](/docs/action) and the CLI read the committed lockfile and nothing else. To also check references the
+lockfile lacks, opt in to fetching them for the run: nothing is written back, and the lockfile's own entries stand.
+
+```yaml title=".github/workflows/flowpact.yml"
+- uses: ciatlas/flowpact@v0.18
+  with:
+    remotes: fetch            # token defaults to github.token
+```
+
+On the command line, `flowpact lint --fetch-remotes` (or `check`) does the same with `GH_TOKEN`, `GITHUB_TOKEN` or the
+GitHub CLI's token. A reference that cannot be fetched is a warning and stays unchecked. The job's `github.token` reads
+public repositories; private and internal ones of your organization need a token that can read them (a GitHub App
+installation token, for example from `actions/create-github-app-token` with their names under `repositories:`).
+
+The action does not fetch on `pull_request_target` or `workflow_run`: there the workflows come from an untrusted
+pull request while the token may be privileged, so the pull request would choose which repositories the token reads,
+and the findings would show what it read.
+
+A lockfile that lacks a reference the repository uses, or has one nothing uses, is reported by
+[`FP612`](/docs/rules/fp612) (a warning), also when the run fetched it: run `flowpact remotes update` and commit it.
+
+## Renovate and Dependabot
+
+When Renovate or Dependabot moves a reference to another version (`octo/setup@v2` → `@v3`), the lockfile still has
+`@v2` and lacks `@v3`. Until it is updated, `@v3` is checked only by a run that fetches it, and [`FP612`](/docs/rules/fp612)
+says the lockfile is out of date. Three ways to keep it current:
+
+- **Check the pull request anyway.** With `remotes: fetch` in your flowpact job, the bot's pull request is checked
+  against `@v3`'s interface, and FP612 reminds you to update the lockfile before merging.
+- **Self-hosted Renovate:** update the lockfile in the same pull request with a post-upgrade task. Allow the command in
+  the bot's own config (`allowedPostUpgradeCommands: ["^npx --yes flowpact@"]`), and give it a token that can read the
+  remote repositories through the environment Renovate runs commands in (for example `customEnvVariables`):
+
+  ```json title="renovate.json"
+  {
+    "postUpgradeTasks": {
+      "commands": ["npx --yes flowpact@0.18 remotes update"],
+      "fileFilters": [".github/flowpact/remotes.lock.yaml"],
+      "executionMode": "branch"
+    }
+  }
+  ```
+
+- **The Renovate app or Dependabot**, which run no commands of yours: a workflow on their pull requests runs the update
+  and pushes the lockfile to their branch. Push with a GitHub App token rather than `github.token`, whose pushes start
+  no workflow runs, so the pull request's checks run again on the new commit. Dependabot's runs get a read-only token
+  and only Dependabot secrets, so store the app's key as a Dependabot secret.
+
+  ```yaml title=".github/workflows/remotes-lock.yml"
+  name: Remote interfaces lockfile
+  on:
+    pull_request:
+      paths: ['.github/workflows/**', '**/action.yml', '**/action.yaml']
+  permissions: {}
+  jobs:
+    update:
+      if: contains(fromJSON('["renovate[bot]", "dependabot[bot]"]'), github.event.pull_request.user.login)
+      runs-on: ubuntu-latest
+      steps:
+        - id: app
+          uses: actions/create-github-app-token@v2       # pin to a commit SHA
+          with:
+            client-id: ${{ vars.LOCK_BOT_CLIENT_ID }}
+            private-key: ${{ secrets.LOCK_BOT_PRIVATE_KEY }}
+        - uses: actions/checkout@v5                       # pin to a commit SHA
+          with:
+            ref: ${{ github.head_ref }}
+            token: ${{ steps.app.outputs.token }}
+            persist-credentials: true
+        - run: npx --yes flowpact@0.18 remotes update
+          env:
+            GH_TOKEN: ${{ steps.app.outputs.token }}
+        - run: |
+            git diff --quiet -- .github/flowpact/remotes.lock.yaml && exit 0
+            git config user.name 'remotes-lock[bot]'
+            git config user.email 'remotes-lock[bot]@users.noreply.github.com'
+            git commit -m 'chore: update the remote interfaces lockfile' -- .github/flowpact/remotes.lock.yaml
+            git push
+  ```
+
+  The job runs only for the bots' pull requests, checks out their branch (never a fork's: bots push to your
+  repository), and runs `flowpact` from npm, not code from the pull request.
+
 ## The lockfile
 
 `.github/flowpact/remotes.lock.yaml` (or `remotes.lock.yml`), one entry per `uses:` reference:

@@ -125,7 +125,8 @@ All inputs are optional.
 | `impact` | `off` | [Impact mode](/docs/impact-mode): `off`, `auto` (on pull requests, or on any event when `base-ref` is set, in repositories that publish workflows or actions that `ignore` does not leave out, and with `paths` when one is within them; never on `pull_request_target`) or `on`. |
 | `expected-impact` | `''` | The declared impact (`none`, `patch`, `minor`, `major`); overrides the pull request title and labels. |
 | `base-ref` | `''` | Baseline for impact mode: a commit, tag or branch (read from `origin/<branch>`, fetched when missing). Empty uses the pull request base, the commit before a push, or the last release tag for a release pull request. |
-| `token` | `${{ github.token }}` | Used only to fetch the baseline commit or release tags when the checkout is shallow. |
+| `remotes` | `lockfile` | Remote workflows and actions: `lockfile` checks them against the committed [remote interfaces lockfile](/docs/remote-interfaces) only; `fetch` also fetches, with `token`, the interfaces of the references it lacks, for this run (never on `pull_request_target` or `workflow_run`). |
+| `token` | `${{ github.token }}` | Used to fetch the baseline commit or release tags when the checkout is shallow, and with `remotes: fetch` to read the remote repositories (private and internal ones need a token that can read them). |
 | `debug` | `false` | Print flowpact debug logs (also enabled by re-running the job with debug logging). |
 
 Even when `paths` limits the report to some files, flowpact reads every workflow and local action, because findings

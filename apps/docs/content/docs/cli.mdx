@@ -58,6 +58,7 @@ flowpact lint [paths…] [options]
 | `--include-graph` | Add the data-flow graph to JSON output and the call graph (Mermaid) to Markdown output. |
 | `--dump-graph <file>` | Write the data-flow graph as JSON (debugging). |
 | `--no-schema` | Skip validation against GitHub's workflow schema. |
+| `--fetch-remotes` | Fetch the interfaces of the remote workflows and actions the [remote interfaces lockfile](/docs/remote-interfaces) lacks, for this run only (nothing is written), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. A reference that cannot be fetched is a warning. |
 | `--impact` | Also check the release impact of the changes against the declared impact, with `--base <ref>`, `--expect none\|patch\|minor\|major`, `--title <text>` and `--labels <a,b>`. See [`flowpact impact`](#flowpact-impact). |
 | `-d, --debug` | Debug logging (see below). |
 | `-v` / `-vv` | Verbose / trace logging. |
