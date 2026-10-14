@@ -8681,9 +8681,9 @@ var require_cronstrue = __commonJS({
 
 // src/main.ts
 import { execFileSync as execFileSync3 } from "child_process";
-import { mkdirSync as mkdirSync2, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { mkdirSync as mkdirSync3, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname4, isAbsolute as isAbsolute7, join as join6, relative as relative7, resolve as resolve7, sep as sep4 } from "path";
+import { dirname as dirname5, isAbsolute as isAbsolute8, join as join7, relative as relative8, resolve as resolve7, sep as sep4 } from "path";
 import { fileURLToPath } from "url";
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -26830,6 +26830,13 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   return loaded;
 }
 
+// ../lint/src/remotes-cache.ts
+import { randomBytes } from "crypto";
+import { existsSync as existsSync7, mkdirSync as mkdirSync2, renameSync, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { homedir } from "os";
+import { dirname as dirname4, isAbsolute as isAbsolute6, join as join6, relative as relative6 } from "path";
+var sourceFiles = (r) => r.kind === "workflow" ? [r.path] : ["action.yml", "action.yaml"].map((n) => r.path ? `${r.path}/${n}` : n);
+
 // ../lint/src/remotes-fetch.ts
 var FetchError = class extends Error {
   constructor(message, unreadable = false) {
@@ -26907,22 +26914,24 @@ async function shaOf(r, opts) {
   return sha.trim();
 }
 var fileAt2 = (r, path, sha, opts) => get2(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, "application/vnd.github.raw", opts);
+async function sourceAt(r, sha, opts) {
+  for (const file of sourceFiles(r)) {
+    const text2 = await fileAt2(r, file, sha, opts);
+    if (text2 === void 0) continue;
+    opts.onSource?.({ ref: r, sha, file, text: text2 });
+    return { file, text: text2 };
+  }
+  const what = r.kind === "workflow" ? `${r.path} not found` : `no action.yml in ${r.path || "the repository root"}`;
+  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, true);
+}
 async function fetchRemoteEntry(r, opts = {}) {
   const sha = await shaOf(r, opts);
   const ctx = createParseContext(`${r.owner}/${r.repo}`);
-  if (r.kind === "workflow") {
-    const text2 = await fileAt2(r, r.path, sha, opts);
-    if (text2 === void 0) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`, true);
-    const wf = parseWorkflowFile(r.raw, text2, ctx);
-    const undeclared = undeclaredSecretsRead(wf);
-    return { ...lockEntryOf(wf, sha), ...undeclared.length ? { undeclaredSecrets: undeclared } : {} };
-  }
-  for (const name of ["action.yml", "action.yaml"]) {
-    const file = r.path ? `${r.path}/${name}` : name;
-    const text2 = await fileAt2(r, file, sha, opts);
-    if (text2 !== void 0) return lockEntryOf(parseActionFile(r.raw, file, text2, ctx), sha);
-  }
-  throw new FetchError(`no action.yml in ${r.path || "the repository root"} at ${sha.slice(0, 7)}`, true);
+  const { file, text: text2 } = await sourceAt(r, sha, opts);
+  if (r.kind === "action") return lockEntryOf(parseActionFile(r.raw, file, text2, ctx), sha);
+  const wf = parseWorkflowFile(r.raw, text2, ctx);
+  const undeclared = undeclaredSecretsRead(wf);
+  return { ...lockEntryOf(wf, sha), ...undeclared.length ? { undeclaredSecrets: undeclared } : {} };
 }
 async function fetchWithFallback(r, opts) {
   try {
@@ -26953,14 +26962,14 @@ async function tryFetch(r, opts, out) {
   try {
     return await fetchWithFallback(r, opts);
   } catch (e) {
-    if (!(e instanceof FetchError) && !(e instanceof TypeError) && e.name !== "TimeoutError")
-      throw e;
+    if (!isFetchFailure(e)) throw e;
     const problem = { ref: r.raw, error: e.message };
     if (e instanceof FetchError && e.unreadable) out.unreadable.push(problem);
     else out.failed.push(problem);
     return void 0;
   }
 }
+var isFetchFailure = (e) => e instanceof FetchError || e instanceof TypeError || e.name === "TimeoutError";
 async function fetchCounted(r, opts, out, count) {
   const entry = await tryFetch(r, opts, out);
   count.done++;
@@ -27870,7 +27879,7 @@ var import_yaml9 = __toESM(require_dist(), 1);
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
 import { readFileSync as readFileSync4, statSync as statSync3 } from "fs";
-import { isAbsolute as isAbsolute6, relative as relative6, resolve as resolve6, sep as sep3 } from "path";
+import { isAbsolute as isAbsolute7, relative as relative7, resolve as resolve6, sep as sep3 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
 var SERVICE = "github.actions.results.api.v1.ArtifactService";
@@ -28027,7 +28036,7 @@ async function blobRequest(http2, url2, body, headers, what, secrets) {
 }
 async function uploadBlob(signedUrl, zip2, secrets) {
   const http2 = new HttpClient(USER_AGENT, [], { socketTimeout: stallTimeout() });
-  const join7 = signedUrl.includes("?") ? "&" : "?";
+  const join8 = signedUrl.includes("?") ? "&" : "?";
   const prefix = randomUUID2();
   const ids = [];
   for (let at = 0; at < zip2.length; at += BLOCK_SIZE) {
@@ -28035,7 +28044,7 @@ async function uploadBlob(signedUrl, zip2, secrets) {
     ids.push(id);
     await blobRequest(
       http2,
-      `${signedUrl}${join7}comp=block&blockid=${encodeURIComponent(id)}`,
+      `${signedUrl}${join8}comp=block&blockid=${encodeURIComponent(id)}`,
       zip2.subarray(at, at + BLOCK_SIZE),
       { "Content-Type": "application/octet-stream" },
       "Put Block",
@@ -28046,7 +28055,7 @@ async function uploadBlob(signedUrl, zip2, secrets) {
   const list = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><BlockList>${latest}</BlockList>`;
   await blobRequest(
     http2,
-    `${signedUrl}${join7}comp=blocklist`,
+    `${signedUrl}${join8}comp=blocklist`,
     Buffer.from(list),
     { "Content-Type": "application/xml", "x-ms-blob-content-type": "application/zip" },
     "Put Block List",
@@ -28119,8 +28128,8 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
   if (!files.length) throw new Error("No files were found to upload");
   const root = resolve6(rootDirectory);
   const entries2 = files.map((file) => {
-    const path = relative6(root, resolve6(file));
-    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute6(path))
+    const path = relative7(root, resolve6(file));
+    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute7(path))
       throw new Error(`${file} is not inside the artifact's root directory ${root}`);
     const entry = path.split(sep3).join("/");
     if (BAD_PATH.test(entry))
@@ -28188,7 +28197,7 @@ var DEFAULTS2 = {
   token: "${{ github.token }}",
   debug: "false"
 };
-var ACTION_DIR = resolve7(dirname4(fileURLToPath(import.meta.url)), "../../..");
+var ACTION_DIR = resolve7(dirname5(fileURLToPath(import.meta.url)), "../../..");
 var UNTRUSTED_EVENTS = /* @__PURE__ */ new Set(["pull_request_target", "workflow_run"]);
 var SUMMARY_LIMIT = 1e6;
 var PATCH_FILE = "flowpact-contracts.patch";
@@ -28216,7 +28225,7 @@ function int3(name) {
     throw new InputError(`Input ${name} must be a non-negative integer (got "${value}")`);
   return Number(value);
 }
-var fromActionDir = (p) => isAbsolute7(p) ? p : resolve7(ACTION_DIR, p);
+var fromActionDir = (p) => isAbsolute8(p) ? p : resolve7(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
@@ -28233,7 +28242,7 @@ function declaredDefaultsOf(actionYml) {
 }
 var declaredDefaults;
 function declaredDefault(name) {
-  declaredDefaults ??= declaredDefaultsOf(join6(ACTION_DIR, "action.yml"));
+  declaredDefaults ??= declaredDefaultsOf(join7(ACTION_DIR, "action.yml"));
   return declaredDefaults[name]?.trim() || DEFAULTS2[name];
 }
 var orgInput = (name) => getInput(name).trim() || declaredDefault(name);
@@ -28440,9 +28449,9 @@ function annotate(f, prefix) {
 function writeReport(workspace, file, content) {
   const abs = resolve7(workspace, file);
   assertSafeWritePath(abs, [workspace]);
-  mkdirSync2(dirname4(abs), { recursive: true });
-  writeFileSync2(abs, content);
-  const shown = toPosix3(relative7(workspace, abs));
+  mkdirSync3(dirname5(abs), { recursive: true });
+  writeFileSync3(abs, content);
+  const shown = toPosix3(relative8(workspace, abs));
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
   return abs;
 }
@@ -28474,24 +28483,24 @@ async function driftArtifact(plan, prefix, inputs, runId) {
   const runnerTemp = process.env.RUNNER_TEMP;
   let dir;
   if (runnerTemp) {
-    dir = join6(runnerTemp, name);
-    rmSync2(dir, { recursive: true, force: true });
-    mkdirSync2(dir, { recursive: true });
+    dir = join7(runnerTemp, name);
+    rmSync3(dir, { recursive: true, force: true });
+    mkdirSync3(dir, { recursive: true });
   } else {
-    dir = mkdtempSync(join6(tmpdir(), `${name}-`));
+    dir = mkdtempSync(join7(tmpdir(), `${name}-`));
   }
   const repoPlan = {
     ...plan,
     entries: plan.entries.map((e) => ({ ...e, file: inRepository(e.file, prefix) }))
   };
-  const patch = join6(dir, PATCH_FILE);
-  writeFileSync2(patch, contractPatch(repoPlan));
-  const contracts = writeContracts(dir, repoPlan, join6(dir, ARTIFACT_DIR));
-  writeFileSync2(join6(dir, ARTIFACT_DIR, "README.md"), artifactReadme(plan, inputs.artifactName, runId));
+  const patch = join7(dir, PATCH_FILE);
+  writeFileSync3(patch, contractPatch(repoPlan));
+  const contracts = writeContracts(dir, repoPlan, join7(dir, ARTIFACT_DIR));
+  writeFileSync3(join7(dir, ARTIFACT_DIR, "README.md"), artifactReadme(plan, inputs.artifactName, runId));
   const files = [
     patch,
-    join6(dir, ARTIFACT_DIR, "README.md"),
-    ...contracts.map((f) => join6(dir, ARTIFACT_DIR, f))
+    join7(dir, ARTIFACT_DIR, "README.md"),
+    ...contracts.map((f) => join7(dir, ARTIFACT_DIR, f))
   ];
   info(`wrote ${PATCH_FILE} and ${plural2(contracts.length, "contract file")} to ${dir}`);
   const out = { dir, patch };
@@ -28569,7 +28578,7 @@ function logging(debug2, envLevel) {
 function placeOf(workingDirectory) {
   const workspace = resolve7(process.env.GITHUB_WORKSPACE || process.cwd());
   const root = resolve7(workspace, workingDirectory);
-  const rel = toPosix3(relative7(workspace, root));
+  const rel = toPosix3(relative8(workspace, root));
   return { workspace, root, prefix: rel === "" || rel === "." ? "" : rel };
 }
 function loadInputConfig(inputs, { root, prefix }) {
@@ -28589,7 +28598,7 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
   const extraPlugins = inputs.extraPlugins.filter((p) => inputs.plugins || !inCheckout(p));
   const skippedPlugins = inputs.extraPlugins.filter((p) => !extraPlugins.includes(p));
   if (skippedPlugins.length) {
-    const names = skippedPlugins.map((p) => toPosix3(relative7(workspace, p))).join(", ");
+    const names = skippedPlugins.map((p) => toPosix3(relative8(workspace, p))).join(", ");
     warning(`Not loading the plugin input's ${names} from the checkout: ${pluginsOff}.`);
   }
   return extraPlugins;
