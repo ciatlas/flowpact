@@ -94,6 +94,14 @@ inputs:
     description: 'Remote workflows and actions: lockfile (check them against the committed .github/flowpact/remotes.lock.yaml only) or fetch (also fetch, with token, the interfaces of the references the lockfile lacks, for this run; not on pull_request_target or workflow_run).'
     required: false
     default: 'lockfile'
+  remotes-github-com:
+    description: 'With remotes: fetch on GitHub Enterprise Server or GHE.com: also look on github.com for the remote references the enterprise server lacks, as GitHub Connect does (true or false). It sends their names to github.com.'
+    required: false
+    default: 'false'
+  github-com-token:
+    description: 'Token for github.com with remotes-github-com (the enterprise token is never sent there). Empty reads public repositories without one.'
+    required: false
+    default: ''
   token:
     description: 'Token used only to fetch the baseline commit or release tags when the checkout is shallow, and with remotes: fetch to read the remote repositories through the GitHub API (contents: read is enough; private and internal repositories of the organization need a token that can read them).'
     required: false

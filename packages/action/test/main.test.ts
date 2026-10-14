@@ -1319,3 +1319,50 @@ describe('remotes: fetch', () => {
     }
   });
 });
+
+describe('remotes-github-com on GitHub Enterprise Server', () => {
+  const SHA = 'c'.repeat(40);
+  const ACTION =
+    'name: s\ndescription: d\ninputs:\n  version: { description: v, required: true }\nruns:\n  using: composite\n  steps: []\n';
+
+  it('looks on github.com for what the enterprise server lacks, with github-com-token, never token', async () => {
+    const seen: { host: string; auth: string | null }[] = [];
+    vi.stubGlobal('fetch', async (input: string | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      seen.push({ host: url.host, auth: new Headers(init?.headers).get('authorization') });
+      if (url.host !== 'api.github.com') return new Response('', { status: 404 });
+      if (url.pathname === '/repos/octo/setup/commits/v2') return new Response(SHA);
+      if (url.pathname === '/repos/octo/setup/contents/action.yml') return new Response(ACTION);
+      return new Response('', { status: 404 });
+    });
+    process.env.GITHUB_API_URL = 'https://ghes.example/api/v3';
+    try {
+      const root = join(temp, 'ghes');
+      mkdirSync(join(root, '.github/workflows'), { recursive: true });
+      writeFileSync(
+        join(root, '.github/workflows/ci.yml'),
+        'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+      );
+      await action(root, {
+        remotes: 'fetch',
+        'remotes-github-com': 'true',
+        'github-com-token': 'dotcom',
+        token: 'ghes',
+      });
+      expect(state.annotations.some((a) => a.message.includes('without required input "version"'))).toBe(
+        true,
+      );
+      expect(seen.filter((r) => r.host === 'api.github.com').every((r) => r.auth === 'Bearer dotcom')).toBe(
+        true,
+      );
+      expect(seen.filter((r) => r.host === 'ghes.example').every((r) => r.auth === 'Bearer ghes')).toBe(true);
+      // Without remotes-github-com, github.com is never asked.
+      seen.length = 0;
+      await action(root, { remotes: 'fetch', token: 'ghes' });
+      expect(seen.some((r) => r.host === 'api.github.com')).toBe(false);
+    } finally {
+      delete process.env.GITHUB_API_URL;
+      vi.unstubAllGlobals();
+    }
+  });
+});

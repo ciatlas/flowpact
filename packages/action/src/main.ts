@@ -28,11 +28,13 @@ import {
   contractPatch,
   createRegistry,
   exitCodeFor,
+  type FetchRemotesOptions,
   type Finding,
   type FlowpactConfig,
   fetchMissingRemotes,
   followsPullRequest,
   githubEvent,
+  hostOf,
   type ImpactLevel,
   type ImpactRequest,
   ImpactSetupError,
@@ -82,6 +84,8 @@ export const DEFAULTS = {
   'expected-impact': '',
   'base-ref': '',
   remotes: 'lockfile',
+  'remotes-github-com': 'false',
+  'github-com-token': '',
   token: '${{ github.token }}',
   debug: 'false',
 } as const;
@@ -138,6 +142,8 @@ interface Inputs {
   baseRef: string;
   /** `lockfile`: only the committed remote interfaces; `fetch`: also fetch the references it lacks, for this run. */
   remotes: 'lockfile' | 'fetch';
+  /** With `remotes: fetch` on GHES or GHE.com: also look on github.com, with `github-com-token` or none. */
+  remotesGithubCom: boolean;
   debug: boolean;
 }
 
@@ -234,6 +240,7 @@ function readInputs(): Inputs {
       : {}),
     baseRef: input('base-ref'),
     remotes: oneOf('remotes', ['lockfile', 'fetch']),
+    remotesGithubCom: bool('remotes-github-com'),
     debug: bool('debug'),
   };
 }
@@ -740,6 +747,17 @@ function inputPlugins(inputs: Inputs, { workspace, root }: Place, pluginsOff: st
 }
 
 /**
+ * With `remotes-github-com` on GitHub Enterprise Server or GHE.com: look on github.com for the references the enterprise
+ * server lacks, as the runner does through GitHub Connect, with `github-com-token` or none (never `token`).
+ */
+function githubComFallback(inputs: Inputs): Pick<FetchRemotesOptions, 'fallback'> {
+  const api = process.env.GITHUB_API_URL;
+  if (!inputs.remotesGithubCom || !api || hostOf(api) === 'github.com') return {};
+  const token = core.getInput('github-com-token');
+  return { fallback: { apiUrl: 'https://api.github.com', ...(token ? { token } : {}) } };
+}
+
+/**
  * With `remotes: fetch`, the interfaces of the remote references the lockfile lacks, fetched with `token` for this run.
  * Not on events whose checkout may be untrusted while the token is privileged: the pull request would choose which
  * repositories the token reads, and the findings would show what it read.
@@ -762,6 +780,7 @@ async function remotesToFetch(
   const r = await fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, {
     ...(token && !token.startsWith('${{') ? { token } : {}),
     ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
+    ...githubComFallback(inputs),
     onProgress: (p) =>
       logger.debug(
         `remote interface ${p.done}/${p.total}: ${p.ref} ${p.outcome === 'fetched' ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`}`,
