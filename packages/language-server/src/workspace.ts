@@ -28,6 +28,7 @@ import { DiagnosticSeverity } from 'vscode-languageserver';
 import { pathToUri, toDiagnostic, toPosix } from './convert';
 import { type RemoteBinding, RemoteBindings } from './remotes';
 import type { Settings } from './settings';
+import { originHost, type RemoteSources } from './sources';
 
 /** Files the analysis reads: workflows, action metadata, and flowpact's config and contracts. */
 function isRelevant(rel: string): boolean {
@@ -60,6 +61,8 @@ export class Root {
   locator?: SymbolLocator;
   /** The keys of remote calls whose interface the lockfile has, which the locator does not know. */
   remotes?: RemoteBindings;
+  /** The host of the repository's `origin` remote, for links to the sources of remote references. */
+  webHost?: string;
   /** Paths that got diagnostics last time, so files whose findings are gone are cleared. */
   published = new Set<string>();
   /** The last config that parsed and analyzed cleanly, used while the config file is being edited. */
@@ -175,6 +178,8 @@ export class Workspace {
     private readonly host: WorkspaceHost,
     private settings: Settings,
     private folders: string[],
+    /** The remote sources cache: its files are another repository's, at a commit, and are not analyzed. */
+    private readonly sources?: RemoteSources,
   ) {}
 
   /** Analyzes the workspace folders that are repositories, so their diagnostics show before any file is opened. */
@@ -246,6 +251,7 @@ export class Workspace {
 
   /** The root a relevant file belongs to; other files (and their roots) are ignored. */
   private rootOf(path: string): Root | undefined {
+    if (this.sources?.contains(path)) return undefined;
     const dir = findRoot(path);
     if (dir === undefined) return undefined;
     const rel = toPosix(relative(dir, path));
@@ -375,6 +381,7 @@ export class Workspace {
     root.result = result;
     root.locator = new SymbolLocator(result.index);
     root.remotes = new RemoteBindings(result.index);
+    root.webHost = originHost(root.dir);
     logger.debug(`analyzed ${root.dir}`, {
       findings: result.findings.length,
       ms: Math.round(result.durationMs),

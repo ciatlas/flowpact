@@ -11,6 +11,7 @@ import {
   type LocationLink,
   type Position,
   ProposedFeatures,
+  type Range,
   TextDocumentSyncKind,
   TextDocuments,
 } from 'vscode-languageserver/node';
@@ -18,6 +19,7 @@ import { TextDocument } from 'vscode-languageserver-textdocument';
 import { pathToUri, toRange, uriToPath } from './convert';
 import { hoverMarkdown, remoteBindingMarkdown } from './hover';
 import { readSettings, type Settings } from './settings';
+import { RemoteSources, remoteTarget, type SourceTarget } from './sources';
 import { type Root, Workspace } from './workspace';
 
 const HIGHLIGHT = {
@@ -35,6 +37,8 @@ export function startServer(connection: Connection): void {
   let logger = createLogger();
   let analysisLogger = createLogger();
   let workspace: Workspace | undefined;
+  /** The remote sources cache, where it is when the server starts (`FLOWPACT_CACHE_DIR`, else the platform's). */
+  const sources = new RemoteSources();
   let linkSupport = false;
   let watchFiles = false;
   let folderEvents = false;
@@ -88,6 +92,7 @@ export function startServer(connection: Connection): void {
       },
       settings,
       folders.filter((f): f is string => f !== undefined),
+      sources,
     );
     return {
       capabilities: {
@@ -160,16 +165,30 @@ export function startServer(connection: Connection): void {
     const found = await locate(textDocument.uri, position);
     if (!found?.root.locator) return null;
     const { root, at, remote } = found;
+    const lock = root.result?.remotes;
     const value = remote
-      ? remoteBindingMarkdown(remote, occurrencesOf(found).length)
-      : hoverMarkdown(root.locator!, at, root.result?.remotes);
+      ? remoteBindingMarkdown(remote, occurrencesOf(found).length, sources.of(lock?.lock, remote.ref))
+      : hoverMarkdown(root.locator!, at, { ...(lock ? { lock } : {}), sources, webHost: root.webHost });
     return { contents: { kind: 'markdown', value }, range: toRange(at.loc) };
   });
+
+  /** Go to Definition into the cached source of a remote reference: the file, or the declaration in it. */
+  const toSource = (target: SourceTarget, origin: Range): Location | LocationLink => {
+    const uri = pathToUri(target.path);
+    const range = target.loc
+      ? toRange(target.loc)
+      : { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } };
+    return linkSupport
+      ? { originSelectionRange: origin, targetUri: uri, targetRange: range, targetSelectionRange: range }
+      : { uri, range };
+  };
 
   connection.onDefinition(async ({ textDocument, position }): Promise<Location[] | LocationLink[] | null> => {
     const found = await locate(textDocument.uri, position);
     if (!found?.root.locator) return null;
     const { root, at } = found;
+    const target = remoteTarget(root.locator!, root.result?.remotes?.lock, sources, at, found.remote);
+    if (target) return [toSource(target, toRange(at.loc))] as Location[] | LocationLink[];
     const decls = root.locator!.declarations(at.symbol);
     if (!linkSupport) return decls.map((d) => location(root, d.loc));
     return decls.map((d) => ({
@@ -195,6 +214,9 @@ export function startServer(connection: Connection): void {
       .filter((o) => o.loc.file === found.at.loc.file)
       .map((o) => ({ range: toRange(o.loc), kind: HIGHLIGHT[o.role] }));
   });
+
+  // The remote sources cache, so the client can open its files read-only.
+  connection.onRequest('flowpact/sourcesDir', () => sources.dir);
 
   // Lets tests (and clients that want to) wait until every pending edit is analyzed.
   connection.onRequest('flowpact/settled', async () => {

@@ -15,6 +15,7 @@ import {
 } from '@ciatlas/core';
 import { DOCS_BASE_URL, lockedRemote, type RemoteEntry, type RemotesLockRead } from '@flowpact/lint';
 import type { RemoteBinding } from './remotes';
+import { type CachedUnit, declarationIn, type RemoteSources, sourceLink } from './sources';
 
 /**
  * The hover sits above other extensions' hovers (GitHub Actions adds its own), so it stays short: a header naming
@@ -196,11 +197,16 @@ function symbolLines(
   return out;
 }
 
-/**
- * Markdown for hovering a symbol: who says so, what it is, and where its value comes from and goes. `remotes` is the
- * lockfile, which describes remote references.
- */
-export function hoverMarkdown(locator: SymbolLocator, at: Occurrence, remotes?: RemotesLockRead): string {
+/** What a hover knows of remote references: the lockfile, the sources cache, and the host to link sources on. */
+export interface RemoteContext {
+  lock?: RemotesLockRead;
+  sources?: RemoteSources;
+  /** The repository's own host (its `origin`), where the remote references without a `host` were read. */
+  webHost?: string | undefined;
+}
+
+/** Markdown for hovering a symbol: who says so, what it is, and where its value comes from and goes. */
+export function hoverMarkdown(locator: SymbolLocator, at: Occurrence, remote: RemoteContext = {}): string {
   const index = locator.index;
   const node = index.nodes.get(at.symbol);
   const kind = kindOf(at.symbol, node);
@@ -213,7 +219,7 @@ export function hoverMarkdown(locator: SymbolLocator, at: Occurrence, remotes?: 
   const facts = decl
     ? describe(locator, decl, at.symbol)
     : kind === 'remote'
-      ? remoteFacts(remotes, label)
+      ? remoteFacts(remote, label)
       : undeclared(index, kind, at.symbol, node);
   const owner = ownerOf(node, decl);
   const from = declaredElsewhere(decl, owner);
@@ -408,31 +414,60 @@ function interfaceLines(e: RemoteEntry): string {
     : declared;
 }
 
-/** A remote reference: what the lockfile records for it, or why its interface is not verified. */
-function remoteFacts(remotes: RemotesLockRead | undefined, ref: string): Facts {
-  const { entry, unreadable } = lockedRemote(remotes?.lock, ref);
-  const lock = lockName(remotes);
-  if (entry) {
-    const where = `at ${code(entry.sha.slice(0, 7))}${entry.host ? ` on ${text(entry.host)}` : ''}`;
-    const kind = entry.kind === 'workflow' ? 'reusable workflow' : 'action';
-    return { line: `${kind} ${where}, recorded in ${lock}`, description: interfaceLines(entry) };
-  }
+/**
+ * A remote reference: what the lockfile records for it (with its source's name, and where its source is), or why its
+ * interface is not verified.
+ */
+function remoteFacts(remote: RemoteContext, ref: string): Facts {
+  const { entry, unreadable } = lockedRemote(remote.lock?.lock, ref);
+  if (entry) return lockedFacts(remote, ref, entry);
+  const lock = lockName(remote.lock);
   const line = 'in another repository; its interface is not verified';
   if (unreadable !== undefined)
     return { line, description: `${lock} records it as not readable: ${text(unreadable)}` };
-  if (remotes?.error) return { line, description: `${lock} cannot be used.` };
+  if (remote.lock?.error) return { line, description: `${lock} cannot be used.` };
   return { line, description: `${code('flowpact remotes update')} records it in ${lock}.` };
 }
 
-/** A `with:` or `secrets:` key of a remote call: the input or secret the lockfile records, and what this call passes. */
-export function remoteBindingMarkdown(b: RemoteBinding, callers: number): string {
+/** A remote reference the lockfile has: its commit, its source's name, its interface, and where its source is. */
+function lockedFacts(remote: RemoteContext, ref: string, entry: RemoteEntry): Facts {
+  const where = `at ${code(entry.sha.slice(0, 7))}${entry.host ? ` on ${text(entry.host)}` : ''}`;
+  const kind = entry.kind === 'workflow' ? 'reusable workflow' : 'action';
+  const cached = remote.sources?.of(remote.lock?.lock, ref);
+  const name = cached?.unit.name ? text(cached.unit.name) : undefined;
+  const parts = [name, interfaceLines(entry), sourceLine(ref, entry, cached !== undefined, remote.webHost)];
+  return {
+    line: `${kind} ${where}, recorded in ${lockName(remote.lock)}`,
+    description: parts.filter(Boolean).join('\n\n'),
+  };
+}
+
+/**
+ * Where a remote reference's source is: in the cache, where Go to Definition opens it, else on its host (a link, when
+ * the host is known), with how to cache it.
+ */
+function sourceLine(ref: string, entry: RemoteEntry, cached: boolean, webHost: string | undefined): string {
+  const at = code(entry.sha.slice(0, 7));
+  if (cached) return `Go to Definition opens its source at ${at}.`;
+  const download = `${code('flowpact remotes download')} caches it for Go to Definition.`;
+  const link = sourceLink(ref, entry, webHost);
+  return link ? `[Source at ${at}](${link}) · ${download}` : `Its source is not cached: ${download}`;
+}
+
+/**
+ * A `with:` or `secrets:` key of a remote call: the input or secret the lockfile records, its description in the cached
+ * source, and what this call passes.
+ */
+export function remoteBindingMarkdown(b: RemoteBinding, callers: number, cached?: CachedUnit): string {
   const facts = b.decl.kind === 'input' ? inputFacts(b.decl.decl) : secretFacts(b.decl.decl);
   const label = code(`${b.decl.kind}s.${b.decl.decl.name}`);
+  const description = cached && declarationIn(cached.unit, `${b.decl.kind}s`, b.decl.decl.name)?.description;
   return [
     `**flowpact** · ${b.decl.kind} · [docs](${DOCS})`,
     '',
     `${label} in ${code(b.ref)}${facts.line ? ` · ${facts.line}` : ''}`,
     ...callLines(b.binding, callers - 1),
+    ...(description ? ['', text(description)] : []),
   ].join('\n');
 }
 

@@ -412,6 +412,73 @@ describe('navigation', () => {
     expect(refs.map((l) => l.range.start.line)).toEqual([4, 7]);
   });
 
+  it('goes to the cached source of a remote call, and leaves the cached file unanalyzed', async () => {
+    const R = '.github/workflows/remote.yml';
+    const SHA = 'a'.repeat(40);
+    const text = [
+      'on: push',
+      'jobs:',
+      '  a:',
+      '    uses: octo/ship/.github/workflows/deploy.yml@v1',
+      '    with: { env: prod }',
+      '',
+    ].join('\n');
+    const lock = [
+      'version: 1',
+      'remotes:',
+      '  octo/ship/.github/workflows/deploy.yml@v1:',
+      `    sha: ${SHA}`,
+      '    kind: workflow',
+      '    inputs: { env: { type: string, required: true } }',
+      '',
+    ].join('\n');
+    const source = [
+      'on:',
+      '  workflow_call:',
+      '    inputs:',
+      '      env: { type: string, required: true }',
+      'jobs:',
+      '  d:',
+      '    runs-on: x',
+      '    steps:',
+      '      - uses: elsewhere/unlocked@v1',
+      '',
+    ].join('\n');
+    const dir = repo({ [R]: text, '.github/flowpact/remotes.lock.yaml': lock });
+    const cache = repo({});
+    const cached = join(cache, 'remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
+    write(cache, { [join('remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml')]: source });
+    const before = process.env.FLOWPACT_CACHE_DIR;
+    process.env.FLOWPACT_CACHE_DIR = cache;
+    let client: Client;
+    try {
+      client = await start(dir);
+    } finally {
+      if (before === undefined) delete process.env.FLOWPACT_CACHE_DIR;
+      else process.env.FLOWPACT_CACHE_DIR = before;
+    }
+    await client.open(dir, R, text);
+    expect(await client.conn.sendRequest('flowpact/sourcesDir')).toBe(join(cache, 'remotes'));
+    const definition = async (needle: string) =>
+      (await client.conn.sendRequest('textDocument/definition', {
+        textDocument: { uri: uri(dir, R) },
+        position: position(text, needle),
+      })) as { targetUri: string; targetRange: { start: { line: number } } }[];
+    expect((await definition('octo/ship')).map((l) => [l.targetUri, l.targetRange.start.line])).toEqual([
+      [URI.file(cached).toString(), 1],
+    ]);
+    expect((await definition('env: prod')).map((l) => [l.targetUri, l.targetRange.start.line])).toEqual([
+      [URI.file(cached).toString(), 3],
+    ]);
+    // Opening the cached file analyzes nothing there: it would report FP603 for its own remote call otherwise.
+    await client.conn.sendNotification(DidOpenTextDocumentNotification.type, {
+      textDocument: { uri: URI.file(cached).toString(), languageId: 'yaml', version: 1, text: source },
+    });
+    await client.settled();
+    expect(client.diagnostics.get(URI.file(cached).toString())).toBeUndefined();
+    expect(client.logs.some((l) => l.includes(join(cache, 'remotes')))).toBe(false);
+  });
+
   it('answers nothing where no symbol is written', async () => {
     const { dir, client } = await ready();
     const at = { textDocument: { uri: uri(dir, CALLEE) }, position: position(REPO[CALLEE]!, 'runs-on') };
