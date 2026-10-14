@@ -22572,7 +22572,12 @@ var entrySchema = strictObject({
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
   using: optional(string2()),
   /** Where it was read when not from the API the run used: `github.com`, through GitHub Connect. */
-  host: optional(string2())
+  host: optional(string2()),
+  /**
+   * A workflow's secrets it reads without declaring them, which only `secrets: inherit` gives it (see FP205); only
+   * reads no caller's inputs can switch off.
+   */
+  undeclaredSecrets: optional(array(string2()))
 });
 var remotesLockSchema = strictObject({
   version: literal(1),
@@ -24934,7 +24939,7 @@ var undeclaredSecretRef = defineRule({
   category: "secrets",
   defaultSeverity: "error",
   docs: {
-    summary: "A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`.",
+    summary: "A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`. For a remote reusable workflow, from the secrets the remote interfaces lockfile records it reads.",
     why: "Inside a called workflow only declared (or inherited) secrets exist. Reading anything else yields an empty string, so authentication steps fail late or, worse, fall back to anonymous access.",
     fix: "Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`)."
   },
@@ -24952,8 +24957,36 @@ var undeclaredSecretRef = defineRule({
         if (reached.length > 0) reportUndeclaredSecret(ctx, wf, ref, name, reached);
       }
     }
+    checkRemoteCalls(ctx);
   }
 });
+function emptyInCall(ctx, call) {
+  if (!isExternal(call.callee) || call.job.secretsInherit) return [];
+  return ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+}
+function checkRemoteCalls(ctx) {
+  for (const call of interfaceCalls(ctx.index)) {
+    for (const name of emptyInCall(ctx, call)) {
+      ctx.report({
+        message: `jobs.${call.job.id} calls ${call.callee.path}, which reads secrets.${name} without declaring it \u2014 it is empty without \`secrets: inherit\``,
+        loc: call.job.uses?.loc ?? call.job.loc,
+        symbol: sym.secret(call.callee.path, name),
+        related: chainRelated(chainTo(ctx.index, call.caller.path))
+      });
+    }
+  }
+}
+function undeclaredSecretsRead(wf) {
+  const out = /* @__PURE__ */ new Map();
+  for (const { site, ref } of refsOf(wf)) {
+    const name = undeclaredSecretRead(wf.call?.secrets ?? {}, ref);
+    if (!name || out.has(name.toLowerCase())) continue;
+    if (guardsOf2(wf, site).some((g) => readsInputs(g) || isFalse(g, () => UNKNOWN))) continue;
+    out.set(name.toLowerCase(), name);
+  }
+  return [...out.values()].sort();
+}
+var readsInputs = (g) => g !== false && g.segments.some((s) => s.refs.some((r) => r.context === "inputs"));
 function undeclaredSecretRead(declared, ref) {
   const name = ref.path[0];
   if (ref.context !== "secrets" || !namesKey2(name)) return void 0;
@@ -26827,7 +26860,9 @@ async function fetchRemoteEntry(r, opts = {}) {
   if (r.kind === "workflow") {
     const text2 = await fileAt2(r, r.path, sha, opts);
     if (text2 === void 0) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`, true);
-    return lockEntryOf(parseWorkflowFile(r.raw, text2, ctx), sha);
+    const wf = parseWorkflowFile(r.raw, text2, ctx);
+    const undeclared = undeclaredSecretsRead(wf);
+    return { ...lockEntryOf(wf, sha), ...undeclared.length ? { undeclaredSecrets: undeclared } : {} };
   }
   for (const name of ["action.yml", "action.yaml"]) {
     const file = r.path ? `${r.path}/${name}` : name;
