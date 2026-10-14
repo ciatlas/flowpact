@@ -184,6 +184,59 @@ describe('interfaces, units, permissions and runtimes', () => {
   });
 });
 
+describe('runners', () => {
+  const on = (runsOn: string) =>
+    `on:\n  workflow_call:\n    inputs:\n      runner: { type: string, required: false }\njobs:\n  t:\n    runs-on: ${runsOn}\n    steps: [{ run: 'true' }]\n`;
+  const grade = (before: string, after: string) =>
+    summary(changes({ [`${WF}/r.yml`]: on(before) }, { [`${WF}/r.yml`]: on(after) }));
+
+  it('grades a runner label or group callers may not have as major', () => {
+    expect(grade('ubuntu-latest', '[self-hosted, gpu]')).toEqual([
+      'major jobs.t now needs a runner with [self-hosted, gpu]; callers without one never start it',
+    ]);
+    expect(grade('[self-hosted, linux]', '[self-hosted, linux, gpu]')).toEqual([
+      'major jobs.t now needs a runner with [self-hosted, linux, gpu]; callers without one never start it',
+    ]);
+    expect(grade('ubuntu-latest', '{ group: builders }')).toEqual([
+      'major jobs.t now needs a runner with runner group "builders"; callers without one never start it',
+    ]);
+  });
+
+  it('grades another GitHub-hosted image, or fewer needs, as a patch', () => {
+    expect(grade('ubuntu-22.04', 'ubuntu-24.04')).toEqual([
+      'patch jobs.t now runs on [ubuntu-24.04] instead of [ubuntu-22.04]',
+    ]);
+    expect(grade('[self-hosted, linux, gpu]', '[self-hosted, linux]')).toEqual([
+      'patch jobs.t now runs on [self-hosted, linux]',
+    ]);
+    expect(grade('[self-hosted, gpu]', 'ubuntu-latest')).toEqual([
+      'patch jobs.t now runs on [ubuntu-latest] instead of [self-hosted, gpu]',
+    ]);
+    expect(grade('[Self-Hosted, GPU]', '[gpu, self-hosted]')).toEqual([]);
+  });
+
+  it('grades runners chosen at run time as an uncertain major', () => {
+    expect(grade('ubuntu-latest', '${{ inputs.runner }}')).toEqual([
+      'major? jobs.t now runs on [${{ inputs.runner }}], chosen at run time; callers without such a runner never start it',
+    ]);
+    expect(grade('${{ inputs.runner }}', '${{ inputs.runner }}')).toEqual([]);
+  });
+
+  it('grades a new job, and the jobs of a called workflow, the same way', () => {
+    const two = `${on('ubuntu-latest')}  gpu:\n    runs-on: [self-hosted, gpu]\n    steps: [{ run: 'true' }]\n`;
+    expect(summary(changes({ [`${WF}/r.yml`]: on('ubuntu-latest') }, { [`${WF}/r.yml`]: two }))).toContain(
+      'major jobs.gpu now needs a runner with [self-hosted, gpu]; callers without one never start it',
+    );
+    const caller = (inner: string) => ({
+      [`${WF}/r.yml`]: 'on:\n  workflow_call:\njobs:\n  c:\n    uses: ./.github/workflows/_inner.yml\n',
+      [`${WF}/_inner.yml`]: inner,
+    });
+    expect(summary(changes(caller(on('ubuntu-latest')), caller(on('[self-hosted]'))))).toEqual([
+      'major jobs.c › t now needs a runner with [self-hosted]; callers without one never start it',
+    ]);
+  });
+});
+
 describe('output reliability', () => {
   /** A reusable workflow whose output `v` comes from step `m` of job `build`, with `jobIf` and `stepIf` on them. */
   const wf = (jobIf = '', stepIf = '', extraJobs = '', needs = '') =>

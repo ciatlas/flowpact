@@ -16,6 +16,7 @@ import {
   matchesPattern,
   type PermissionsDecl,
   type ProjectIndex,
+  type RunsOnDecl,
   refsOf,
   type StepDecl,
   UNKNOWN,
@@ -34,7 +35,7 @@ export const maxLevel = (levels: ImpactLevel[]): ImpactLevel =>
 export interface ImpactChange {
   /** The published unit (workflow path or action directory). */
   unit: string;
-  kind: 'check-name' | 'interface' | 'output' | 'unit' | 'permissions' | 'runtime' | 'uses';
+  kind: 'check-name' | 'interface' | 'output' | 'unit' | 'permissions' | 'runner' | 'runtime' | 'uses';
   level: ImpactLevel;
   /** False when the change involves something flowpact cannot evaluate (event data, dynamic matrices, …). */
   certain: boolean;
@@ -285,28 +286,33 @@ function scopesOf(p: PermissionsDecl | undefined): Scopes {
 }
 
 /**
- * What each job requests, by chain of job ids, including the jobs of called workflows (GitHub checks nested jobs
- * against what the caller grants, so they count too).
+ * `pick` of each job that runs steps, by chain of job ids, including the jobs of called workflows: they run in the
+ * caller's run, so GitHub checks their permissions against what the caller grants, and on the caller's runners.
  */
-function requestedByJob(
+function byJobChain<T>(
   index: ProjectIndex,
   wf: WorkflowDecl,
+  pick: (job: JobDecl, wf: WorkflowDecl) => T,
   depth = 0,
   seen = new Set<string>(),
-): Map<string, Scopes> {
-  const out = new Map<string, Scopes>();
+): Map<string, T> {
+  const out = new Map<string, T>();
   for (const job of Object.values(wf.jobs)) {
     const callee = job.uses ? index.calleeOf(job) : undefined;
     if (callee) {
       if (depth >= 10 || seen.has(callee.path)) continue;
-      for (const [chain, s] of requestedByJob(index, callee, depth + 1, new Set([...seen, wf.path])))
-        out.set(`${job.id} > ${chain}`, s);
+      for (const [chain, v] of byJobChain(index, callee, pick, depth + 1, new Set([...seen, wf.path])))
+        out.set(`${job.id} > ${chain}`, v);
       continue;
     }
-    if (!job.uses) out.set(job.id, scopesOf(job.permissions ?? wf.permissions));
+    if (!job.uses) out.set(job.id, pick(job, wf));
   }
   return out;
 }
+
+/** What each job requests (see `byJobChain`). */
+const requestedByJob = (index: ProjectIndex, wf: WorkflowDecl) =>
+  byJobChain(index, wf, (job, w) => scopesOf(job.permissions ?? w.permissions));
 
 function permissionChanges(
   base: ProjectIndex,
@@ -335,6 +341,88 @@ function permissionChanges(
       message: `jobs.${chain.replaceAll(' > ', ' › ')} now requests ${widened.map(([k, v]) => `${k}: ${LEVEL_NAMES[v]}`).join(', ')}; callers that grant less fail when the run starts`,
       loc: job?.loc ?? fileStart(h.file),
     });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Runners
+// ---------------------------------------------------------------------------
+
+/** A standard GitHub-hosted runner label, which every repository on github.com can run on. */
+const HOSTED_LABEL = /^(ubuntu|windows|macos)-(latest|[\d.]+)(-arm|-intel)?$/i;
+
+/** What a job needs of a runner: each label and the runner group, as one set. */
+const requirements = (r: RunsOnDecl) =>
+  new Set([...r.labels.map((l) => l.toLowerCase()), ...(r.group ? [`group ${r.group.toLowerCase()}`] : [])]);
+
+/** Whether a job runs on one standard GitHub-hosted runner image. */
+const isHosted = (r: RunsOnDecl) =>
+  !r.dynamic && !r.group && r.labels.length === 1 && HOSTED_LABEL.test(r.labels[0]!);
+
+const describeRunners = (r: RunsOnDecl) =>
+  [r.labels.length ? `[${r.labels.join(', ')}]` : '', r.group ? `runner group "${r.group}"` : '']
+    .filter(Boolean)
+    .join(' in ');
+
+const sameRunners = (a: RunsOnDecl, b: RunsOnDecl) =>
+  JSON.stringify([...requirements(a)].sort()) === JSON.stringify([...requirements(b)].sort());
+
+type RunnerChange = Omit<ImpactChange, 'unit' | 'kind'>;
+
+/** Runners chosen at run time on one side: callers may not have them. */
+const runtimeRunners = (at: string, h: RunsOnDecl): RunnerChange => ({
+  level: 'major',
+  certain: false,
+  message: `${at} now runs on ${describeRunners(h)}, chosen at run time; callers without such a runner never start it`,
+  loc: h.loc,
+});
+
+/** Another GitHub-hosted image: every caller has it. */
+const hostedRunners = (at: string, b: RunsOnDecl | undefined, h: RunsOnDecl): RunnerChange | undefined =>
+  b && {
+    level: 'patch',
+    certain: true,
+    message: `${at} now runs on ${describeRunners(h)} instead of ${describeRunners(b)}`,
+    loc: h.loc,
+  };
+
+/** Self-hosted or custom runners: major when they need a label or group the job did not need. */
+function customRunners(at: string, b: RunsOnDecl | undefined, h: RunsOnDecl): RunnerChange {
+  const before = b && !isHosted(b) ? requirements(b) : new Set<string>();
+  if (![...requirements(h)].some((r) => !before.has(r)))
+    return { level: 'patch', certain: true, message: `${at} now runs on ${describeRunners(h)}`, loc: h.loc };
+  return {
+    level: 'major',
+    certain: true,
+    message: `${at} now needs a runner with ${describeRunners(h)}; callers without one never start it`,
+    loc: h.loc,
+  };
+}
+
+/**
+ * How a job's runners changed, or undefined when callers see no difference. A job runs on the caller's runners:
+ * needing a label or group it did not need before is major (callers without such a runner never start it), a runner
+ * chosen at run time is major but uncertain, and another GitHub-hosted image or fewer needs is a patch.
+ */
+function runnerChange(chain: string, b: RunsOnDecl | undefined, h: RunsOnDecl): RunnerChange | undefined {
+  if (b && sameRunners(b, h)) return undefined;
+  const at = `jobs.${chain.replaceAll(' > ', ' › ')}`;
+  if (h.dynamic || b?.dynamic) return runtimeRunners(at, h);
+  return isHosted(h) ? hostedRunners(at, b, h) : customRunners(at, b, h);
+}
+
+function runnerChanges(
+  base: ProjectIndex,
+  head: ProjectIndex,
+  b: WorkflowDecl,
+  h: WorkflowDecl,
+): ImpactChange[] {
+  const before = byJobChain(base, b, (job) => job.runsOn);
+  const out: ImpactChange[] = [];
+  for (const [chain, hr] of byJobChain(head, h, (job) => job.runsOn)) {
+    const change = hr && runnerChange(chain, before.get(chain), hr);
+    if (change) out.push({ unit: h.path, kind: 'runner', ...change });
   }
   return out;
 }
@@ -604,7 +692,11 @@ function comparedChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h:
     ...usesChanges(b, h),
   ];
   if (b.kind === 'workflow' && h.kind === 'workflow')
-    out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
+    out.push(
+      ...checkNameChanges(base, head, b, h),
+      ...permissionChanges(base, head, b, h),
+      ...runnerChanges(base, head, b, h),
+    );
   if (b.kind === 'action' && h.kind === 'action') out.push(...runtimeChanges(b, h));
   return out;
 }
