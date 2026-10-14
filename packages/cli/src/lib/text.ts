@@ -161,11 +161,12 @@ export function remotesText(r: RemotesUpdateResult, opts: RenderOptions): string
   list('new    ', r.added);
   list('changed', r.changed);
   list('removed', r.removed);
+  for (const u of r.unreadable) lines.push(`  ${c.dim('unread ')} ${u.ref}: ${u.error}`);
   for (const f of r.failed) lines.push(`  ${c.red('failed ')} ${f.ref}: ${f.error}`);
   const verb = r.dryRun ? 'would write' : 'wrote';
   const head = r.changes ? `${verb} ${r.file}` : `${r.file} is up to date`;
   lines.unshift(c.bold(head));
-  if (r.failed.length && !r.authenticated)
+  if ((r.failed.length || r.unreadable.length) && !r.authenticated)
     lines.push(
       c.dim(
         '  No token was used: set GH_TOKEN or GITHUB_TOKEN (or sign in with `gh auth login`) to read private repositories.',

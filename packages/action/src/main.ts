@@ -763,7 +763,8 @@ async function remotesToFetch(
     ...(token && !token.startsWith('${{') ? { token } : {}),
     ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
   });
-  for (const f of r.failed) core.warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  for (const f of [...r.failed, ...r.unreadable])
+    core.warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
   logger.debug('fetched remote interfaces', { refs: Object.keys(r.remotes) });
   return r.remotes;
 }

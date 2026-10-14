@@ -233,7 +233,8 @@ async function fetchRemotesFor(session: Session): Promise<AnalyzeOptions['fetche
   const r = await logger.time('fetch remote interfaces', () =>
     fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, { apiUrl, ...(token ? { token } : {}) }),
   );
-  for (const f of r.failed) logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  for (const f of [...r.failed, ...r.unreadable])
+    logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
   return r.remotes;
 }
 

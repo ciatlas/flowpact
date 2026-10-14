@@ -49,6 +49,11 @@ const remotesLockSchema = z.strictObject({
   version: z.literal(1),
   /** By `uses:` reference: `owner/repo/.github/workflows/<file>@<ref>` or `owner/repo[/path]@<ref>`. */
   remotes: z.record(z.string(), entrySchema),
+  /**
+   * References `flowpact remotes update` could not read (they do not exist, or its token cannot read them), with why:
+   * accounted for, though not checked.
+   */
+  unreadable: z.optional(z.record(z.string(), z.string())),
 });
 
 export type RemotesLock = z.infer<typeof remotesLockSchema>;
@@ -210,8 +215,11 @@ const LOCK_HEADER =
 
 /** The lockfile's text: its entries sorted by reference. */
 export function serializeRemotesLock(lock: RemotesLock): string {
-  const remotes = Object.fromEntries(
-    Object.entries(lock.remotes).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
-  );
-  return `${LOCK_HEADER}${stringify({ version: 1, remotes }, { lineWidth: 0, singleQuote: true })}`;
+  const sorted = <T>(rec: Record<string, T>) =>
+    Object.fromEntries(Object.entries(rec).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const unreadable = Object.keys(lock.unreadable ?? {}).length
+    ? { unreadable: sorted(lock.unreadable!) }
+    : {};
+  const doc = { version: 1, remotes: sorted(lock.remotes), ...unreadable };
+  return `${LOCK_HEADER}${stringify(doc, { lineWidth: 0, singleQuote: true })}`;
 }

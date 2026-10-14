@@ -330,7 +330,7 @@ function withFetched(read: RemotesLockRead, fetched: RemotesLock['remotes'] | un
   if (!fetched || !Object.keys(fetched).length) return read;
   return {
     ...read,
-    lock: { version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
+    lock: { ...read.lock, version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
     fetched: Object.keys(fetched),
   };
 }

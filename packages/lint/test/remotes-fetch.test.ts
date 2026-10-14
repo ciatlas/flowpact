@@ -97,9 +97,14 @@ describe('updateRemotesLock', () => {
       },
     });
     expect(u.added).toEqual(['octo/setup@v2', 'octo/ship/.github/workflows/deploy.yml@v1']);
-    expect(u.failed).toEqual([
+    expect(u.failed).toEqual([]);
+    expect(u.unreadable).toEqual([
       { ref: 'octo/gone@v1', error: 'octo/gone@v1 not found, or not readable with this token' },
     ]);
+    // Without an entry, it is recorded, so FP612 counts it as accounted for.
+    expect(u.lock.unreadable).toEqual({
+      'octo/gone@v1': 'octo/gone@v1 not found, or not readable with this token',
+    });
   });
 
   it('sends the token to the API only, and reads action.yml before action.yaml', async () => {
@@ -170,5 +175,41 @@ describe('fetchRemoteEntry limits', () => {
     }).index;
     const u = await updateRemotesLock(index, undefined, { fetch: big });
     expect(u.failed).toEqual([{ ref: 'octo/big@v1', error: 'a response over 1000000 bytes' }]);
+  });
+});
+
+describe('unreadable references', () => {
+  it('takes a SHA that is no commit of the repository (422) as not found, and a server error as a failure', async () => {
+    const api = (async (input: string | URL) =>
+      String(input).includes('/repos/octo/odd/')
+        ? new Response('', { status: 422 })
+        : new Response('', { status: 502, statusText: 'Bad Gateway' })) as typeof globalThis.fetch;
+    const index = lint({
+      [`${WF}/ci.yml`]:
+        'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/odd@0123\n      - uses: octo/down@v1\n',
+    }).index;
+    const u = await updateRemotesLock(index, undefined, { fetch: api });
+    expect(u.unreadable).toEqual([
+      { ref: 'octo/odd@0123', error: 'octo/odd@0123 not found, or not readable with this token' },
+    ]);
+    expect(u.failed).toEqual([{ ref: 'octo/down@v1', error: '502 Bad Gateway from the GitHub API' }]);
+    expect(Object.keys(u.lock.unreadable ?? {})).toEqual(['octo/odd@0123']);
+  });
+
+  it('keeps FP612 quiet for a reference the lockfile records as unreadable, and writes it back sorted', async () => {
+    const files = {
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/private@v1\n',
+      '.github/flowpact/remotes.lock.yaml': serializeRemotesLock({
+        version: 1,
+        remotes: {},
+        unreadable: { 'octo/private@v1': 'not readable' },
+      }),
+    };
+    expect(files['.github/flowpact/remotes.lock.yaml']).toContain(
+      'unreadable:\n  octo/private@v1: not readable',
+    );
+    const findings = lint(files).findings.map((f) => f.code);
+    expect(findings).not.toContain('FP612');
+    expect(findings).not.toContain('FP611');
   });
 });

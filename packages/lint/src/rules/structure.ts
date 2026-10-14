@@ -342,7 +342,10 @@ const remotesLockInvalid = defineRule({
 /** The remote references the lockfile file lacks, and its entries nothing uses (entries fetched for the run aside). */
 function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[] } {
   const { lock, fetched = [] } = ctx.remotes ?? {};
-  const locked = Object.keys(lock?.remotes ?? {}).filter((r) => !fetched.includes(r));
+  // A reference the lockfile records as unreadable is accounted for, though not checked.
+  const locked = [...Object.keys(lock?.remotes ?? {}), ...Object.keys(lock?.unreadable ?? {})].filter(
+    (r) => !fetched.includes(r),
+  );
   const lockedKeys = new Set(locked.map(remoteKey));
   const used = remoteRefsOf(ctx.index).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));

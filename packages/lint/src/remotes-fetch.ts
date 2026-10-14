@@ -33,11 +33,24 @@ export interface RemotesUpdate {
   added: string[];
   changed: string[];
   removed: string[];
-  /** References that could not be fetched, with why; their previous entries are kept. */
+  /** References that could not be fetched (the network, the API or the file), with why; previous entries are kept. */
   failed: { ref: string; error: string }[];
+  /**
+   * References that do not exist or the token cannot read, with why. One without a previous entry is recorded under
+   * the lockfile's `unreadable`, so it is accounted for.
+   */
+  unreadable: { ref: string; error: string }[];
 }
 
-class FetchError extends Error {}
+/** Why a reference could not be fetched: `unreadable` when it does not exist or the token cannot read it. */
+class FetchError extends Error {
+  constructor(
+    message: string,
+    readonly unreadable = false,
+  ) {
+    super(message);
+  }
+}
 
 /** A GET on the GitHub API, as text: `accept` picks the media type (a commit's SHA, a file's raw content). */
 async function get(url: string, accept: string, opts: FetchRemotesOptions): Promise<string | undefined> {
@@ -50,8 +63,14 @@ async function get(url: string, accept: string, opts: FetchRemotesOptions): Prom
     },
     signal: AbortSignal.timeout(30_000),
   });
-  if (res.status === 404) return undefined;
+  // 422: a SHA that is no commit of the repository.
+  if (res.status === 404 || res.status === 422) return undefined;
   if (!res.ok) throw new FetchError(`${res.status} ${res.statusText || 'error'} from the GitHub API`);
+  return bodyOf(res);
+}
+
+/** A response's text, refused over `MAX_FILE_BYTES` by its length header or by what it holds. */
+async function bodyOf(res: Response): Promise<string> {
   if (Number(res.headers.get('content-length') ?? 0) > MAX_FILE_BYTES) throw tooLarge();
   const text = await res.text();
   if (text.length > MAX_FILE_BYTES) throw tooLarge();
@@ -75,7 +94,7 @@ async function shaOf(r: RemoteRef, opts: FetchRemotesOptions): Promise<string> {
     opts,
   );
   if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
-    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`);
+    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`, true);
   return sha.trim();
 }
 
@@ -89,7 +108,7 @@ export async function fetchRemoteEntry(r: RemoteRef, opts: FetchRemotesOptions =
   const ctx = createParseContext(`${r.owner}/${r.repo}`);
   if (r.kind === 'workflow') {
     const text = await fileAt(r, r.path, sha, opts);
-    if (text === undefined) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`);
+    if (text === undefined) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`, true);
     return lockEntryOf(parseWorkflowFile(r.raw, text, ctx), sha);
   }
   for (const name of ['action.yml', 'action.yaml']) {
@@ -97,7 +116,7 @@ export async function fetchRemoteEntry(r: RemoteRef, opts: FetchRemotesOptions =
     const text = await fileAt(r, file, sha, opts);
     if (text !== undefined) return lockEntryOf(parseActionFile(r.raw, file, text, ctx), sha);
   }
-  throw new FetchError(`no action.yml in ${r.path || 'the repository root'} at ${sha.slice(0, 7)}`);
+  throw new FetchError(`no action.yml in ${r.path || 'the repository root'} at ${sha.slice(0, 7)}`, true);
 }
 
 /** Runs `work` on each item, `limit` at a time. */
@@ -111,24 +130,31 @@ async function eachLimited<T>(items: T[], limit: number, work: (item: T) => Prom
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+type Problems = Pick<RemotesUpdate, 'failed' | 'unreadable'>;
+
 /**
- * A reference's entry, or undefined when it cannot be fetched (not found, unreadable, the network or a timeout), which
- * `failed` then records; any other error is a bug and is thrown.
+ * A reference's entry, or undefined when it cannot be fetched, which `out` then records: as unreadable (it does not
+ * exist, or the token cannot read it) or failed (the network, a timeout, the API, the file); any other error is a bug
+ * and is thrown.
  */
 async function tryFetch(
   r: RemoteRef,
   opts: FetchRemotesOptions,
-  failed: { ref: string; error: string }[],
+  out: Problems,
 ): Promise<RemoteEntry | undefined> {
   try {
     return await fetchRemoteEntry(r, opts);
   } catch (e) {
     if (!(e instanceof FetchError) && !(e instanceof TypeError) && (e as Error).name !== 'TimeoutError')
       throw e;
-    failed.push({ ref: r.raw, error: (e as Error).message });
+    const problem = { ref: r.raw, error: (e as Error).message };
+    if (e instanceof FetchError && e.unreadable) out.unreadable.push(problem);
+    else out.failed.push(problem);
     return undefined;
   }
 }
+
+const byRef = (a: { ref: string }, b: { ref: string }) => (a.ref < b.ref ? -1 : 1);
 
 /**
  * The lockfile for the remote references a project uses, fetched: one entry each, entries of references nothing uses
@@ -148,10 +174,11 @@ export async function updateRemotesLock(
     changed: [],
     removed: [],
     failed: [],
+    unreadable: [],
   };
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const old = before.get(remoteKey(r.raw));
-    const entry = await tryFetch(r, opts, out.failed);
+    const entry = await tryFetch(r, opts, out);
     if (entry) remotes[r.raw] = entry;
     else if (old) remotes[r.raw] = old;
     if (entry && !old) out.added.push(r.raw);
@@ -160,15 +187,20 @@ export async function updateRemotesLock(
   const used = new Set(refs.map((r) => remoteKey(r.raw)));
   out.removed = Object.keys(previous?.remotes ?? {}).filter((ref) => !used.has(remoteKey(ref)));
   for (const list of [out.added, out.changed, out.removed]) list.sort();
-  out.failed.sort((a, b) => (a.ref < b.ref ? -1 : 1));
+  out.failed.sort(byRef);
+  out.unreadable.sort(byRef);
+  // A reference without an entry that cannot be read is recorded, so the lockfile accounts for it (see FP612).
+  const unreadable = out.unreadable.filter((u) => !remotes[u.ref]);
+  if (unreadable.length) out.lock.unreadable = Object.fromEntries(unreadable.map((u) => [u.ref, u.error]));
   return out;
 }
 
 export interface FetchedRemotes {
   /** Entries for the references the lockfile lacks, by reference. */
   remotes: RemotesLock['remotes'];
-  /** References that could not be fetched, with why. */
+  /** References that could not be fetched, and those that do not exist or the token cannot read, with why. */
   failed: { ref: string; error: string }[];
+  unreadable: { ref: string; error: string }[];
 }
 
 /**
@@ -189,11 +221,12 @@ export async function fetchMissingRemotes(
   });
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
   const missing = remoteRefsOf(new Index(project)).filter((r) => !locked.has(remoteKey(r.raw)));
-  const out: FetchedRemotes = { remotes: {}, failed: [] };
+  const out: FetchedRemotes = { remotes: {}, failed: [], unreadable: [] };
   await eachLimited(missing, opts.concurrency ?? 8, async (r) => {
-    const entry = await tryFetch(r, opts, out.failed);
+    const entry = await tryFetch(r, opts, out);
     if (entry) out.remotes[r.raw] = entry;
   });
-  out.failed.sort((a, b) => (a.ref < b.ref ? -1 : 1));
+  out.failed.sort(byRef);
+  out.unreadable.sort(byRef);
   return out;
 }

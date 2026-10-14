@@ -50,14 +50,14 @@ const run = (root: string, args: string[], env: Record<string, string> = {}) =>
   });
 
 describe('flowpact remotes update', () => {
-  it('writes the lockfile, lists what it could not fetch, exits 1, and lint then checks the remote step', async () => {
+  it('writes the lockfile, records what it cannot read, exits 0, and lint then checks the remote step', async () => {
     const root = repo();
     const r = await run(root, ['update'], { GH_TOKEN: 's3cr3t' });
-    expect(r.exitCode).toBe(1);
+    expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain(`wrote ${LOCK}`);
     expect(r.stdout).toContain('new     octo/setup@v2');
     expect(r.stdout).toContain(
-      'failed  octo/missing@v1: octo/missing@v1 not found, or not readable with this token',
+      'unread  octo/missing@v1: octo/missing@v1 not found, or not readable with this token',
     );
     expect(`${r.stdout}${r.stderr}`).not.toContain('s3cr3t');
     expect(auth.every((a) => a === 'Bearer s3cr3t')).toBe(true);
