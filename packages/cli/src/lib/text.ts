@@ -21,7 +21,12 @@ import pc from 'picocolors';
 import { usage } from './errors';
 import type { ContractGeneration } from './generate';
 import type { RuleDocs, RuleInfo, TraceResult } from './inspect';
-import { describeToken, type RemotesUpdateResult } from './remotes';
+import {
+  describeToken,
+  type RemotesDownloadResult,
+  type RemotesUpdateResult,
+  type SourcesKept,
+} from './remotes';
 import { oneOf } from './session';
 
 /** How text is rendered: what `--no-color`, `--ascii` and the terminal decide in the CLI. */
@@ -163,14 +168,42 @@ export function remotesText(r: RemotesUpdateResult, opts: RenderOptions): string
   list('removed', r.removed);
   for (const u of r.unreadable) lines.push(`  ${c.dim('unread ')} ${u.ref}: ${u.error}`);
   for (const f of r.failed) lines.push(`  ${c.red('failed ')} ${f.ref}: ${f.error}`);
+  if ((r.failed.length || r.unreadable.length) && !r.tokenSource) lines.push(c.dim(NO_TOKEN));
+  return safe(`${[...updateHead(r, c), ...lines].join('\n')}\n`);
+}
+
+/** What `remotes update` wrote (or would), the token it used, and where it kept the files it read. */
+function updateHead(r: RemotesUpdateResult, c: { bold: (s: string) => string; dim: (s: string) => string }) {
   const verb = r.dryRun ? 'would write' : 'wrote';
-  lines.unshift(c.dim(`token: ${describeToken(r.tokenSource)}`));
-  lines.unshift(c.bold(r.changes ? `${verb} ${r.file}` : `${r.file} is up to date`));
-  if ((r.failed.length || r.unreadable.length) && !r.tokenSource)
-    lines.push(
-      c.dim(
-        '  No token was used: set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`. It needs read access to the contents of the private repositories.',
-      ),
-    );
+  return [
+    c.bold(r.changes ? `${verb} ${r.file}` : `${r.file} is up to date`),
+    c.dim(`token: ${describeToken(r.tokenSource)}`),
+    ...(r.sources ? [c.dim(sourcesLine(r.sources))] : []),
+  ];
+}
+
+const NO_TOKEN =
+  '  No token was used: set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`. It needs read access to the contents of the private repositories.';
+
+/** Where `remotes update` kept the files it read, for the editor, and why one could not be kept. */
+const sourcesLine = (s: SourcesKept) =>
+  s.failed
+    ? `sources: not all kept in ${s.dir} (${s.failed})`
+    : `sources: ${s.dir}${s.written ? ` (${s.written} new)` : ''}`;
+
+/** `remotes download`: what the cache now has, then each reference not downloaded, and why. */
+export function remotesDownloadText(r: RemotesDownloadResult, opts: RenderOptions): string {
+  const c = opts.color ? pc : { bold: (s: string) => s, red: (s: string) => s, dim: (s: string) => s };
+  const n = (k: number) => `${k} source${k === 1 ? '' : 's'}`;
+  const head = r.downloaded.length
+    ? `downloaded ${n(r.downloaded.length)} to ${r.dir}`
+    : `nothing to download to ${r.dir}`;
+  const lines = [c.bold(head), c.dim(`token: ${describeToken(r.tokenSource)}`)];
+  if (r.cached.length) lines.push(c.dim(`  ${n(r.cached.length)} already there`));
+  for (const ref of r.notLocked)
+    lines.push(`  ${c.dim('unlocked')} ${ref}: not in ${r.file}; \`flowpact remotes update\` adds it`);
+  for (const s of r.skipped) lines.push(`  ${c.dim('skipped ')} ${s.ref}: ${s.reason}`);
+  for (const f of r.failed) lines.push(`  ${c.red('failed  ')} ${f.ref}: ${f.error}`);
+  if (r.failed.length && !r.tokenSource) lines.push(c.dim(NO_TOKEN));
   return safe(`${lines.join('\n')}\n`);
 }

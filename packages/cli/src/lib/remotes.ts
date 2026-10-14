@@ -1,15 +1,24 @@
-/** `remotes update`: the remote interfaces lockfile, fetched and written (or previewed). */
+/**
+ * `remotes update`: the remote interfaces lockfile, fetched and written (or previewed), and the files read kept in the
+ * sources cache; `remotes download`: the sources of the locked commits, into the cache.
+ */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { type Logger, nodeFileSystem } from '@ciatlas/core';
 import {
   assertSafeWritePath,
+  cacheSource,
+  downloadRemoteSources,
+  type FetchedSource,
   type FetchProgress,
   hostOf,
   REMOTES_LOCK_FILES,
+  type RemotesDownload,
+  type RemotesLock,
   type RemotesUpdate,
   readRemotesLock,
+  remotesCacheDir,
   serializeRemotesLock,
   updateRemotesLock,
 } from '@flowpact/lint';
@@ -36,13 +45,25 @@ export interface RemotesUpdateOptions {
   githubCom?: boolean;
   /** Called as each reference is fetched (or not), after its debug log line; for a progress display. */
   onProgress?: (p: FetchProgress) => void;
+  /**
+   * Where to keep the files read, for the editor to open (see `remotesCacheDir`, the default); `false` keeps none.
+   * Nothing is kept with `dryRun`.
+   */
+  sourcesCache?: string | false;
 }
 
-/** A debug log line per reference as it is done, then `then`, if given. */
-function logProgress(logger: Logger, then?: (p: FetchProgress) => void): (p: FetchProgress) => void {
+/** A debug log line per reference as it is done (`what`: a remote interface, or source), then `then`, if given. */
+function logProgress(
+  logger: Logger,
+  then?: (p: FetchProgress) => void,
+  what = 'remote interface',
+): (p: FetchProgress) => void {
   return (p) => {
-    const what = p.outcome === 'fetched' ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`;
-    logger.debug(`remote interface ${p.done}/${p.total}: ${p.ref} ${what}`);
+    const how =
+      p.outcome === 'fetched' || p.outcome === 'cached'
+        ? `${p.outcome === 'cached' ? 'cached ' : ''}at ${p.detail.slice(0, 7)}`
+        : `${p.outcome}: ${p.detail}`;
+    logger.debug(`${what} ${p.done}/${p.total}: ${p.ref} ${how}`);
     then?.(p);
   };
 }
@@ -55,6 +76,15 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
   dryRun: boolean;
   /** Where the token came from (`GH_TOKEN`, `GITHUB_TOKEN`, `gh auth token`, the option), or undefined without one. */
   tokenSource?: string;
+  /** The sources cache, unless none was kept: how many files were written to it, and why one could not be. */
+  sources?: SourcesKept;
+}
+
+export interface SourcesKept {
+  dir: string;
+  written: number;
+  /** Why a file could not be written (the first such reason); the lockfile is written all the same. */
+  failed?: string;
 }
 
 /** The GitHub API: `GITHUB_API_URL` (GitHub Enterprise Server), else github.com's. */
@@ -110,6 +140,7 @@ export async function timed<T>(logger: Logger, run: () => Promise<T>): Promise<T
 export function fetchOptions(
   logger: Logger,
   options: Pick<RemotesUpdateOptions, 'apiUrl' | 'token' | 'githubCom' | 'onProgress'>,
+  what?: string,
 ) {
   const apiUrl = options.apiUrl ?? apiUrlFromEnv();
   const { token, source } = tokenFor(apiUrl, options.token);
@@ -120,7 +151,7 @@ export function fetchOptions(
       apiUrl,
       ...(token ? { token } : {}),
       ...githubComFallback(apiUrl, options.githubCom, logger),
-      onProgress: logProgress(logger, options.onProgress),
+      onProgress: logProgress(logger, options.onProgress, what),
     },
   };
 }
@@ -133,24 +164,100 @@ function writeLock(root: string, file: string, text: string): void {
   writeFileSync(abs, text);
 }
 
+/** The analysis `remotes` works on: the repository, or what the given paths reach; a bad option or path is refused. */
+async function analyzeTargets(session: Session, options: Pick<RemotesUpdateOptions, 'paths' | 'token'>) {
+  if (options.token !== undefined && typeof options.token !== 'string') throw usage('token must be a string');
+  const paths = stringList('paths', options.paths) ?? [];
+  const result = await analyzeSession(session, { paths, only: [], validateSchema: false });
+  checkTargets(result.project, paths, session.root);
+  return result;
+}
+
 export async function runRemotesUpdate(
   session: Session,
   options: RemotesUpdateOptions = {},
 ): Promise<RemotesUpdateResult> {
-  if (options.token !== undefined && typeof options.token !== 'string') throw usage('token must be a string');
   const { root, logger } = session;
-  const paths = stringList('paths', options.paths) ?? [];
-  const result = await analyzeSession(session, { paths, only: [], validateSchema: false });
-  checkTargets(result.project, paths, root);
+  const result = await analyzeTargets(session, options);
   const fs = nodeFileSystem(root);
   const read = readRemotesLock(fs);
   const file = read.file ?? REMOTES_LOCK_FILES[0];
   const { fetch, source } = fetchOptions(logger, options);
-  const update = await timed(logger, () => updateRemotesLock(result.index, read.lock, fetch));
-  const text = serializeRemotesLock(update.lock);
   const dryRun = bool('dryRun', options.dryRun) ?? false;
+  const keep = dryRun ? undefined : sourcesKeeper(options.sourcesCache, logger);
+  const update = await timed(logger, () =>
+    updateRemotesLock(result.index, read.lock, { ...fetch, ...(keep ? { onSource: keep.add } : {}) }),
+  );
+  const text = serializeRemotesLock(update.lock);
   const changes = fs.read(file) !== text;
   if (changes && !dryRun) writeLock(root, file, text);
   const { lock: _, ...rest } = update;
-  return { ...rest, file, changes, dryRun, ...(source ? { tokenSource: source } : {}) };
+  const extra = { ...(source ? { tokenSource: source } : {}), ...(keep ? { sources: keep.kept } : {}) };
+  return { ...rest, file, changes, dryRun, ...extra };
+}
+
+/** The sources cache's directory: the option (a string), else the default; undefined for `false`. */
+function cacheDirOf(option: string | false | undefined): string | undefined {
+  if (option === false) return undefined;
+  if (option !== undefined && typeof option !== 'string')
+    throw usage('sourcesCache must be a directory or false');
+  return option ?? remotesCacheDir();
+}
+
+/** Keeps each fetched file in the sources cache, counting what it wrote; a failure is logged, never thrown. */
+function sourcesKeeper(option: string | false | undefined, logger: Logger) {
+  const dir = cacheDirOf(option);
+  if (!dir) return undefined;
+  const kept: SourcesKept = { dir, written: 0 };
+  const add = (s: FetchedSource) => {
+    const outcome = cacheSource(dir, s.ref, s.sha, s.file, s.text);
+    if (outcome === 'written') kept.written++;
+    else if (outcome === 'unsafe')
+      logger.debug(`source not cached: ${s.ref.raw}: its path cannot be a file name`);
+    else if (typeof outcome === 'object') {
+      logger.debug(`source not cached: ${s.ref.raw}: ${outcome.failed}`);
+      kept.failed ??= outcome.failed;
+    }
+  };
+  return { add, kept };
+}
+
+export interface RemotesDownloadOptions
+  extends Pick<RemotesUpdateOptions, 'paths' | 'token' | 'apiUrl' | 'githubCom' | 'onProgress'> {
+  /** The sources cache's directory (see `remotesCacheDir`, the default). */
+  sourcesCache?: string;
+}
+
+export interface RemotesDownloadResult extends RemotesDownload {
+  /** The lockfile, relative to the root, and the sources cache's directory. */
+  file: string;
+  dir: string;
+  tokenSource?: string;
+}
+
+/**
+ * `remotes download`: the sources of the remote references the repository uses (or the given paths), at the commits the
+ * lockfile pins, into the sources cache. The lockfile is required and does not change.
+ */
+export async function runRemotesDownload(
+  session: Session,
+  options: RemotesDownloadOptions = {},
+): Promise<RemotesDownloadResult> {
+  const { root, logger } = session;
+  const dir = cacheDirOf(options.sourcesCache)!;
+  const { file, lock } = requireLock(root);
+  const result = await analyzeTargets(session, options);
+  const { fetch, source } = fetchOptions(logger, options, 'remote source');
+  logger.debug(`remote sources: ${dir}`);
+  const download = await timed(logger, () => downloadRemoteSources(result.index, lock, dir, fetch));
+  return { ...download, file, dir, ...(source ? { tokenSource: source } : {}) };
+}
+
+/** The lockfile, which `remotes download` needs: none, or one it cannot use, is a usage error. */
+function requireLock(root: string): { file: string; lock: RemotesLock } {
+  const read = readRemotesLock(nodeFileSystem(root));
+  if (!read.file)
+    throw usage(`no remotes lockfile: run \`flowpact remotes update\` to write ${REMOTES_LOCK_FILES[0]}`);
+  if (!read.lock) throw usage(`${read.file} cannot be used: ${read.error}`);
+  return { file: read.file, lock: read.lock };
 }

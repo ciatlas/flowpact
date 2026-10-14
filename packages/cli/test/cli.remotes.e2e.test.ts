@@ -1,5 +1,5 @@
 /** `flowpact remotes update` against a local stand-in for the GitHub API (#152). */
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -20,6 +20,9 @@ const files: Record<string, string> = {
 const auth: (string | undefined)[] = [];
 /** A HOME of its own: the CLI asks `gh` for a token, which writes its state under HOME (or the working directory). */
 const home = mkdtempSync(join(tmpdir(), 'flowpact-remotes-home-'));
+/** The sources cache (FLOWPACT_CACHE_DIR), and where it keeps octo/setup's action.yml. */
+const cache = join(home, 'cache');
+const SETUP_SOURCE = join(cache, 'remotes', 'octo', 'setup', SHA, 'action.yml');
 let server: Server;
 let api = '';
 
@@ -51,7 +54,14 @@ const run = (root: string, args: string[], env: Record<string, string> = {}) =>
   execa('node', [BIN, 'remotes', ...args, '--root', root], {
     reject: false,
     extendEnv: false,
-    env: { PATH: process.env.PATH ?? '', HOME: home, NO_COLOR: '1', GITHUB_API_URL: api, ...env },
+    env: {
+      PATH: process.env.PATH ?? '',
+      HOME: home,
+      NO_COLOR: '1',
+      GITHUB_API_URL: api,
+      FLOWPACT_CACHE_DIR: cache,
+      ...env,
+    },
   });
 
 describe('flowpact remotes update', () => {
@@ -125,6 +135,51 @@ describe('flowpact remotes update', () => {
   it('refuses another action', async () => {
     const r = await run(repo(), ['check']);
     expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain('use `flowpact remotes update`');
+    expect(r.stderr).toContain('use `flowpact remotes update` or `flowpact remotes download`');
+  });
+});
+
+describe('the sources cache', () => {
+  it('keeps the files remotes update reads, unless it is a dry run', async () => {
+    rmSync(cache, { recursive: true, force: true });
+    const root = repo();
+    const dry = await run(root, ['update', '--dry-run']);
+    expect(dry.stdout).not.toContain('sources:');
+    expect(existsSync(SETUP_SOURCE)).toBe(false);
+    const r = await run(root, ['update']);
+    expect(r.stdout).toContain(`sources: ${join(cache, 'remotes')} (1 new)`);
+    expect(readFileSync(SETUP_SOURCE, 'utf8')).toBe(
+      files[`/repos/octo/setup/contents/action.yml?ref=${SHA}`],
+    );
+  });
+
+  it('remotes download fills the cache from the lockfile, without resolving a ref or changing the lockfile', async () => {
+    const root = repo();
+    await run(root, ['update']);
+    const lock = readFileSync(join(root, LOCK), 'utf8');
+    rmSync(cache, { recursive: true, force: true });
+    const seen = auth.length;
+    const r = await run(root, ['download'], { GH_TOKEN: 'dl' });
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain(`downloaded 1 source to ${join(cache, 'remotes')}`);
+    expect(r.stdout).toContain('token: GH_TOKEN');
+    expect(r.stdout).toContain(
+      'skipped  octo/missing@v1: the lockfile records it as not readable (octo/missing@v1 not found, or not readable with this token)',
+    );
+    expect(existsSync(SETUP_SOURCE)).toBe(true);
+    expect(auth.length - seen).toBe(1);
+    expect(readFileSync(join(root, LOCK), 'utf8')).toBe(lock);
+    const again = await run(root, ['download']);
+    expect(again.stdout).toContain('nothing to download');
+    expect(again.stdout).toContain('1 source already there');
+  });
+
+  it('remotes download needs a lockfile, and takes no --dry-run', async () => {
+    const none = await run(repo(), ['download']);
+    expect(none.exitCode).toBe(2);
+    expect(none.stderr).toContain('no remotes lockfile: run `flowpact remotes update`');
+    const dry = await run(repo(), ['download', '--dry-run']);
+    expect(dry.exitCode).toBe(2);
+    expect(dry.stderr).toContain('--dry-run is for `flowpact remotes update`');
   });
 });
