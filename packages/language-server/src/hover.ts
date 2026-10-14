@@ -385,7 +385,10 @@ function remoteCallOutput(index: ProjectIndex, symbol: string): Facts | undefine
 const lockName = (remotes: RemotesLockRead | undefined) =>
   code((remotes?.file ?? 'remotes.lock.yaml').replace(/^.*\//, ''));
 
-/** A remote reference's interface as the lockfile records it, one line per part. */
+/**
+ * A remote reference's interface as the lockfile records it, one line per part; then the secrets a reusable workflow
+ * reads without declaring them, which only `secrets: inherit` passes.
+ */
 function interfaceLines(e: RemoteEntry): string {
   const named = (m: Record<string, { required?: boolean }> | undefined) =>
     Object.entries(m ?? {}).map(([n, d]) => `${code(n)}${d.required ? ' (required)' : ''}`);
@@ -398,7 +401,11 @@ function interfaceLines(e: RemoteEntry): string {
   )
     .filter(([, items]) => items.length)
     .map(([what, items]) => `**${what}** ${list(items)}`);
-  return parts.length ? parts.join('  \n') : 'Declares no inputs, secrets or outputs.';
+  const declared = parts.length ? parts.join('  \n') : 'Declares no inputs, secrets or outputs.';
+  const undeclared = e.undeclaredSecrets ?? [];
+  return undeclared.length
+    ? `${declared}  \n**Reads without declaring** ${list(undeclared.map(code))}, passed only by ${code('secrets: inherit')}`
+    : declared;
 }
 
 /** A remote reference: what the lockfile records for it, or why its interface is not verified. */

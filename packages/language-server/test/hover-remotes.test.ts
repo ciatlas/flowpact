@@ -48,6 +48,7 @@ remotes:
     secrets:
       token: { required: true }
     outputs: [url]
+    undeclaredSecrets: [NPM_TOKEN]
   octo/setup@v2:
     sha: ${SHA}
     kind: action
@@ -100,7 +101,8 @@ describe('hover on remote references, from the lockfile', () => {
       '',
       '**Inputs** `env` (required), `dry-run`  ',
       '**Secrets** `token` (required)  ',
-      '**Outputs** `url`',
+      '**Outputs** `url`  ',
+      '**Reads without declaring** `NPM_TOKEN`, passed only by `secrets: inherit`',
     ]);
   });
 
