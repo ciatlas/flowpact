@@ -41,7 +41,7 @@ import {
   type ImpactResult,
   type ImpactScope,
 } from './impact';
-import { type RemotesLockRead, readRemotesLock, remoteInterfaces } from './remotes';
+import { type RemotesLock, type RemotesLockRead, readRemotesLock, remoteInterfaces } from './remotes';
 import { createRegistry, IMPACT_CODES } from './rules/index';
 import { CODE_PATTERN, type RuleRegistry } from './rules/registry';
 import type {
@@ -67,6 +67,11 @@ export interface AnalyzeOptions {
   repository?: string;
   /** Only run these rules (codes or names). */
   only?: string[];
+  /**
+   * Remote interfaces fetched for this run (see `fetchMissingRemotes`), used where the lockfile has no entry for a
+   * reference: the lockfile's own entries stand.
+   */
+  fetchedRemotes?: RemotesLock['remotes'];
   /**
    * Impact mode: the baseline's project (analysed from git), where it came from, what the pull request declares and
    * the policy (read from the baseline's config, so a pull request cannot relax its own check).
@@ -318,6 +323,16 @@ function effectiveConfig(opts: AnalyzeOptions): FlowpactConfig {
   // entries for rules it does not load cannot fail it.
   const configured = opts.config ?? defaultConfig();
   return opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
+}
+
+/** The lockfile as read, with the entries fetched for this run added where it has none. */
+function withFetched(read: RemotesLockRead, fetched: RemotesLock['remotes'] | undefined): RemotesLockRead {
+  if (!fetched || !Object.keys(fetched).length) return read;
+  return {
+    ...read,
+    lock: { version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
+    fetched: Object.keys(fetched),
+  };
 }
 
 /** Units to load even when nothing here uses them: what the config (and, in impact mode, the baseline) publishes. */
@@ -912,7 +927,7 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
     rules: Object.keys(config.rules).length,
   });
 
-  const remotes = readRemotesLock(opts.fs ?? nodeFileSystem(opts.root));
+  const remotes = withFetched(readRemotesLock(opts.fs ?? nodeFileSystem(opts.root)), opts.fetchedRemotes);
   const project = loadUnits(opts, logger, publishPatterns, repository, remotes);
   const index = logger.time('build graph', () => new ProjectIndex(project));
   logger.info(

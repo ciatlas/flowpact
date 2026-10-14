@@ -5,6 +5,9 @@
  */
 import {
   createParseContext,
+  type FileSystem,
+  ProjectIndex as Index,
+  loadProject,
   type ProjectIndex,
   parseActionFile,
   parseWorkflowFile,
@@ -102,6 +105,25 @@ async function eachLimited<T>(items: T[], limit: number, work: (item: T) => Prom
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
+ * A reference's entry, or undefined when it cannot be fetched (not found, unreadable, the network or a timeout), which
+ * `failed` then records; any other error is a bug and is thrown.
+ */
+async function tryFetch(
+  r: RemoteRef,
+  opts: FetchRemotesOptions,
+  failed: { ref: string; error: string }[],
+): Promise<RemoteEntry | undefined> {
+  try {
+    return await fetchRemoteEntry(r, opts);
+  } catch (e) {
+    if (!(e instanceof FetchError) && !(e instanceof TypeError) && (e as Error).name !== 'TimeoutError')
+      throw e;
+    failed.push({ ref: r.raw, error: (e as Error).message });
+    return undefined;
+  }
+}
+
+/**
  * The lockfile for the remote references a project uses, fetched: one entry each, entries of references nothing uses
  * any more dropped. A reference that cannot be fetched keeps its previous entry and is listed as failed.
  */
@@ -122,21 +144,49 @@ export async function updateRemotesLock(
   };
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const old = before.get(remoteKey(r.raw));
-    try {
-      const entry = await fetchRemoteEntry(r, opts);
-      remotes[r.raw] = entry;
-      if (!old) out.added.push(r.raw);
-      else if (!same(old, entry)) out.changed.push(r.raw);
-    } catch (e) {
-      if (!(e instanceof FetchError) && !(e instanceof TypeError) && (e as Error).name !== 'TimeoutError')
-        throw e;
-      out.failed.push({ ref: r.raw, error: (e as Error).message });
-      if (old) remotes[r.raw] = old;
-    }
+    const entry = await tryFetch(r, opts, out.failed);
+    if (entry) remotes[r.raw] = entry;
+    else if (old) remotes[r.raw] = old;
+    if (entry && !old) out.added.push(r.raw);
+    else if (entry && !same(old, entry)) out.changed.push(r.raw);
   });
   const used = new Set(refs.map((r) => remoteKey(r.raw)));
   out.removed = Object.keys(previous?.remotes ?? {}).filter((ref) => !used.has(remoteKey(ref)));
   for (const list of [out.added, out.changed, out.removed]) list.sort();
+  out.failed.sort((a, b) => (a.ref < b.ref ? -1 : 1));
+  return out;
+}
+
+export interface FetchedRemotes {
+  /** Entries for the references the lockfile lacks, by reference. */
+  remotes: RemotesLock['remotes'];
+  /** References that could not be fetched, with why. */
+  failed: { ref: string; error: string }[];
+}
+
+/**
+ * The interfaces of the remote references a repository uses that its lockfile lacks, fetched for one run (`--fetch-remotes`,
+ * the action's `remotes: fetch`); nothing is written. Entries the lockfile has are not fetched, so its pins stand.
+ */
+export async function fetchMissingRemotes(
+  root: string,
+  fs: FileSystem,
+  lock: RemotesLock | undefined,
+  opts: FetchRemotesOptions & { repository?: string } = {},
+): Promise<FetchedRemotes> {
+  const project = loadProject({
+    root,
+    fs,
+    validateSchema: false,
+    ...(opts.repository ? { repository: opts.repository } : {}),
+  });
+  const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
+  const missing = remoteRefsOf(new Index(project)).filter((r) => !locked.has(remoteKey(r.raw)));
+  const out: FetchedRemotes = { remotes: {}, failed: [] };
+  await eachLimited(missing, opts.concurrency ?? 8, async (r) => {
+    const entry = await tryFetch(r, opts, out.failed);
+    if (entry) out.remotes[r.raw] = entry;
+  });
   out.failed.sort((a, b) => (a.ref < b.ref ? -1 : 1));
   return out;
 }

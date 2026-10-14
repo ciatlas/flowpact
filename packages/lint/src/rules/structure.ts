@@ -7,10 +7,12 @@ import {
   type Project,
   type ProjectIndex,
   refsOf,
+  remoteKey,
   sym,
   type UnverifiedUse,
   type WorkflowDecl,
 } from '@ciatlas/core';
+import { remoteRefsOf } from '../remotes';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote } from './util';
 
@@ -333,6 +335,50 @@ const remotesLockInvalid = defineRule({
       message: `${file} cannot be used: ${error}`,
       loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
       symbol: `${file}#remotes`,
+    });
+  },
+});
+
+/** The remote references the lockfile file lacks, and its entries nothing uses (entries fetched for the run aside). */
+function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[] } {
+  const { lock, fetched = [] } = ctx.remotes ?? {};
+  const locked = Object.keys(lock?.remotes ?? {}).filter((r) => !fetched.includes(r));
+  const lockedKeys = new Set(locked.map(remoteKey));
+  const used = remoteRefsOf(ctx.index).map((r) => r.raw);
+  const usedKeys = new Set(used.map(remoteKey));
+  return {
+    missing: used.filter((r) => !lockedKeys.has(remoteKey(r))),
+    unused: locked.filter((r) => !usedKeys.has(remoteKey(r))),
+  };
+}
+
+const remotesLockOutdated = defineRule({
+  code: 'FP612',
+  name: 'remotes-lock-outdated',
+  category: 'structure',
+  defaultSeverity: 'warning',
+  docs: {
+    summary:
+      'The remote interfaces lockfile lacks a remote workflow or action the repository uses, or has one it no longer uses.',
+    why:
+      'A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action’s `remotes: fetch` fetches it ' +
+      'for the run). It happens when a reference moves to another version, for example in a pull request from Renovate ' +
+      'or Dependabot, until the lockfile is updated.',
+    fix: 'Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs).',
+  },
+  check(ctx) {
+    const { file, error } = ctx.remotes ?? {};
+    if (!file || error) return;
+    const { missing, unused } = lockDrift(ctx);
+    if (!missing.length && !unused.length) return;
+    const parts = [
+      ...(missing.length ? [`lacks ${missing.join(', ')}`] : []),
+      ...(unused.length ? [`no longer needs ${unused.join(', ')}`] : []),
+    ];
+    ctx.report({
+      message: `${file} is out of date: it ${parts.join('; it ')}. Run \`flowpact remotes update\``,
+      loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
+      symbol: `${file}#outdated`,
     });
   },
 });
@@ -708,6 +754,7 @@ export const structureRules: RuleDefinition[] = [
   nestingDepth,
   remoteUnverified,
   remotesLockInvalid,
+  remotesLockOutdated,
   needsWithoutData,
   largeInterface,
   missingLocalTarget,

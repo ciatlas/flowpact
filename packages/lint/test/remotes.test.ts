@@ -152,3 +152,40 @@ describe('secrets and outputs of remote interfaces', () => {
     expect(all.filter((c) => c === 'FP203' || c === 'FP204')).toEqual([]);
   });
 });
+
+describe('fetched remote interfaces and an outdated lockfile', () => {
+  const setup = { sha: SHA, kind: 'action' as const, inputs: { version: { required: true } }, outputs: [] };
+
+  it('checks a reference the lockfile lacks with an interface fetched for the run; the lockfile’s own entries stand', () => {
+    const only = { [`${WF}/ci.yml`]: ci };
+    const fetched = { 'octo/setup@v2': setup };
+    expect(messages(only, 'FP101')).toEqual([]);
+    expect(byCode(lint(only, { fetchedRemotes: fetched }), 'FP101').map((f) => f.message)).toEqual([
+      'Step #1 uses octo/setup@v2 without required input "version" — GitHub will run it with an empty value',
+    ]);
+    // With a lockfile that has it, its entry wins over a fetched one that declares nothing.
+    const withLock = { [`${WF}/ci.yml`]: ci, [LOCK]: lock };
+    const empty = { 'octo/setup@v2': { ...setup, inputs: {} } };
+    expect(byCode(lint(withLock, { fetchedRemotes: empty }), 'FP101').map((f) => f.message)).toContain(
+      'Step #1 uses octo/setup@v2 without required input "version" — GitHub will run it with an empty value',
+    );
+  });
+
+  it('reports a lockfile that lacks a reference or has one nothing uses (FP612), also when the run fetched it', () => {
+    const bumped = { [`${WF}/ci.yml`]: ci.replace('Octo/Setup@v2', 'octo/setup@v3'), [LOCK]: lock };
+    const expected =
+      '.github/flowpact/remotes.lock.yaml is out of date: it lacks octo/ship/.github/workflows/other.yml@v1, octo/setup@v3; it no longer needs octo/setup@v2. Run `flowpact remotes update`';
+    expect(messages(bumped, 'FP612')).toEqual([expected]);
+    const fetched = { 'octo/setup@v3': setup };
+    expect(byCode(lint(bumped, { fetchedRemotes: fetched }), 'FP612').map((f) => f.message)).toEqual([
+      expected,
+    ]);
+  });
+
+  it('stays quiet without a lockfile, with an unusable one, and when it matches', () => {
+    expect(messages({ [`${WF}/ci.yml`]: ci }, 'FP612')).toEqual([]);
+    expect(messages({ [`${WF}/ci.yml`]: ci, [LOCK]: 'version: [' }, 'FP612')).toEqual([]);
+    const exact = { [`${WF}/ci.yml`]: ci.replace(/\s+other:\n\s+uses: \S+\n/, '\n'), [LOCK]: lock };
+    expect(messages(exact, 'FP612')).toEqual([]);
+  });
+});

@@ -1,5 +1,5 @@
 import { createLogger, memoryFileSystem, memorySink } from '@ciatlas/core';
-import { type AnalysisResult, analyze, type Finding, parseConfig } from '@flowpact/lint';
+import { type AnalysisResult, type AnalyzeOptions, analyze, type Finding, parseConfig } from '@flowpact/lint';
 
 /** Strips the common leading indentation so YAML can be written inline in tests. */
 export function yaml(strings: TemplateStringsArray, ...values: unknown[]): string {
@@ -15,6 +15,7 @@ export interface LintOptions {
   paths?: string[];
   schema?: boolean;
   repository?: string;
+  fetchedRemotes?: AnalyzeOptions['fetchedRemotes'];
 }
 
 export function lint(
@@ -31,6 +32,7 @@ export function lint(
     logger: createLogger({ level: 'trace', sink }),
     ...(opts.only ? { only: opts.only } : {}),
     ...(opts.paths ? { paths: opts.paths } : {}),
+    ...(opts.fetchedRemotes ? { fetchedRemotes: opts.fetchedRemotes } : {}),
   });
   return Object.assign(result, { logs: sink.records });
 }

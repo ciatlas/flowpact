@@ -59,6 +59,8 @@ export interface RemotesLockRead {
   file?: string;
   lock?: RemotesLock;
   error?: string;
+  /** References whose entries were fetched for this run, not read from the file (see `fetchMissingRemotes`). */
+  fetched?: string[];
 }
 
 export function readRemotesLock(fs: FileSystem): RemotesLockRead {
