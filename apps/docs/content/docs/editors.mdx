@@ -73,7 +73,8 @@ Hovering an input, secret, output, env variable, matrix key, job or `uses:` valu
   `toJSON(github)`). `flowpact trace` shows the whole chain.
 - On a caller's `with:` or `secrets:` key, the card shows what this call passes and where the value goes in the callee.
 - On a remote `uses:` value, the card shows what the [remote interfaces lockfile](/docs/remote-interfaces) records:
-  the commit, and the inputs, secrets and outputs, or why the reference has no entry. On a remote call's `with:` or
+  the commit, the inputs, secrets and outputs, and the secrets a reusable workflow reads without declaring them (only
+  `secrets: inherit` passes those), or why the reference has no entry. On a remote call's `with:` or
   `secrets:` key it shows the input or secret as recorded there, and **Find All References** lists every call that passes
   it. A read of a remote call's or action's output says whether the reference declares it.
 
