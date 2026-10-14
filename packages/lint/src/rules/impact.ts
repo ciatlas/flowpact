@@ -145,10 +145,14 @@ const impactUncertain = defineRule({
   docs: {
     summary: 'A change to a published unit depends on something flowpact cannot evaluate statically.',
     why:
-      'For example a check name built from the triggering event, `needs` outputs or `vars`, or a matrix computed at ' +
-      'runtime. flowpact cannot tell whether consumers see a different check name, so it does not count the change ' +
+      'For example a check name built from the triggering event, `needs` outputs or `vars`, a matrix computed at ' +
+      'runtime, or an output that is now set only when an `if:` holds. flowpact cannot tell whether consumers see a ' +
+      "different check name, or run where the output is `''`, so it does not count the change " +
       '(`impact.uncertain: fail` counts it).',
-    fix: 'Review the change by hand, or make the name static (a literal `name:` or one built only from `matrix` and `inputs`).',
+    fix:
+      'Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and ' +
+      '`inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as ' +
+      "`${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.",
   },
   check(ctx) {
     for (const c of ctx.impact?.changes ?? []) {

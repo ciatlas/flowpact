@@ -6,11 +6,19 @@
 import {
   type ActionDecl,
   type CheckName,
+  type ContextResolver,
+  calledFunctions,
+  definitelyTruthy,
+  type ExprSite,
   type JobDecl,
   type Loc,
+  type LocatedRef,
   matchesPattern,
   type PermissionsDecl,
   type ProjectIndex,
+  refsOf,
+  type StepDecl,
+  UNKNOWN,
   type UnitDecl,
   type WorkflowDecl,
   workflowChecks,
@@ -26,7 +34,7 @@ export const maxLevel = (levels: ImpactLevel[]): ImpactLevel =>
 export interface ImpactChange {
   /** The published unit (workflow path or action directory). */
   unit: string;
-  kind: 'check-name' | 'interface' | 'unit' | 'permissions' | 'runtime' | 'uses';
+  kind: 'check-name' | 'interface' | 'output' | 'unit' | 'permissions' | 'runtime' | 'uses';
   level: ImpactLevel;
   /** False when the change involves something flowpact cannot evaluate (event data, dynamic matrices, …). */
   certain: boolean;
@@ -370,6 +378,168 @@ function runtimeChanges(b: ActionDecl, h: ActionDecl): ImpactChange[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Output reliability
+// ---------------------------------------------------------------------------
+
+/** A condition an output's source runs under: the job or step that has it, and its `if:` as written. */
+interface SourceCondition {
+  where: string;
+  text: string;
+}
+
+/** Every context unknown: what holds whatever the run's event, inputs and earlier results are. */
+const ANY_RUN: ContextResolver = () => UNKNOWN;
+
+/** Status functions: with one, a job runs although a job it needs did not succeed. */
+const STATUS_FUNCTIONS = new Set(['always', 'cancelled', 'failure', 'success']);
+
+/**
+ * The condition an `if:` puts on its job or step, or undefined where it holds on every run as far as the files tell:
+ * there is none, it reads no context (`success()`, `always()`), or it is true whatever the contexts hold.
+ */
+function realCondition(ifValue: boolean | undefined, site: ExprSite | undefined): string | undefined {
+  if (ifValue === false) return 'false';
+  if (!site?.segments.some((seg) => seg.refs.length)) return undefined;
+  const [only] = site.segments;
+  if (site.segments.length === 1 && only?.expr.ast && definitelyTruthy(only.expr.ast, ANY_RUN))
+    return undefined;
+  return site.text.trim();
+}
+
+/** Whether a job's `if:` calls a status function, so it runs whatever the jobs it needs did. */
+const runsDespiteNeeds = (site: ExprSite | undefined) =>
+  !!site?.segments.some((seg) =>
+    calledFunctions(seg.expr).some((f) => STATUS_FUNCTIONS.has(f.toLowerCase())),
+  );
+
+/** The conditions a job runs under: its own, and, unless its `if:` calls a status function, those of the jobs it needs. */
+function jobConditions(wf: WorkflowDecl, id: string, seen = new Set<string>()): SourceCondition[] {
+  const job = wf.jobs[id];
+  if (!job || seen.has(id)) return [];
+  seen.add(id);
+  const own = realCondition(job.ifValue, job.ifSite);
+  const out = own ? [{ where: `jobs.${id}`, text: own }] : [];
+  if (!runsDespiteNeeds(job.ifSite)) for (const n of job.needs) out.push(...jobConditions(wf, n.id, seen));
+  return out;
+}
+
+const sameName = (a: string | undefined, b: string) => a?.toLowerCase() === b.toLowerCase();
+
+/** Whether a site is the value of output `key` (of job `job`, when given) in `field`. */
+const isOutputSite = (site: ExprSite, field: ExprSite['field'], key: string, job?: string) =>
+  site.field === field && sameName(site.key, key) && (job === undefined || site.job === job);
+
+/** The owner and name of `<owner>.outputs.<name>` of `context`, or undefined for any other reference. */
+function outputRef(ref: LocatedRef, context: string): { owner: string; name: string } | undefined {
+  const [owner, outputs, name] = ref.path;
+  return ref.context === context && owner && name && sameName(outputs, 'outputs')
+    ? { owner, name }
+    : undefined;
+}
+
+/** The `outputs` named as a source in an output's value: `<owner>.outputs.<name>` of `context`, by owner. */
+function sourcesIn(unit: UnitDecl, field: ExprSite['field'], key: string, context: string, job?: string) {
+  return [...refsOf(unit)].flatMap(({ site, ref }) => {
+    const src = isOutputSite(site, field, key, job) ? outputRef(ref, context) : undefined;
+    return src ? [src] : [];
+  });
+}
+
+const stepNamed = (steps: StepDecl[], id: string) => steps.find((s) => sameName(s.id, id));
+
+/** The condition a step puts on the outputs it sets, at `where`. */
+function stepConditions(steps: StepDecl[], id: string, where: string): SourceCondition[] {
+  const step = stepNamed(steps, id);
+  const own = step && realCondition(step.ifValue, step.ifSite);
+  return own ? [{ where: `${where}.steps.${id}`, text: own }] : [];
+}
+
+/**
+ * The conditions each source of a job output runs under, one list per source: the job's, and the step's that sets
+ * it; for a job that calls a reusable workflow, the conditions of that workflow's output.
+ */
+function jobOutputSources(
+  index: ProjectIndex,
+  wf: WorkflowDecl,
+  id: string,
+  name: string,
+  depth: number,
+): SourceCondition[][] {
+  const job = wf.jobs[id];
+  if (!job) return [];
+  const own = jobConditions(wf, id);
+  const callee = job.uses ? index.calleeOf(job) : undefined;
+  if (callee)
+    return workflowOutputSources(index, callee, name, depth + 1).map((c) => [
+      ...own,
+      ...c.map((x) => ({ ...x, where: `jobs.${id} › ${x.where}` })),
+    ]);
+  return sourcesIn(wf, 'job.output', name, 'steps', id).map((s) => [
+    ...own,
+    ...stepConditions(job.steps, s.owner, `jobs.${id}`),
+  ]);
+}
+
+/** One list of conditions per source of a reusable workflow's `workflow_call` output. */
+function workflowOutputSources(
+  index: ProjectIndex,
+  wf: WorkflowDecl,
+  name: string,
+  depth = 0,
+): SourceCondition[][] {
+  if (depth > 10) return [];
+  return sourcesIn(wf, 'workflow.output', name, 'jobs').flatMap((s) =>
+    jobOutputSources(index, wf, s.owner, s.name, depth),
+  );
+}
+
+/**
+ * The conditions each output of a published unit is set under: none when it is set on every run that reaches it (a
+ * source without conditions, or no source to judge), else those of every source.
+ */
+function outputConditions(index: ProjectIndex, unit: UnitDecl): Map<string, SourceCondition[]> {
+  const out = new Map<string, SourceCondition[]>();
+  const outputs = unit.kind === 'workflow' ? unit.call?.outputs : unit.outputs;
+  for (const name of Object.keys(outputs ?? {})) {
+    const sources =
+      unit.kind === 'workflow'
+        ? workflowOutputSources(index, unit, name)
+        : sourcesIn(unit, 'action.output', name, 'steps').map((s) => stepConditions(unit.steps, s.owner, ''));
+    const always = !sources.length || sources.some((c) => !c.length);
+    out.set(name.toLowerCase(), always ? [] : sources.flat());
+  }
+  return out;
+}
+
+const describeCondition = (c: SourceCondition) => `${c.where.replace(/^\./, '')} runs (if: ${c.text})`;
+
+/** Outputs set on every run before that are now set only under a condition: callers on other runs read `''`. */
+function outputReliabilityChanges(
+  base: ProjectIndex,
+  head: ProjectIndex,
+  b: UnitDecl,
+  h: UnitDecl,
+): ImpactChange[] {
+  const before = outputConditions(base, b);
+  const decls = (h.kind === 'workflow' ? h.call?.outputs : h.outputs) ?? {};
+  const out: ImpactChange[] = [];
+  for (const [key, conditions] of outputConditions(head, h)) {
+    if (!conditions.length || before.get(key)?.length !== 0) continue;
+    const [name, decl] = Object.entries(decls).find(([n]) => n.toLowerCase() === key)!;
+    const when = [...new Map(conditions.map((c) => [describeCondition(c), c])).keys()].join(' and ');
+    out.push({
+      unit: h.path,
+      kind: 'output',
+      level: 'major',
+      certain: false,
+      message: `output "${name}" is now set only when ${when}; callers that read it on other runs get ''`,
+      loc: decl.loc,
+    });
+  }
+  return out;
+}
+
 const describeUnit = (u: UnitDecl) =>
   u.kind === 'workflow' ? `reusable workflow ${u.path}` : `action ${u.path}`;
 
@@ -428,7 +598,11 @@ function blockingChange(
 
 /** The graded changes between the base and head versions of a published unit that both parse. */
 function comparedChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h: UnitDecl): ImpactChange[] {
-  const out = [...interfaceChanges(base, head, b, h), ...usesChanges(b, h)];
+  const out = [
+    ...interfaceChanges(base, head, b, h),
+    ...outputReliabilityChanges(base, head, b, h),
+    ...usesChanges(b, h),
+  ];
   if (b.kind === 'workflow' && h.kind === 'workflow')
     out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
   if (b.kind === 'action' && h.kind === 'action') out.push(...runtimeChanges(b, h));

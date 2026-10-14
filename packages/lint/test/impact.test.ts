@@ -184,6 +184,60 @@ describe('interfaces, units, permissions and runtimes', () => {
   });
 });
 
+describe('output reliability', () => {
+  /** A reusable workflow whose output `v` comes from step `m` of job `build`, with `jobIf` and `stepIf` on them. */
+  const wf = (jobIf = '', stepIf = '', extraJobs = '', needs = '') =>
+    `on:\n  workflow_call:\n    outputs:\n      v: { value: '\${{ jobs.build.outputs.v }}' }\njobs:\n${extraJobs}  build:\n${needs}${jobIf}    runs-on: ubuntu-latest\n    outputs:\n      v: \${{ steps.m.outputs.v }}\n    steps:\n      - id: m\n${stepIf}        run: echo "v=1" >> "$GITHUB_OUTPUT"\n`;
+  const grade = (before: string, after: string) =>
+    summary(changes({ [`${WF}/r.yml`]: before }, { [`${WF}/r.yml`]: after }));
+
+  it('grades an output set on every run that becomes conditional as a possible major', () => {
+    expect(grade(wf(), wf('', "        if: github.event_name == 'push'\n"))).toEqual([
+      `major? output "v" is now set only when jobs.build.steps.m runs (if: github.event_name == 'push'); callers that read it on other runs get ''`,
+    ]);
+    expect(grade(wf(), wf('    if: ${{ inputs.deploy }}\n'))).toEqual([
+      `major? output "v" is now set only when jobs.build runs (if: \${{ inputs.deploy }}); callers that read it on other runs get ''`,
+    ]);
+  });
+
+  it('follows the jobs a job needs, unless its if: calls a status function', () => {
+    const gate =
+      "  gate:\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-latest\n    steps: [{ run: 'true' }]\n";
+    const needs = '    needs: gate\n';
+    expect(grade(wf('', '', gate), wf('', '', gate, needs))).toEqual([
+      `major? output "v" is now set only when jobs.gate runs (if: github.ref == 'refs/heads/main'); callers that read it on other runs get ''`,
+    ]);
+    expect(grade(wf('', '', gate), wf('    if: always()\n', '', gate, needs))).toEqual([]);
+  });
+
+  it('does not grade conditions that hold on every run, or outputs that were already conditional', () => {
+    for (const cond of ['always()', 'success()', "${{ true || github.ref == 'x' }}", '${{ !cancelled() }}'])
+      expect(grade(wf(), wf('', `        if: ${cond}\n`))).toEqual([]);
+    const pushOnly = wf('', "        if: github.event_name == 'push'\n");
+    expect(grade(pushOnly, wf('', "        if: github.event_name != 'pull_request'\n"))).toEqual([]);
+    // Back to every run is not a break.
+    expect(grade(pushOnly, wf())).toEqual([]);
+  });
+
+  it('follows a called reusable workflow, and a published action', () => {
+    const caller = (inner: string) => ({
+      [`${WF}/r.yml`]:
+        "on:\n  workflow_call:\n    outputs:\n      v: { value: '${{ jobs.c.outputs.v }}' }\njobs:\n  c:\n    uses: ./.github/workflows/_inner.yml\n",
+      [`${WF}/_inner.yml`]: inner,
+    });
+    expect(summary(changes(caller(wf()), caller(wf('', '        if: inputs.x\n'))))).toEqual([
+      `major? output "v" is now set only when jobs.c › jobs.build.steps.m runs (if: inputs.x); callers that read it on other runs get ''`,
+    ]);
+    const action = (stepIf: string) =>
+      `name: a\ndescription: d\noutputs:\n  v: { description: d, value: '\${{ steps.m.outputs.v }}' }\nruns:\n  using: composite\n  steps:\n    - id: m\n${stepIf}      run: echo "v=1" >> "$GITHUB_OUTPUT"\n      shell: bash\n`;
+    expect(
+      summary(changes({ 'action.yml': action('') }, { 'action.yml': action('      if: inputs.on\n') })),
+    ).toEqual([
+      `major? output "v" is now set only when steps.m runs (if: inputs.on); callers that read it on other runs get ''`,
+    ]);
+  });
+});
+
 const pre = (bumpMinorPreMajor: boolean, bumpPatchForMinorPreMajor = false) => ({
   bumpMinorPreMajor,
   bumpPatchForMinorPreMajor,
