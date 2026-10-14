@@ -385,8 +385,19 @@ const entryNamed = (entries: TreeEntry[], name: string, ignoreCase: boolean) =>
   entries.find((e) => e.name === name) ??
   (ignoreCase ? entries.find((e) => e.name.toLowerCase() === name.toLowerCase()) : undefined);
 
+/** Whether two paths are the same file. */
+const sameFile = (a: string, b: string): boolean => {
+  const [x, y] = [statSync(a, { throwIfNoEntry: false }), statSync(b, { throwIfNoEntry: false })];
+  return x !== undefined && y !== undefined && x.ino === y.ino && x.dev === y.dev;
+};
+
+/**
+ * Whether paths in the repository at `dir` (its top) reach a file in another letter case: where git says so, or the
+ * file system ignores case (macOS and Windows by default), which `core.ignorecase=false` does not change.
+ */
 const ignoresCase = (dir: string) =>
-  gitOutput(dir, ['config', '--bool', 'core.ignorecase'])?.trim() === 'true';
+  gitOutput(dir, ['config', '--bool', 'core.ignorecase'])?.trim() === 'true' ||
+  sameFile(join(dir, '.git'), join(dir, '.GIT'));
 
 const realpathOr = (p: string): string | undefined => {
   try {

@@ -190,6 +190,19 @@ describe('a base config reached through a symbolic link', () => {
     expect(baselineOf(root, '.github/base.yml').ignore).toEqual([]);
     expect(baselineOf(root, '.GITHUB/BASE.yml').ignore).toEqual([]);
   });
+
+  it('takes a path in another case for the tracked one where the file system ignores case, though git says it does not', (ctx) => {
+    // core.ignorecase=false, as set to catch case-only renames on macOS. Before: ORG was looked up in the commit as
+    // written and missed, so the file it reaches, which the pull request edits, counted on both sides and left b out.
+    const root = repo(
+      { '.github/org/base.yml': NOTHING, '.github/base.yml': { link: 'ORG/base.yml' } },
+      { '.github/org/base.yml': IGNORES_B },
+    );
+    if (!existsSync(join(root, '.GITHUB/ORG/BASE.yml'))) ctx.skip();
+    git(root, 'config', 'core.ignorecase', 'false');
+    for (const path of ['.github/base.yml', '.github/ORG/base.yml', '.github/org/BASE.yml'])
+      expect(baselineOf(root, path)).toMatchObject({ ignore: [], notes: [OF_REPOSITORY] });
+  });
 });
 
 describe('a base config the baseline lacks or no commit tracks', () => {
