@@ -314,8 +314,10 @@ A workflow passes untrusted text as a flag value, such as `--title "$PR_TITLE"`.
 flowpact checks calls to other repositories against interfaces it does not hold itself: the
 [remote interfaces lockfile](/docs/remote-interfaces), which a pull request can edit, and the files it fetches, which
 those repositories serve. A pull request can try to make the checks pass with a false interface (an input marked
-optional), a remote repository can serve a file built to waste memory, and a pull request that controls the
-references can try to make a privileged token read repositories it should not, and show what it read in findings.
+optional), a remote repository can serve a file built to waste memory, a pull request that controls the
+references can try to make a privileged token read repositories it should not, and show what it read in findings, and
+a reference built with `..` can try to make the [sources cache](/docs/remote-interfaces#sources-for-the-editor) write
+outside its directory.
 
 - **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
   [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a
@@ -325,10 +327,16 @@ references can try to make a privileged token read repositories it should not, a
   it (core `ProjectIndex.interfaceOf`, `actionInterfaceOf`). Fetching is opt-in; the token goes only to the GitHub API
   (`GITHUB_API_URL`) as an authorization header and is never printed; the action does not fetch on
   `pull_request_target` or `workflow_run`, where an untrusted pull request would choose the references while the token
-  may be privileged (`remotesToFetch` in `packages/action/src/main.ts`).
+  may be privileged (`remotesToFetch` in `packages/action/src/main.ts`). Only `flowpact remotes update` and
+  `remotes download` keep the files they read, in a per-user cache: every part of the path (owner, repository, commit,
+  each directory and the file name) must be a plain file name on every platform, or the file is not kept, and it is
+  written to a temporary file, made read-only and renamed (`cachedSourcePath`, `cacheSource` in
+  `packages/lint/src/remotes-cache.ts`). The action, `--fetch-remotes` and `--dry-run` write nothing there.
 - **Tests.** `packages/lint/test/remotes.test.ts` (FP611 for an invalid lockfile, then nothing checked;
   `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the token sent only to the API, a response
-  over 1 MB refused); `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output);
+  over 1 MB refused); `packages/lint/test/remotes-cache.test.ts` (paths that leave the cache, or are no file name on
+  Windows, refused); `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output, nothing cached by a
+  dry run);
   `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`); `test/external.test.ts`
   (core; external units out of everything that follows a call).
 - **Residual risk: low.** A false entry in the lockfile weakens only the checks of the repository that commits it, and

@@ -47,7 +47,8 @@ flowpact remotes update .github/workflows/release.yml     # only what release.ym
 a commit, reads its workflow file or `action.yml` there through the GitHub API, and writes the lockfile. Commit it, and
 run it again when you move a reference to another version, or on a schedule to notice a tag that moved. In a terminal
 it counts the references as it fetches them; `-v` or `-d` logs a line for each instead, with the commit it resolved to
-or why it could not be fetched.
+or why it could not be fetched. It also keeps the files it reads in your [sources cache](#sources-for-the-editor), so
+the editor can open them.
 
 ### Which token
 
@@ -73,6 +74,35 @@ a classic token with `repo`, or a GitHub App installation token that includes th
 | `the GitHub API refused the request (403)` | The token lacks read access to that repository's contents. |
 | `could not reach https://api.github.com (…)` | Node's `fetch failed`: no network, DNS, TLS or a proxy. Check `GITHUB_API_URL`; behind a proxy, set `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` (Node 24 and later), as Node's fetch ignores proxy variables otherwise. |
 | `no answer from … within 30 s` | The network or the API is slow: try again. |
+
+## Sources for the editor
+
+The lockfile holds interfaces only. The files they were read from, the remote workflow files and `action.yml`s, go to
+a cache of your own, outside the repository, so the [editor](/docs/editors) can open them:
+`flowpact remotes update` keeps every file it reads there, and `flowpact remotes download` fills it for a lockfile
+someone else wrote, say after a `git pull`:
+
+```sh
+flowpact remotes download                                 # every remote reference the lockfile pins
+flowpact remotes download .github/workflows/release.yml   # only what release.yml (and what it calls) uses
+```
+
+[`flowpact remotes download`](/docs/cli#flowpact-remotes-download) reads each file at the commit the lockfile pins:
+it resolves no tag and does not change the lockfile, so the editor shows the version the checks used. It skips what
+the cache has, and needs the same [token](#which-token) as `remotes update`.
+
+| Platform | Cache |
+| --- | --- |
+| Linux and others | `$XDG_CACHE_HOME/flowpact/remotes`, or `~/.cache/flowpact/remotes` |
+| macOS | `~/Library/Caches/flowpact/remotes` |
+| Windows | `%LOCALAPPDATA%\flowpact\Cache\remotes` |
+
+`FLOWPACT_CACHE_DIR` (an absolute path) moves it to `$FLOWPACT_CACHE_DIR/remotes`. Files are kept by repository and
+commit (`octo/ship/<sha>/.github/workflows/deploy.yml`), read-only. A file at a commit never changes, so nothing in
+the cache goes stale; one cache serves every repository on the machine, and you can delete any of it at any time.
+Files of private and internal repositories land there too, as protected as your home directory is.
+A reference whose path could not be a file name on every platform (`..`, a character Windows rejects) is not cached.
+The action never writes the cache, and neither does `--fetch-remotes` or `--dry-run`.
 
 ## GitHub Enterprise Server and GHE.com
 

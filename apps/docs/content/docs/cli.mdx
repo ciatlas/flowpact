@@ -10,13 +10,15 @@ description: Every flowpact command, flag, output format and environment variabl
 | [`flowpact impact`](#flowpact-impact) | Check that the release impact a pull request declares covers its changes to published workflows and actions. |
 | [`flowpact generate`](#flowpact-generate) | Write (or preview) the contracts. |
 | [`flowpact remotes update`](#flowpact-remotes-update) | Fetch the interfaces of the remote workflows and actions this repository (or the given workflows and actions) uses into the [remote interfaces lockfile](/docs/remote-interfaces). |
+| [`flowpact remotes download`](#flowpact-remotes-download) | Download the sources of the commits the lockfile pins into the [sources cache](/docs/remote-interfaces#sources-for-the-editor), for the editor. |
 | [`flowpact graph`](#flowpact-graph) | Show the call graph of workflows and actions. |
 | [`flowpact trace`](#flowpact-trace) | Follow a value down to where it is used, or up to where it comes from. |
 | [`flowpact explain`](#flowpact-explain) | Print the docs for a rule. |
 | [`flowpact rules`](#flowpact-rules) | List the rules and their effective severities. |
 | [`flowpact lsp`](#flowpact-lsp) | Start the language server for editors. |
 
-Every command but `lsp` is also a function of the [API](/docs/api), for programs that run flowpact themselves.
+Every command but `lsp` and `remotes` is also a function of the [API](/docs/api), for programs that run flowpact
+themselves.
 
 Options go after the command (`flowpact lint --no-plugins`); an option before it is a usage error. The value of an
 option is only ever that option's value, whatever it looks like: `--title "$PR_TITLE"` with a title of `--help` or
@@ -211,6 +213,30 @@ Server). Public repositories can be read without one, at GitHub's 60 requests an
 internal ones need read access to their contents (fine-grained: **Contents: read** on them; classic: `repo`). In a
 terminal it shows a count as it fetches; `-v` or `-d` logs each reference instead. Each failure says why and what to do:
 see [Remote interfaces](/docs/remote-interfaces#when-a-reference-is-not-fetched).
+
+The files it reads go to the [sources cache](/docs/remote-interfaces#sources-for-the-editor), for the editor; the
+output names it (`sources: ~/.cache/flowpact/remotes (2 new)`). A file it cannot keep there is listed on that line and
+does not fail the command. With `--dry-run`, nothing is kept.
+
+## `flowpact remotes download`
+
+Downloads the workflow files and `action.yml`s of the remote references the repository uses into the
+[sources cache](/docs/remote-interfaces#sources-for-the-editor), at the commits the lockfile pins, so the editor can
+open them. It resolves no tag and does not change the lockfile.
+
+```sh
+flowpact remotes download [paths…] [--github-com]
+```
+
+| Option | Description |
+| --- | --- |
+| `[paths…]` | Workflow or action files or directories: download only the sources of the remote references they use, and those of the local workflows and actions they call. |
+| `--github-com` | Download the sources of entries read on github.com (`host: github.com`), with `GITHUB_COM_TOKEN` or none; without it they are skipped. See [GitHub Enterprise Server](/docs/remote-interfaces#github-enterprise-server-and-ghecom). |
+
+It needs the lockfile (without one, or with one it cannot use, it exits `2`), and the same token as
+`flowpact remotes update`. A source the cache has is not downloaded again. A reference the lockfile has no entry for is
+listed as `unlocked` (`flowpact remotes update` adds it), one it records as not readable as `skipped`. A source that
+cannot be downloaded or kept is listed as `failed`, and makes the command exit `1`.
 
 ## `flowpact graph`
 
@@ -461,4 +487,5 @@ exits `0` too, or `1` when a file with YAML syntax errors could not be regenerat
 | `GH_TOKEN` / `GITHUB_TOKEN` | The token `flowpact remotes update` reads remote repositories with (else `gh auth token`). |
 | `GITHUB_API_URL` | The GitHub API `flowpact remotes update` and `--fetch-remotes` use (`https://<host>/api/v3` on GitHub Enterprise Server); `https://api.github.com` by default. |
 | `GITHUB_COM_TOKEN` | With `--github-com`, the token for github.com; without it, github.com is read without one. |
+| `FLOWPACT_CACHE_DIR` | An absolute path: keep the [sources cache](/docs/remote-interfaces#sources-for-the-editor) in its `remotes` directory instead of the platform's per-user cache. |
 | `COLUMNS` | Output width when not attached to a terminal. |
