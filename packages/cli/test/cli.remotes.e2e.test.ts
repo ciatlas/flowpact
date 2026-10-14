@@ -150,6 +150,27 @@ describe('flowpact remotes update', () => {
     expect(missing.exitCode).toBe(2);
   });
 
+  it("runs none of the repository's plugins: it runs no rule", async () => {
+    const root = repo();
+    const marker = join(root, 'plugin-ran');
+    writeFileSync(
+      join(root, 'plugin.mjs'),
+      `import { writeFileSync } from 'node:fs';\nwriteFileSync(${JSON.stringify(marker)}, 'ran');\nexport default { code: 'ACME601', name: 'acme', category: 'structure', defaultSeverity: 'error', docsUrl: 'https://x', docs: { summary: 's', why: 'w', fix: 'f' }, check() {} };\n`,
+    );
+    mkdirSync(join(root, '.github/flowpact'), { recursive: true });
+    writeFileSync(
+      join(root, '.github/flowpact/flowpact.config.yml'),
+      'plugins: [./plugin.mjs]\nrules:\n  acme: warning\n',
+    );
+    const r = await run(root, ['update']);
+    expect(r.exitCode).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+    expect(r.stderr).not.toContain('plugin');
+    const d = await run(root, ['download']);
+    expect(d.exitCode).toBe(0);
+    expect(existsSync(marker)).toBe(false);
+  });
+
   it('refuses another action', async () => {
     const r = await run(repo(), ['check']);
     expect(r.exitCode).toBe(2);
