@@ -58,7 +58,10 @@ flowpact has **no telemetry** and sends nothing anywhere.
     `token` input, the same way as the CLI. Never on `pull_request_target` or `workflow_run`, where an untrusted pull
     request would choose which repositories the token reads.
 
-On GitHub Enterprise Server, the `git fetch` and the API reads go to the enterprise server, never to github.com. The artifact upload is
+On GitHub Enterprise Server, the `git fetch` and the API reads go to the enterprise server, never to github.com, unless
+you opt in to looking on github.com for the actions it takes from there through GitHub Connect (`--github-com`, the
+action's `remotes-github-com`). Then the names of the references the enterprise server lacks go to github.com, read
+with `GITHUB_COM_TOKEN` (`github-com-token`) or no token; the enterprise token is never sent there. The artifact upload is
 not available there: the action warns that it could not upload the artifact and still writes the patch (the `patch`
 output). Set `upload-contracts: false` there.
 

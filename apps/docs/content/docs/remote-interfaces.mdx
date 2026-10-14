@@ -65,6 +65,36 @@ a classic token with `repo`, or a GitHub App installation token that includes th
 | `could not reach https://api.github.com (…)` | Node's `fetch failed`: no network, DNS, TLS or a proxy. Check `GITHUB_API_URL`; behind a proxy, set `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` (Node 24 and later), as Node's fetch ignores proxy variables otherwise. |
 | `no answer from … within 30 s` | The network or the API is slow: try again. |
 
+## GitHub Enterprise Server and GHE.com
+
+flowpact reads every remote reference from one API: `GITHUB_API_URL`, else `https://api.github.com`. It does not guess
+the host from the references.
+
+- **In CI**, the runner sets `GITHUB_API_URL` (`https://<host>/api/v3` on GitHub Enterprise Server,
+  `https://api.<subdomain>.ghe.com` on GHE.com), so the action reads from your enterprise with `token`.
+- **On your machine**, set it yourself: `export GITHUB_API_URL=https://<host>/api/v3`. The token is `GH_TOKEN`,
+  `GITHUB_TOKEN`, or the GitHub CLI's for that host (`gh auth login --hostname <host>`).
+
+**Actions from github.com.** With GitHub Connect, a runner of GitHub Enterprise Server looks for an action on the
+enterprise server first, then on github.com. flowpact asks only the enterprise server unless you opt in, so an action
+the runner takes from github.com is recorded under `unreadable:`. To look on github.com too:
+
+```sh
+flowpact remotes update --github-com          # GITHUB_COM_TOKEN for github.com, or none
+```
+
+```yaml
+- uses: ciatlas/flowpact@v0.19
+  with:
+    remotes: fetch
+    remotes-github-com: true
+    github-com-token: ${{ secrets.GITHUB_COM_TOKEN }}   # optional; public repositories need none
+```
+
+Entries read from github.com are marked `host: github.com`. The enterprise token is never sent to github.com: it is read
+with `GITHUB_COM_TOKEN` (the action's `github-com-token`), or without a token. It is opt-in because it sends the names
+of the references your enterprise server lacks to github.com, internal ones that are misspelled or deleted included.
+
 ## In CI
 
 The [action](/docs/action) and the CLI read the committed lockfile and nothing else. To also check references the

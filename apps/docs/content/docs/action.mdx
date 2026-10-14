@@ -126,6 +126,8 @@ All inputs are optional.
 | `expected-impact` | `''` | The declared impact (`none`, `patch`, `minor`, `major`); overrides the pull request title and labels. |
 | `base-ref` | `''` | Baseline for impact mode: a commit, tag or branch (read from `origin/<branch>`, fetched when missing). Empty uses the pull request base, the commit before a push, or the last release tag for a release pull request. |
 | `remotes` | `lockfile` | Remote workflows and actions: `lockfile` checks them against the committed [remote interfaces lockfile](/docs/remote-interfaces) only; `fetch` also fetches, with `token`, the interfaces of the references it lacks, for this run (never on `pull_request_target` or `workflow_run`). |
+| `remotes-github-com` | `false` | With `remotes: fetch` on GitHub Enterprise Server or GHE.com: also look on github.com for the references the enterprise server lacks, as GitHub Connect does. It sends their names to github.com. |
+| `github-com-token` | `''` | The token for github.com with `remotes-github-com`; `token` is never sent there. Empty reads public repositories without one. |
 | `token` | `${{ github.token }}` | Used to fetch the baseline commit or release tags when the checkout is shallow, and with `remotes: fetch` to read the remote repositories (private and internal ones need a token that can read them). |
 | `debug` | `false` | Print flowpact debug logs (also enabled by re-running the job with debug logging). |
 

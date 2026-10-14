@@ -195,6 +195,7 @@ flowpact remotes update [paths…] [--dry-run]
 | Option | Description |
 | --- | --- |
 | `[paths…]` | Workflow or action files or directories: fetch only the remote references they use, and those of the local workflows and actions they call. Other entries of the lockfile are kept as they are; an entry nothing in the repository uses any more is still dropped. |
+| `--github-com` | On GitHub Enterprise Server or GHE.com: also look on github.com for the references the enterprise server lacks, as GitHub Connect does, with `GITHUB_COM_TOKEN` or none (never the enterprise token). See [GitHub Enterprise Server](/docs/remote-interfaces#github-enterprise-server-and-ghecom). |
 | `--dry-run` | Fetch and say what would change; write nothing. |
 
 It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
@@ -458,5 +459,6 @@ exits `0` too, or `1` when a file with YAML syntax errors could not be regenerat
 | `FLOWPACT_NO_HYPERLINKS` | Disable clickable docs links (OSC 8). |
 | `GITHUB_REPOSITORY` | `owner/repo`, used to resolve same-repository `uses:` references (also read from `.git/config` or the `repository` config key). |
 | `GH_TOKEN` / `GITHUB_TOKEN` | The token `flowpact remotes update` reads remote repositories with (else `gh auth token`). |
-| `GITHUB_API_URL` | The GitHub API `flowpact remotes update` uses (GitHub Enterprise Server); `https://api.github.com` by default. |
+| `GITHUB_API_URL` | The GitHub API `flowpact remotes update` and `--fetch-remotes` use (`https://<host>/api/v3` on GitHub Enterprise Server); `https://api.github.com` by default. |
+| `GITHUB_COM_TOKEN` | With `--github-com`, the token for github.com; without it, github.com is read without one. |
 | `COLUMNS` | Output width when not attached to a terminal. |
