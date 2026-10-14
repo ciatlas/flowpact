@@ -29,7 +29,8 @@ export const REMOTES_LOCK_FILES = [
 
 const inputSchema = z.strictObject({
   type: z.optional(z.string()),
-  required: z.boolean(),
+  /** Written only when true. */
+  required: z.optional(z.boolean()),
   default: z.optional(z.json()),
   options: z.optional(z.array(z.string())),
 });
@@ -39,7 +40,7 @@ const entrySchema = z.strictObject({
   sha: z.string().check(z.regex(/^[0-9a-f]{40}$/)),
   kind: z.enum(['workflow', 'action']),
   inputs: z.optional(z.record(z.string(), inputSchema)),
-  secrets: z.optional(z.record(z.string(), z.strictObject({ required: z.boolean() }))),
+  secrets: z.optional(z.record(z.string(), z.strictObject({ required: z.optional(z.boolean()) }))),
   outputs: z.optional(z.array(z.string())),
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
   using: z.optional(z.string()),
@@ -196,7 +197,7 @@ export function targetedUnits(index: ProjectIndex): Set<UnitDecl> | undefined {
 /** An input as the lockfile records it. */
 const lockedInput = (i: InputDecl) => ({
   ...(i.type ? { type: i.type } : {}),
-  required: i.required,
+  ...(i.required ? { required: true } : {}),
   ...(i.hasDefault && i.default !== undefined ? { default: i.default } : {}),
   ...(i.options ? { options: i.options } : {}),
 });
@@ -204,26 +205,42 @@ const lockedInput = (i: InputDecl) => ({
 const lockedInputs = (decls: Record<string, InputDecl>) =>
   Object.fromEntries(Object.values(decls).map((i) => [i.name, lockedInput(i)]));
 
-/** The lockfile entry of a remote unit, read from its file at commit `sha`. */
+/** `key: value` when the value holds something, so the lockfile leaves out empty maps and lists. */
+const ifAny = <K extends string, V extends object>(key: K, value: V): Partial<Record<K, V>> =>
+  Object.keys(value).length ? ({ [key]: value } as Record<K, V>) : {};
+
+/**
+ * The lockfile entry of a remote unit, read from its file at commit `sha`. What is the default is left out: `required`
+ * when false, and empty inputs, secrets and outputs.
+ */
 export function lockEntryOf(unit: UnitDecl, sha: string): RemoteEntry {
   if (unit.kind === 'workflow') {
     const call = unit.call;
     return {
       sha,
       kind: 'workflow',
-      inputs: lockedInputs(call?.inputs ?? {}),
-      secrets: Object.fromEntries(
-        Object.values(call?.secrets ?? {}).map((s) => [s.name, { required: s.required }]),
+      ...ifAny('inputs', lockedInputs(call?.inputs ?? {})),
+      ...ifAny(
+        'secrets',
+        Object.fromEntries(
+          Object.values(call?.secrets ?? {}).map((s) => [s.name, s.required ? { required: true } : {}]),
+        ),
       ),
-      outputs: Object.values(call?.outputs ?? {}).map((o) => o.name),
+      ...ifAny(
+        'outputs',
+        Object.values(call?.outputs ?? {}).map((o) => o.name),
+      ),
     };
   }
   return {
     sha,
     kind: 'action',
     ...(unit.using ? { using: unit.using } : {}),
-    inputs: lockedInputs(unit.inputs),
-    outputs: Object.values(unit.outputs).map((o) => o.name),
+    ...ifAny('inputs', lockedInputs(unit.inputs)),
+    ...ifAny(
+      'outputs',
+      Object.values(unit.outputs).map((o) => o.name),
+    ),
   };
 }
 
