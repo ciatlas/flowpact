@@ -13,6 +13,7 @@ import {
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
+import { isExternal } from '../remotes';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { didYouMeanNote, isProperty, listNames, namesKey, quote } from './util';
 
@@ -77,13 +78,27 @@ function jobOutputRead(site: ExprSite, ref: LocatedRef): string | undefined {
   return isProperty(ref.path[1], 'outputs') && namesKey(output) ? output : undefined;
 }
 
-/** Where a job's outputs are declared: in the reusable workflow it calls, or on the job itself. */
+/**
+ * Where a job's outputs are declared: in the reusable workflow it calls, or on the job itself. A remote workflow's
+ * declaration is in another repository, so the job's `uses:` stands for it.
+ */
 function jobOutputsDeclared(ctx: RuleContext, job: JobDecl, names: string[]): RelatedLocation {
-  const callee = ctx.index.calleeOf(job);
+  const callee = ctx.index.interfaceOf(job);
+  const loc = callee && !isExternal(callee) ? callee.call?.loc : job.uses?.loc;
   return {
-    loc: callee?.call?.loc ?? job.loc,
+    loc: loc ?? job.loc,
     message: `${callee ? `${callee.path} declares` : 'declared'} outputs: ${listNames(names)}`,
   };
+}
+
+/**
+ * The outputs a job has: its own, or those of the reusable workflow it calls, the local one or a remote one whose
+ * interface the lockfile has; undefined for a call flowpact cannot see.
+ */
+function jobOutputs(ctx: RuleContext, job: JobDecl): string[] | undefined {
+  if (!job.uses) return ctx.index.jobOutputNames(job);
+  const callee = ctx.index.interfaceOf(job);
+  return callee?.call ? Object.values(callee.call.outputs).map((o) => o.name) : undefined;
 }
 
 /** FP301 for a job output read: the job must exist and, unless it calls a workflow flowpact cannot see, declare it. */
@@ -103,8 +118,8 @@ function checkJobOutputRef(
     }
     return; // needs.<missing> is reported by FP302
   }
-  if (job.uses && (job.uses.kind !== 'local-workflow' || !ctx.index.calleeOf(job))) return;
-  const names = ctx.index.jobOutputNames(job);
+  const names = jobOutputs(ctx, job);
+  if (!names) return;
   if (names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
   const guess = didYouMean(c, names);
   ctx.report({
@@ -153,7 +168,7 @@ function checkStepOutputRef(
 /** FP301 for `steps.<id>.outputs.<name>` of a step that runs a composite action: the action must declare it. */
 function checkActionOutputRef(ctx: RuleContext, step: StepDecl, ref: LocatedRef): void {
   const [, b, c] = ref.path;
-  const action = ctx.index.actionOf(step);
+  const action = ctx.index.actionInterfaceOf(step);
   if (!isProperty(b, 'outputs') || !namesKey(c) || !action) return;
   // JavaScript and Docker actions may set outputs they do not declare; only composite outputs are fixed.
   if (action.using !== 'composite') return;

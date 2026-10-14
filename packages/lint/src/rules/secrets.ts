@@ -22,6 +22,7 @@ import {
   UNKNOWN,
   type WorkflowDecl,
 } from '@ciatlas/core';
+import { interfaceCalls, isExternal } from '../remotes';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, namesKey, quote } from './util';
 
@@ -45,7 +46,7 @@ secrets:
     },
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       if (call.job.secretsInherit) continue;
       for (const s of Object.values(call.callee.call?.secrets ?? {})) {
         if (!s.required || lookup(call.job.secrets, s.name)) continue;
@@ -63,7 +64,7 @@ function reportMissingSecret(ctx: RuleContext, call: CallSite, s: SecretDecl): v
     symbol: sym.secret(call.callee.path, s.name),
     related: [
       ...chainRelated(chainTo(ctx.index, call.caller.path)),
-      { loc: s.loc, message: 'declared required here' },
+      ...(isExternal(call.callee) ? [] : [{ loc: s.loc, message: 'declared required here' }]),
     ],
   });
 }
@@ -79,7 +80,7 @@ const unknownSecret = defineRule({
     fix: 'Declare the secret under `on.workflow_call.secrets` in the callee, fix the name, or remove it.',
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       const declared = call.callee.call?.secrets ?? {};
       for (const b of Object.values(call.job.secrets)) {
         if (lookup(declared, b.name)) continue;
@@ -88,14 +89,15 @@ const unknownSecret = defineRule({
           message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
           loc: b.loc,
           symbol: sym.secret(call.callee.path, b.name),
-          related: call.callee.call
-            ? [
-                {
-                  loc: call.callee.call.loc,
-                  message: `declared secrets: ${listNames(Object.keys(declared))}`,
-                },
-              ]
-            : [],
+          related:
+            call.callee.call && !isExternal(call.callee)
+              ? [
+                  {
+                    loc: call.callee.call.loc,
+                    message: `declared secrets: ${listNames(Object.keys(declared))}`,
+                  },
+                ]
+              : [],
         });
       }
     }

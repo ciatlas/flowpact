@@ -36,6 +36,8 @@ const entrySchema = z.strictObject({
   inputs: z.optional(z.record(z.string(), inputSchema)),
   secrets: z.optional(z.record(z.string(), z.strictObject({ required: z.boolean() }))),
   outputs: z.optional(z.array(z.string())),
+  /** An action's `runs.using`: only a composite action's outputs are all declared. */
+  using: z.optional(z.string()),
 });
 
 const remotesLockSchema = z.strictObject({
@@ -77,7 +79,9 @@ function interfaceYaml(e: RemoteEntry): string {
     return stringify({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs } }, jobs: {} });
   }
   const outputs = Object.fromEntries((e.outputs ?? []).map((o) => [o, { description: '' }]));
-  return stringify({ name: '', inputs, outputs, runs: { using: 'composite', steps: [] } });
+  const using = e.using ?? 'composite';
+  const runs = using === 'composite' ? { using, steps: [] } : { using, main: '' };
+  return stringify({ name: '', inputs, outputs, runs });
 }
 
 /** The remote interfaces of a lockfile, for `loadProject`. */
