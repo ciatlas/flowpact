@@ -43,6 +43,7 @@ published one calls them — their check names appear under the caller's.
 | A new check name (matrix value added, new job) | minor |
 | `workflow_call` input or secret removed, optional → required, new required input or secret, input type changed, choice option removed | major |
 | Output removed (callers silently read `''`) | major |
+| An artifact the unit uploaded with `actions/upload-artifact` — in its own steps, a local action it uses or a workflow it calls — is no longer uploaded under that name (they run in the caller's run, so a caller's later job that downloads it by name fails) | major (uncertain when a name is now chosen at run time) |
 | An output set on every run is now set only under a condition: the job or step it comes from (or a job that one needs) gains an `if:` that reads a context, so callers read `''` on runs where it is false | major, uncertain ([`FP814`](/docs/rules/fp814)) |
 | Optional input, secret or output added | minor |
 | Input default changed | minor |
