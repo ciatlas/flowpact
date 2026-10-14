@@ -50,6 +50,9 @@ it counts the references as it fetches them; `-v` or `-d` logs a line for each i
 or why it could not be fetched. It also keeps the files it reads in your [sources cache](#sources-for-the-editor), so
 the editor can open them.
 
+A program can do the same with [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean) from the
+API, and read what changed and what failed from its result.
+
 ### Which token
 
 | Token | Read from |

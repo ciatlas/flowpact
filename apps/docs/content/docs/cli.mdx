@@ -18,8 +18,7 @@ description: Every flowpact command, flag, output format and environment variabl
 | [`flowpact rules`](#flowpact-rules) | List the rules and their effective severities. |
 | [`flowpact lsp`](#flowpact-lsp) | Start the language server for editors. |
 
-Every command but `lsp` and `remotes` is also a function of the [API](/docs/api), for programs that run flowpact
-themselves.
+Every command but `lsp` is also a function of the [API](/docs/api), for programs that run flowpact themselves.
 
 Options go after the command (`flowpact lint --no-plugins`); an option before it is a usage error. The value of an
 option is only ever that option's value, whatever it looks like: `--title "$PR_TITLE"` with a title of `--help` or
