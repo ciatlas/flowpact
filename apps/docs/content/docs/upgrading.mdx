@@ -7,6 +7,25 @@ A minor release can change what is reported; an incompatible change to the CLI, 
 reports or the API is a major release (the next one is 1.0.0). Up to 0.14, such a change could also come in a minor
 release. Each section below lists what to do when you move to that release.
 
+## 0.17 → 0.18
+
+0.18 writes new contracts as `.contract.yaml` and reads `.contract.yaml` and `.contract.yml` alike. Existing contracts
+keep their names, so a repository that locks contracts sees no change.
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.18`.
+- **CLI:** `npx flowpact@0.18`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Contract file names
+
+`flowpact generate` names a new contract `.contract.yaml`, except in a repository whose contracts are all
+`.contract.yml`, where it keeps to `.contract.yml` so the directory has one extension. A contract named either way is
+read, compared and updated under its own name. To move a repository to `.contract.yaml`, rename its contract files
+(`git mv`): each contract names its unit, so a renamed file is still that unit's contract, and `flowpact check` stays
+clean. Where tooling or `CODEOWNERS` matches `*.contract.yml`, match `*.contract.yaml` too.
+
 ## 0.16 → 0.17
 
 0.17 follows secrets as GitHub holds them, and places some findings more exactly. No finding is added or removed: what
