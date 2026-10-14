@@ -13,7 +13,8 @@ import {
   trace,
   type UnitDecl,
 } from '@ciatlas/core';
-import { DOCS_BASE_URL } from '@flowpact/lint';
+import { DOCS_BASE_URL, lockedRemote, type RemoteEntry, type RemotesLockRead } from '@flowpact/lint';
+import type { RemoteBinding } from './remotes';
 
 /**
  * The hover sits above other extensions' hovers (GitHub Actions adds its own), so it stays short: a header naming
@@ -144,20 +145,24 @@ function passedValue(binding: Binding | undefined): string | undefined {
   return binding ? (binding.site ? binding.site.text : json(binding.value)) : undefined;
 }
 
+/** What this call passes, and how many other callers pass the same key. */
+function callLines(binding: Binding | undefined, others: number): string[] {
+  const passed = passedValue(binding);
+  const call = [
+    passed !== undefined ? `this call passes ${passed === '' ? 'an empty value' : code(passed)}` : undefined,
+    others > 0 ? plural(others, 'other caller') : undefined,
+  ].filter(Boolean);
+  return call.length ? ['', call.join(' · ')] : [];
+}
+
 /**
  * A caller's `with:`/`secrets:` key: what this call passes, then where the value goes in the callee. Other callers'
  * values are not this call's business; they are counted.
  */
 function bindingLines(locator: SymbolLocator, at: Occurrence, facts: Facts): string[] {
   const index = locator.index;
-  const passed = passedValue(bindingAt(index, at.loc));
   const others = locator.occurrences(at.symbol).filter((o) => o.role === 'binding').length - 1;
-  const out: string[] = [];
-  const call = [
-    passed !== undefined ? `this call passes ${passed === '' ? 'an empty value' : code(passed)}` : undefined,
-    others > 0 ? plural(others, 'other caller') : undefined,
-  ].filter(Boolean);
-  if (call.length) out.push('', call.join(' · '));
+  const out = callLines(bindingAt(index, at.loc), others);
   if (facts.description) out.push('', facts.description);
   const to = flowLine(trace(index, at.symbol, { direction: 'down', maxDepth: 2 }));
   if (to) out.push('', '---', '', `**To** ${to}`);
@@ -191,8 +196,11 @@ function symbolLines(
   return out;
 }
 
-/** Markdown for hovering a symbol: who says so, what it is, and where its value comes from and goes. */
-export function hoverMarkdown(locator: SymbolLocator, at: Occurrence): string {
+/**
+ * Markdown for hovering a symbol: who says so, what it is, and where its value comes from and goes. `remotes` is the
+ * lockfile, which describes remote references.
+ */
+export function hoverMarkdown(locator: SymbolLocator, at: Occurrence, remotes?: RemotesLockRead): string {
   const index = locator.index;
   const node = index.nodes.get(at.symbol);
   const kind = kindOf(at.symbol, node);
@@ -202,7 +210,11 @@ export function hoverMarkdown(locator: SymbolLocator, at: Occurrence): string {
   const label = labelOf(at.symbol, kind, node);
 
   const out = [`**flowpact** · ${KIND[kind] ?? 'reference'} · [docs](${DOCS})`, ''];
-  const facts = decl ? describe(locator, decl) : undeclared(index, kind, at.symbol, node);
+  const facts = decl
+    ? describe(locator, decl, at.symbol)
+    : kind === 'remote'
+      ? remoteFacts(remotes, label)
+      : undeclared(index, kind, at.symbol, node);
   const owner = ownerOf(node, decl);
   const from = declaredElsewhere(decl, owner);
   if (from) facts.line = [from, facts.line].filter(Boolean).join(' · ');
@@ -283,7 +295,11 @@ function matrixFacts(d: DeclOf<'matrix'>): Facts {
   return { line: `values ${list([...values])}` };
 }
 
-function stepFacts(step: DeclOf<'step'>['decl']): Facts {
+/** An output of a step: of its remote action, as the lockfile records it, or written by the step's script. */
+function stepFacts(index: ProjectIndex, step: DeclOf<'step'>['decl'], symbol: string): Facts {
+  const action = step.uses?.kind === 'remote-action' ? index.actionInterfaceOf(step) : undefined;
+  const name = symbol.slice(symbol.lastIndexOf('.outputs.') + '.outputs.'.length);
+  if (action && lookup(action.outputs, name)) return { line: `declared by ${code(step.uses!.raw)}` };
   return {
     line: step.uses ? `outputs of ${code(step.uses.raw)}, not declared` : 'written by the step’s script',
   };
@@ -309,7 +325,7 @@ function unitFacts(locator: SymbolLocator, u: DeclOf<'unit'>['decl']): Facts {
   };
 }
 
-function describe(locator: SymbolLocator, d: Declaration): Facts {
+function describe(locator: SymbolLocator, d: Declaration, symbol: string): Facts {
   switch (d.kind) {
     case 'input':
       return inputFacts(d.decl);
@@ -324,7 +340,7 @@ function describe(locator: SymbolLocator, d: Declaration): Facts {
     case 'matrix':
       return matrixFacts(d);
     case 'step':
-      return stepFacts(d.decl);
+      return stepFacts(locator.index, d.decl, symbol);
     case 'unit':
       return unitFacts(locator, d.decl);
   }
@@ -343,8 +359,8 @@ function undeclared(index: ProjectIndex, kind: string, symbol: string, node: Gra
   switch (kind) {
     case 'var':
       return { line: 'set in the repository, environment or organization settings' };
-    case 'remote':
-      return { line: 'in another repository; its interface is not verified' };
+    case 'job-output':
+      return remoteCallOutput(index, symbol) ?? { line: 'not declared in any file flowpact analyzes' };
     case 'step-output':
       return { line: 'not declared, so not verified' };
     case 'secret':
@@ -352,6 +368,65 @@ function undeclared(index: ProjectIndex, kind: string, symbol: string, node: Gra
     default:
       return { line: 'not declared in any file flowpact analyzes' };
   }
+}
+
+/** An output of a job that calls a remote workflow the lockfile has: declared by it, or not. */
+function remoteCallOutput(index: ProjectIndex, symbol: string): Facts | undefined {
+  const m = /^(.*)#jobs\.([^.]+)\.outputs\.(.+)$/.exec(symbol);
+  const unit = m ? index.unit(m[1]!) : undefined;
+  const job = unit?.kind === 'workflow' ? lookup(unit.jobs, m![2]!) : undefined;
+  const callee = job?.uses?.kind === 'remote-workflow' ? index.interfaceOf(job) : undefined;
+  if (!callee?.call) return undefined;
+  const ref = code(job!.uses!.raw);
+  return { line: lookup(callee.call.outputs, m![3]!) ? `declared by ${ref}` : `not declared by ${ref}` };
+}
+
+/** The lockfile's name, for hovers. */
+const lockName = (remotes: RemotesLockRead | undefined) =>
+  code((remotes?.file ?? 'remotes.lock.yaml').replace(/^.*\//, ''));
+
+/** A remote reference's interface as the lockfile records it, one line per part. */
+function interfaceLines(e: RemoteEntry): string {
+  const named = (m: Record<string, { required?: boolean }> | undefined) =>
+    Object.entries(m ?? {}).map(([n, d]) => `${code(n)}${d.required ? ' (required)' : ''}`);
+  const parts = (
+    [
+      ['Inputs', named(e.inputs)],
+      ['Secrets', named(e.secrets)],
+      ['Outputs', (e.outputs ?? []).map(code)],
+    ] as const
+  )
+    .filter(([, items]) => items.length)
+    .map(([what, items]) => `**${what}** ${list(items)}`);
+  return parts.length ? parts.join('  \n') : 'Declares no inputs, secrets or outputs.';
+}
+
+/** A remote reference: what the lockfile records for it, or why its interface is not verified. */
+function remoteFacts(remotes: RemotesLockRead | undefined, ref: string): Facts {
+  const { entry, unreadable } = lockedRemote(remotes?.lock, ref);
+  const lock = lockName(remotes);
+  if (entry) {
+    const where = `at ${code(entry.sha.slice(0, 7))}${entry.host ? ` on ${text(entry.host)}` : ''}`;
+    const kind = entry.kind === 'workflow' ? 'reusable workflow' : 'action';
+    return { line: `${kind} ${where}, recorded in ${lock}`, description: interfaceLines(entry) };
+  }
+  const line = 'in another repository; its interface is not verified';
+  if (unreadable !== undefined)
+    return { line, description: `${lock} records it as not readable: ${text(unreadable)}` };
+  if (remotes?.error) return { line, description: `${lock} cannot be used.` };
+  return { line, description: `${code('flowpact remotes update')} records it in ${lock}.` };
+}
+
+/** A `with:` or `secrets:` key of a remote call: the input or secret the lockfile records, and what this call passes. */
+export function remoteBindingMarkdown(b: RemoteBinding, callers: number): string {
+  const facts = b.decl.kind === 'input' ? inputFacts(b.decl.decl) : secretFacts(b.decl.decl);
+  const label = code(`${b.decl.kind}s.${b.decl.decl.name}`);
+  return [
+    `**flowpact** · ${b.decl.kind} · [docs](${DOCS})`,
+    '',
+    `${label} in ${code(b.ref)}${facts.line ? ` · ${facts.line}` : ''}`,
+    ...callLines(b.binding, callers - 1),
+  ].join('\n');
 }
 
 /**

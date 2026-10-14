@@ -366,6 +366,52 @@ describe('navigation', () => {
     expect((highlights as { kind: number }[]).map((h) => h.kind)).toEqual([3, 2]);
   });
 
+  it('describes a remote call and its keys from the lockfile, and finds the callers passing an input', async () => {
+    const R = '.github/workflows/remote.yml';
+    const text = [
+      'on: push',
+      'jobs:',
+      '  a:',
+      '    uses: octo/ship/.github/workflows/deploy.yml@v1',
+      '    with: { env: prod }',
+      '  b:',
+      '    uses: octo/ship/.github/workflows/deploy.yml@v1',
+      '    with: { env: dev }',
+      '',
+    ].join('\n');
+    const lock = [
+      'version: 1',
+      'remotes:',
+      '  octo/ship/.github/workflows/deploy.yml@v1:',
+      `    sha: ${'a'.repeat(40)}`,
+      '    kind: workflow',
+      '    inputs: { env: { type: string, required: true } }',
+      '',
+    ].join('\n');
+    const dir = repo({ [R]: text, '.github/flowpact/remotes.lock.yaml': lock });
+    const client = await start(dir);
+    await client.open(dir, R, text);
+    const hoverAt = async (needle: string) =>
+      (
+        (await client.conn.sendRequest('textDocument/hover', {
+          textDocument: { uri: uri(dir, R) },
+          position: position(text, needle),
+        })) as { contents: { value: string } }
+      ).contents.value;
+    expect(await hoverAt('octo/ship')).toContain(
+      'reusable workflow at `aaaaaaa`, recorded in `remotes.lock.yaml`',
+    );
+    expect(await hoverAt('env: prod')).toContain(
+      '`inputs.env` in `octo/ship/.github/workflows/deploy.yml@v1` · `string` · required',
+    );
+    const refs = (await client.conn.sendRequest('textDocument/references', {
+      textDocument: { uri: uri(dir, R) },
+      position: position(text, 'env: prod'),
+      context: { includeDeclaration: true },
+    })) as { range: { start: { line: number } } }[];
+    expect(refs.map((l) => l.range.start.line)).toEqual([4, 7]);
+  });
+
   it('answers nothing where no symbol is written', async () => {
     const { dir, client } = await ready();
     const at = { textDocument: { uri: uri(dir, CALLEE) }, position: position(REPO[CALLEE]!, 'runs-on') };

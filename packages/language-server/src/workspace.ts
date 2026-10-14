@@ -26,6 +26,7 @@ import {
 import type { Diagnostic } from 'vscode-languageserver';
 import { DiagnosticSeverity } from 'vscode-languageserver';
 import { pathToUri, toDiagnostic, toPosix } from './convert';
+import { type RemoteBinding, RemoteBindings } from './remotes';
 import type { Settings } from './settings';
 
 /** Files the analysis reads: workflows, action metadata, and flowpact's config and contracts. */
@@ -57,6 +58,8 @@ function findRoot(path: string): string | undefined {
 export class Root {
   result?: AnalysisResult;
   locator?: SymbolLocator;
+  /** The keys of remote calls whose interface the lockfile has, which the locator does not know. */
+  remotes?: RemoteBindings;
   /** Paths that got diagnostics last time, so files whose findings are gone are cleared. */
   published = new Set<string>();
   /** The last config that parsed and analyzed cleanly, used while the config file is being edited. */
@@ -207,18 +210,23 @@ export class Workspace {
     if (root) this.schedule(root, DEBOUNCE_MS);
   }
 
-  /** The symbol at a position (1-based), after pending edits are analyzed. */
+  /**
+   * The symbol at a position (1-based), after pending edits are analyzed; on a key of a remote call, also that key's
+   * input or secret as the lockfile records it.
+   */
   async locate(
     path: string,
     line: number,
     column: number,
-  ): Promise<{ root: Root; at: Occurrence } | undefined> {
+  ): Promise<{ root: Root; at: Occurrence; remote?: RemoteBinding } | undefined> {
     const root = this.rootOf(path);
     const rel = root?.rel(path);
     if (!root || !rel) return undefined;
     await this.ready(root);
     const at = root.locator?.at(rel, line, column);
-    return at ? { root, at } : undefined;
+    if (at) return { root, at };
+    const remote = root.remotes?.at(rel, line, column);
+    return remote ? { root, at: remote.at, remote } : undefined;
   }
 
   /** Waits until every root's analysis reflects the latest edits. */
@@ -366,6 +374,7 @@ export class Workspace {
     if (analyzed.candidate === loaded && problems.length === 0) root.goodConfig = loaded;
     root.result = result;
     root.locator = new SymbolLocator(result.index);
+    root.remotes = new RemoteBindings(result.index);
     logger.debug(`analyzed ${root.dir}`, {
       findings: result.findings.length,
       ms: Math.round(result.durationMs),

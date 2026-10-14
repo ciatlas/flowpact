@@ -16,7 +16,7 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { pathToUri, toRange, uriToPath } from './convert';
-import { hoverMarkdown } from './hover';
+import { hoverMarkdown, remoteBindingMarkdown } from './hover';
 import { readSettings, type Settings } from './settings';
 import { type Root, Workspace } from './workspace';
 
@@ -150,13 +150,20 @@ export function startServer(connection: Connection): void {
     range: toRange(loc),
   });
 
+  /** Every occurrence of the found symbol; a remote call's key is one the locator does not know. */
+  const occurrencesOf = (found: NonNullable<Awaited<ReturnType<typeof locate>>>) =>
+    found.remote
+      ? found.root.remotes!.occurrences(found.at.symbol)
+      : found.root.locator!.occurrences(found.at.symbol);
+
   connection.onHover(async ({ textDocument, position }) => {
     const found = await locate(textDocument.uri, position);
     if (!found?.root.locator) return null;
-    return {
-      contents: { kind: 'markdown', value: hoverMarkdown(found.root.locator, found.at) },
-      range: toRange(found.at.loc),
-    };
+    const { root, at, remote } = found;
+    const value = remote
+      ? remoteBindingMarkdown(remote, occurrencesOf(found).length)
+      : hoverMarkdown(root.locator!, at, root.result?.remotes);
+    return { contents: { kind: 'markdown', value }, range: toRange(at.loc) };
   });
 
   connection.onDefinition(async ({ textDocument, position }): Promise<Location[] | LocationLink[] | null> => {
@@ -176,18 +183,15 @@ export function startServer(connection: Connection): void {
   connection.onReferences(async ({ textDocument, position, context }) => {
     const found = await locate(textDocument.uri, position);
     if (!found?.root.locator) return null;
-    const { root, at } = found;
-    return root
-      .locator!.occurrences(at.symbol)
+    return occurrencesOf(found)
       .filter((o) => context.includeDeclaration || o.role !== 'declaration')
-      .map((o) => location(root, o.loc));
+      .map((o) => location(found.root, o.loc));
   });
 
   connection.onDocumentHighlight(async ({ textDocument, position }): Promise<DocumentHighlight[] | null> => {
     const found = await locate(textDocument.uri, position);
     if (!found?.root.locator) return null;
-    return found.root
-      .locator!.occurrences(found.at.symbol)
+    return occurrencesOf(found)
       .filter((o) => o.loc.file === found.at.loc.file)
       .map((o) => ({ range: toRange(o.loc), kind: HIGHLIGHT[o.role] }));
   });
