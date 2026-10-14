@@ -1,0 +1,16 @@
+{
+  "title": "Reference",
+  "description": "Commands, inputs, the API and security",
+  "root": true,
+  "icon": "FileCode",
+  "pages": [
+    "---[Terminal]Tools---",
+    "cli",
+    "action",
+    "api",
+    "[Settings][Configuration keys](/docs/configuration#reference)",
+    "---[ShieldCheck]Security---",
+    "security",
+    "threat-model"
+  ]
+}

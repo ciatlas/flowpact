@@ -155,6 +155,36 @@ export function indexPage(rules: RuleDefinition[]): string {
   return lines.join('\n');
 }
 
+/** A lucide icon for each group of the Rules tab's sidebar, by the start of its title. */
+const GROUP_ICONS: [string, string][] = [
+  ['Inputs', 'TextCursorInput'],
+  ['Secrets', 'KeyRound'],
+  ['Outputs', 'ArrowRightFromLine'],
+  ['Matrix', 'Grid3x3'],
+  ['Env', 'Braces'],
+  ['Graph', 'Network'],
+  ['Contracts', 'FileLock'],
+  ['Impact', 'GitPullRequest'],
+  ['Config', 'Settings'],
+];
+
+/** The Rules tab of the sidebar: the index, then the rules under a separator per group (`meta.json`). */
+export function rulesMeta(rules: RuleDefinition[]) {
+  const pages = ['index'];
+  for (const group of ruleGroups(rules)) {
+    const icon = GROUP_ICONS.find(([start]) => group.title.startsWith(start))?.[1];
+    pages.push(`---${icon ? `[${icon}]` : ''}${group.title.replace(/`/g, '')}---`);
+    pages.push(...group.rules.map((r) => r.code.toLowerCase()));
+  }
+  return {
+    title: 'Rules',
+    description: 'Every finding, why it matters and how to fix it',
+    root: true,
+    icon: 'ListChecks',
+    pages,
+  };
+}
+
 /** Ranges within a category that read as a group of their own: impact mode's rules share the contracts category. */
 const SUBGROUPS: { prefix: string; title: string }[] = [{ prefix: 'FP81', title: 'Impact mode (`FP81x`)' }];
 
@@ -182,9 +212,6 @@ if (import.meta.main ?? process.argv[1]?.endsWith('gen-rule-docs.ts')) {
   for (const f of readdirSync(OUT)) if (/^fp\d{3}\.mdx$/.test(f)) rmSync(join(OUT, f));
   for (const rule of rules) writeFileSync(join(OUT, `${rule.code.toLowerCase()}.mdx`), rulePage(rule));
   writeFileSync(join(OUT, 'index.mdx'), indexPage(rules));
-  writeFileSync(
-    join(OUT, 'meta.json'),
-    `${JSON.stringify({ title: 'Rules', pages: ['index', ...rules.map((r) => r.code.toLowerCase())] }, null, 2)}\n`,
-  );
+  writeFileSync(join(OUT, 'meta.json'), `${JSON.stringify(rulesMeta(rules), null, 2)}\n`);
   console.log(`wrote ${rules.length} rule pages to ${OUT}`);
 }

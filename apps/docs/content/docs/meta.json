@@ -1,27 +1,4 @@
 {
   "title": "Documentation",
-  "pages": [
-    "index",
-    "getting-started",
-    "how-it-works",
-    "---Usage---",
-    "cli",
-    "editors",
-    "ci",
-    "action",
-    "integrating",
-    "api",
-    "configuration",
-    "contracts",
-    "remote-interfaces",
-    "impact-mode",
-    "---Reference---",
-    "rules",
-    "custom-rules",
-    "comparison",
-    "security",
-    "threat-model",
-    "roadmap",
-    "upgrading"
-  ]
+  "pages": ["(guide)", "rules", "(reference)"]
 }

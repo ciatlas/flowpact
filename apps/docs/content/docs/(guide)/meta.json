@@ -1,0 +1,28 @@
+{
+  "title": "Guides",
+  "description": "Install, use and roll out flowpact",
+  "root": true,
+  "icon": "BookOpen",
+  "pages": [
+    "---[Compass]Overview---",
+    "index",
+    "how-it-works",
+    "comparison",
+    "---[Rocket]Get started---",
+    "getting-started",
+    "---[Wrench]Everyday use---",
+    "editors",
+    "ci",
+    "---[Building]Shared workflows---",
+    "contracts",
+    "impact-mode",
+    "remote-interfaces",
+    "integrating",
+    "---[SlidersHorizontal]Customize---",
+    "configuration",
+    "custom-rules",
+    "---[LifeBuoy]Help---",
+    "upgrading",
+    "roadmap"
+  ]
+}

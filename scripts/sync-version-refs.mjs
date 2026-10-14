@@ -24,9 +24,12 @@ export const FILES = [
   'SECURITY.md',
   'CONTRIBUTING.md',
   'packages/cli/README.md',
-  ...readdirSync(join(ROOT, DOCS))
-    // The upgrading notes name the versions they are about.
-    .filter((f) => f.endsWith('.mdx') && f !== 'upgrading.mdx')
+  ...readdirSync(join(ROOT, DOCS), { recursive: true })
+    .map((f) => String(f).replaceAll('\\', '/'))
+    // In the sidebar's group folders too; not the rule pages, which are generated, nor the upgrading notes, which name
+    // the versions they are about.
+    .filter((f) => f.endsWith('.mdx') && !f.startsWith('rules/') && !f.endsWith('upgrading.mdx'))
+    .sort()
     .map((f) => `${DOCS}/${f}`),
   ...readdirSync(join(ROOT, SHOTS))
     .filter((f) => f.endsWith('.svg'))
