@@ -17,9 +17,11 @@ reference resolved to. With it, flowpact checks remote calls as it checks local 
 - [`FP201`](/docs/rules/fp201): a required secret is not passed to a remote reusable workflow;
 - [`FP202`](/docs/rules/fp202): a secret it does not declare is passed;
 - [`FP205`](/docs/rules/fp205): a remote reusable workflow reads a secret it does not declare (relying on
-  `secrets: inherit`), and your call passes secrets by name instead, so the secret is empty. `flowpact remotes update`
-  records such secrets when it reads the workflow, only where no caller's inputs can switch the read off (an `if:` on
-  the way that reads `inputs`, or is always false, leaves the read out);
+  `secrets: inherit`), and your call does not use `secrets: inherit`, so the secret is empty. `flowpact remotes update`
+  records such secrets as `undeclaredSecrets` when it reads the workflow, only reads that run on every call: a read
+  under an `if:` (on its step, its job, or a job its job needs), or in a condition, is left out, since a caller's
+  inputs, event or environment may switch it off. Not followed: a secret the remote workflow hands on with its own
+  `secrets: inherit`, and `inherit` from a workflow of yours that was itself given secrets by name;
 - [`FP301`](/docs/rules/fp301): an output it does not declare is read (`needs.<job>.outputs.<name>`,
   `steps.<id>.outputs.<name>`). A JavaScript or Docker action may set outputs it does not declare, so only a
   composite action's are checked.

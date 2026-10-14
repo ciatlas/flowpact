@@ -7,6 +7,31 @@ A minor release can change what is reported; an incompatible change to the CLI, 
 reports or the API is a major release (the next one is 1.0.0). Up to 0.14, such a change could also come in a minor
 release. Each section below lists what to do when you move to that release.
 
+## 0.20 → 0.21
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.21`.
+- **CLI:** `npx flowpact@0.21`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Remote interfaces lockfile
+
+`flowpact remotes update` now records, for a remote reusable workflow, the secrets it reads without declaring them
+(`undeclaredSecrets`), and [FP205](/docs/rules/fp205) reports a call of it without `secrets: inherit`. The first
+`remotes update` lists those entries as `changed`, though their commits are the same.
+
+flowpact 0.20 and earlier refuse a lockfile with this key (FP611) and then check no remote call. **Update every
+flowpact that reads the lockfile (the action's pin, the CLI, the editor extension) before running `remotes update`
+with 0.21.** From 0.21, a key a later version adds is ignored instead.
+
+### New findings
+
+FP205 reports calls of remote reusable workflows without `secrets: inherit` whose secrets the lockfile records, and,
+with `--fetch-remotes` or the action's `remotes: fetch`, those it fetches for the run. Use `secrets: inherit`, or add
+an override on the symbol (`octo/ship/.github/workflows/ship.yml@v1#secrets.NPM_TOKEN`). FP205 no longer reports a
+read where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`).
+
 ## 0.17 → 0.18
 
 0.18 writes new contracts as `.contract.yaml` and reads `.contract.yaml` and `.contract.yml` alike. Existing contracts

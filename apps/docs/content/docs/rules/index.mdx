@@ -29,7 +29,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP202`](/docs/rules/fp202) | `unknown-secret` | 🔴 error | A caller passes a secret the reusable workflow does not declare. |
 | [`FP203`](/docs/rules/fp203) | `unused-secret` | 🟡 warning | A `workflow_call` secret is declared but never read. |
 | [`FP204`](/docs/rules/fp204) | `secrets-inherit` | 🔵 info | `secrets: inherit` hands every repository secret to the callee; flowpact lists what is actually needed. |
-| [`FP205`](/docs/rules/fp205) | `undeclared-secret-ref` | 🔴 error | A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`. For a remote reusable workflow, from the secrets the remote interfaces lockfile records it reads. |
+| [`FP205`](/docs/rules/fp205) | `undeclared-secret-ref` | 🔴 error | A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`. |
 
 ## Outputs (`FP3xx`)
 
