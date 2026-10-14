@@ -21315,8 +21315,8 @@ function buildContract(index, unit) {
 function serializeContract(c) {
   return `${CONTRACT_HEADER}${(0, import_yaml6.stringify)(c, { lineWidth: 0, indent: 2, defaultStringType: "PLAIN", singleQuote: true })}`;
 }
-function contractFileFor(unit, taken = /* @__PURE__ */ new Set(), dir = CONTRACTS_DIR) {
-  const fileOf = (base2) => `${dir}/${base2}.contract.yml`;
+function contractFileFor(unit, taken = /* @__PURE__ */ new Set(), dir = CONTRACTS_DIR, extension = "yaml") {
+  const fileOf = (base2) => `${dir}/${base2}.contract.${extension}`;
   let base;
   if (unit.kind === "workflow") {
     base = `workflows/${unit.path.split("/").pop().replace(/\.ya?ml$/i, "")}`;
@@ -21497,9 +21497,10 @@ function diffContracts(before, after) {
   diffUsage(add, before, after);
   return changes;
 }
+var CONTRACT_FILE = /\.contract\.ya?ml$/;
 function readContracts(fs3) {
   const out = /* @__PURE__ */ new Map();
-  for (const file of fs3.walk(CONTRACTS_DIR).filter((f) => f.endsWith(".contract.yml")).sort()) {
+  for (const file of fs3.walk(CONTRACTS_DIR).filter((f) => CONTRACT_FILE.test(f)).sort()) {
     const text2 = fs3.read(file) ?? "";
     try {
       const parsed = contractSchema.safeParse((0, import_yaml6.parse)(text2));
@@ -21526,13 +21527,15 @@ function expectedFiles(existing, units, dir) {
   }
   const expected = /* @__PURE__ */ new Map();
   const taken = new Set(lockedFile.values());
+  const extension = contractExtension([...existing.keys()]);
   for (const unit of units) {
-    const file = lockedFile.get(unit.path) ?? contractFileFor(unit, taken, dir);
+    const file = lockedFile.get(unit.path) ?? contractFileFor(unit, taken, dir, extension);
     taken.add(file);
     expected.set(file, unit);
   }
   return expected;
 }
+var contractExtension = (files) => files.length > 0 && files.every((f) => f.endsWith(".yml")) ? "yml" : "yaml";
 var withBrokenConsumers = (current, locked, broken) => [...current.filter((c) => !broken.has(c.from)), ...locked.filter((c) => broken.has(c.from))].sort(
   byConsumer
 );
