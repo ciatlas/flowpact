@@ -22156,6 +22156,7 @@ function uploadsOf(index, unit) {
   const out = { names: /* @__PURE__ */ new Set(), dynamic: false };
   for (const step2 of stepsRun(index, unit)) {
     if (step2.uses?.kind !== "remote-action" || !UPLOAD_ARTIFACT.test(step2.uses.raw)) continue;
+    if (!out.at && step2.loc.file === unit.file) out.at = step2.uses.loc;
     const name = artifactName(step2);
     if (name.includes("${{")) out.dynamic = true;
     else out.names.add(name);
@@ -22170,7 +22171,7 @@ function artifactChanges(base, head, b, h) {
     level: "major",
     certain: !after.dynamic,
     message: `no longer uploads artifact "${n}"; callers' jobs that download it fail`,
-    loc: fileStart(h.file)
+    loc: after.at ?? fileStart(h.file)
   }));
 }
 function canonical(v) {
@@ -22573,7 +22574,12 @@ var entrySchema = strictObject({
 var remotesLockSchema = strictObject({
   version: literal(1),
   /** By `uses:` reference: `owner/repo/.github/workflows/<file>@<ref>` or `owner/repo[/path]@<ref>`. */
-  remotes: record(string2(), entrySchema)
+  remotes: record(string2(), entrySchema),
+  /**
+   * References `flowpact remotes update` could not read (they do not exist, or its token cannot read them), with why:
+   * accounted for, though not checked.
+   */
+  unreadable: optional(record(string2(), string2()))
 });
 function readRemotesLock(fs3) {
   const file = REMOTES_LOCK_FILES.find((f) => fs3.read(f) !== void 0);
@@ -23218,7 +23224,7 @@ var impactUnderDeclared = defineRule({
   defaultSeverity: "error",
   docs: {
     summary: "The changes to published workflows or actions need a bigger release than the pull request declares.",
-    why: "Consumers pin a floating tag (`@v1`) or a version range and take every release in it. A breaking change released as a minor or patch reaches them without warning: a renamed job leaves their required status check waiting forever, a removed input fails their run.",
+    why: "Consumers pin a floating tag (`@v1`) or a version range and take every release in it, and read the version to judge an update. A change released at a lower level than it needs reaches them without warning: a breaking one released as a minor or patch leaves their required status check waiting forever or fails their run, and a new environment or check released as a patch changes their runs where they expected fixes only.",
     fix: "Declare the required impact (for example retitle the pull request `feat!: \u2026` for a major release), or keep the published interface and check names compatible.",
     examples: {
       bad: `# PR title: "fix: tidy the test job"
@@ -25223,7 +25229,9 @@ var remotesLockInvalid = defineRule({
 });
 function lockDrift(ctx) {
   const { lock, fetched = [] } = ctx.remotes ?? {};
-  const locked = Object.keys(lock?.remotes ?? {}).filter((r) => !fetched.includes(r));
+  const locked = [...Object.keys(lock?.remotes ?? {}), ...Object.keys(lock?.unreadable ?? {})].filter(
+    (r) => !fetched.includes(r)
+  );
   const lockedKeys = new Set(locked.map(remoteKey));
   const used = remoteRefsOf(ctx.index).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
@@ -25678,7 +25686,7 @@ function withFetched(read, fetched) {
   if (!fetched || !Object.keys(fetched).length) return read;
   return {
     ...read,
-    lock: { version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
+    lock: { ...read.lock, version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
     fetched: Object.keys(fetched)
   };
 }
@@ -26725,6 +26733,11 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
 
 // ../lint/src/remotes-fetch.ts
 var FetchError = class extends Error {
+  constructor(message, unreadable = false) {
+    super(message);
+    this.unreadable = unreadable;
+  }
+  unreadable;
 };
 async function get2(url2, accept, opts) {
   const res = await (opts.fetch ?? fetch)(url2, {
@@ -26736,8 +26749,11 @@ async function get2(url2, accept, opts) {
     },
     signal: AbortSignal.timeout(3e4)
   });
-  if (res.status === 404) return void 0;
+  if (res.status === 404 || res.status === 422) return void 0;
   if (!res.ok) throw new FetchError(`${res.status} ${res.statusText || "error"} from the GitHub API`);
+  return bodyOf(res);
+}
+async function bodyOf(res) {
   if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) throw tooLarge();
   const text2 = await res.text();
   if (text2.length > MAX_FILE_BYTES) throw tooLarge();
@@ -26754,7 +26770,7 @@ async function shaOf(r, opts) {
     opts
   );
   if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
-    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`);
+    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`, true);
   return sha.trim();
 }
 var fileAt2 = (r, path, sha, opts) => get2(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, "application/vnd.github.raw", opts);
@@ -26763,7 +26779,7 @@ async function fetchRemoteEntry(r, opts = {}) {
   const ctx = createParseContext(`${r.owner}/${r.repo}`);
   if (r.kind === "workflow") {
     const text2 = await fileAt2(r, r.path, sha, opts);
-    if (text2 === void 0) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`);
+    if (text2 === void 0) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`, true);
     return lockEntryOf(parseWorkflowFile(r.raw, text2, ctx), sha);
   }
   for (const name of ["action.yml", "action.yaml"]) {
@@ -26771,7 +26787,7 @@ async function fetchRemoteEntry(r, opts = {}) {
     const text2 = await fileAt2(r, file, sha, opts);
     if (text2 !== void 0) return lockEntryOf(parseActionFile(r.raw, file, text2, ctx), sha);
   }
-  throw new FetchError(`no action.yml in ${r.path || "the repository root"} at ${sha.slice(0, 7)}`);
+  throw new FetchError(`no action.yml in ${r.path || "the repository root"} at ${sha.slice(0, 7)}`, true);
 }
 async function eachLimited(items, limit, work) {
   let next = 0;
@@ -26780,16 +26796,19 @@ async function eachLimited(items, limit, work) {
   };
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run2));
 }
-async function tryFetch(r, opts, failed) {
+async function tryFetch(r, opts, out) {
   try {
     return await fetchRemoteEntry(r, opts);
   } catch (e) {
     if (!(e instanceof FetchError) && !(e instanceof TypeError) && e.name !== "TimeoutError")
       throw e;
-    failed.push({ ref: r.raw, error: e.message });
+    const problem = { ref: r.raw, error: e.message };
+    if (e instanceof FetchError && e.unreadable) out.unreadable.push(problem);
+    else out.failed.push(problem);
     return void 0;
   }
 }
+var byRef = (a, b) => a.ref < b.ref ? -1 : 1;
 async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
   const project = loadProject({
     root,
@@ -26799,12 +26818,13 @@ async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
   });
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
   const missing = remoteRefsOf(new ProjectIndex(project)).filter((r) => !locked.has(remoteKey(r.raw)));
-  const out = { remotes: {}, failed: [] };
+  const out = { remotes: {}, failed: [], unreadable: [] };
   await eachLimited(missing, opts.concurrency ?? 8, async (r) => {
-    const entry = await tryFetch(r, opts, out.failed);
+    const entry = await tryFetch(r, opts, out);
     if (entry) out.remotes[r.raw] = entry;
   });
-  out.failed.sort((a, b) => a.ref < b.ref ? -1 : 1);
+  out.failed.sort(byRef);
+  out.unreadable.sort(byRef);
   return out;
 }
 
@@ -28420,7 +28440,8 @@ async function remotesToFetch(inputs, root, logger) {
     ...token && !token.startsWith("${{") ? { token } : {},
     ...process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}
   });
-  for (const f of r.failed) warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  for (const f of [...r.failed, ...r.unreadable])
+    warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
   logger.debug("fetched remote interfaces", { refs: Object.keys(r.remotes) });
   return r.remotes;
 }
