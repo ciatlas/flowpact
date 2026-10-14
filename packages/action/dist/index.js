@@ -22635,13 +22635,13 @@ function parseRemoteRef(raw, kind) {
   if (!m) return void 0;
   return { raw: raw.trim(), kind, owner: m[1], repo: m[2], path: m[3].replace(/^\//, ""), ref: m[4] };
 }
-function remoteRefsOf(index) {
+function remoteRefsOf(index, units = index.units()) {
   const out = /* @__PURE__ */ new Map();
   const add = (raw, kind) => {
     const ref = parseRemoteRef(raw, kind);
     if (ref && !out.has(remoteKey(raw))) out.set(remoteKey(raw), ref);
   };
-  for (const unit of index.units()) {
+  for (const unit of units) {
     if (unit.kind === "workflow") {
       for (const job of Object.values(unit.jobs))
         if (job.uses?.kind === "remote-workflow") add(job.uses.raw, "workflow");
