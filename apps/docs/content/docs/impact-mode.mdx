@@ -53,6 +53,7 @@ published one calls them — their check names appear under the caller's.
 | A job — its own, or a called workflow's — needs a runner label or runner group it did not need before (`ubuntu-latest` → `[self-hosted, gpu]`, a new job on such runners): it runs on the caller's runners, and callers without one never start it | major |
 | A job's runners are chosen at run time (`runs-on: ${{ inputs.runner }}`) where they were not, or by another expression | major, uncertain ([`FP814`](/docs/rules/fp814)) |
 | Another GitHub-hosted image (`ubuntu-22.04` → `ubuntu-24.04`), or fewer runner labels | patch |
+| A job gains, changes or loses its `environment:` (a called workflow's job deploys to the caller's environment of that name: GitHub creates a missing one, so nothing fails, but its protection rules and secrets now apply, or no longer do) | minor (uncertain for a name chosen at run time) |
 | A new third-party action or workflow used inside a published unit (organization allow-lists and SHA-pinning policies apply to consumers) | minor |
 | Narrower permissions, descriptions, other changes to internal steps, `workflow_dispatch` inputs | none |
 
