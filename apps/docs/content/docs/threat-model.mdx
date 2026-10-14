@@ -330,13 +330,16 @@ outside its directory.
   may be privileged (`remotesToFetch` in `packages/action/src/main.ts`). Only `flowpact remotes update` and
   `remotes download` keep the files they read, in a per-user cache: every part of the path (owner, repository, commit,
   each directory and the file name) must be a plain file name on every platform, or the file is not kept, and it is
-  written to a temporary file, made read-only and renamed (`cachedSourcePath`, `cacheSource` in
-  `packages/lint/src/remotes-cache.ts`). The action, `--fetch-remotes` and `--dry-run` write nothing there.
+  written to a temporary file, made read-only for your user alone, and renamed (`cachedSourcePath`, `cacheSource` in
+  `packages/lint/src/remotes-cache.ts`). The action, `--fetch-remotes` and `--dry-run` write nothing there, and
+  `remotes update` nothing in CI unless asked. References and reasons from the lockfile are printed with control
+  characters escaped (`packages/cli/src/lib/text.ts`).
 - **Tests.** `packages/lint/test/remotes.test.ts` (FP611 for an invalid lockfile, then nothing checked;
   `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the token sent only to the API, a response
-  over 1 MB refused); `packages/lint/test/remotes-cache.test.ts` (paths that leave the cache, or are no file name on
-  Windows, refused); `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output, nothing cached by a
-  dry run);
+  over 1 MB refused, the enterprise token never sent to github.com); `packages/lint/test/remotes-cache.test.ts` (paths
+  that leave the cache, or are no file name on Windows, refused; files for your user alone);
+  `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output, control characters from the lockfile
+  shown rather than sent, nothing cached by a dry run, `lint --fetch-remotes` or in CI unless asked);
   `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`); `test/external.test.ts`
   (core; external units out of everything that follows a call).
 - **Residual risk: low.** A false entry in the lockfile weakens only the checks of the repository that commits it, and

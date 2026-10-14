@@ -18,8 +18,10 @@ it and the risk that remains.
   [remote interfaces lockfile](/docs/remote-interfaces). With [impact mode](/docs/impact-mode), it also reads the same
   files at the pull request's base commit through git.
 - **Writes** only what you ask for: reports to stdout or `--output`, contracts with `flowpact generate`, the remote
-  interfaces lockfile with `flowpact remotes update`, and a patch with `flowpact check --patch`. It never commits or
-  pushes.
+  interfaces lockfile with `flowpact remotes update`, and a patch with `flowpact check --patch`. `flowpact remotes
+  update` and `remotes download` also keep the remote workflow and action files they read in a per-user
+  [sources cache](/docs/remote-interfaces#sources-for-the-editor) outside the repository, for your user alone (not in
+  CI unless asked, and never with `--dry-run`, `--fetch-remotes` or in the action). It never commits or pushes.
 - **The GitHub Action** additionally writes annotations, the job summary and its outputs, and, in `mode: check` when
   contracts drifted, uploads the regenerated contracts as a workflow artifact (`upload-contracts`).
 
@@ -27,7 +29,8 @@ flowpact treats the analyzed files as untrusted input:
 
 - it never writes contracts, reports or patches through a symlink in the repository (or, in GitHub Actions, the
   workspace), which a pull request could commit; it writes outside the repository only to paths you pass, such as
-  `-o markdown:"$GITHUB_STEP_SUMMARY"`;
+  `-o markdown:"$GITHUB_STEP_SUMMARY"`, and to the sources cache, where every part of a path from the repository is
+  checked to be a plain file name;
 - it escapes control characters in every finding, and keeps its output from being read as
   [workflow commands](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands) (`::…`
   at the start of a line, `##[…]` anywhere), except the annotations it prints on purpose with `--format github`;

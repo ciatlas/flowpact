@@ -191,14 +191,15 @@ Fetches the interface of every remote reusable workflow and action the repositor
 `.github/flowpact/remotes.lock.yaml` (see [Remote interfaces](/docs/remote-interfaces)).
 
 ```sh
-flowpact remotes update [paths…] [--dry-run]
+flowpact remotes update [paths…] [--cache-dir <dir>] [--dry-run]
 ```
 
 | Option | Description |
 | --- | --- |
 | `[paths…]` | Workflow or action files or directories: fetch only the remote references they use, and those of the local workflows and actions they call. Other entries of the lockfile are kept as they are; an entry nothing in the repository uses any more is still dropped. |
 | `--github-com` | On GitHub Enterprise Server or GHE.com: also look on github.com for the references the enterprise server lacks, as GitHub Connect does, with `GITHUB_COM_TOKEN` or none (never the enterprise token). See [GitHub Enterprise Server](/docs/remote-interfaces#github-enterprise-server-and-ghecom). |
-| `--dry-run` | Fetch and say what would change; write nothing. |
+| `--cache-dir <dir>` | flowpact's cache directory: keep the files read in its `remotes` directory (relative to where you run flowpact). Also in CI, where nothing is kept by default. |
+| `--dry-run` | Fetch and say what would change; write nothing, not even to the cache. |
 
 It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
 through the GitHub API, and its workflow file or `action.yml` is read at that commit. Entries of references nothing uses
@@ -215,8 +216,10 @@ terminal it shows a count as it fetches; `-v` or `-d` logs each reference instea
 see [Remote interfaces](/docs/remote-interfaces#when-a-reference-is-not-fetched).
 
 The files it reads go to the [sources cache](/docs/remote-interfaces#sources-for-the-editor), for the editor; the
-output names it (`sources: ~/.cache/flowpact/remotes (2 new)`). A file it cannot keep there is listed on that line and
-does not fail the command. With `--dry-run`, nothing is kept.
+output names it (`sources: ~/.cache/flowpact/remotes (2 new)`). Files it cannot keep there are counted on that line,
+with the first reason (`-d` logs each one), and do not fail the command. With `--dry-run`, nothing is kept. In CI
+(`CI` set, or Azure Pipelines' `TF_BUILD`, or Jenkins' `JENKINS_URL`), nothing is kept unless `--cache-dir` or
+`FLOWPACT_CACHE_DIR` says where: nobody opens the files there, and the line says so.
 
 ## `flowpact remotes download`
 
@@ -225,16 +228,17 @@ Downloads the workflow files and `action.yml`s of the remote references the repo
 open them. It resolves no tag and does not change the lockfile.
 
 ```sh
-flowpact remotes download [paths…] [--github-com]
+flowpact remotes download [paths…] [--cache-dir <dir>] [--github-com]
 ```
 
 | Option | Description |
 | --- | --- |
 | `[paths…]` | Workflow or action files or directories: download only the sources of the remote references they use, and those of the local workflows and actions they call. |
+| `--cache-dir <dir>` | flowpact's cache directory: download into its `remotes` directory (relative to where you run flowpact). |
 | `--github-com` | Download the sources of entries read on github.com (`host: github.com`), with `GITHUB_COM_TOKEN` or none; without it they are skipped. See [GitHub Enterprise Server](/docs/remote-interfaces#github-enterprise-server-and-ghecom). |
 
-It needs the lockfile (without one, or with one it cannot use, it exits `2`), and the same token as
-`flowpact remotes update`. A source the cache has is not downloaded again. A reference the lockfile has no entry for is
+It needs the lockfile (without one, or with one it cannot use, it exits `2`), and the same token and `GITHUB_API_URL`
+as `flowpact remotes update`. Unlike `remotes update`, it uses the cache in CI too: downloading is all it does. A source the cache has is not downloaded again. A reference the lockfile has no entry for is
 listed as `unlocked` (`flowpact remotes update` adds it), one it records as not readable as `skipped`. A source that
 cannot be downloaded or kept is listed as `failed`, and makes the command exit `1`.
 
@@ -484,8 +488,9 @@ exits `0` too, or `1` when a file with YAML syntax errors could not be regenerat
 | `FLOWPACT_DEBUG` | `1` for debug logs, `trace` for trace logs. |
 | `FLOWPACT_NO_HYPERLINKS` | Disable clickable docs links (OSC 8). |
 | `GITHUB_REPOSITORY` | `owner/repo`, used to resolve same-repository `uses:` references (also read from `.git/config` or the `repository` config key). |
-| `GH_TOKEN` / `GITHUB_TOKEN` | The token `flowpact remotes update` reads remote repositories with (else `gh auth token`). |
-| `GITHUB_API_URL` | The GitHub API `flowpact remotes update` and `--fetch-remotes` use (`https://<host>/api/v3` on GitHub Enterprise Server); `https://api.github.com` by default. |
+| `GH_TOKEN` / `GITHUB_TOKEN` | The token `flowpact remotes update`, `remotes download` and `--fetch-remotes` read remote repositories with (else `gh auth token`). |
+| `GITHUB_API_URL` | The GitHub API `flowpact remotes update`, `remotes download` and `--fetch-remotes` use (`https://<host>/api/v3` on GitHub Enterprise Server); `https://api.github.com` by default. |
 | `GITHUB_COM_TOKEN` | With `--github-com`, the token for github.com; without it, github.com is read without one. |
-| `FLOWPACT_CACHE_DIR` | An absolute path: keep the [sources cache](/docs/remote-interfaces#sources-for-the-editor) in its `remotes` directory instead of the platform's per-user cache. |
+| `FLOWPACT_CACHE_DIR` | An absolute path: keep the [sources cache](/docs/remote-interfaces#sources-for-the-editor) in its `remotes` directory instead of the platform's per-user cache, also in CI. `--cache-dir` takes precedence. |
+| `CI` / `TF_BUILD` / `JENKINS_URL` | Set by CI services: `flowpact remotes update` keeps no sources unless `--cache-dir` or `FLOWPACT_CACHE_DIR` says where. |
 | `COLUMNS` | Output width when not attached to a terminal. |
