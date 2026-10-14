@@ -22076,6 +22076,34 @@ function runnerChanges(base, head, b, h) {
   }
   return out;
 }
+var envName = (e) => e?.name.toLowerCase();
+function environmentChange(at, b, h, fallback) {
+  if (envName(b) === envName(h)) return void 0;
+  const certain = !b?.dynamic && !h?.dynamic;
+  if (!h)
+    return {
+      certain,
+      message: `${at} no longer uses environment "${b.name}"; its protection rules and secrets no longer apply to callers' runs`,
+      loc: fallback
+    };
+  return {
+    certain,
+    message: `${at} now uses environment "${h.name}"${b ? ` instead of "${b.name}"` : ""}; callers' environment of that name, its protection rules and secrets now apply (GitHub creates it when missing)`,
+    loc: h.loc
+  };
+}
+function environmentChanges(base, head, b, h) {
+  const before = byJobChain(base, b, (job) => job.environment);
+  const loc = byJobChain(head, h, (job) => job.loc);
+  const out = [];
+  for (const [chain, he] of byJobChain(head, h, (job) => job.environment)) {
+    if (!before.has(chain) && !he) continue;
+    const at = `jobs.${chain.replaceAll(" > ", " \u203A ")}`;
+    const change = environmentChange(at, before.get(chain), he, loc.get(chain));
+    if (change) out.push({ unit: h.path, kind: "environment", level: "minor", ...change });
+  }
+  return out;
+}
 function remoteUses(unit) {
   const out = /* @__PURE__ */ new Set();
   const steps2 = unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
@@ -22253,7 +22281,8 @@ function comparedChanges(base, head, b, h) {
     out.push(
       ...checkNameChanges(base, head, b, h),
       ...permissionChanges(base, head, b, h),
-      ...runnerChanges(base, head, b, h)
+      ...runnerChanges(base, head, b, h),
+      ...environmentChanges(base, head, b, h)
     );
   if (b.kind === "action" && h.kind === "action") out.push(...runtimeChanges(b, h));
   return out;
