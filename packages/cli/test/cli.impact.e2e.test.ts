@@ -1125,6 +1125,25 @@ describe('ignore and impact mode', () => {
       expect(r.stderr).not.toContain('a file of this repository');
     });
 
+    it('notes only what the commit the pull request records for the submodule leaves out', async () => {
+      // The pull request keeps v1, which ignores nothing; the submodule is checked out at v2, which ignores b.
+      const root = withSubmodule(['ignore: []\n', IGNORES_B], 0, 0);
+      git(join(root, '.org'), 'checkout', '-q', 'main');
+      const r = await impact(root);
+      expect(r.exitCode).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      // Before: "this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged".
+      expect(r.stderr).not.toContain('ignore leaves out');
+      // The pull request moves the submodule to v2, which no longer ignores b, while the one checked out (v1) does:
+      // b is graded, as it leaves the baseline's ignore. Before: left out, exit 0.
+      const moved = withSubmodule([IGNORES_B, 'ignore: []\n'], 0, 1);
+      git(join(moved, '.org'), 'checkout', '-q', 'HEAD~1');
+      const m = await impact(moved);
+      expect(m.exitCode).toBe(1);
+      expect(m.stdout).toContain('FP810');
+      expect(m.stderr).not.toContain('ignore leaves out');
+    });
+
     it("reads it at the baseline's commit of the submodule, so one the pull request leaves alone counts on both sides", async () => {
       const r = await impact(withSubmodule([IGNORES_B], 0, 0));
       // Before: b was graded with "this pull request changes what ignore leaves out of impact mode (b); that applies

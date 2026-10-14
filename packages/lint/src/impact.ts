@@ -657,9 +657,11 @@ export interface ImpactLookAt {
   /**
    * The `ignore` patterns of the baseline's config and of the pull request's (the working tree's). A unit whose file
    * both match is not graded, so neither adding a published unit to `ignore` nor taking it out in the pull request lets
-   * its change through. Without them, every unit is graded.
+   * its change through. Without them, every unit is graded. `afterMerge` is the pull request's as its commits have it,
+   * where that differs from the working tree's (a base config in a submodule checked out at another commit than the
+   * pull request records): it must match the file too, and it is what applies once the pull request is merged.
    */
-  ignore?: { baseline: readonly string[]; head: readonly string[] };
+  ignore?: { baseline: readonly string[]; head: readonly string[]; afterMerge?: readonly string[] };
 }
 
 const matchesAny = (patterns: readonly string[], file: string) =>
@@ -671,7 +673,10 @@ const coveredBy = (within: ImpactPaths | undefined) => (file: string) =>
 
 /** Whether impact mode leaves a file out: both the baseline's and the pull request's `ignore` match it. */
 const leftOutBy = (ignore: ImpactLookAt['ignore']) => (file: string) =>
-  ignore !== undefined && matchesAny(ignore.baseline, file) && matchesAny(ignore.head, file);
+  ignore !== undefined &&
+  matchesAny(ignore.baseline, file) &&
+  matchesAny(ignore.head, file) &&
+  (!ignore.afterMerge || matchesAny(ignore.afterMerge, file));
 
 /**
  * The units of either side impact mode looks at, by path; undefined when it looks at every unit (no paths, and an
@@ -702,9 +707,10 @@ function ignoreAddedOf(
   const files = new Map<string, string[]>();
   for (const u of [...base.units(), ...head.units()])
     if (isPublished(u, policy) && covered(u.file)) files.set(u.path, [...(files.get(u.path) ?? []), u.file]);
+  const merged = ignore.afterMerge ?? ignore.head;
   const leavesOut = (patterns: readonly string[], of: string[]) => of.every((f) => matchesAny(patterns, f));
   return [...files]
-    .filter(([, of]) => leavesOut(ignore.head, of) && !leavesOut(ignore.baseline, of))
+    .filter(([, of]) => leavesOut(merged, of) && !leavesOut(ignore.baseline, of))
     .map(([path]) => path)
     .sort();
 }

@@ -81,8 +81,8 @@ function baselineOf(root: string, file: string) {
     baseConfigFile,
   });
   if ('skip' in prepared) throw new Error(prepared.skip);
-  const { ignore, ignoreUnread } = prepared.options;
-  return { ignore, ignoreUnread, notes: prepared.notes };
+  const { ignore, ignoreAfterMerge, ignoreUnread } = prepared.options;
+  return { ignore, ignoreAfterMerge, ignoreUnread, notes: prepared.notes };
 }
 
 describe('a base config reached through a symbolic link', () => {
@@ -98,6 +98,7 @@ describe('a base config reached through a symbolic link', () => {
       '.github/base.yml',
     );
     expect(moved).toMatchObject({ ignore: [], notes: [OF_REPOSITORY] });
+    expect(moved.ignoreAfterMerge).toBeUndefined();
     const kept = repo({ ...CONFIGS, '.github/base.yml': { link: 'org/loose.yml' } }, {});
     expect(baselineOf(kept, '.github/base.yml').ignore).toEqual(['b/**']);
     // A linked directory on the way, and a link to a link.
@@ -205,7 +206,11 @@ describe('a base config the baseline lacks or no commit tracks', () => {
     put(join(sub, '.org'), { 'base.yml': IGNORES_B });
     commit(join(sub, '.org'), 'v1');
     commit(sub, 'submodule');
-    expect(baselineOf(sub, '.org/base.yml')).toMatchObject({ ignore: [], notes: [OF_REPOSITORY] });
+    expect(baselineOf(sub, '.org/base.yml')).toMatchObject({
+      ignore: [],
+      ignoreAfterMerge: ['b/**'],
+      notes: [OF_REPOSITORY],
+    });
   });
 });
 
@@ -217,11 +222,25 @@ describe('a base config within a submodule', () => {
     expect(baselineOf(root, '.org/gen.yml')).toMatchObject({ ignore: ['b/**'], notes: [] });
   });
 
+  it('pairs it with the commit the pull request records, not one checked out in its place', () => {
+    const versions = [{ 'base.yml': NOTHING }, { 'base.yml': IGNORES_B }];
+    // Both record v1; the submodule is checked out at v2 (`git submodule update --remote`).
+    const remote = repo({}, {}, versions, [0, 0]);
+    git(join(remote, '.org'), 'checkout', '-q', 'main');
+    expect(baselineOf(remote, '.org/base.yml')).toMatchObject({ ignore: [], ignoreAfterMerge: [] });
+    // The pull request records v2.
+    const moved = repo({}, {}, versions, [0, 1]);
+    expect(baselineOf(moved, '.org/base.yml')).toMatchObject({ ignore: [], ignoreAfterMerge: ['b/**'] });
+  });
+
   it('follows a link in the submodule back into the repository, as each side has it', () => {
     const root = repo({ '.github/org/strict.yml': NOTHING }, { '.github/org/strict.yml': IGNORES_B }, [
       { 'base.yml': { link: '../.github/org/strict.yml' } },
     ]);
-    expect(baselineOf(root, '.org/base.yml').ignore).toEqual([]);
+    const r = baselineOf(root, '.org/base.yml');
+    expect(r.ignore).toEqual([]);
+    // The file is the repository's own, which the working tree has as the pull request does.
+    expect(r.ignoreAfterMerge).toBeUndefined();
   });
 
   it("names the submodule when the clone lacks the baseline's commit of it", () => {

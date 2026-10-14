@@ -409,11 +409,12 @@ function repositoryPathOf(top: string, file: string): string | undefined {
 
 /**
  * What a checkout of a commit has at a path (see `locate`): a file the commit tracks (`object` in the repository at
- * `dir`; `path` from the top), a file of the working tree that no commit tracks or one outside the repository
- * (`file`, its real path), none, or `unread`: the submodule whose commit there this clone lacks.
+ * `dir`, which is a submodule's with `submodule`; `path` from the top), a file of the working tree that no commit
+ * tracks or one outside the repository (`file`, its real path), none, or `unread`: the submodule whose commit there
+ * this clone lacks.
  */
 type Located =
-  | { kind: 'tracked'; dir: string; object: string; path: string }
+  | { kind: 'tracked'; dir: string; object: string; path: string; submodule: boolean }
   | { kind: 'file'; file: string }
   | { kind: 'none' }
   | { kind: 'unread'; submodule: string; path: string };
@@ -496,7 +497,13 @@ function tracked(w: Walk, entry: TreeEntry): Located | undefined {
       return submodule(w, entry);
     default:
       if (w.todo.length) return NONE;
-      return { kind: 'tracked', dir: w.dir, object: entry.object, path: walked(w, entry.name) };
+      return {
+        kind: 'tracked',
+        dir: w.dir,
+        object: entry.object,
+        path: walked(w, entry.name),
+        submodule: w.shown !== '',
+      };
   }
 }
 
@@ -646,7 +653,10 @@ function baseConfigAt(
 }
 
 /** What impact mode pairs with the pull request's own `ignore` (see `AnalyzeOptions['impact']`). */
-type BaselineIgnore = Pick<NonNullable<AnalyzeOptions['impact']>, 'ignore' | 'ignoreUnread'>;
+type BaselineIgnore = Pick<
+  NonNullable<AnalyzeOptions['impact']>,
+  'ignore' | 'ignoreUnread' | 'ignoreAfterMerge'
+>;
 
 /**
  * The baseline's `ignore`, which impact mode pairs with the pull request's own: its config's, on top of the base
@@ -666,7 +676,25 @@ function baselineIgnore(
   return { ignore: at.config ? [...new Set([...at.config.ignore, ...own])] : own };
 }
 
-/** The baseline's config, the impact policy it sets, and its `ignore`. */
+/**
+ * The pull request's `ignore` as its commits have it, when the working tree may have another: for a base config of the
+ * repository in a submodule, at the commit the checked-out commit records for it (`git submodule update --remote`
+ * checks out another), under the config's own. Undefined otherwise: the working tree's is the pull request's.
+ */
+function ignoreAfterMerge(
+  root: string,
+  base: RepositoryBaseConfig,
+  configPath: string | undefined,
+): readonly string[] | undefined {
+  const head = locate(base.top, 'HEAD', base.path);
+  if (head.kind !== 'tracked' || !head.submodule) return undefined;
+  const recorded = asBaseConfig(textOf(head) ?? '', head.path);
+  // The config's own `ignore`, without the base config's: read like the baseline's, from the working tree.
+  const own = baselineConfig(workingTree(root), configPath, undefined, [])?.ignore ?? [];
+  return [...new Set([...(recorded instanceof ConfigError ? [] : recorded.ignore), ...own])];
+}
+
+/** The baseline's config, the impact policy it sets, and its `ignore`, beside the pull request's once merged. */
 function baselinePolicy(
   root: string,
   baseline: { fs: FileSystem; commit: string },
@@ -694,7 +722,8 @@ function baselinePolicy(
     notes.push('this pull request changes impact settings; they apply after it is merged');
   }
   const ignore = baselineIgnore(repositoryBase, config, notes);
-  return { config, policy, ignore };
+  const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath);
+  return { config, policy, ignore: { ...ignore, ...(afterMerge ? { ignoreAfterMerge: afterMerge } : {}) } };
 }
 
 /** The pull request's title and labels: given in the request, else read from the pull request event. */
