@@ -1043,6 +1043,66 @@ describe('impact mode', () => {
     expect(s.failed).toEqual([]);
   });
 
+  it("runs impact: auto where the commit a pull request records for a base config's submodule ignores less", async () => {
+    const workspace = mkdtempSync(join(temp, 'org-submodule-'));
+    const org = join(workspace, '.org');
+    const init = (dir: string) => {
+      mkdirSync(dir, { recursive: true });
+      for (const args of [
+        ['init', '-q', '-b', 'main'],
+        ['config', 'user.email', 't@example.com'],
+        ['config', 'user.name', 't'],
+        ['config', 'commit.gpgsign', 'false'],
+      ])
+        execFileSync('git', args, { cwd: dir, stdio: 'pipe' });
+    };
+    const g = (dir: string, ...args: string[]) =>
+      execFileSync('git', args, { cwd: dir, stdio: 'pipe' }).toString().trim();
+    const actionYml = (input: string) =>
+      `name: a\ndescription: d\ninputs:\n${input}runs:\n  using: composite\n  steps: [{ shell: bash, run: "true" }]\n`;
+    init(workspace);
+    init(org);
+    // The organization's config ignores every published action at v1, and nothing at v2.
+    const versions = ['ignore: ["*/action.yml"]\n', 'ignore: []\n'].map((text, i) => {
+      writeFileSync(join(org, 'base.yml'), text);
+      g(org, 'add', '-A');
+      g(org, 'commit', '-q', '-m', `v${i + 1}`);
+      return g(org, 'rev-parse', 'HEAD');
+    });
+    g(org, 'checkout', '-q', versions[0]!);
+    const files: Record<string, string> = {
+      '.github/flowpact/flowpact.config.yml': 'impact:\n  publish: ["*/action.yml"]\n',
+      'a/action.yml': actionYml('  token: { description: t, required: false }\n'),
+      'b/action.yml': actionYml('  token: { description: t, required: false }\n'),
+    };
+    for (const [f, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(workspace, f)), { recursive: true });
+      writeFileSync(join(workspace, f), text);
+    }
+    g(workspace, 'add', '-A');
+    g(workspace, 'commit', '-q', '-m', 'base');
+    // The pull request records v2 and breaks b; the submodule is checked out at v1 (`git submodule update --remote`
+    // checks out another commit than the one recorded).
+    g(workspace, 'checkout', '-q', '-b', 'change');
+    g(org, 'checkout', '-q', versions[1]!);
+    writeFileSync(join(workspace, 'b/action.yml'), actionYml(''));
+    g(workspace, 'add', '-A');
+    g(workspace, 'commit', '-q', '-m', 'record v2, break b');
+    g(org, 'checkout', '-q', versions[0]!);
+    const s = await action(workspace, {
+      impact: 'auto',
+      'base-ref': 'main',
+      'expected-impact': 'patch',
+      'base-config': join(org, 'base.yml'),
+    });
+    // Before: "impact: the baseline's and the pull request's ignore leave out every published workflow and action
+    // (a/action.yml, b/action.yml); see ignore", and exit-code 0, where impact: on failed with FP810.
+    expect(s.infos.filter((i) => i.includes('leave out every published'))).toEqual([]);
+    expect(s.outputs['required-impact']).toBe('major');
+    expect(s.outputs['impact-ok']).toBe('false');
+    expect(s.outputs['exit-code']).toBe('1');
+  });
+
   it('skips impact: auto when nothing within the paths is published', async () => {
     const workspace = renamedRepo();
     const g = (...args: string[]) => execFileSync('git', args, { cwd: workspace, stdio: 'pipe' });
