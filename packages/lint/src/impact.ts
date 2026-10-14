@@ -25,6 +25,7 @@ import {
   type WorkflowDecl,
   workflowChecks,
 } from '@ciatlas/core';
+import { parse as parseYaml } from 'yaml';
 import { buildContract, diffContracts, pathHolds } from './contracts';
 
 export const IMPACT_LEVELS = ['none', 'patch', 'minor', 'major'] as const;
@@ -40,6 +41,7 @@ export interface ImpactChange {
     | 'artifact'
     | 'check-name'
     | 'environment'
+    | 'implementation'
     | 'interface'
     | 'output'
     | 'unit'
@@ -500,19 +502,24 @@ interface Uploads {
   dynamic: boolean;
 }
 
-/** The steps that run when a unit runs: its own, those of the local actions they use, and of the workflows it calls. */
-function stepsRun(index: ProjectIndex, unit: UnitDecl, seen = new Set<string>()): StepDecl[] {
-  if (seen.has(unit.path) || seen.size > 50) return [];
-  seen.add(unit.path);
-  const own = unit.kind === 'workflow' ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
+/** The units that run when a unit runs: itself, the local actions its steps use, and the workflows it calls. */
+function unitsRun(index: ProjectIndex, unit: UnitDecl, seen = new Map<string, UnitDecl>()): UnitDecl[] {
+  if (seen.has(unit.path) || seen.size > 50) return [...seen.values()];
+  seen.set(unit.path, unit);
   const actions = index.actionUses.filter((u) => u.unit === unit).map((u) => u.action);
   const callees =
     unit.kind === 'workflow'
       ? Object.values(unit.jobs).flatMap((j) => (j.uses ? [index.calleeOf(j)] : []))
       : [];
-  const ran = [...actions, ...callees].filter((u): u is UnitDecl => u !== undefined);
-  return [...own, ...ran.flatMap((u) => stepsRun(index, u, seen))];
+  for (const u of [...actions, ...callees]) if (u) unitsRun(index, u, seen);
+  return [...seen.values()];
 }
+
+/** The steps that run when a unit runs (see `unitsRun`). */
+const stepsRun = (index: ProjectIndex, unit: UnitDecl): StepDecl[] =>
+  unitsRun(index, unit).flatMap((u) =>
+    u.kind === 'workflow' ? Object.values(u.jobs).flatMap((j) => j.steps) : u.steps,
+  );
 
 /** The artifact name an `actions/upload-artifact` step uploads: its `name:`, `artifact` by default. */
 function artifactName(step: StepDecl): string {
@@ -551,6 +558,61 @@ function artifactChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h:
       message: `no longer uploads artifact "${n}"; callers' jobs that download it fail`,
       loc: fileStart(h.file),
     }));
+}
+
+// ---------------------------------------------------------------------------
+// Implementation
+// ---------------------------------------------------------------------------
+
+/** A value as JSON with every map's keys sorted, so the order they are written in does not count. */
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (v && typeof v === 'object')
+    return `{${Object.keys(v)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`)
+      .join(',')}}`;
+  return JSON.stringify(v) ?? 'null';
+}
+
+/**
+ * A unit's implementation without its interface, comments or formatting: a workflow's `jobs`, an action's `runs`.
+ * The whole text where it does not parse (such units are graded as unparsable before this is asked).
+ */
+function implementationOf(unit: UnitDecl): string {
+  try {
+    const doc = parseYaml(unit.source.text) as Record<string, unknown> | null;
+    return canonical(doc?.[unit.kind === 'workflow' ? 'jobs' : 'runs'] ?? null);
+  } catch {
+    return unit.source.text;
+  }
+}
+
+/** The implementation of everything that runs when a unit runs (see `unitsRun`), by path. */
+const implementations = (index: ProjectIndex, unit: UnitDecl) =>
+  canonical(Object.fromEntries(unitsRun(index, unit).map((u) => [u.path, implementationOf(u)])));
+
+/**
+ * A patch when a unit's jobs or steps changed, or those of the local actions and workflows it runs, and nothing graded
+ * otherwise: callers' runs may do something else, though nothing they pass, read or need changed.
+ */
+function implementationChange(
+  base: ProjectIndex,
+  head: ProjectIndex,
+  b: UnitDecl,
+  h: UnitDecl,
+): ImpactChange[] {
+  if (implementations(base, b) === implementations(head, h)) return [];
+  return [
+    {
+      unit: h.path,
+      kind: 'implementation',
+      level: 'patch',
+      certain: true,
+      message: "jobs or steps changed; what callers' runs do may differ",
+      loc: fileStart(h.file),
+    },
+  ];
 }
 
 function remoteUses(unit: UnitDecl): Set<string> {
@@ -826,7 +888,7 @@ function comparedChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h:
       ...environmentChanges(base, head, b, h),
     );
   if (b.kind === 'action' && h.kind === 'action') out.push(...runtimeChanges(b, h));
-  return out;
+  return out.length ? out : implementationChange(base, head, b, h);
 }
 
 /** Adds to `out` the units the head publishes that the base did not (or did not publish). */

@@ -29,13 +29,19 @@ const reusable = (body: string, inputs = '') =>
 const job = (id: string, extra = '') =>
   `  ${id}:\n${extra}    runs-on: ubuntu-latest\n    steps: [{ run: 'true' }]\n`;
 
+/** The graded changes, without the patch for changed jobs or steps that most changes come with (see its own tests). */
 function changes(
   before: Record<string, string>,
   after: Record<string, string>,
   publish?: string[],
 ): ImpactChange[] {
-  return impactChanges(index(before, publish), index(after, publish), publish ? { publish } : {});
+  return withImplementation(before, after, publish).filter((c) => c.kind !== 'implementation');
 }
+const withImplementation = (
+  before: Record<string, string>,
+  after: Record<string, string>,
+  publish?: string[],
+) => impactChanges(index(before, publish), index(after, publish), publish ? { publish } : {});
 const summary = (cs: ImpactChange[]) => cs.map((c) => `${c.level}${c.certain ? '' : '?'} ${c.message}`);
 
 describe('check names of published reusable workflows', () => {
@@ -261,6 +267,60 @@ describe('environments', () => {
       `minor? jobs.deploy now uses environment "\${{ inputs.env }}" instead of "production"; ${applies}`,
     ]);
     expect(grade('production', '{ name: Production, url: https://y }')).toEqual([]);
+  });
+});
+
+describe('implementation', () => {
+  const PATCH = "patch jobs or steps changed; what callers' runs do may differ";
+  const wf = (steps: string, extra = '') =>
+    `on:\n  workflow_call:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n${steps}${extra}`;
+  const grade = (before: Record<string, string>, after: Record<string, string>) =>
+    summary(withImplementation(before, after));
+
+  it('grades changed jobs or steps as a patch when nothing else is graded', () => {
+    expect(
+      grade(
+        { [`${WF}/r.yml`]: wf('      - run: make\n') },
+        { [`${WF}/r.yml`]: wf('      - run: make test\n') },
+      ),
+    ).toEqual([PATCH]);
+    expect(
+      grade(
+        { [`${WF}/r.yml`]: wf('      - run: make\n      - run: test\n') },
+        { [`${WF}/r.yml`]: wf('      - run: make\n') },
+      ),
+    ).toEqual([PATCH]);
+  });
+
+  it('counts the local actions and internal workflows a unit runs', () => {
+    const viaAction = (run: string) => ({
+      [`${WF}/r.yml`]: wf('      - uses: ./.github/actions/pack\n'),
+      '.github/actions/pack/action.yml': `name: p\ndescription: d\nruns:\n  using: composite\n  steps:\n    - run: ${run}\n      shell: bash\n`,
+    });
+    expect(grade(viaAction('make'), viaAction('make dist'))).toEqual([PATCH]);
+  });
+
+  it('ignores comments, formatting, key order and the interface, and gives way to other graded changes', () => {
+    const before = wf('      - run: make\n        shell: bash\n');
+    expect(
+      grade(
+        { [`${WF}/r.yml`]: before },
+        { [`${WF}/r.yml`]: `# build\n${wf('      - { shell: bash, run: make }   # same step\n')}` },
+      ),
+    ).toEqual([]);
+    expect(
+      summary(
+        withImplementation(
+          { [`${WF}/r.yml`]: before },
+          {
+            [`${WF}/r.yml`]: wf(
+              '      - run: make\n        shell: bash\n',
+              '  gpu:\n    runs-on: [self-hosted]\n    steps: [{ run: x }]\n',
+            ),
+          },
+        ),
+      ),
+    ).not.toContain(PATCH);
   });
 });
 
