@@ -1,7 +1,7 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:37bfe42f-4805-5190-9d2b-31941c94408b",
+  "serialNumber": "urn:uuid:373e9052-31b7-5876-974b-110a880a9fa7",
   "version": 1,
   "metadata": {
     "component": {
@@ -342,10 +342,10 @@
     },
     {
       "type": "library",
-      "bom-ref": "pkg:npm/zod@4.6.5",
+      "bom-ref": "pkg:npm/zod@4.6.6",
       "name": "zod",
-      "version": "4.6.5",
-      "purl": "pkg:npm/zod@4.6.5",
+      "version": "4.6.6",
+      "purl": "pkg:npm/zod@4.6.6",
       "licenses": [
         {
           "license": {
@@ -381,7 +381,7 @@
         "pkg:npm/strip-ansi@7.2.0",
         "pkg:npm/tunnel@0.0.6",
         "pkg:npm/yaml@2.9.1",
-        "pkg:npm/zod@4.6.5"
+        "pkg:npm/zod@4.6.6"
       ]
     }
   ]
