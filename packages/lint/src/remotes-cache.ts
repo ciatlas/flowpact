@@ -4,7 +4,18 @@
  * nothing in the cache goes stale, and any of it can be deleted at any time. The lockfile names the commit to open.
  */
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  type Dirent,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import type { RemoteRef } from './remotes';
@@ -165,5 +176,109 @@ function removeQuietly(path: string): void {
     rmSync(path, { force: true });
   } catch {
     // ENOTDIR and the like: the temporary file was never written.
+  }
+}
+
+/** How many commits of each repository the cache keeps after `remotes update` and `remotes download`. */
+export const KEEP_COMMITS = 3;
+
+/** A repository's commit in the cache, as `owner/repo/sha` in lower case: what a prune must keep. */
+export const commitKey = (r: Pick<RemoteRef, 'owner' | 'repo'>, sha: string) =>
+  `${r.owner.toLowerCase()}/${r.repo.toLowerCase()}/${sha}`;
+
+/**
+ * Marks a cached commit as just used, so pruning keeps the most recently used ones (the time of its directory). Never
+ * throws: the cache only helps the editor.
+ */
+export function touchCommit(dir: string, r: Pick<RemoteRef, 'owner' | 'repo'>, sha: string): void {
+  const path = commitDir(dir, r, sha);
+  if (!path) return;
+  const now = new Date();
+  try {
+    utimesSync(path, now, now);
+  } catch {
+    // Not cached (any more): nothing to mark.
+  }
+}
+
+/** A repository's commit directory in the cache; undefined when a part could not be a file name safely. */
+function commitDir(dir: string, r: Pick<RemoteRef, 'owner' | 'repo'>, sha: string): string | undefined {
+  const parts = [r.owner.toLowerCase(), r.repo.toLowerCase(), sha];
+  return /^[0-9a-f]{40}$/.test(sha) && parts.every(safeName) ? join(dir, ...parts) : undefined;
+}
+
+export interface PruneOptions {
+  /** The repositories to prune (`owner/repo`, any case); every repository in the cache without it. */
+  repos?: Iterable<string>;
+  /** Commits never removed (`commitKey`): those the run that prunes uses. */
+  keep?: Set<string>;
+}
+
+/**
+ * Keeps the `keep` most recently used commits of each repository in the cache and removes the others: only directories
+ * named by a commit, at `<owner>/<repo>/<sha>`, never a link or anything else a user put there, then the repository and
+ * owner directories left empty. Returns how many commits it removed, and why one could not be. Never throws.
+ */
+export function pruneCache(
+  dir: string,
+  keep: number,
+  opts: PruneOptions = {},
+): { removed: number; failed?: string } {
+  const out: { removed: number; failed?: string } = { removed: 0 };
+  const repos = opts.repos
+    ? [...new Set([...opts.repos].map((r) => r.toLowerCase()))].map((r) => r.split('/') as [string, string])
+    : allRepos(dir);
+  for (const [owner, repo] of repos) {
+    if (!safeName(owner) || !safeName(repo)) continue;
+    const commits = commitsOf(join(dir, owner, repo));
+    commits.sort((a, b) => b.time - a.time);
+    for (const c of commits.slice(keep)) {
+      if (opts.keep?.has(`${owner}/${repo}/${c.sha}`)) continue;
+      try {
+        rmSync(c.path, { recursive: true, force: true });
+        out.removed++;
+      } catch (e) {
+        out.failed ??= (e as Error).message;
+      }
+    }
+    removeIfEmpty(join(dir, owner, repo));
+    removeIfEmpty(join(dir, owner));
+  }
+  return out;
+}
+
+/** The directories of a directory, without following links; none when it cannot be read. */
+function subdirs(path: string): Dirent[] {
+  try {
+    return readdirSync(path, { withFileTypes: true }).filter((d) => d.isDirectory());
+  } catch {
+    return [];
+  }
+}
+
+/** Every `owner/repo` in the cache. */
+const allRepos = (dir: string): [string, string][] =>
+  subdirs(dir).flatMap((o) => subdirs(join(dir, o.name)).map((r): [string, string] => [o.name, r.name]));
+
+/** A repository's cached commits, with when each was last used. */
+function commitsOf(path: string): { sha: string; path: string; time: number }[] {
+  return subdirs(path)
+    .filter((d) => /^[0-9a-f]{40}$/.test(d.name))
+    .flatMap((d) => {
+      const p = join(path, d.name);
+      try {
+        return [{ sha: d.name, path: p, time: statSync(p).mtimeMs }];
+      } catch {
+        return [];
+      }
+    });
+}
+
+/** Removes a directory when it is empty, and leaves it otherwise. */
+function removeIfEmpty(path: string): void {
+  try {
+    rmdirSync(path);
+  } catch {
+    // Not empty, or gone: either way there is nothing to do.
   }
 }

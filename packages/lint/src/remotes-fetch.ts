@@ -24,7 +24,14 @@ import {
   remoteRefsOf,
   targetedUnits,
 } from './remotes';
-import { cachedSource, cachedSourcePath, cacheSource, sourceFiles } from './remotes-cache';
+import {
+  cachedSource,
+  cachedSourcePath,
+  cacheSource,
+  commitKey,
+  sourceFiles,
+  touchCommit,
+} from './remotes-cache';
 import { undeclaredSecretsRead } from './rules/secrets';
 
 export interface FetchRemotesOptions {
@@ -421,6 +428,8 @@ export interface RemotesDownload {
   skipped: { ref: string; reason: string }[];
   /** References whose source could not be downloaded or cached, with why; `cache` when writing the cache failed. */
   failed: { ref: string; error: string; cache?: true }[];
+  /** The cached commits this run uses (`commitKey`), marked as just used: what a prune keeps. */
+  commits: string[];
 }
 
 /**
@@ -435,13 +444,26 @@ export async function downloadRemoteSources(
   opts: FetchRemotesOptions = {},
 ): Promise<RemotesDownload> {
   const refs = remoteRefsOf(index, targetedUnits(index));
-  const out: RemotesDownload = { downloaded: [], cached: [], notLocked: [], skipped: [], failed: [] };
+  const out: RemotesDownload = {
+    downloaded: [],
+    cached: [],
+    notLocked: [],
+    skipped: [],
+    failed: [],
+    commits: [],
+  };
   const count = { done: 0, total: refs.length };
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
-    const outcome = record(out, r.raw, await downloadOne(r, lock, dir, opts));
+    const done = await downloadOne(r, lock, dir, opts);
+    if (done.list === 'downloaded' || done.list === 'cached') {
+      touchCommit(dir, r, done.sha);
+      out.commits.push(commitKey(r, done.sha));
+    }
+    const outcome = record(out, r.raw, done);
     count.done++;
     opts.onProgress?.({ ...count, ref: r.raw, ...outcome });
   });
+  out.commits = [...new Set(out.commits)].sort();
   for (const list of [out.downloaded, out.cached, out.notLocked]) list.sort();
   out.skipped.sort(byRef);
   out.failed.sort(byRef);

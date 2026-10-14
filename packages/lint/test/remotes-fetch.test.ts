@@ -729,3 +729,75 @@ describe('the files read, for the sources cache', () => {
     ]);
   });
 });
+
+describe('two versions of one action in the same workflow', () => {
+  const V1 = yaml`
+    name: setup
+    inputs:
+      old: { required: true }
+    runs: { using: composite, steps: [] }
+  `;
+  const V2 = yaml`
+    name: setup
+    inputs:
+      new: { required: true }
+    runs: { using: composite, steps: [] }
+  `;
+  const files = (ci: string) => ({ [`${WF}/ci.yml`]: ci });
+  const both = yaml`
+    on: push
+    jobs:
+      legacy:
+        runs-on: x
+        steps:
+          - uses: octo/setup@v1
+            with: { old: a }
+      current:
+        runs-on: x
+        steps:
+          - uses: octo/setup@v2
+            with: { new: b }
+  `;
+  const api = () =>
+    fakeApi(
+      { 'octo/setup@v1': SHA('1'), 'octo/setup@v2': SHA('2') },
+      { [`octo/setup/action.yml@${SHA('1')}`]: V1, [`octo/setup/action.yml@${SHA('2')}`]: V2 },
+    );
+
+  it('locks each version as its own entry, checks each call against its own version, and caches both', async () => {
+    const u = await updateRemotesLock(lint(files(both)).index, undefined, { fetch: api().fetch });
+    expect(Object.keys(u.lock.remotes)).toEqual(['octo/setup@v1', 'octo/setup@v2']);
+    expect(u.lock.remotes['octo/setup@v1']).toMatchObject({
+      sha: SHA('1'),
+      inputs: { old: { required: true } },
+    });
+    expect(u.lock.remotes['octo/setup@v2']).toMatchObject({
+      sha: SHA('2'),
+      inputs: { new: { required: true } },
+    });
+    const lockText = serializeRemotesLock(u.lock);
+    const codes = (ci: string) =>
+      lint({ ...files(ci), '.github/flowpact/remotes.lock.yaml': lockText })
+        .findings.filter((f) => f.code === 'FP101' || f.code === 'FP102')
+        .map((f) => f.message);
+    expect(codes(both)).toEqual([]);
+    // Each call is checked against its own version: v1 has no input "new".
+    expect(codes(both.replace('with: { old: a }', 'with: { new: a }'))).toEqual([
+      'Step #1 uses octo/setup@v1 without required input "old" — GitHub will run it with an empty value',
+      'octo/setup@v1 has no input "new"',
+    ]);
+    const dir = mkdtempSync(join(tmpdir(), 'flowpact-versions-'));
+    try {
+      const d = await downloadRemoteSources(lint(files(both)).index, u.lock, dir, { fetch: api().fetch });
+      expect(d.downloaded).toEqual(['octo/setup@v1', 'octo/setup@v2']);
+      expect(
+        readFileSync(cachedSource(dir, parseRemoteRef('octo/setup@v1', 'action')!, SHA('1'))!.path, 'utf8'),
+      ).toBe(V1);
+      expect(
+        readFileSync(cachedSource(dir, parseRemoteRef('octo/setup@v2', 'action')!, SHA('2'))!.path, 'utf8'),
+      ).toBe(V2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
