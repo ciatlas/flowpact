@@ -52,8 +52,15 @@ async function get(url: string, accept: string, opts: FetchRemotesOptions): Prom
   });
   if (res.status === 404) return undefined;
   if (!res.ok) throw new FetchError(`${res.status} ${res.statusText || 'error'} from the GitHub API`);
-  return res.text();
+  if (Number(res.headers.get('content-length') ?? 0) > MAX_FILE_BYTES) throw tooLarge();
+  const text = await res.text();
+  if (text.length > MAX_FILE_BYTES) throw tooLarge();
+  return text;
 }
+
+/** Workflow and action files are small; a larger response is refused rather than parsed. */
+const MAX_FILE_BYTES = 1_000_000;
+const tooLarge = () => new FetchError(`a response over ${MAX_FILE_BYTES} bytes`);
 
 const repoUrl = (r: RemoteRef, opts: FetchRemotesOptions) =>
   `${trimChar(opts.apiUrl ?? 'https://api.github.com', '/')}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;

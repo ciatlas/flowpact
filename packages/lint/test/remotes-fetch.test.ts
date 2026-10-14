@@ -158,3 +158,17 @@ describe('parseRemoteRef', () => {
       expect(parseRemoteRef(bad, 'action')).toBeUndefined();
   });
 });
+
+describe('fetchRemoteEntry limits', () => {
+  it('refuses a response over 1 MB', async () => {
+    const big = (async (input: string | URL) =>
+      String(input).includes('/commits/')
+        ? new Response(SHA('a'))
+        : new Response(`# ${'x'.repeat(1_000_001)}`)) as typeof globalThis.fetch;
+    const index = lint({
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/big@v1\n',
+    }).index;
+    const u = await updateRemotesLock(index, undefined, { fetch: big });
+    expect(u.failed).toEqual([{ ref: 'octo/big@v1', error: 'a response over 1000000 bytes' }]);
+  });
+});
