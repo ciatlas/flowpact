@@ -26832,7 +26832,17 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
 
 // ../lint/src/remotes-cache.ts
 import { randomBytes } from "crypto";
-import { existsSync as existsSync7, mkdirSync as mkdirSync2, renameSync, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import {
+  existsSync as existsSync7,
+  mkdirSync as mkdirSync2,
+  readdirSync as readdirSync2,
+  renameSync,
+  rmdirSync,
+  rmSync as rmSync2,
+  statSync as statSync3,
+  utimesSync,
+  writeFileSync as writeFileSync2
+} from "fs";
 import { homedir } from "os";
 import { dirname as dirname4, isAbsolute as isAbsolute6, join as join6, relative as relative6, resolve as resolve6 } from "path";
 var sourceFiles = (r) => r.kind === "workflow" ? [r.path] : ["action.yml", "action.yaml"].map((n) => r.path ? `${r.path}/${n}` : n);
@@ -27878,7 +27888,7 @@ var import_yaml9 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
-import { readFileSync as readFileSync4, statSync as statSync3 } from "fs";
+import { readFileSync as readFileSync4, statSync as statSync4 } from "fs";
 import { isAbsolute as isAbsolute7, relative as relative7, resolve as resolve7, sep as sep3 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
@@ -28135,7 +28145,7 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
     if (BAD_PATH.test(entry))
       throw new Error(`The path ${entry} contains one of " : < > | * ? or a line break`);
     const data = readFileSync4(file);
-    const { mode, mtime } = statSync3(file);
+    const { mode, mtime } = statSync4(file);
     return { name: entry, data, mode, mtime };
   });
   const token = process.env.ACTIONS_RUNTIME_TOKEN;
