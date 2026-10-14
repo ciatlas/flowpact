@@ -7,6 +7,45 @@ A minor release can change what is reported; an incompatible change to the CLI, 
 reports or the API is a major release (the next one is 1.0.0). Up to 0.14, such a change could also come in a minor
 release. Each section below lists what to do when you move to that release.
 
+## 0.16 → 0.17
+
+0.17 follows secrets as GitHub holds them, and places some findings more exactly. No finding is added or removed: what
+changes is where a few findings are, and what `flowpact trace`, the editor, the JSON report's graph and custom rules see
+of secrets.
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.17`.
+- **CLI:** `npx flowpact@0.17`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Finding locations
+
+A finding on an expression that spans lines in a block scalar, or on a double-quoted scalar with escapes, now ends where
+the expression ends in the file: [FP502](/docs/rules/fp502)'s range, for example, ended early. A reference written after
+a property that follows a dot and spaces or a line break (`fromJSON(x). inputs.a`) is now located at the reference, not
+at the property, and so is an expression whose `${{` or `}}` is written with an escape (`\x7d`). A finding's
+fingerprint does not include its location, so code scanning keeps these alerts.
+
+### `flowpact trace`, the editor and custom rules
+
+`flowpact trace` now names the workflow of a secret or input that no file declares, such as a secret a called workflow
+reads through `secrets: inherit` without declaring it: `<workflow>#secrets.<name> (unresolved)`, where 0.16 showed
+`secrets.<name> (unresolved)` alone. In `--format json`, such a node has the workflow as its `unit` and
+`secrets.<name>` as its `label`.
+
+A whole or computed `secrets` (`toJSON(secrets)`, `secrets[inputs.name]`) now also reads each secret the workflow reads
+by name or is passed by name, and its `GITHUB_TOKEN`; in a workflow that callers hand every secret to through
+`secrets: inherit`, also each secret those callers declare, read by name or are passed by name. `flowpact trace` and the
+editor's hover list them, and the editor's references of such a secret include the whole read. `secrets: inherit`
+follows a secret to the other workflow's own spelling of it, in any letter case, both ways, and no longer to a caller's
+`GITHUB_TOKEN`, which GitHub gives every workflow itself. The JSON report's graph, and the symbol and edge counts in the
+summary, gain these secrets.
+
+**Custom rules:** `usagesOf` lists a whole or computed `secrets` read as a usage, marked `whole`, of each of the secrets
+above. A secret read by name, and `GITHUB_TOKEN`, now have these usages next to their reads by name, and an inherited
+secret that the workflow does not name, which had no usage, now has them.
+
 ## 0.15 → 0.16
 
 0.16 follows inputs that a workflow reads through `github` as GitHub does. A workflow's own inputs are in

@@ -465,11 +465,14 @@ export interface TraceNode {
    * Downstream, the symbols the value flows to; upstream, the symbols it is computed from. A whole or computed read
    * (`toJSON(inputs)`, `matrix[inputs.key]`, `secrets[inputs.name]`, `toJSON(env)`) reads every member the files
    * declare: one child each. In a workflow that can be dispatched, a whole or computed `github` (`toJSON(github)`,
-   * `github.event[x]`) reads each of its `workflow_dispatch` inputs, which `github.event.inputs` holds. In a workflow
-   * that callers hand every secret to through `secrets: inherit`, a whole `secrets` also reads each secret those
-   * callers declare or read by name; downstream, a caller's secret goes through `secrets: inherit` into a callee that
-   * reads, or may read, every secret, itself or further down (an expression that does not parse, or a remote workflow
-   * it hands every secret on to, may).
+   * `github.event[x]`) reads each of its `workflow_dispatch` inputs, which `github.event.inputs` holds. A whole
+   * `secrets` also reads each secret the workflow reads by name or is passed by name, and `GITHUB_TOKEN`; in a workflow
+   * that callers hand every secret to through `secrets: inherit`, also each secret those callers declare, read by name
+   * or are passed by name. Both ways, `secrets: inherit` follows a secret to the other workflow's own spelling of it
+   * (names ignore case): the one it declares, else each spelling it reads or a caller passes it by. It never hands on
+   * `GITHUB_TOKEN`. Downstream, a caller's secret goes through `secrets: inherit` into a callee that reads, or may
+   * read, every secret, itself or further down (an expression that does not parse, or a remote workflow it hands every
+   * secret on to, may).
    */
   children: TraceNode[];
   /**
@@ -957,6 +960,10 @@ export interface Usage {
    * takes in what a caller passes in `with:` (`ref.context` is `github`, or the usage reads a step's own `env:` value
    * that reads `github`). A read through `github` in the workflow's own input defaults or `workflow_call` outputs is no
    * usage: GitHub evaluates them only when the workflow is called.
+   *
+   * In a workflow, a whole or computed `secrets` (`toJSON(secrets)`, `secrets[inputs.name]`) is a usage of each secret
+   * the workflow declares, reads by name or is passed by name, of its `GITHUB_TOKEN`, and, when callers hand it every
+   * secret through `secrets: inherit`, of each secret they declare, read by name or are passed by name.
    */
   whole?: true;
 }
