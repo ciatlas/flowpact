@@ -67,7 +67,7 @@ In CI, add the action; it lints by default and annotates the pull request:
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: ciatlas/flowpact@v0.16
+- uses: ciatlas/flowpact@v0.17
 ```
 
 Findings you accept go into `.github/flowpact/flowpact.config.yml` as **overrides** with a reason, an owner and an
@@ -136,7 +136,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.16
+      - uses: ciatlas/flowpact@v0.17
         with:
           mode: check   # lint, and compare with the committed contracts
           impact: auto  # grade the change against the pull request title

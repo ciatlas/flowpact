@@ -177,7 +177,7 @@ then delete the old key; the app accepts both until then.
    `scripts/action-archive.sh`), each with its Sigstore bundle and in-toto provenance, and a CycloneDX SBOM of each,
    attested against it. Only when every one of them is on the release does it publish the release (a failed extension
    build keeps it a draft too), and only after that does it move the floating tag used by
-   `uses: ciatlas/flowpact@v0.16` (before 1.0 one tag per minor line, because a minor release can change what is
+   `uses: ciatlas/flowpact@v0.17` (before 1.0 one tag per minor line, because a minor release can change what is
    reported; from 1.0 the major, `v1`). **Immutable releases** are enabled in the repository settings (since 0.9.0 went out), so a
    published release's tag and assets cannot change, and what a mirror verified stays what was released.
 
