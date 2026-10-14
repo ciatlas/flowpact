@@ -242,13 +242,14 @@ units](#only-some-units)). A
 or an invalid one, the base config's settings apply, or the defaults without one. How a base config counts depends on
 whether the pull request's commits can change it:
 
-- **Outside the repository, or a file of the working tree that the checked-out commit does not track**, such as the
-  organization's config checked out into a gitignored directory: no commit of the pull request can change it, so it
-  applies on both sides, `ignore` included. A published unit it ignores is left out, with no note.
+- **Outside the repository, or a file of the working tree that no commit tracks**, such as the organization's config
+  checked out into a gitignored directory, or one generated within a submodule: no commit of the pull request can
+  change it, so it applies on both sides, `ignore` included. A published unit it ignores is left out, with no note.
 - **A file of the checked-out commit** is the pull request's own version of it, so the baseline's impact settings
   leave it out. Its `ignore` counts on the baseline's side as the baseline has it (read from git): a base config the
   pull request leaves alone ignores the same on both sides, and what one it edits adds to `ignore` applies after it is
-  merged.
+  merged. A symbolic link on the way counts as the baseline has it too, so pointing a tracked link at another config
+  is graded like editing the config.
 - **A file within a submodule** counts like a file of the checked-out commit, read at the baseline's commit of the
   submodule: moving the submodule to a version that ignores more is graded until the pull request is merged. When the
   clone lacks that commit (a submodule checked out at depth 1 has only the pull request's commit of it; actions/checkout
