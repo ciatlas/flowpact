@@ -36,9 +36,34 @@ flowpact remotes update .github/workflows/release.yml     # only what release.ym
 
 [`flowpact remotes update`](/docs/cli#flowpact-remotes-update) resolves every remote reference the repository uses to
 a commit, reads its workflow file or `action.yml` there through the GitHub API, and writes the lockfile. Commit it, and
-run it again when you move a reference to another version, or on a schedule to notice a tag that moved. It reads with
-`GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token: public repositories need none, private and internal ones a token
-that can read their contents.
+run it again when you move a reference to another version, or on a schedule to notice a tag that moved. In a terminal
+it counts the references as it fetches them; `-v` or `-d` logs a line for each instead, with the commit it resolved to
+or why it could not be fetched.
+
+### Which token
+
+| Token | Read from |
+| --- | --- |
+| `GH_TOKEN` | first, when set |
+| `GITHUB_TOKEN` | when `GH_TOKEN` is not set |
+| the GitHub CLI's (`gh auth token`) | when neither is set, for github.com |
+| none | public repositories only, at GitHub's 60 requests an hour for anonymous reads |
+
+The output starts with the source it used (`token: GH_TOKEN`); the token itself is never printed, and it is sent only to
+the GitHub API (`GITHUB_API_URL` on GitHub Enterprise Server). Public repositories need no permission. Private and
+internal ones need read access to their contents: a fine-grained token with **Contents: read** on those repositories,
+a classic token with `repo`, or a GitHub App installation token that includes them.
+
+### When a reference is not fetched
+
+| Message | What to do |
+| --- | --- |
+| `not found, or not readable with this token` | The reference does not exist, or the token cannot read it. It is recorded under `unreadable:`; give a token that can read it to check it. |
+| `the GitHub API rejected the token (401)` | The token is invalid or expired: check `GH_TOKEN` or `GITHUB_TOKEN`, or run `gh auth status`. |
+| `the GitHub API rate limit is used up` | Without a token GitHub allows 60 requests an hour: set a token, or wait. |
+| `the GitHub API refused the request (403)` | The token lacks read access to that repository's contents. |
+| `could not reach https://api.github.com (…)` | Node's `fetch failed`: no network, DNS, TLS or a proxy. Check `GITHUB_API_URL`; behind a proxy, set `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` (Node 24 and later), as Node's fetch ignores proxy variables otherwise. |
+| `no answer from … within 30 s` | The network or the API is slow: try again. |
 
 ## In CI
 
@@ -137,7 +162,7 @@ remotes:
     kind: workflow
     inputs:
       env: { type: string, required: true }
-      dry-run: { type: boolean, required: false, default: false }
+      dry-run: { type: boolean, default: false }
     secrets:
       token: { required: true }
     outputs: [url]
