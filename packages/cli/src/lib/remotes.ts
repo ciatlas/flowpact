@@ -181,9 +181,18 @@ function writeLock(root: string, file: string, text: string): void {
 async function analyzeTargets(session: Session, options: Pick<RemotesUpdateOptions, 'paths' | 'token'>) {
   if (options.token !== undefined && typeof options.token !== 'string') throw usage('token must be a string');
   const paths = stringList('paths', options.paths) ?? [];
-  const result = await analyzeSession(session, { paths, only: [], validateSchema: false });
+  const result = await analyzeSession(withoutRules(session), { paths, only: [], validateSchema: false });
   checkTargets(result.project, paths, session.root);
   return result;
+}
+
+/**
+ * The session as `remotes` analyzes with it: it runs no rule, so it loads no plugin (that would run the repository's
+ * code for nothing) and has no rule settings or overrides to check. The config's `ignore` and `repository` still apply.
+ */
+function withoutRules(session: Session): Session {
+  const config = { ...session.loaded.config, plugins: [], rules: {}, overrides: [] };
+  return { ...session, plugins: { config: false, extra: [] }, loaded: { ...session.loaded, config } };
 }
 
 export async function runRemotesUpdate(

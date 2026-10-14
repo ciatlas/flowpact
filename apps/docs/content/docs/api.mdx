@@ -39,6 +39,9 @@ process.exitCode = analysis.exitCode();
 | `trace(options)` | `flowpact trace --format json` | `TraceResult` |
 | `rules(options?)` | `flowpact rules --format json` | `RuleInfo[]` |
 | `explain(codeOrName, options?)` | `flowpact explain` | `RuleDocs` |
+| `remotesUpdate(options?)` | `flowpact remotes update` | [`RemotesUpdateResult`](#remotesupdate-remotesdownload-and-remotesclean) |
+| `remotesDownload(options?)` | `flowpact remotes download` | `RemotesDownloadResult` |
+| `remotesClean(options?)` | `flowpact remotes clean` | `RemotesCleanResult` |
 
 Each returns a promise. `flowpact lsp` has no function: editors start the language server through the CLI. What the
 commands print in the terminal comes from these results: `pretty()` and the other methods of an `Analysis`, and the
@@ -55,7 +58,8 @@ Every function takes these options:
 | `repositoryPlugins` | `--no-plugins` | `false` skips the plugins the config lists, which run the repository's code. Default: `true`. |
 | `log` | `--debug`, `-v`, `-q` | `{ level, write(record) }`: receives each log record at `level` (default `info`) or above, with its `level`, `scope`, `message`, `data` and `time`. Like an error's, a record's `message` is written for people and can name the CLI's flags. |
 
-`graph` takes only `root`, `config`, `baseConfig`, `log` and `paths`: it runs no rules.
+`graph`, `remotesUpdate` and `remotesDownload` take only `root`, `config`, `baseConfig` and `log` of these: they run no
+rules, so they load no plugins. `remotesClean` takes none of them: it works on the cache alone.
 
 ## lint, check and impact
 
@@ -142,6 +146,40 @@ const { summary, why, fix, docsUrl } = await explain('FP401');
 - `explain(codeOrName)`: the same for one rule, with `why`, `fix`, `examples` and `generatedFiles`, and `scope` when the
   rule has one.
 
+## remotesUpdate, remotesDownload and remotesClean
+
+The [remote interfaces](/docs/remote-interfaces) commands, for a program that keeps a repository's lockfile current, such
+as your own bot or a step after Renovate's update:
+
+```js
+import { formatRemotesUpdate, remotesUpdate } from 'flowpact';
+
+const result = await remotesUpdate({ root: 'path/to/repository', cacheDir: false });
+console.log(formatRemotesUpdate(result));
+if (result.failed.length) process.exitCode = 1;
+if (result.changes) {
+  // Commit result.file (.github/flowpact/remotes.lock.yaml).
+}
+```
+
+- `remotesUpdate(options)`: `paths`, `dryRun`, `token`, `apiUrl`, `githubCom`, `cacheDir` and `onProgress`. The token is
+  `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's, unless you pass one, and is sent only to `apiUrl`
+  (`GITHUB_API_URL`, else github.com's API). `cacheDir` is flowpact's cache directory (as `--cache-dir`), or `false` to
+  keep none (`--no-cache`); by default it is `FLOWPACT_CACHE_DIR`, else none in CI, else the per-user cache.
+  `onProgress(progress)` is called as each reference is done, with `done`, `total`, `ref`, `outcome` and `detail`.
+  The result has `file` (the lockfile), `changes`, `added`, `changed` and `removed`, `failed` and `unreadable` (each
+  `{ ref, error }`), `tokenSource` (where the token came from, never the token), and `sources` (the cache's `dir`, and
+  files `written`, older commits `removed`, files `notKept` with why) or `sourcesNotKept`.
+- `remotesDownload(options)`: the same options but `dryRun`, with `cacheDir` a directory. The result has `downloaded`,
+  `cached`, `notLocked`, `skipped` (`{ ref, reason }`), `failed` (`{ ref, error }`, with `cache: true` when writing the
+  cache failed), the cache's `dir` and the older commits `removed`. Without a lockfile, or with one it cannot use, it
+  throws a usage error.
+- `remotesClean({ cacheDir, keep })`: removes the cached commits, or keeps the `keep` most recently used of each
+  repository. The result has `dir`, `keep`, `removed`, and `failed` when a commit could not be removed.
+
+As with the CLI, a reference that cannot be fetched is in the result, not thrown: check `failed`. The functions make
+requests to the GitHub API and, but for `dryRun`, write the lockfile and the cache; nothing else.
+
 ## Text
 
 What the commands print, from what the functions return: the same text as the CLI's for the same options.
@@ -162,6 +200,9 @@ console.log(formatTrace(await trace({ symbol: 'pipeline.yml#inputs.config' })));
 | `formatRules(rules, options?)` | `flowpact rules` |
 | `formatExplain(rule, options?)` | `flowpact explain` |
 | `formatGeneration(generation, options?)` | `flowpact generate`: what was written, or after a `dryRun`, what would be. `diff: true` adds the diff, as `--dry-run` prints it. |
+| `formatRemotesUpdate(result, options?)` | `flowpact remotes update` |
+| `formatRemotesDownload(result, options?)` | `flowpact remotes download` |
+| `formatRemotesClean(result, options?)` | `flowpact remotes clean` |
 
 For the reports of `lint`, `check` and `impact`, use the [`Analysis`](#analysis) methods: `pretty()` is
 `--format pretty`.
