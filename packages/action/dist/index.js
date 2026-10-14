@@ -21832,6 +21832,7 @@ function scopePlan(plan, keep) {
 }
 
 // ../lint/src/impact.ts
+var import_yaml7 = __toESM(require_dist(), 1);
 var IMPACT_LEVELS = ["none", "patch", "minor", "major"];
 var levelRank = (l) => IMPACT_LEVELS.indexOf(l);
 var maxLevel = (levels) => levels.reduce((a, b) => levelRank(b) > levelRank(a) ? b : a, "none");
@@ -22105,15 +22106,17 @@ function environmentChanges(base, head, b, h) {
   return out;
 }
 var UPLOAD_ARTIFACT = /^actions\/upload-artifact@/i;
-function stepsRun(index, unit, seen = /* @__PURE__ */ new Set()) {
-  if (seen.has(unit.path) || seen.size > 50) return [];
-  seen.add(unit.path);
-  const own2 = unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
+function unitsRun(index, unit, seen = /* @__PURE__ */ new Map()) {
+  if (seen.has(unit.path) || seen.size > 50) return [...seen.values()];
+  seen.set(unit.path, unit);
   const actions = index.actionUses.filter((u) => u.unit === unit).map((u) => u.action);
   const callees = unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((j) => j.uses ? [index.calleeOf(j)] : []) : [];
-  const ran = [...actions, ...callees].filter((u) => u !== void 0);
-  return [...own2, ...ran.flatMap((u) => stepsRun(index, u, seen))];
+  for (const u of [...actions, ...callees]) if (u) unitsRun(index, u, seen);
+  return [...seen.values()];
 }
+var stepsRun = (index, unit) => unitsRun(index, unit).flatMap(
+  (u) => u.kind === "workflow" ? Object.values(u.jobs).flatMap((j) => j.steps) : u.steps
+);
 function artifactName(step2) {
   const name = step2.with.name?.value;
   return name === void 0 || name === null ? "artifact" : String(name);
@@ -22138,6 +22141,34 @@ function artifactChanges(base, head, b, h) {
     message: `no longer uploads artifact "${n}"; callers' jobs that download it fail`,
     loc: fileStart(h.file)
   }));
+}
+function canonical(v) {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v && typeof v === "object")
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;
+  return JSON.stringify(v) ?? "null";
+}
+function implementationOf(unit) {
+  try {
+    const doc = (0, import_yaml7.parse)(unit.source.text);
+    return canonical(doc?.[unit.kind === "workflow" ? "jobs" : "runs"] ?? null);
+  } catch {
+    return unit.source.text;
+  }
+}
+var implementations = (index, unit) => canonical(Object.fromEntries(unitsRun(index, unit).map((u) => [u.path, implementationOf(u)])));
+function implementationChange(base, head, b, h) {
+  if (implementations(base, b) === implementations(head, h)) return [];
+  return [
+    {
+      unit: h.path,
+      kind: "implementation",
+      level: "patch",
+      certain: true,
+      message: "jobs or steps changed; what callers' runs do may differ",
+      loc: fileStart(h.file)
+    }
+  ];
 }
 function remoteUses(unit) {
   const out = /* @__PURE__ */ new Set();
@@ -22321,7 +22352,7 @@ function comparedChanges(base, head, b, h) {
       ...environmentChanges(base, head, b, h)
     );
   if (b.kind === "action" && h.kind === "action") out.push(...runtimeChanges(b, h));
-  return out;
+  return out.length ? out : implementationChange(base, head, b, h);
 }
 function newUnits(out, baseUnits, headUnits, policy) {
   for (const [path, h] of headUnits) {
@@ -27327,7 +27358,7 @@ function renderSarif(result, opts = {}) {
 }
 
 // src/main.ts
-var import_yaml7 = __toESM(require_dist(), 1);
+var import_yaml8 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -27679,7 +27710,7 @@ var fromActionDir = (p) => isAbsolute7(p) ? p : resolve7(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml7.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml8.parse)(readFileSync5(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
