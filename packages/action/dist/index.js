@@ -11462,6 +11462,23 @@ function refEndFromSource(source, ref) {
   const m = re.exec(source.slice(ref.start));
   return m ? ref.start + m[0].length : ref.end;
 }
+function calledFunctions(expr) {
+  const names = [];
+  const visit2 = (e) => {
+    if (e instanceof FunctionCall) names.push(e.functionName.lexeme);
+    for (const inner of operandsOf(e)) visit2(inner);
+  };
+  if (expr.ast) visit2(expr.ast);
+  return names;
+}
+function operandsOf(e) {
+  if (e instanceof Unary) return [e.expr];
+  if (e instanceof Binary) return [e.left, e.right];
+  if (e instanceof Logical || e instanceof FunctionCall) return e.args;
+  if (e instanceof Grouping) return [e.group];
+  if (e instanceof IndexAccess) return [e.expr, e.index];
+  return [];
+}
 var UNKNOWN = { known: false, taint: [] };
 var known = (value, taint = []) => ({ known: true, value, taint });
 var mergeTaint = (...vals) => {
@@ -22021,6 +22038,97 @@ function runtimeChanges(b, h) {
     }
   ];
 }
+var ANY_RUN = () => UNKNOWN;
+var STATUS_FUNCTIONS = /* @__PURE__ */ new Set(["always", "cancelled", "failure", "success"]);
+function realCondition(ifValue, site) {
+  if (ifValue === false) return "false";
+  if (!site?.segments.some((seg) => seg.refs.length)) return void 0;
+  const [only] = site.segments;
+  if (site.segments.length === 1 && only?.expr.ast && definitelyTruthy(only.expr.ast, ANY_RUN))
+    return void 0;
+  return site.text.trim();
+}
+var runsDespiteNeeds = (site) => !!site?.segments.some(
+  (seg) => calledFunctions(seg.expr).some((f) => STATUS_FUNCTIONS.has(f.toLowerCase()))
+);
+function jobConditions(wf, id, seen = /* @__PURE__ */ new Set()) {
+  const job = wf.jobs[id];
+  if (!job || seen.has(id)) return [];
+  seen.add(id);
+  const own2 = realCondition(job.ifValue, job.ifSite);
+  const out = own2 ? [{ where: `jobs.${id}`, text: own2 }] : [];
+  if (!runsDespiteNeeds(job.ifSite)) for (const n of job.needs) out.push(...jobConditions(wf, n.id, seen));
+  return out;
+}
+var sameName = (a, b) => a?.toLowerCase() === b.toLowerCase();
+var isOutputSite = (site, field, key, job) => site.field === field && sameName(site.key, key) && (job === void 0 || site.job === job);
+function outputRef(ref, context) {
+  const [owner, outputs, name] = ref.path;
+  return ref.context === context && owner && name && sameName(outputs, "outputs") ? { owner, name } : void 0;
+}
+function sourcesIn(unit, field, key, context, job) {
+  return [...refsOf(unit)].flatMap(({ site, ref }) => {
+    const src = isOutputSite(site, field, key, job) ? outputRef(ref, context) : void 0;
+    return src ? [src] : [];
+  });
+}
+var stepNamed = (steps2, id) => steps2.find((s) => sameName(s.id, id));
+function stepConditions(steps2, id, where) {
+  const step2 = stepNamed(steps2, id);
+  const own2 = step2 && realCondition(step2.ifValue, step2.ifSite);
+  return own2 ? [{ where: `${where}.steps.${id}`, text: own2 }] : [];
+}
+function jobOutputSources(index, wf, id, name, depth) {
+  const job = wf.jobs[id];
+  if (!job) return [];
+  const own2 = jobConditions(wf, id);
+  const callee = job.uses ? index.calleeOf(job) : void 0;
+  if (callee)
+    return workflowOutputSources(index, callee, name, depth + 1).map((c) => [
+      ...own2,
+      ...c.map((x) => ({ ...x, where: `jobs.${id} \u203A ${x.where}` }))
+    ]);
+  return sourcesIn(wf, "job.output", name, "steps", id).map((s) => [
+    ...own2,
+    ...stepConditions(job.steps, s.owner, `jobs.${id}`)
+  ]);
+}
+function workflowOutputSources(index, wf, name, depth = 0) {
+  if (depth > 10) return [];
+  return sourcesIn(wf, "workflow.output", name, "jobs").flatMap(
+    (s) => jobOutputSources(index, wf, s.owner, s.name, depth)
+  );
+}
+function outputConditions(index, unit) {
+  const out = /* @__PURE__ */ new Map();
+  const outputs = unit.kind === "workflow" ? unit.call?.outputs : unit.outputs;
+  for (const name of Object.keys(outputs ?? {})) {
+    const sources = unit.kind === "workflow" ? workflowOutputSources(index, unit, name) : sourcesIn(unit, "action.output", name, "steps").map((s) => stepConditions(unit.steps, s.owner, ""));
+    const always = !sources.length || sources.some((c) => !c.length);
+    out.set(name.toLowerCase(), always ? [] : sources.flat());
+  }
+  return out;
+}
+var describeCondition = (c) => `${c.where.replace(/^\./, "")} runs (if: ${c.text})`;
+function outputReliabilityChanges(base, head, b, h) {
+  const before = outputConditions(base, b);
+  const decls = (h.kind === "workflow" ? h.call?.outputs : h.outputs) ?? {};
+  const out = [];
+  for (const [key, conditions] of outputConditions(head, h)) {
+    if (!conditions.length || before.get(key)?.length !== 0) continue;
+    const [name, decl] = Object.entries(decls).find(([n]) => n.toLowerCase() === key);
+    const when = [...new Map(conditions.map((c) => [describeCondition(c), c])).keys()].join(" and ");
+    out.push({
+      unit: h.path,
+      kind: "output",
+      level: "major",
+      certain: false,
+      message: `output "${name}" is now set only when ${when}; callers that read it on other runs get ''`,
+      loc: decl.loc
+    });
+  }
+  return out;
+}
 var describeUnit = (u) => u.kind === "workflow" ? `reusable workflow ${u.path}` : `action ${u.path}`;
 var removedUnit = (path, b) => ({
   unit: path,
@@ -22064,7 +22172,11 @@ function blockingChange(path, b, h, policy) {
   return void 0;
 }
 function comparedChanges(base, head, b, h) {
-  const out = [...interfaceChanges(base, head, b, h), ...usesChanges(b, h)];
+  const out = [
+    ...interfaceChanges(base, head, b, h),
+    ...outputReliabilityChanges(base, head, b, h),
+    ...usesChanges(b, h)
+  ];
   if (b.kind === "workflow" && h.kind === "workflow")
     out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
   if (b.kind === "action" && h.kind === "action") out.push(...runtimeChanges(b, h));
@@ -22697,12 +22809,12 @@ var STANDARD_FUNCTIONS = /* @__PURE__ */ new Set([
   "tojson",
   "fromjson"
 ]);
-var STATUS_FUNCTIONS = ["always", "success", "failure", "cancelled"];
+var STATUS_FUNCTIONS2 = ["always", "success", "failure", "cancelled"];
 var CONDITION_TABLES = {
   "workflow:job.if": {
     label: "a job's `if:`",
     contexts: /* @__PURE__ */ new Set(["github", "needs", "vars", "inputs"]),
-    functions: new Set(STATUS_FUNCTIONS)
+    functions: new Set(STATUS_FUNCTIONS2)
   },
   "workflow:step.if": {
     label: "a step's `if:`",
@@ -22869,8 +22981,8 @@ var impactUncertain = defineRule({
   defaultSeverity: "warning",
   docs: {
     summary: "A change to a published unit depends on something flowpact cannot evaluate statically.",
-    why: "For example a check name built from the triggering event, `needs` outputs or `vars`, or a matrix computed at runtime. flowpact cannot tell whether consumers see a different check name, so it does not count the change (`impact.uncertain: fail` counts it).",
-    fix: "Review the change by hand, or make the name static (a literal `name:` or one built only from `matrix` and `inputs`)."
+    why: "For example a check name built from the triggering event, `needs` outputs or `vars`, a matrix computed at runtime, or an output that is now set only when an `if:` holds. flowpact cannot tell whether consumers see a different check name, or run where the output is `''`, so it does not count the change (`impact.uncertain: fail` counts it).",
+    fix: "Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major."
   },
   check(ctx) {
     for (const c of ctx.impact?.changes ?? []) {
