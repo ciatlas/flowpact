@@ -90,6 +90,12 @@ export interface AnalyzeOptions {
      */
     ignoreUnread?: string;
     /**
+     * The pull request's `ignore` as its commits have it, where that differs from the config's: with a base config in a
+     * submodule, at the commit the pull request records for it (`git submodule update --remote` checks out another).
+     * A unit is left out only when this matches its file too, and it is what applies once the pull request is merged.
+     */
+    ignoreAfterMerge?: readonly string[];
+    /**
      * Run only when the paths hold a published unit that `ignore` does not leave out, in the baseline or the working
      * tree (the action's `impact: auto`). Without paths, the caller decides that beforehand.
      */
@@ -523,6 +529,23 @@ function gradingNotes(impact: ImpactResult, unread: string | undefined): string[
 }
 
 /**
+ * What impact mode looks at: the paths, and the units `ignore` leaves out. A unit is left out only when both the
+ * baseline's `ignore` and the pull request's own match it: the config's (`head`), and its commits' where they differ.
+ */
+function lookAtOf(
+  opts: AnalyzeOptions,
+  within: ImpactPaths | undefined,
+  head: readonly string[],
+): ImpactLookAt {
+  const baseline = opts.impact?.ignore;
+  const afterMerge = opts.impact?.ignoreAfterMerge;
+  return {
+    ...(within ? { within } : {}),
+    ...(baseline ? { ignore: { baseline, head, ...(afterMerge ? { afterMerge } : {}) } } : {}),
+  };
+}
+
+/**
  * Impact mode's changes and verdict, when it runs: about the published units it looks at (with paths, those within
  * them; never one whose file both the baseline's and the pull request's `ignore` match). With nothing to grade or
  * report on, why it does not.
@@ -819,13 +842,7 @@ function prepareRules(
     contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] }),
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  // A unit is left out only when both the baseline's `ignore` and the pull request's own match it.
-  const baselineIgnore = opts.impact?.ignore;
-  const lookAt: ImpactLookAt = {
-    ...(within ? { within } : {}),
-    ...(baselineIgnore ? { ignore: { baseline: baselineIgnore, head: config.ignore } } : {}),
-  };
-  const impact = impactOf(opts, index, lookAt, logger);
+  const impact = impactOf(opts, index, lookAtOf(opts, within, config.ignore), logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
   const run = ruleRun({
     ...base,

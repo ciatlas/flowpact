@@ -1,6 +1,6 @@
 /** `flowpact impact` and `--impact` on real git repositories (base commit, pull request head, release tags). */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -934,13 +934,190 @@ describe('ignore and impact mode', () => {
     expect(r.stderr).toContain('changes what ignore leaves out');
   });
 
+  it('does not note an ignore edit that leaves out no file of the unit once merged', async () => {
+    // The pull request moves b/action.yml to b/action.yaml, breaks it and adds the old file to ignore.
+    const root = repo(
+      {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml", "*/action.yaml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+      },
+      { [CONFIG]: 'ignore: ["b/action.yml"]\nimpact:\n  publish: ["*/action.yml", "*/action.yaml"]\n' },
+    );
+    git(root, 'mv', 'b/action.yml', 'b/action.yaml');
+    write(root, { 'b/action.yaml': action('b', false) });
+    git(root, 'commit', '-q', '-am', 'move b');
+    const r = await flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x', '--format', 'json']);
+    expect(r.exitCode).toBe(1);
+    expect(
+      JSON.parse(r.stdout).findings.map(
+        (f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`,
+      ),
+    ).toEqual(['FP810@b/action.yaml']);
+    // Before: "this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged",
+    // though once merged ignore matches no file of b.
+    expect(r.stderr).not.toContain('ignore leaves out');
+  });
+
+  it('notes an ignore edit that leaves out the file a unit moves to once merged', async () => {
+    // The pull request moves b/action.yml to b/action.yaml, breaks it and ignores the new file.
+    const publish = 'impact:\n  publish: ["*/action.yml", "*/action.yaml"]\n';
+    const root = repo(
+      { [CONFIG]: publish, 'a/action.yml': action('a', true), 'b/action.yml': action('b', true) },
+      { [CONFIG]: `ignore: ["**/*.yaml"]\n${publish}` },
+    );
+    git(root, 'mv', 'b/action.yml', 'b/action.yaml');
+    write(root, { 'b/action.yaml': action('b', false) });
+    git(root, 'commit', '-q', '-am', 'move b');
+    const r = await flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x', '--format', 'json']);
+    expect(r.exitCode).toBe(1);
+    expect(
+      JSON.parse(r.stdout).findings.map(
+        (f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`,
+      ),
+    ).toEqual(['FP810@b/action.yaml']);
+    // Before: no note, though once merged b has only b/action.yaml, which the pull request's ignore matches.
+    expect(r.stderr).toContain(
+      'impact: this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
+    );
+  });
+
+  describe('a base config reached through a symbolic link', () => {
+    const BASE = '.github/base.yml';
+    const IGNORES_B = 'ignore: ["b/**"]\n';
+    /**
+     * Published actions a and b and the files `files` on main, with the symbolic links `links` (path → target); the
+     * change breaks b and sets the links `moved`.
+     */
+    function linked(
+      files: Record<string, string>,
+      links: Record<string, string>,
+      moved: Record<string, string>,
+    ): string {
+      const top = mkdtempSync(join(tmpdir(), 'flowpact-impact-'));
+      git(top, 'init', '-q', '-b', 'main');
+      git(top, 'config', 'user.email', 't@example.com');
+      git(top, 'config', 'user.name', 't');
+      git(top, 'config', 'commit.gpgsign', 'false');
+      const link = (all: Record<string, string>) => {
+        for (const [path, target] of Object.entries(all)) {
+          rmSync(join(top, path), { force: true });
+          mkdirSync(dirname(join(top, path)), { recursive: true });
+          symlinkSync(target, join(top, path));
+        }
+      };
+      write(top, {
+        [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n',
+        'a/action.yml': action('a', true),
+        'b/action.yml': action('b', true),
+        ...files,
+      });
+      link(links);
+      git(top, 'add', '-A');
+      git(top, 'commit', '-q', '-m', 'base');
+      git(top, 'checkout', '-q', '-b', 'change');
+      link(moved);
+      write(top, { 'b/action.yml': action('b', false) });
+      git(top, 'add', '-A');
+      git(top, 'commit', '-q', '-m', 'change');
+      return top;
+    }
+    const impact = (root: string, baseConfig = BASE) =>
+      flowpact(root, [
+        'impact',
+        '--base',
+        'main',
+        '--title',
+        'fix: x',
+        '--base-config',
+        baseConfig,
+        '--format',
+        'json',
+      ]);
+    const CONFIGS = { '.github/org/strict.yml': 'ignore: []\n', '.github/org/loose.yml': IGNORES_B };
+
+    it('compares what a tracked link points at on each side, so a pull request cannot repoint it past the gate', async () => {
+      const r = await impact(linked(CONFIGS, { [BASE]: 'org/strict.yml' }, { [BASE]: 'org/loose.yml' }));
+      // Before: the baseline read the pull request's target, so b was left out: "required none, ok: true" and exit 0.
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain(
+        'impact: this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
+      );
+      // A link the pull request leaves alone points at the same config on both sides.
+      const kept = await impact(linked(CONFIGS, { [BASE]: 'org/loose.yml' }, {}));
+      expect(kept.exitCode).toBe(0);
+      expect(JSON.parse(kept.stdout).impact).toMatchObject({ required: 'none', ok: true, ignored: ['b'] });
+      expect(kept.stderr).not.toContain('ignore leaves out');
+    });
+
+    it('follows a linked directory on the way as each side has it', async () => {
+      const root = linked(
+        { '.github/strict/base.yml': 'ignore: []\n', '.github/loose/base.yml': IGNORES_B },
+        { '.github/org': 'strict' },
+        { '.github/org': 'loose' },
+      );
+      const r = await impact(root, '.github/org/base.yml');
+      // Before: exit 0, with b left out.
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
+    });
+
+    it('reads the directory the baseline has where the pull request puts a link to the top in its place', async () => {
+      // The baseline's .github/org/base.yml ignores nothing; the pull request makes .github/org a link to the top,
+      // whose base.yml ignores b.
+      const root = linked({ '.github/org/base.yml': 'ignore: []\n', 'base.yml': IGNORES_B }, {}, {});
+      git(root, 'rm', '-rq', '.github/org');
+      symlinkSync('..', join(root, '.github/org'));
+      git(root, 'add', '-A');
+      git(root, 'commit', '-q', '-m', 'link to the top');
+      const r = await impact(root, '.github/org/base.yml');
+      // Before: the baseline's top-level base.yml was read, so b was left out: "required none, ok: true" and exit 0.
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
+    });
+
+    it('reads the config a tracked link points at from the working tree when no commit tracks it', async () => {
+      // The organization's configs checked out into a gitignored directory; the pull request repoints the link.
+      const root = linked(
+        { '.gitignore': '.org/\n' },
+        { [BASE]: '../.org/strict.yml' },
+        { [BASE]: '../.org/loose.yml' },
+      );
+      write(root, { '.org/strict.yml': 'ignore: []\n', '.org/loose.yml': IGNORES_B });
+      const r = await impact(root);
+      // Before: the target was taken for a file no commit tracks, the same on both sides: exit 0, with b left out.
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
+    });
+
+    it('follows a link no commit tracks to the tracked config it points at', async () => {
+      // The pull request edits the tracked config that an untracked link (made by an earlier step) points at.
+      const root = linked({ '.github/org/strict.yml': 'ignore: []\n' }, {}, {});
+      write(root, { '.github/org/strict.yml': IGNORES_B });
+      git(root, 'commit', '-q', '-am', 'ignore b');
+      symlinkSync('org/strict.yml', join(root, BASE));
+      const r = await impact(root);
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
+    });
+  });
+
   describe('a base config within a submodule', () => {
     /**
      * Published actions a and b, and the base config `.org/base.yml` in the submodule `.org` (an embedded repository
-     * holding each of `versions` in turn). Main records the submodule at `versions[baseAt]` (or at a commit the clone
-     * lacks), the change at `versions[headAt]`, and breaks b.
+     * holding each of `versions` in turn, none for a commit without it). Main records the submodule at
+     * `versions[baseAt]` (or at a commit the clone lacks), the change at `versions[headAt]`, and breaks b.
      */
-    function withSubmodule(versions: string[], baseAt: number | 'missing', headAt: number): string {
+    function withSubmodule(
+      versions: (string | undefined)[],
+      baseAt: number | 'missing',
+      headAt: number,
+    ): string {
       const top = repo(
         { [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n' },
         { 'a/action.yml': action('a', true) },
@@ -954,7 +1131,7 @@ describe('ignore and impact mode', () => {
       git(org, 'config', 'user.name', 't');
       git(org, 'config', 'commit.gpgsign', 'false');
       const commits = versions.map((text, i) => {
-        write(org, { 'base.yml': text });
+        write(org, text === undefined ? { README: 'x\n' } : { 'base.yml': text });
         git(org, 'add', '-A');
         git(org, 'commit', '-q', '-m', `v${i + 1}`);
         return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: org }).toString().trim();
@@ -974,9 +1151,55 @@ describe('ignore and impact mode', () => {
       git(top, 'commit', '-q', '-m', 'change');
       return top;
     }
-    const impact = (root: string) =>
-      flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x', '--base-config', '.org/base.yml']);
+    const impact = (root: string, baseConfig = '.org/base.yml', ...args: string[]) =>
+      flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x', '--base-config', baseConfig, ...args]);
     const IGNORES_B = 'ignore: ["b/**"]\n';
+
+    it('uses a config generated in a submodule that no commit of it tracks on both sides', async () => {
+      const root = withSubmodule(['ignore: []\n'], 0, 0);
+      write(root, { '.org/gen.yml': IGNORES_B });
+      const r = await impact(root, '.org/gen.yml', '--format', 'json');
+      // Before: "this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged"
+      // and FP810 (exit 1): the baseline's commit of the submodule lacks the file, so its ignore did not count there.
+      expect(r.exitCode).toBe(0);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'none', ok: true, ignored: ['b'] });
+      expect(r.stderr).not.toContain('ignore leaves out');
+      expect(r.stderr).not.toContain('a file of this repository');
+    });
+
+    it('notes only what the commit the pull request records for the submodule leaves out', async () => {
+      // The pull request keeps v1, which ignores nothing; the submodule is checked out at v2, which ignores b.
+      const root = withSubmodule(['ignore: []\n', IGNORES_B], 0, 0);
+      git(join(root, '.org'), 'checkout', '-q', 'main');
+      const r = await impact(root);
+      expect(r.exitCode).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      // Before: "this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged".
+      expect(r.stderr).not.toContain('ignore leaves out');
+      // The pull request moves the submodule to v2, which no longer ignores b, while the one checked out (v1) does:
+      // b is graded, as it leaves the baseline's ignore. Before: left out, exit 0.
+      const moved = withSubmodule([IGNORES_B, 'ignore: []\n'], 0, 1);
+      git(join(moved, '.org'), 'checkout', '-q', 'HEAD~1');
+      const m = await impact(moved);
+      expect(m.exitCode).toBe(1);
+      expect(m.stdout).toContain('FP810');
+      expect(m.stderr).not.toContain('ignore leaves out');
+    });
+
+    it('does not note an ignore edit when the commit both record lacks the config checked out in its place', async () => {
+      // Both record v1, which lacks base.yml; the submodule is checked out at v2, whose base.yml ignores b.
+      const root = withSubmodule([undefined, IGNORES_B], 0, 0);
+      git(join(root, '.org'), 'checkout', '-q', 'main');
+      const r = await impact(root);
+      expect(r.exitCode).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      // Before: "this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged",
+      // though the pull request changes nothing and v1 leaves nothing out once merged.
+      expect(r.stderr).not.toContain('ignore leaves out');
+      expect(r.stderr).toMatch(
+        /impact: the pull request's commit of the submodule \.org at [0-9a-f]{7} has no base config \.org\/base\.yml, so impact mode reads no ignore from it for the pull request/,
+      );
+    });
 
     it("reads it at the baseline's commit of the submodule, so one the pull request leaves alone counts on both sides", async () => {
       const r = await impact(withSubmodule([IGNORES_B], 0, 0));
@@ -1008,6 +1231,22 @@ describe('ignore and impact mode', () => {
       expect(r.stderr).toContain(
         "impact: the baseline's ignore lacks what the pull request's leaves out of impact mode (b), as the baseline's version of .org/base.yml cannot be read; they are graded",
       );
+    });
+
+    it('grades what it leaves out, and says why, when the clone lacks the commit the pull request records', async () => {
+      // Both record v1, which ignores b; then the pull request records a commit the clone lacks, while the submodule
+      // stays checked out at v1.
+      const root = withSubmodule([IGNORES_B], 0, 0);
+      git(root, 'update-index', '--cacheinfo', `160000,${'2'.repeat(40)},.org`);
+      git(root, 'commit', '-q', '-m', 'record a commit the clone lacks');
+      const r = await impact(root);
+      // Before: v1's ignore stood in for the recorded commit's, so b was left out: exit 0, with no word of it.
+      expect(r.exitCode).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      expect(r.stderr).toContain(
+        "impact: the pull request's version of the base config .org/base.yml is in the submodule .org at 2222222, which this clone lacks, so impact mode reads no ignore from it for the pull request",
+      );
+      expect(r.stderr).not.toContain('applies after it is merged');
     });
   });
 });

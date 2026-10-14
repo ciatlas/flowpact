@@ -125,7 +125,7 @@ function setupImpact(session: Session, flags: ImpactFlags, paths: string[]): Pre
         ...(process.env.GITHUB_ACTIONS === 'true' ? { event: githubEvent() } : {}),
         ...(loaded.file ? { configPath: loaded.file } : {}),
         // A base config the pull request's commits can change stays out of the baseline's impact settings (impact mode
-        // asks git whether the checked-out commit, or a submodule of it, holds the file).
+        // follows the path through git: the commits, their submodules and the symbolic links on the way).
         ...(loaded.base
           ? { baseConfig: loaded.base.data, baseConfigFile: resolve(process.cwd(), loaded.base.file) }
           : {}),

@@ -657,9 +657,11 @@ export interface ImpactLookAt {
   /**
    * The `ignore` patterns of the baseline's config and of the pull request's (the working tree's). A unit whose file
    * both match is not graded, so neither adding a published unit to `ignore` nor taking it out in the pull request lets
-   * its change through. Without them, every unit is graded.
+   * its change through. Without them, every unit is graded. `afterMerge` is the pull request's as its commits have it,
+   * where that differs from the working tree's (a base config in a submodule checked out at another commit than the
+   * pull request records): it must match the file too, and it is what applies once the pull request is merged.
    */
-  ignore?: { baseline: readonly string[]; head: readonly string[] };
+  ignore?: { baseline: readonly string[]; head: readonly string[]; afterMerge?: readonly string[] };
 }
 
 const matchesAny = (patterns: readonly string[], file: string) =>
@@ -671,7 +673,10 @@ const coveredBy = (within: ImpactPaths | undefined) => (file: string) =>
 
 /** Whether impact mode leaves a file out: both the baseline's and the pull request's `ignore` match it. */
 const leftOutBy = (ignore: ImpactLookAt['ignore']) => (file: string) =>
-  ignore !== undefined && matchesAny(ignore.baseline, file) && matchesAny(ignore.head, file);
+  ignore !== undefined &&
+  matchesAny(ignore.baseline, file) &&
+  matchesAny(ignore.head, file) &&
+  (!ignore.afterMerge || matchesAny(ignore.afterMerge, file));
 
 /**
  * The units of either side impact mode looks at, by path; undefined when it looks at every unit (no paths, and an
@@ -687,8 +692,11 @@ function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore 
 }
 
 /**
- * The published units (within the paths) that only the pull request's own `ignore` matches: graded until it is merged,
- * left out after.
+ * The published units (within the paths) that the pull request's own `ignore` leaves out once it is merged and the
+ * baseline's does not: graded until then. Each is a unit whose every file once merged (the working tree's, or the
+ * baseline's for a unit the pull request removes, within the paths) the pull request's matches, and one of whose files
+ * on either side the baseline's does not, so a move that `ignore` does not follow leaves no unit out, and an `ignore`
+ * that follows it does.
  */
 function ignoreAddedOf(
   base: ProjectIndex,
@@ -698,14 +706,25 @@ function ignoreAddedOf(
 ): string[] {
   if (!ignore) return [];
   const covered = coveredBy(within);
-  const added = [...base.units(), ...head.units()].filter(
-    (u) =>
-      isPublished(u, policy) &&
-      covered(u.file) &&
-      matchesAny(ignore.head, u.file) &&
-      !matchesAny(ignore.baseline, u.file),
-  );
-  return [...new Set(added.map((u) => u.path))].sort();
+  const files = new Map<string, { base: string[]; head: string[] }>();
+  const add = (side: 'base' | 'head') => (u: UnitDecl) => {
+    if (!isPublished(u, policy) || !covered(u.file)) return;
+    const of = files.get(u.path) ?? { base: [], head: [] };
+    of[side].push(u.file);
+    files.set(u.path, of);
+  };
+  base.units().forEach(add('base'));
+  head.units().forEach(add('head'));
+  const merged = ignore.afterMerge ?? ignore.head;
+  const leavesOut = (patterns: readonly string[], of: string[]) => of.every((f) => matchesAny(patterns, f));
+  return [...files]
+    .filter(
+      ([, of]) =>
+        leavesOut(merged, of.head.length ? of.head : of.base) &&
+        !leavesOut(ignore.baseline, [...of.base, ...of.head]),
+    )
+    .map(([path]) => path)
+    .sort();
 }
 
 /** The file of the working tree to place findings about the verdict on, when no change is there (see `anchor`). */
@@ -762,8 +781,8 @@ export interface ImpactResult {
   /** When paths or `ignore` leave out units: which published ones `ignore` does, and where to report the verdict. */
   narrowed?: ImpactNarrowed;
   /**
-   * The published units that only the pull request's own `ignore` matches (see `ImpactLookAt.ignore`): graded until it
-   * is merged, left out after.
+   * The published units that the pull request's own `ignore` leaves out once it is merged and the baseline's does not
+   * (see `ImpactLookAt.ignore`): graded until it is merged, left out after.
    */
   ignoreAdded?: string[];
 }

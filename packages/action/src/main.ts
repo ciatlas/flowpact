@@ -359,8 +359,9 @@ const listed = (files: string[], max = 10) =>
 
 /**
  * Why `impact: auto` stops when nothing published is graded, without paths: nothing is published, or `ignore` leaves
- * out every published unit (both the baseline's and the pull request's match each). Decided on both sides: a pull
- * request that deletes, unpublishes or takes out of `ignore` the only published unit is still checked.
+ * out every published unit (the baseline's and the pull request's both match each, the latter as its commits have it
+ * too). Decided on both sides: a pull request that deletes, unpublishes or takes out of `ignore` the only published
+ * unit is still checked.
  */
 function nothingPublishedNote(
   root: string,
@@ -368,10 +369,11 @@ function nothingPublishedNote(
   options: NonNullable<AnalyzeOptions['impact']>,
   headIgnore: readonly string[],
 ): string | undefined {
-  const { policy, publishedFiles, ignore } = options;
+  const { policy, publishedFiles, ignore, ignoreAfterMerge } = options;
+  const sides = [headIgnore, ...(ignoreAfterMerge ? [ignoreAfterMerge] : [])];
   const leftOut = (file: string) =>
     ignore !== undefined &&
-    [ignore, headIgnore].every((patterns) => patterns.some((p) => matchesPattern(file, p)));
+    [ignore, ...sides].every((patterns) => patterns.some((p) => matchesPattern(file, p)));
   if (!publishedFiles?.every(leftOut)) return undefined;
   const project = loadProject({
     root,

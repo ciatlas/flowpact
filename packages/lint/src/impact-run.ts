@@ -4,8 +4,16 @@
  * git, and the policy from the baseline's config.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  type Stats,
+  statSync,
+} from 'node:fs';
+import { basename, dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
   type FileSystem,
   type GitError,
@@ -44,12 +52,13 @@ export interface ImpactRequest {
   /** The base config the head uses (`--base-config`, from `loadBaseConfig`); the baseline's config goes on top of it too. */
   baseConfig?: Record<string, unknown>;
   /**
-   * Where the base config was read from. A file of the checked-out commit, or one within a submodule, is the pull
-   * request's own version of it, so the baseline's impact settings leave it out: a pull request cannot relax its own
-   * check through it. For the baseline's `ignore`, its version in the baseline is read from git (within a submodule,
-   * at the baseline's commit of it). A file outside the repository, or one of the working tree that the checked-out
-   * commit does not track (say, an organization's config checked out into an ignored directory), is the same on both
-   * sides: no commit of the pull request can change it.
+   * Where the base config was read from. A file of the checked-out commit, one within a submodule, or one reached
+   * through a symbolic link either has, is the pull request's own version of it, so the baseline's impact settings
+   * leave it out: a pull request cannot relax its own check through it. For the baseline's `ignore`, its version in the
+   * baseline is read from git, following each link and submodule on the way as the baseline has it (a submodule at the
+   * baseline's commit of it). A file outside the repository, or one of the working tree that no commit tracks (say, an
+   * organization's config checked out into an ignored directory, or one generated within a submodule), is the same on
+   * both sides: no commit of the pull request can change it.
    */
   baseConfigFile?: string;
   /** Called with refs (commits, `refs/tags/…`) the clone lacks, so a shallow checkout can fetch them. */
@@ -337,60 +346,6 @@ function gitOutput(dir: string, args: string[]): string | undefined {
   }
 }
 
-type TreeEntries = Map<string, { mode: string; object: string }>;
-
-/**
- * The entries of `commit`'s tree along `path` (relative to the top of the repository at `dir`): the file and each
- * directory above it that the tree has, by path. Undefined when git cannot list them (say, no commit checked out).
- */
-function entriesAlong(dir: string, commit: string, path: string): TreeEntries | undefined {
-  const parts = path.split('/');
-  const along = parts.map((_, i) => parts.slice(0, i + 1).join('/'));
-  const out = gitOutput(dir, ['ls-tree', '-z', '--full-tree', commit, '--', ...along]);
-  if (out === undefined) return undefined;
-  const entries: TreeEntries = new Map();
-  for (const entry of out.split('\0')) {
-    const tab = entry.indexOf('\t');
-    if (tab < 0) continue;
-    const [mode = '', , object = ''] = entry.slice(0, tab).split(' ');
-    entries.set(entry.slice(tab + 1), { mode, object });
-  }
-  return entries;
-}
-
-/** The submodule a tree holds `path` in (see `entriesAlong`): its path and its commit. */
-function submoduleHolding(entries: TreeEntries, path: string): { path: string; commit: string } | undefined {
-  const parts = path.split('/');
-  for (let i = 1; i < parts.length; i++) {
-    const dir = parts.slice(0, i).join('/');
-    const entry = entries.get(dir);
-    if (entry?.mode === '160000') return { path: dir, commit: entry.object };
-  }
-  return undefined;
-}
-
-/**
- * The real top directory of the git work tree `root` is in. `.native` gives the case the file system stores, so a path
- * written in another case on a case-insensitive file system still names the file git tracks.
- */
-const realTop = (root: string) => realpathSync.native(gitTopLevel(root)!);
-
-/**
- * The base config's path in the repository when the pull request's commits can change it: a file of the checked-out
- * commit, or one within a submodule, whose commit they may move. Undefined for one outside the repository, and for one
- * of the working tree that the checked-out commit does not track, which is the same on both sides.
- */
-function baseConfigOfRepository(root: string, req: ImpactRequest): string | undefined {
-  const file = req.baseConfig ? req.baseConfigFile : undefined;
-  const top = file ? gitTopLevel(root) : undefined;
-  if (!file || top === undefined || !pathInside(top, file)) return undefined;
-  const path = relative(realTop(root), realpathSync.native(file)).split(sep).join('/');
-  const entries = entriesAlong(realTop(root), 'HEAD', path);
-  // Without a commit to tell, it is the pull request's own.
-  if (!entries || entries.has(path) || submoduleHolding(entries, path)) return path;
-  return undefined;
-}
-
 /** Whether `dir` is the top of a git work tree of its own (a submodule that is checked out). */
 function isCheckout(dir: string): boolean {
   const top = existsSync(dir) ? gitTopLevel(dir) : undefined;
@@ -406,23 +361,307 @@ function hasCommit(dir: string, commit: string): boolean {
   }
 }
 
+/** An entry of a git tree: its name, mode and object. */
+interface TreeEntry {
+  name: string;
+  mode: string;
+  object: string;
+}
+
+/** The entries `git ls-tree -z` printed; none when it failed. */
+function treeEntries(out: string | undefined): TreeEntry[] {
+  const entries: TreeEntry[] = [];
+  for (const line of (out ?? '').split('\0')) {
+    const tab = line.indexOf('\t');
+    if (tab < 0) continue;
+    const [mode = '', , object = ''] = line.slice(0, tab).split(' ');
+    entries.push({ name: line.slice(tab + 1), mode, object });
+  }
+  return entries;
+}
+
+/** The entry named `name`, or in another letter case where the file system ignores case, as git checks out there. */
+const entryNamed = (entries: TreeEntry[], name: string, ignoreCase: boolean) =>
+  entries.find((e) => e.name === name) ??
+  (ignoreCase ? entries.find((e) => e.name.toLowerCase() === name.toLowerCase()) : undefined);
+
+/** Whether two paths are the same file. */
+const sameFile = (a: string, b: string): boolean => {
+  const [x, y] = [statSync(a, { throwIfNoEntry: false }), statSync(b, { throwIfNoEntry: false })];
+  return x !== undefined && y !== undefined && x.ino === y.ino && x.dev === y.dev;
+};
+
 /**
- * `path` as `commit` of the repository at `dir` has it, through the submodules that hold it, each at its commit there:
- * `text` (undefined when the commit lacks the file), or `unread`, the submodule (`shown` before its path) whose commit
- * this clone lacks.
+ * Whether paths in the repository at `dir` (its top) reach a file in another letter case: where git says so, or the
+ * file system ignores case (macOS and Windows by default), which `core.ignorecase=false` does not change.
  */
-function textAt(
-  dir: string,
+const ignoresCase = (dir: string) =>
+  gitOutput(dir, ['config', '--bool', 'core.ignorecase'])?.trim() === 'true' ||
+  sameFile(join(dir, '.git'), join(dir, '.GIT'));
+
+const realpathOr = (p: string): string | undefined => {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * `file` (absolute) as a path of the repository whose real top directory is `top`, or undefined outside it. It is
+ * taken from the outermost directory above it that is the top, so the symbolic links on the way stay parts of it, a
+ * link in the repository to its own top included.
+ */
+function repositoryPathOf(top: string, file: string): string | undefined {
+  const dirs: string[] = [];
+  for (let dir = dirname(file); dir !== dirname(dir); dir = dirname(dir)) dirs.unshift(dir);
+  for (const dir of dirs) if (realpathOr(dir) === top) return relative(dir, file).split(sep).join('/');
+  const real = realpathOr(file);
+  return real !== undefined && pathInside(top, real) ? relative(top, real).split(sep).join('/') : undefined;
+}
+
+/**
+ * What a checkout of a commit has at a path (see `locate`): a file the commit tracks (`object` in the repository at
+ * `dir`, which is a submodule's with `submodule`; `path` from the top), a file of the working tree that no commit
+ * tracks or one outside the repository (`file`, its real path), none (in `submodule`, at the commit there, when the
+ * path ends in one), or `unread`: the submodule whose commit there this clone lacks.
+ */
+type Located =
+  | { kind: 'tracked'; dir: string; object: string; path: string; submodule: boolean }
+  | { kind: 'file'; file: string }
+  | { kind: 'none'; submodule?: string }
+  | { kind: 'unread'; submodule: string; path: string };
+
+const NONE: Located = { kind: 'none' };
+
+/** Symbolic links followed before a path counts as none, so a loop ends (Linux's limit). */
+const MAX_LINKS = 40;
+
+/** A path being followed through a checkout of a commit (see `locate`). */
+interface Walk {
+  /** The real top directory of the repository, and the commit of it the walk follows the path in. */
+  top: string;
+  commit: string;
+  /**
+   * The repository the walk is in (the top's, or a submodule's directory), its commit there, and the one the top's
+   * checked-out commit records for it (none where that commit has no submodule there).
+   */
+  dir: string;
+  tree: string;
+  head: string | undefined;
+  ignoreCase: boolean;
+  /** The submodules the walk is in, as a path (`.org/`). */
+  shown: string;
+  /** The directories walked in `dir`, each with its tree (none for one the commit lacks). */
+  at: { name: string; tree: string | undefined }[];
+  /** The parts of the path left. */
+  todo: string[];
+  links: number;
+}
+
+/** Goes on in the repository at `dir`, at its `commit` (`head` the checked-out one's, see `Walk`), from its top. */
+function enter(w: Walk, dir: string, commit: string, head: string | undefined, shown: string): void {
+  Object.assign(w, { dir, tree: commit, head, shown, at: [], ignoreCase: ignoresCase(dir) });
+}
+
+/** The path from the top of the repository to `name` in the directory the walk is at. */
+const walked = (w: Walk, name: string) => `${w.shown}${[...w.at.map((a) => a.name), name].join('/')}`;
+
+/** A file of the working tree at `abs`, by its real path; none when there is no such file. */
+const fileAt = (abs: string): Located => {
+  const real = realpathOr(abs);
+  return real !== undefined && statSync(real).isFile() ? { kind: 'file', file: real } : NONE;
+};
+
+/** The path continues at `abs` (absolute, the parts left included): from the top when it is in the repository. */
+function leave(w: Walk, abs: string): Located | undefined {
+  const path = repositoryPathOf(w.top, abs);
+  if (path === undefined) return fileAt(abs);
+  enter(w, w.top, w.commit, 'HEAD', '');
+  w.todo = path.split('/');
+  return undefined;
+}
+
+/** Follows a symbolic link to `target`: the parts left go on from where it points. */
+function follow(w: Walk, target: string | undefined): Located | undefined {
+  if (target === undefined || ++w.links > MAX_LINKS) return NONE;
+  if (isAbsolute(target)) return leave(w, join(target, ...w.todo));
+  w.todo.unshift(...target.split('/'));
+  return undefined;
+}
+
+/** Goes on in a submodule, at the commit the tree records for it, when the clone has that commit checked out. */
+function submodule(w: Walk, entry: TreeEntry): Located | undefined {
+  const path = [...w.at.map((a) => a.name), entry.name].join('/');
+  const dir = join(w.dir, path);
+  if (!isCheckout(dir) || !hasCommit(dir, entry.object)) {
+    const at = `${w.shown}${path} at ${entry.object.slice(0, 7)}`;
+    return { kind: 'unread', submodule: at, path: [`${w.shown}${path}`, ...w.todo].join('/') };
+  }
+  enter(w, dir, entry.object, recordedAt(w, path), `${w.shown}${path}/`);
+  return undefined;
+}
+
+/** The commit the top's checked-out commit records for the submodule at `path` in the repository the walk is in. */
+function recordedAt(w: Walk, path: string): string | undefined {
+  let tree = w.head;
+  const parts = path.split('/');
+  for (const [i, part] of parts.entries()) {
+    if (tree === undefined) return undefined;
+    const entry = entryNamed(treeEntries(gitOutput(w.dir, ['ls-tree', '-z', tree])), part, w.ignoreCase);
+    if (i === parts.length - 1) return entry?.mode === '160000' ? entry.object : undefined;
+    tree = entry?.mode === '040000' ? entry.object : undefined;
+  }
+  return undefined;
+}
+
+/** Goes on through an entry of the commit: a directory, a symbolic link, a submodule or, last, the file. */
+function tracked(w: Walk, entry: TreeEntry): Located | undefined {
+  switch (entry.mode) {
+    case '040000':
+      w.at.push({ name: entry.name, tree: entry.object });
+      return undefined;
+    case '120000':
+      return follow(w, gitOutput(w.dir, ['cat-file', 'blob', entry.object]));
+    case '160000':
+      return submodule(w, entry);
+    default:
+      if (w.todo.length) return NONE;
+      return {
+        kind: 'tracked',
+        dir: w.dir,
+        object: entry.object,
+        path: walked(w, entry.name),
+        submodule: w.shown !== '',
+      };
+  }
+}
+
+/**
+ * Whether the pull request's commits track a file, link or submodule along `parts` in the repository the walk is in
+ * (the checked-out commit, or the commit it records for the submodule the walk is in): at the last of them, or in
+ * place of a directory before it (a pull request that turns a directory into a link or a submodule controls what the
+ * path reaches); also where it records no submodule there, or there is no commit to tell. In a submodule, also when
+ * the commit checked out there does, so a file of another commit (`git submodule update --remote`) is never taken for
+ * one no commit tracks.
+ */
+function trackedAtHead(w: Walk, parts: string[]): boolean {
+  if (w.shown !== '' && trackedIn(w.dir, 'HEAD', parts, w.ignoreCase)) return true;
+  return w.head === undefined || trackedIn(w.dir, w.head, parts, w.ignoreCase);
+}
+
+/** Whether `commit` of the repository at `dir` tracks something along `parts` (see `trackedAtHead`). */
+function trackedIn(dir: string, commit: string, parts: string[], ignoreCase: boolean): boolean {
+  if (!hasCommit(dir, commit)) return true;
+  let tree = commit;
+  for (const part of parts) {
+    const entry = entryNamed(treeEntries(gitOutput(dir, ['ls-tree', '-z', tree])), part, ignoreCase);
+    if (!entry) return false;
+    if (entry.mode !== '040000') return true;
+    tree = entry.object;
+  }
+  return false;
+}
+
+/**
+ * Goes on through a part the commit lacks: none where the pull request's commits track it or something on the way to
+ * it (`trackedAtHead`: the pull request added it), else as the working tree has it, the same on both sides: a symbolic
+ * link, a directory or, last, the file.
+ */
+function untracked(w: Walk, part: string): Located | undefined {
+  const parent = w.at.map((a) => a.name);
+  if (trackedAtHead(w, [...parent, part])) return NONE;
+  const full = join(w.dir, ...parent, part);
+  let stat: Stats;
+  try {
+    stat = lstatSync(full);
+  } catch {
+    return NONE;
+  }
+  if (stat.isSymbolicLink()) return follow(w, readlinkSync(full).split(sep).join('/'));
+  if (!stat.isDirectory()) return w.todo.length ? NONE : fileAt(full);
+  w.at.push({ name: part, tree: undefined });
+  return undefined;
+}
+
+/** Goes on through one part of the path; what is there when the walk ends with it. */
+function step(w: Walk, part: string): Located | undefined {
+  if (part === '' || part === '.') return undefined;
+  if (part === '..') return w.at.pop() ? undefined : leave(w, join(w.dir, '..', ...w.todo));
+  const tree = w.at.length ? w.at[w.at.length - 1]!.tree : w.tree;
+  const entries = tree === undefined ? [] : treeEntries(gitOutput(w.dir, ['ls-tree', '-z', tree]));
+  const entry = entryNamed(entries, part, w.ignoreCase);
+  return entry ? tracked(w, entry) : untracked(w, part);
+}
+
+/**
+ * What a checkout of `commit` of the repository at `top` (its real path) has at `path`: each symbolic link and
+ * submodule on the way followed as the commit has it (a submodule at the commit it records there), and the files no
+ * commit tracks as the working tree has them.
+ */
+function locate(top: string, commit: string, path: string): Located {
+  const w: Walk = {
+    top,
+    commit,
+    dir: top,
+    tree: commit,
+    head: 'HEAD',
+    ignoreCase: false,
+    shown: '',
+    at: [],
+    todo: [],
+    links: 0,
+  };
+  enter(w, top, commit, 'HEAD', '');
+  w.todo = path.split('/');
+  let found: Located | undefined;
+  while (!found && w.todo.length) found = step(w, w.todo.shift()!);
+  if (found && found.kind !== 'none') return found;
+  return w.shown ? { kind: 'none', submodule: `${w.shown.slice(0, -1)} at ${w.tree.slice(0, 7)}` } : NONE;
+}
+
+/** The text of a file `locate` found; undefined for none, or one that cannot be read. */
+const textOf = (found: Located): string | undefined => {
+  if (found.kind === 'tracked') return gitOutput(found.dir, ['cat-file', 'blob', found.object]);
+  return found.kind === 'file' ? workingTree(dirname(found.file)).read(basename(found.file)) : undefined;
+};
+
+/** A base config the pull request's commits can change: its path from the top, and what the baseline has there. */
+interface RepositoryBaseConfig {
+  top: string;
+  path: string;
+  baseline: Located;
+}
+
+/**
+ * The base config when the pull request's commits can change it: a file of the repository, or one reached through a
+ * symbolic link or submodule of it, that the baseline does not read from the very file the working tree has. Undefined
+ * for one outside the repository, and for one no commit tracks, which is the same on both sides.
+ */
+function repositoryBaseConfig(
+  root: string,
   commit: string,
-  path: string,
-  shown = '',
-): { text: string | undefined } | { unread: string } {
-  const sub = submoduleHolding(entriesAlong(dir, commit, path) ?? new Map(), path);
-  if (!sub) return { text: baselineFiles(dir, commit).read(path) };
-  const subDir = join(dir, sub.path);
-  if (!isCheckout(subDir) || !hasCommit(subDir, sub.commit))
-    return { unread: `${shown}${sub.path} at ${sub.commit.slice(0, 7)}` };
-  return textAt(subDir, sub.commit, path.slice(sub.path.length + 1), `${shown}${sub.path}/`);
+  req: ImpactRequest,
+): RepositoryBaseConfig | undefined {
+  const file = req.baseConfig ? req.baseConfigFile : undefined;
+  const top = file ? gitTopLevel(root) : undefined;
+  if (!file || top === undefined) return undefined;
+  const realTop = realpathSync.native(top);
+  const path = repositoryPathOf(realTop, file);
+  if (path === undefined) return undefined;
+  const baseline = locate(realTop, commit, path);
+  if (baseline.kind === 'file' && baseline.file === realpathOr(file)) return undefined;
+  return { top: realTop, path, baseline };
+}
+
+/** A base config's text as a config, or the error that refuses it. */
+function asBaseConfig(text: string, path: string): FlowpactConfig | ConfigError {
+  try {
+    return parseConfig(parseBaseConfig(text, path), path);
+  } catch (err) {
+    if (err instanceof ConfigError) return err;
+    throw err;
+  }
 }
 
 /**
@@ -431,49 +670,84 @@ function textAt(
  * clone (noted).
  */
 function baseConfigAt(
-  root: string,
-  commit: string,
-  path: string,
+  base: RepositoryBaseConfig,
   notes: string[],
 ): { config?: FlowpactConfig; unread?: true } {
-  const read = textAt(realTop(root), commit, path);
-  if ('unread' in read) {
+  const found = base.baseline;
+  if (found.kind === 'unread') {
     notes.push(
-      `the baseline's version of the base config ${path} is in the submodule ${read.unread}, which this clone lacks, so impact mode reads no ignore from it for the baseline`,
+      `the baseline's version of the base config ${found.path} is in the submodule ${found.submodule}, which this clone lacks, so impact mode reads no ignore from it for the baseline`,
     );
     return { unread: true };
   }
-  if (read.text === undefined) return {};
-  try {
-    return { config: parseConfig(parseBaseConfig(read.text, path), path) };
-  } catch (err) {
-    if (!(err instanceof ConfigError)) throw err;
-    notes.push(`the baseline's ${path} is invalid (${err.message}); impact mode reads no ignore from it`);
+  const text = textOf(found);
+  if (text === undefined) return {};
+  const path = found.kind === 'tracked' ? found.path : base.path;
+  const config = asBaseConfig(text, path);
+  if (config instanceof ConfigError) {
+    notes.push(`the baseline's ${path} is invalid (${config.message}); impact mode reads no ignore from it`);
     return {};
   }
+  return { config };
 }
+
+/** What impact mode pairs with the pull request's own `ignore` (see `AnalyzeOptions['impact']`). */
+type BaselineIgnore = Pick<
+  NonNullable<AnalyzeOptions['impact']>,
+  'ignore' | 'ignoreUnread' | 'ignoreAfterMerge'
+>;
 
 /**
  * The baseline's `ignore`, which impact mode pairs with the pull request's own: its config's, on top of the base
  * config's. A base config the pull request cannot change is the same on both sides; one of the repository counts as the
- * baseline has it, so a base config the pull request leaves alone ignores the same on both sides. `unread` names one
- * whose baseline version cannot be read.
+ * baseline has it, so a base config the pull request leaves alone ignores the same on both sides. `ignoreUnread` names
+ * one whose baseline version cannot be read.
  */
 function baselineIgnore(
-  root: string,
-  commit: string,
-  repositoryBaseConfig: string | undefined,
+  base: RepositoryBaseConfig | undefined,
   config: FlowpactConfig | undefined,
   notes: string[],
-): { patterns: readonly string[]; unread?: string } {
+): BaselineIgnore {
   const own = (config ?? defaultConfig()).ignore;
-  if (!repositoryBaseConfig) return { patterns: own };
-  const base = baseConfigAt(root, commit, repositoryBaseConfig, notes);
-  if (base.unread) return { patterns: own, unread: repositoryBaseConfig };
-  return { patterns: base.config ? [...new Set([...base.config.ignore, ...own])] : own };
+  if (!base) return { ignore: own };
+  const at = baseConfigAt(base, notes);
+  if (at.unread) return { ignore: own, ignoreUnread: base.path };
+  return { ignore: at.config ? [...new Set([...at.config.ignore, ...own])] : own };
 }
 
-/** The baseline's config, the impact policy it sets, and its `ignore`. */
+/**
+ * The pull request's `ignore` as its commits have it, when the working tree may have another: for a base config of the
+ * repository in a submodule, at the commit the checked-out commit records for it (`git submodule update --remote`
+ * checks out another), under the config's own. When that commit lacks it, or the clone lacks that commit, the config's
+ * own alone (noted), as for the baseline. Undefined otherwise: the working tree's is the pull request's.
+ */
+function ignoreAfterMerge(
+  root: string,
+  base: RepositoryBaseConfig,
+  configPath: string | undefined,
+  notes: string[],
+): readonly string[] | undefined {
+  const head = locate(base.top, 'HEAD', base.path);
+  if (head.kind === 'file' || !head.submodule) return undefined;
+  // The config's own `ignore`, without the base config's: read like the baseline's, from the working tree.
+  const own = baselineConfig(workingTree(root), configPath, undefined, [])?.ignore ?? [];
+  if (head.kind === 'unread') {
+    notes.push(
+      `the pull request's version of the base config ${head.path} is in the submodule ${head.submodule}, which this clone lacks, so impact mode reads no ignore from it for the pull request`,
+    );
+    return own;
+  }
+  if (head.kind === 'none') {
+    notes.push(
+      `the pull request's commit of the submodule ${head.submodule} has no base config ${base.path}, so impact mode reads no ignore from it for the pull request`,
+    );
+    return own;
+  }
+  const recorded = asBaseConfig(textOf(head) ?? '', head.path);
+  return [...new Set([...(recorded instanceof ConfigError ? [] : recorded.ignore), ...own])];
+}
+
+/** The baseline's config, the impact policy it sets, and its `ignore`, beside the pull request's once merged. */
 function baselinePolicy(
   root: string,
   baseline: { fs: FileSystem; commit: string },
@@ -483,31 +757,26 @@ function baselinePolicy(
 ): {
   config: FlowpactConfig | undefined;
   policy: ImpactPolicy;
-  ignore: ReturnType<typeof baselineIgnore>;
+  ignore: BaselineIgnore;
 } {
   const configPath = req.configPath
     ? relative(root, join(root, req.configPath)).split('\\').join('/')
     : undefined;
-  const repositoryBaseConfig = baseConfigOfRepository(root, req);
-  const baseInRepository = repositoryBaseConfig !== undefined;
-  if (baseInRepository) {
+  const repositoryBase = repositoryBaseConfig(root, baseline.commit, req);
+  if (repositoryBase) {
     notes.push(
       "the base config is a file of this repository, so the baseline's impact settings leave it out",
     );
   }
-  const config = baselineConfig(
-    baseline.fs,
-    configPath,
-    baseInRepository ? undefined : req.baseConfig,
-    notes,
-  );
+  const config = baselineConfig(baseline.fs, configPath, repositoryBase ? undefined : req.baseConfig, notes);
   // Policy comes from the baseline (or the defaults), never from the pull request, so it cannot relax its own check.
   const policy: ImpactPolicy = { ...(config ?? defaultConfig()).impact };
-  if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
+  if (!repositoryBase && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
     notes.push('this pull request changes impact settings; they apply after it is merged');
   }
-  const ignore = baselineIgnore(root, baseline.commit, repositoryBaseConfig, config, notes);
-  return { config, policy, ignore };
+  const ignore = baselineIgnore(repositoryBase, config, notes);
+  const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath, notes);
+  return { config, policy, ignore: { ...ignore, ...(afterMerge ? { ignoreAfterMerge: afterMerge } : {}) } };
 }
 
 /** The pull request's title and labels: given in the request, else read from the pull request event. */
@@ -583,8 +852,7 @@ export function prepareImpact(
         .map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ignore: ignore.patterns,
-      ...(ignore.unread ? { ignoreUnread: ignore.unread } : {}),
+      ...ignore,
     },
     notes,
   };
