@@ -9,6 +9,7 @@ import {
   parseActionFile,
   parseWorkflowFile,
   remoteKey,
+  trimChar,
 } from '@ciatlas/core';
 import { lockEntryOf, type RemoteEntry, type RemoteRef, type RemotesLock, remoteRefsOf } from './remotes';
 
@@ -52,7 +53,7 @@ async function get(url: string, accept: string, opts: FetchRemotesOptions): Prom
 }
 
 const repoUrl = (r: RemoteRef, opts: FetchRemotesOptions) =>
-  `${(opts.apiUrl ?? 'https://api.github.com').replace(/\/+$/, '')}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
+  `${trimChar(opts.apiUrl ?? 'https://api.github.com', '/')}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
 
 const contentsPath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
