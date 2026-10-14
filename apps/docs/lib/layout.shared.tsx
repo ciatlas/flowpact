@@ -15,8 +15,31 @@ export function baseOptions(): BaseLayoutProps {
     links: [
       { text: 'Docs', url: '/docs' },
       { text: 'Rules', url: '/docs/rules' },
-      { text: 'VS Code', url: installLinks.vscode, external: true },
-      { text: 'GitHub Action', url: installLinks.action, external: true },
+      {
+        type: 'menu',
+        text: 'Install',
+        items: [
+          { text: 'CLI', description: 'npx flowpact lint, from npm', url: installLinks.npm, external: true },
+          {
+            text: 'GitHub Action',
+            description: 'On every pull request',
+            url: installLinks.action,
+            external: true,
+          },
+          {
+            text: 'VS Code',
+            description: 'Visual Studio Marketplace',
+            url: installLinks.vscode,
+            external: true,
+          },
+          {
+            text: 'Open VSX',
+            description: 'VSCodium, Cursor, Windsurf',
+            url: installLinks.openVsx,
+            external: true,
+          },
+        ],
+      },
     ],
     githubUrl: `https://github.com/${gitConfig.user}/${gitConfig.repo}`,
   };

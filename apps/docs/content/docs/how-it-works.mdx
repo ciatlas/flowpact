@@ -8,10 +8,28 @@ files in your repository, including the [remote interfaces lockfile](/docs/remot
 repositories. Only `flowpact remotes update`, `--fetch-remotes` and the action's `remotes: fetch` read the GitHub API,
 when you ask them to.
 
-```text
- YAML files ──▶ IR ──▶ expressions ──▶ graph ──▶ matrix expansion ──▶ contracts ──▶ rules ──▶ overrides ──▶ reporters
-   (yaml +    (jobs,   (@actions/    (symbols,    (exact include/    (flowpact check)  (53 rules)  (reason,  (terminal, JSON,
- positions)   steps)  expressions)    edges)      exclude rules)                               expiry)  Markdown, SARIF)
+```mermaid
+flowchart TD
+  accTitle: From YAML to findings
+  Y["Workflows and local actions (YAML)"]
+  IR["IR: jobs, steps, interfaces, positions"]
+  X["Expressions, parsed with @actions/expressions"]
+  G["Data-flow graph: symbols and edges"]
+  RL[("remotes.lock.yaml")]
+  MX["Matrix expansion: every include and exclude"]
+  C[("Contracts, in flowpact check")]
+  RU["53 rules"]
+  O["Overrides: reason, expiry"]
+  REP["Terminal · JSON · Markdown · SARIF · editor · annotations"]
+  Y --> IR
+  IR --> X
+  X --> G
+  RL -.-> G
+  G --> MX
+  MX --> RU
+  C -.-> RU
+  RU --> O
+  O --> REP
 ```
 
 <Steps>

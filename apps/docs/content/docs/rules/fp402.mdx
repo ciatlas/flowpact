@@ -15,7 +15,7 @@ In combinations without the key the value is an empty string. Scripts, env vars 
 
 ## How to fix
 
-Define the key for every combination, or add a fallback (`$\{\{ matrix.key || 'default' \}\}`). Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != ''`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "$\{\{ matrix.key \}\}" ]]`, `[ "$\{\{ matrix.key \}\}" = on ]`), and combinations where the job or step is skipped by its own `if:`.
+Define the key for every combination, or add a fallback (`${{ matrix.key || 'default' }}`). Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != ''`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}" = on ]`), and combinations where the job or step is skipped by its own `if:`.
 
 ## Configure
 
