@@ -264,6 +264,52 @@ describe('environments', () => {
   });
 });
 
+describe('artifacts', () => {
+  const upload = (name?: string) =>
+    `      - uses: actions/upload-artifact@v4\n        with:\n${name === undefined ? '' : `          name: ${name}\n`}          path: dist\n`;
+  const wf = (...steps: string[]) =>
+    `on:\n  workflow_call:\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: 'true'\n${steps.join('')}`;
+  const grade = (before: string, after: string) =>
+    summary(changes({ [`${WF}/r.yml`]: before }, { [`${WF}/r.yml`]: after }));
+
+  it('grades an artifact no longer uploaded as major', () => {
+    expect(grade(wf(upload('dist'), upload('docs')), wf(upload('docs')))).toEqual([
+      `major no longer uploads artifact "dist"; callers' jobs that download it fail`,
+    ]);
+    expect(grade(wf(upload('dist')), wf(upload('build-output')))).toEqual([
+      `major no longer uploads artifact "dist"; callers' jobs that download it fail`,
+    ]);
+    // Without name:, upload-artifact uploads "artifact".
+    expect(grade(wf(upload()), wf(upload('dist')))).toEqual([
+      `major no longer uploads artifact "artifact"; callers' jobs that download it fail`,
+    ]);
+  });
+
+  it('is uncertain where a name is now chosen at run time, and does not grade new artifacts', () => {
+    expect(grade(wf(upload('dist')), wf(upload('dist-${{ inputs.os }}')))).toEqual([
+      `major? no longer uploads artifact "dist"; callers' jobs that download it fail`,
+    ]);
+    expect(grade(wf(upload('dist')), wf(upload('dist'), upload('docs')))).toEqual([]);
+  });
+
+  it('counts the uploads of the local actions and workflows a unit runs', () => {
+    const viaAction = (name: string) => ({
+      [`${WF}/r.yml`]: wf('      - uses: ./.github/actions/pack\n'),
+      '.github/actions/pack/action.yml': `name: p\ndescription: d\nruns:\n  using: composite\n  steps:\n${upload(name).replaceAll('      ', '    ')}`,
+    });
+    expect(summary(changes(viaAction('dist'), viaAction('pkg')))).toEqual([
+      `major no longer uploads artifact "dist"; callers' jobs that download it fail`,
+    ]);
+    const viaCall = (inner: string) => ({
+      [`${WF}/r.yml`]: 'on:\n  workflow_call:\njobs:\n  c:\n    uses: ./.github/workflows/_build.yml\n',
+      [`${WF}/_build.yml`]: inner,
+    });
+    expect(summary(changes(viaCall(wf(upload('dist'))), viaCall(wf())))).toEqual([
+      `major no longer uploads artifact "dist"; callers' jobs that download it fail`,
+    ]);
+  });
+});
+
 describe('output reliability', () => {
   /** A reusable workflow whose output `v` comes from step `m` of job `build`, with `jobIf` and `stepIf` on them. */
   const wf = (jobIf = '', stepIf = '', extraJobs = '', needs = '') =>

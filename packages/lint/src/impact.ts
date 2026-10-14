@@ -37,6 +37,7 @@ export interface ImpactChange {
   /** The published unit (workflow path or action directory). */
   unit: string;
   kind:
+    | 'artifact'
     | 'check-name'
     | 'environment'
     | 'interface'
@@ -487,6 +488,71 @@ function environmentChanges(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Artifacts
+// ---------------------------------------------------------------------------
+
+const UPLOAD_ARTIFACT = /^actions\/upload-artifact@/i;
+
+/** The artifacts a unit's steps upload: names written out, and whether any name is only known at run time. */
+interface Uploads {
+  names: Set<string>;
+  dynamic: boolean;
+}
+
+/** The steps that run when a unit runs: its own, those of the local actions they use, and of the workflows it calls. */
+function stepsRun(index: ProjectIndex, unit: UnitDecl, seen = new Set<string>()): StepDecl[] {
+  if (seen.has(unit.path) || seen.size > 50) return [];
+  seen.add(unit.path);
+  const own = unit.kind === 'workflow' ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
+  const actions = index.actionUses.filter((u) => u.unit === unit).map((u) => u.action);
+  const callees =
+    unit.kind === 'workflow'
+      ? Object.values(unit.jobs).flatMap((j) => (j.uses ? [index.calleeOf(j)] : []))
+      : [];
+  const ran = [...actions, ...callees].filter((u): u is UnitDecl => u !== undefined);
+  return [...own, ...ran.flatMap((u) => stepsRun(index, u, seen))];
+}
+
+/** The artifact name an `actions/upload-artifact` step uploads: its `name:`, `artifact` by default. */
+function artifactName(step: StepDecl): string {
+  const name = step.with.name?.value;
+  return name === undefined || name === null ? 'artifact' : String(name);
+}
+
+/**
+ * The artifacts a published unit uploads with `actions/upload-artifact`, in its own steps and those it runs. A called
+ * workflow's jobs and an action's steps run in the caller's run, so a caller's later job can download them by name.
+ */
+function uploadsOf(index: ProjectIndex, unit: UnitDecl): Uploads {
+  const out: Uploads = { names: new Set(), dynamic: false };
+  for (const step of stepsRun(index, unit)) {
+    if (step.uses?.kind !== 'remote-action' || !UPLOAD_ARTIFACT.test(step.uses.raw)) continue;
+    const name = artifactName(step);
+    if (name.includes('${{')) out.dynamic = true;
+    else out.names.add(name);
+  }
+  return out;
+}
+
+/**
+ * Artifacts a published unit no longer uploads: a caller's job that downloads one by name fails. Certain when every
+ * name is written out; uncertain when the unit now uploads a name only known at run time, which may still be it.
+ */
+function artifactChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h: UnitDecl): ImpactChange[] {
+  const after = uploadsOf(head, h);
+  return [...uploadsOf(base, b).names]
+    .filter((n) => !after.names.has(n))
+    .map((n) => ({
+      unit: h.path,
+      kind: 'artifact' as const,
+      level: 'major' as const,
+      certain: !after.dynamic,
+      message: `no longer uploads artifact "${n}"; callers' jobs that download it fail`,
+      loc: fileStart(h.file),
+    }));
+}
+
 function remoteUses(unit: UnitDecl): Set<string> {
   const out = new Set<string>();
   const steps = unit.kind === 'workflow' ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
@@ -748,6 +814,7 @@ function blockingChange(
 function comparedChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h: UnitDecl): ImpactChange[] {
   const out = [
     ...interfaceChanges(base, head, b, h),
+    ...artifactChanges(base, head, b, h),
     ...outputReliabilityChanges(base, head, b, h),
     ...usesChanges(b, h),
   ];
