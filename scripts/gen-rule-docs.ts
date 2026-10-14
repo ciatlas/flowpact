@@ -15,13 +15,40 @@ const SEVERITY_BADGE: Record<string, string> = {
   off: '⚪ off (opt-in)',
 };
 
+/** An inline code span: a run of backticks, then the shortest text up to a run of the same length. */
+const CODE_SPAN = /(`+)[\s\S]*?[^`]\1(?!`)/g;
+
+/** `prose` applied to the text outside inline code spans, `code` to the spans (as they are by default). */
+function outsideCode(s: string, prose: (t: string) => string, code = (t: string) => t): string {
+  let out = '';
+  let last = 0;
+  for (const m of s.matchAll(CODE_SPAN)) {
+    out += prose(s.slice(last, m.index)) + code(m[0]);
+    last = m.index + m[0].length;
+  }
+  return out + prose(s.slice(last));
+}
+
 /**
  * Escapes text for MDX prose (braces and angle brackets would be parsed as JSX). Backslashes too: `\{` would otherwise
- * become an escaped backslash followed by a `{` that starts an expression.
+ * become an escaped backslash followed by a `{` that starts an expression. Code spans are left as they are: MDX takes
+ * them literally, so an escape there would show (`$\{\{ inputs.x \}\}`).
  */
-const mdx = (s: string) => s.replace(/[\\{}<>]/g, (c) => `\\${c}`);
-/** `mdx` for a table cell: pipes are escaped in the same pass, after an already escaped backslash run. */
-const mdxCell = (s: string) => s.replace(/[\\{}<>|]/g, (c) => `\\${c}`);
+const mdx = (s: string) => outsideCode(s, (t) => t.replace(/[\\{}<>]/g, (c) => `\\${c}`));
+/**
+ * `mdx` for a table cell: pipes are escaped in the same pass, after an already escaped backslash run. A code span in a
+ * cell is refused when it holds a pipe (a GFM table reads it as a cell border, even in code) or a backslash (which would
+ * then escape it): no summary needs one, and rewording beats a cell that renders differently from its source.
+ */
+const mdxCell = (s: string) =>
+  outsideCode(
+    s,
+    (t) => t.replace(/[\\{}<>|]/g, (c) => `\\${c}`),
+    (t) => {
+      if (/[|\\]/.test(t)) throw new Error(`a code span in a table cell holds a pipe or a backslash: ${t}`);
+      return t;
+    },
+  );
 
 export function rulePage(rule: RuleDefinition): string {
   const category = Object.values(CATEGORIES).find((c) => c.id === rule.category)!;
@@ -115,31 +142,38 @@ export function indexPage(rules: RuleDefinition[]): string {
     'Severity is configurable per rule; codes never change meaning. Plugin rules use their own prefix (for example `ACME101`).',
     '',
   ];
-  for (const [digit, cat] of Object.entries(CATEGORIES)) {
-    const inCat = rules.filter((r) => r.category === cat.id);
-    if (inCat.length === 0) continue;
-    lines.push(
-      `## ${cat.title} (\`FP${digit}xx\`)`,
-      '',
-      '| Code | Name | Default | Summary |',
-      '| --- | --- | --- | --- |',
-    );
-    for (const r of inCat) {
+  for (const group of ruleGroups(rules)) {
+    lines.push(`## ${group.title}`, '', '| Code | Name | Default | Summary |', '| --- | --- | --- | --- |');
+    for (const r of group.rules) {
       lines.push(
         `| [\`${r.code}\`](/docs/rules/${r.code.toLowerCase()}) | \`${r.name}\` | ${SEVERITY_BADGE[r.defaultSeverity]} | ${mdxCell(r.docs.summary)} |`,
       );
     }
     lines.push('');
   }
-  lines.push(
-    '## Reserved ranges',
-    '',
-    '- `FP7xx` — hygiene rules (reserved).',
-    '- `FP8xx` — contract drift (`contract-missing`, `contract-stale`, `breaking-interface-change`), shipping with `flowpact check`.',
-    '- `FP9xx` — config and overrides (`override-expired`, `override-unused`, `invalid-config`), shipping with overrides.',
-    '',
-  );
+  lines.push('## Reserved ranges', '', '- `FP7xx`: hygiene rules (none yet).', '');
   return lines.join('\n');
+}
+
+/** Ranges within a category that read as a group of their own: impact mode's rules share the contracts category. */
+const SUBGROUPS: { prefix: string; title: string }[] = [{ prefix: 'FP81', title: 'Impact mode (`FP81x`)' }];
+
+/** The rules by category, in code order, with each subgroup split out under its own title. */
+export function ruleGroups(rules: RuleDefinition[]): { title: string; rules: RuleDefinition[] }[] {
+  const out: { title: string; rules: RuleDefinition[] }[] = [];
+  for (const [digit, cat] of Object.entries(CATEGORIES)) {
+    const inCat = rules.filter((r) => r.category === cat.id);
+    const sub = (r: RuleDefinition) => SUBGROUPS.find((g) => r.code.startsWith(g.prefix));
+    const main = inCat.filter((r) => !sub(r));
+    const range =
+      main.length && main.every((r) => r.code.startsWith(`FP${digit}0`)) && inCat.length > main.length;
+    if (main.length) out.push({ title: `${cat.title} (\`FP${digit}${range ? '0x' : 'xx'}\`)`, rules: main });
+    for (const g of SUBGROUPS) {
+      const inGroup = inCat.filter((r) => sub(r) === g);
+      if (inGroup.length) out.push({ title: g.title, rules: inGroup });
+    }
+  }
+  return out;
 }
 
 if (import.meta.main ?? process.argv[1]?.endsWith('gen-rule-docs.ts')) {
