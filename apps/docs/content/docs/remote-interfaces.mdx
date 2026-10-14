@@ -107,8 +107,8 @@ files and directories for you alone, wherever it is. A reference whose path coul
 
 **In CI**, nobody opens the files, so `remotes update` keeps none there (when `CI` is set, as GitHub Actions, GitLab,
 CircleCI and most CI services set it, or Azure Pipelines' `TF_BUILD` or Jenkins' `JENKINS_URL`) unless `--cache-dir`
-or `FLOWPACT_CACHE_DIR` says where; the output says it kept none. The action never writes the cache, and neither does
-`--fetch-remotes` or `--dry-run`. Without a home directory and without either option, `remotes update` keeps nothing
+or `FLOWPACT_CACHE_DIR` says where; the output says it kept none. `remotes update --no-cache` keeps none anywhere. The
+action never writes the cache, and neither does `--fetch-remotes` or `--dry-run`. Without a home directory and without either option, `remotes update` keeps nothing
 and `remotes download` stops with a usage error.
 
 ## GitHub Enterprise Server and GHE.com

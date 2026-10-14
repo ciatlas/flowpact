@@ -191,7 +191,7 @@ Fetches the interface of every remote reusable workflow and action the repositor
 `.github/flowpact/remotes.lock.yaml` (see [Remote interfaces](/docs/remote-interfaces)).
 
 ```sh
-flowpact remotes update [paths…] [--cache-dir <dir>] [--dry-run]
+flowpact remotes update [paths…] [--cache-dir <dir> | --no-cache] [--dry-run]
 ```
 
 | Option | Description |
@@ -199,6 +199,7 @@ flowpact remotes update [paths…] [--cache-dir <dir>] [--dry-run]
 | `[paths…]` | Workflow or action files or directories: fetch only the remote references they use, and those of the local workflows and actions they call. Other entries of the lockfile are kept as they are; an entry nothing in the repository uses any more is still dropped. |
 | `--github-com` | On GitHub Enterprise Server or GHE.com: also look on github.com for the references the enterprise server lacks, as GitHub Connect does, with `GITHUB_COM_TOKEN` or none (never the enterprise token). See [GitHub Enterprise Server](/docs/remote-interfaces#github-enterprise-server-and-ghecom). |
 | `--cache-dir <dir>` | flowpact's cache directory: keep the files read in its `remotes` directory (relative to where you run flowpact). Also in CI, where nothing is kept by default. |
+| `--no-cache` | Keep none of the files read; write only the lockfile. Not with `--cache-dir`. |
 | `--dry-run` | Fetch and say what would change; write nothing, not even to the cache. |
 
 It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
