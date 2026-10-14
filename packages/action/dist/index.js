@@ -11277,7 +11277,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11856,7 +11856,7 @@ function evaluateTemplate(text2, resolve8) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11867,7 +11867,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12069,7 +12069,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12210,11 +12210,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12281,7 +12281,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12417,7 +12417,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12430,7 +12430,7 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
@@ -12497,7 +12497,7 @@ function needsSecret(needed, name) {
   return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/graph.ts
 var computed = (s) => s === void 0 || s === "*" || s === "?";
 var isKey = (s, key) => s?.toLowerCase() === key;
 function wholeReads(reads) {
@@ -13167,7 +13167,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -13194,7 +13194,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -13248,7 +13248,7 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { posix as posix2 } from "path";
 function createParseContext(repository) {
@@ -13439,6 +13439,7 @@ function writtenLength(s, at, text2) {
   let i = at;
   for (let n = 0; n < text2.length; n++) {
     if (n > 0) i = pastJoins(s, i);
+    if (i >= s.close) return 0;
     const [char, length] = charAt(s, i);
     if (char !== text2[n]) return 0;
     i += length;
@@ -13916,7 +13917,6 @@ function jobs(unit, node, ctx) {
     const name = str(get(j, "name"));
     const nameSite = unit.siteByPath.get(pathKey([...p, "name"]));
     const namePair = getPair(j, "name");
-    const perms = permissions(get(j, "permissions"));
     const ifNode = get(j, "if");
     const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
     const strategy = get(j, "strategy");
@@ -13927,7 +13927,7 @@ function jobs(unit, node, ctx) {
       ...name !== void 0 ? { name } : {},
       ...nameSite ? { nameSite } : {},
       ...namePair?.value ? { nameLoc: nodeLoc(unit.source, namePair.value) } : {},
-      ...perms ? { permissions: perms } : {},
+      ...jobSettings(unit.source, j),
       ...ifValue !== void 0 ? { ifValue } : {},
       needs,
       ...ifSite ? { ifSite } : {},
@@ -13943,6 +13943,34 @@ function jobs(unit, node, ctx) {
     };
   }
   return out;
+}
+function jobSettings(source, j) {
+  const perms = permissions(get(j, "permissions"));
+  const runs = runsOn(source, get(j, "runs-on"));
+  const env = environment(source, get(j, "environment"));
+  return {
+    ...perms ? { permissions: perms } : {},
+    ...runs ? { runsOn: runs } : {},
+    ...env ? { environment: env } : {}
+  };
+}
+var isExpression = (text2) => text2.includes("${{");
+function texts(node) {
+  if ((0, import_yaml2.isSeq)(node)) return node.items.flatMap((n) => str(n) === void 0 ? [] : [str(n)]);
+  const one = str(node);
+  return one === void 0 ? [] : [one];
+}
+function runsOn(source, node) {
+  if (!node) return void 0;
+  const group2 = (0, import_yaml2.isMap)(node) ? str(get(node, "group")) : void 0;
+  const labels = texts((0, import_yaml2.isMap)(node) ? get(node, "labels") : node);
+  const dynamic = [...labels, group2 ?? ""].some(isExpression) || !((0, import_yaml2.isMap)(node) || labels.length);
+  return { labels, ...group2 !== void 0 ? { group: group2 } : {}, dynamic, loc: nodeLoc(source, node) };
+}
+function environment(source, node) {
+  const name = str((0, import_yaml2.isMap)(node) ? get(node, "name") : node);
+  if (name === void 0 || !node) return void 0;
+  return { name, dynamic: isExpression(name), loc: nodeLoc(source, node) };
 }
 function permissions(node) {
   if ((0, import_yaml2.isScalar)(node)) {
@@ -14105,7 +14133,7 @@ function parseActionFile(dir, file, text2, ctx) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/project.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
@@ -16670,10 +16698,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml4 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16746,7 +16774,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -17035,7 +17063,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/script-writes.ts
 import { posix as posix3 } from "path";
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
@@ -17306,7 +17334,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17558,7 +17586,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
@@ -17815,7 +17843,7 @@ function loadProject(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/trace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/trace.ts
 var readsGithub = (ref) => ref.context === "github";
 function usageReadsCallerEvent(index, u) {
   const wf = index.project.workflows.get(u.site.ownerPath);
@@ -21965,20 +21993,21 @@ function scopesOf(p) {
   }
   return Object.fromEntries(Object.entries(p).map(([k, v]) => [k, RANK[v] ?? 0]));
 }
-function requestedByJob(index, wf, depth = 0, seen = /* @__PURE__ */ new Set()) {
+function byJobChain(index, wf, pick2, depth = 0, seen = /* @__PURE__ */ new Set()) {
   const out = /* @__PURE__ */ new Map();
   for (const job of Object.values(wf.jobs)) {
     const callee = job.uses ? index.calleeOf(job) : void 0;
     if (callee) {
       if (depth >= 10 || seen.has(callee.path)) continue;
-      for (const [chain, s] of requestedByJob(index, callee, depth + 1, /* @__PURE__ */ new Set([...seen, wf.path])))
-        out.set(`${job.id} > ${chain}`, s);
+      for (const [chain, v] of byJobChain(index, callee, pick2, depth + 1, /* @__PURE__ */ new Set([...seen, wf.path])))
+        out.set(`${job.id} > ${chain}`, v);
       continue;
     }
-    if (!job.uses) out.set(job.id, scopesOf(job.permissions ?? wf.permissions));
+    if (!job.uses) out.set(job.id, pick2(job, wf));
   }
   return out;
 }
+var requestedByJob = (index, wf) => byJobChain(index, wf, (job, w) => scopesOf(job.permissions ?? w.permissions));
 function permissionChanges(base, head, b, h) {
   const before = requestedByJob(base, b);
   const after = requestedByJob(head, h);
@@ -22001,6 +22030,49 @@ function permissionChanges(base, head, b, h) {
       message: `jobs.${chain.replaceAll(" > ", " \u203A ")} now requests ${widened.map(([k, v]) => `${k}: ${LEVEL_NAMES[v]}`).join(", ")}; callers that grant less fail when the run starts`,
       loc: job?.loc ?? fileStart(h.file)
     });
+  }
+  return out;
+}
+var HOSTED_LABEL = /^(ubuntu|windows|macos)-(latest|[\d.]+)(-arm|-intel)?$/i;
+var requirements = (r) => /* @__PURE__ */ new Set([...r.labels.map((l) => l.toLowerCase()), ...r.group ? [`group ${r.group.toLowerCase()}`] : []]);
+var isHosted = (r) => !r.dynamic && !r.group && r.labels.length === 1 && HOSTED_LABEL.test(r.labels[0]);
+var describeRunners = (r) => [r.labels.length ? `[${r.labels.join(", ")}]` : "", r.group ? `runner group "${r.group}"` : ""].filter(Boolean).join(" in ");
+var sameRunners = (a, b) => JSON.stringify([...requirements(a)].sort()) === JSON.stringify([...requirements(b)].sort());
+var runtimeRunners = (at, h) => ({
+  level: "major",
+  certain: false,
+  message: `${at} now runs on ${describeRunners(h)}, chosen at run time; callers without such a runner never start it`,
+  loc: h.loc
+});
+var hostedRunners = (at, b, h) => b && {
+  level: "patch",
+  certain: true,
+  message: `${at} now runs on ${describeRunners(h)} instead of ${describeRunners(b)}`,
+  loc: h.loc
+};
+function customRunners(at, b, h) {
+  const before = b && !isHosted(b) ? requirements(b) : /* @__PURE__ */ new Set();
+  if (![...requirements(h)].some((r) => !before.has(r)))
+    return { level: "patch", certain: true, message: `${at} now runs on ${describeRunners(h)}`, loc: h.loc };
+  return {
+    level: "major",
+    certain: true,
+    message: `${at} now needs a runner with ${describeRunners(h)}; callers without one never start it`,
+    loc: h.loc
+  };
+}
+function runnerChange(chain, b, h) {
+  if (b && sameRunners(b, h)) return void 0;
+  const at = `jobs.${chain.replaceAll(" > ", " \u203A ")}`;
+  if (h.dynamic || b?.dynamic) return runtimeRunners(at, h);
+  return isHosted(h) ? hostedRunners(at, b, h) : customRunners(at, b, h);
+}
+function runnerChanges(base, head, b, h) {
+  const before = byJobChain(base, b, (job) => job.runsOn);
+  const out = [];
+  for (const [chain, hr] of byJobChain(head, h, (job) => job.runsOn)) {
+    const change = hr && runnerChange(chain, before.get(chain), hr);
+    if (change) out.push({ unit: h.path, kind: "runner", ...change });
   }
   return out;
 }
@@ -22178,7 +22250,11 @@ function comparedChanges(base, head, b, h) {
     ...usesChanges(b, h)
   ];
   if (b.kind === "workflow" && h.kind === "workflow")
-    out.push(...checkNameChanges(base, head, b, h), ...permissionChanges(base, head, b, h));
+    out.push(
+      ...checkNameChanges(base, head, b, h),
+      ...permissionChanges(base, head, b, h),
+      ...runnerChanges(base, head, b, h)
+    );
   if (b.kind === "action" && h.kind === "action") out.push(...runtimeChanges(b, h));
   return out;
 }
