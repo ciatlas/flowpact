@@ -1744,7 +1744,7 @@ var require_stringify = __commonJS({
         props.push(doc.directives.tagString(tag));
       return props.join(" ");
     }
-    function stringify2(item, ctx, onComment, onChompKeep) {
+    function stringify3(item, ctx, onComment, onChompKeep) {
       if (identity.isPair(item))
         return item.toString(ctx, onComment, onChompKeep);
       if (identity.isAlias(item)) {
@@ -1773,7 +1773,7 @@ var require_stringify = __commonJS({
 ${ctx.indent}${str2}`;
     }
     exports.createStringifyContext = createStringifyContext;
-    exports.stringify = stringify2;
+    exports.stringify = stringify3;
   }
 });
 
@@ -1783,7 +1783,7 @@ var require_stringifyPair = __commonJS({
     "use strict";
     var identity = require_identity();
     var Scalar = require_Scalar();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyPair({ key, value }, ctx, onComment, onChompKeep) {
       const { allNullValues, doc, indent, indentStep, options: { commentString, indentSeq, simpleKeys } } = ctx;
@@ -1805,7 +1805,7 @@ var require_stringifyPair = __commonJS({
       });
       let keyCommentDone = false;
       let chompKeep = false;
-      let str2 = stringify2.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
+      let str2 = stringify3.stringify(key, ctx, () => keyCommentDone = true, () => chompKeep = true);
       if (!explicitKey && !ctx.inFlow && str2.length > 1024) {
         if (simpleKeys)
           throw new Error("With simple keys, single line scalar must not span more than 1024 characters");
@@ -1857,7 +1857,7 @@ ${indent}:`;
         ctx.indent = ctx.indent.substring(2);
       }
       let valueCommentDone = false;
-      const valueStr = stringify2.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
+      const valueStr = stringify3.stringify(value, ctx, () => valueCommentDone = true, () => chompKeep = true);
       let ws = " ";
       if (keyComment || vsb || vcb) {
         ws = vsb ? "\n" : "";
@@ -1998,7 +1998,7 @@ var require_addPairToJSMap = __commonJS({
     "use strict";
     var log = require_log();
     var merge2 = require_merge();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var identity = require_identity();
     var toJS = require_toJS();
     function addPairToJSMap(ctx, map, { key, value }) {
@@ -2034,7 +2034,7 @@ var require_addPairToJSMap = __commonJS({
       if (typeof jsKey !== "object")
         return String(jsKey);
       if (identity.isNode(key) && ctx?.doc) {
-        const strCtx = stringify2.createStringifyContext(ctx.doc, {});
+        const strCtx = stringify3.createStringifyContext(ctx.doc, {});
         strCtx.anchors = /* @__PURE__ */ new Set();
         for (const node of ctx.anchors.keys())
           strCtx.anchors.add(node.anchor);
@@ -2101,12 +2101,12 @@ var require_stringifyCollection = __commonJS({
   "../../node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyCollection.js"(exports) {
     "use strict";
     var identity = require_identity();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyCollection(collection, ctx, options) {
       const flow = ctx.inFlow ?? collection.flow;
-      const stringify3 = flow ? stringifyFlowCollection : stringifyBlockCollection;
-      return stringify3(collection, ctx, options);
+      const stringify4 = flow ? stringifyFlowCollection : stringifyBlockCollection;
+      return stringify4(collection, ctx, options);
     }
     function stringifyBlockCollection({ comment, items }, ctx, { blockItemPrefix, flowChars, itemIndent, onChompKeep, onComment }) {
       const { indent, options: { commentString } } = ctx;
@@ -2131,7 +2131,7 @@ var require_stringifyCollection = __commonJS({
           }
         }
         chompKeep = false;
-        let str3 = stringify2.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
+        let str3 = stringify3.stringify(item, itemCtx, () => comment2 = null, () => chompKeep = true);
         if (comment2)
           str3 += stringifyComment.lineComment(str3, itemIndent, commentString(comment2));
         if (chompKeep && comment2)
@@ -2198,7 +2198,7 @@ ${indent}${line}` : "\n";
         }
         if (comment)
           reqNewline = true;
-        let str2 = stringify2.stringify(item, itemCtx, () => comment = null);
+        let str2 = stringify3.stringify(item, itemCtx, () => comment = null);
         reqNewline || (reqNewline = lines.length > linesAtValue || str2.includes("\n"));
         if (i < items.length - 1) {
           str2 += ",";
@@ -3559,7 +3559,7 @@ var require_stringifyDocument = __commonJS({
   "../../node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/stringify/stringifyDocument.js"(exports) {
     "use strict";
     var identity = require_identity();
-    var stringify2 = require_stringify();
+    var stringify3 = require_stringify();
     var stringifyComment = require_stringifyComment();
     function stringifyDocument(doc, options) {
       const lines = [];
@@ -3574,7 +3574,7 @@ var require_stringifyDocument = __commonJS({
       }
       if (hasDirectives)
         lines.push("---");
-      const ctx = stringify2.createStringifyContext(doc, options);
+      const ctx = stringify3.createStringifyContext(doc, options);
       const { commentString } = ctx.options;
       if (doc.commentBefore) {
         if (lines.length !== 1)
@@ -3596,7 +3596,7 @@ var require_stringifyDocument = __commonJS({
           contentComment = doc.contents.comment;
         }
         const onChompKeep = contentComment ? void 0 : () => chompKeep = true;
-        let body = stringify2.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
+        let body = stringify3.stringify(doc.contents, ctx, () => contentComment = null, onChompKeep);
         if (contentComment)
           body += stringifyComment.lineComment(body, "", commentString(contentComment));
         if ((body[0] === "|" || body[0] === ">") && lines[lines.length - 1] === "---") {
@@ -3604,7 +3604,7 @@ var require_stringifyDocument = __commonJS({
         } else
           lines.push(body);
       } else {
-        lines.push(stringify2.stringify(doc.contents, ctx));
+        lines.push(stringify3.stringify(doc.contents, ctx));
       }
       if (doc.directives?.docEnd) {
         if (doc.comment) {
@@ -5740,7 +5740,7 @@ var require_cst_scalar = __commonJS({
 var require_cst_stringify = __commonJS({
   "../../node_modules/.pnpm/yaml@2.9.1/node_modules/yaml/dist/parse/cst-stringify.js"(exports) {
     "use strict";
-    var stringify2 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
+    var stringify3 = (cst) => "type" in cst ? stringifyToken(cst) : stringifyItem(cst);
     function stringifyToken(token) {
       switch (token.type) {
         case "block-scalar": {
@@ -5793,7 +5793,7 @@ var require_cst_stringify = __commonJS({
         res += stringifyToken(value);
       return res;
     }
-    exports.stringify = stringify2;
+    exports.stringify = stringify3;
   }
 });
 
@@ -7523,7 +7523,7 @@ var require_public_api = __commonJS({
       }
       return doc.toJS(Object.assign({ reviver: _reviver }, options));
     }
-    function stringify2(value, replacer2, options) {
+    function stringify3(value, replacer2, options) {
       let _replacer = null;
       if (typeof replacer2 === "function" || Array.isArray(replacer2)) {
         _replacer = replacer2;
@@ -7548,7 +7548,7 @@ var require_public_api = __commonJS({
     exports.parse = parse3;
     exports.parseAllDocuments = parseAllDocuments;
     exports.parseDocument = parseDocument5;
-    exports.stringify = stringify2;
+    exports.stringify = stringify3;
   }
 });
 
@@ -11277,7 +11277,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11856,7 +11856,7 @@ function evaluateTemplate(text2, resolve8) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11867,7 +11867,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12069,7 +12069,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12210,11 +12210,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12281,7 +12281,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12417,7 +12417,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12430,7 +12430,7 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
@@ -12497,7 +12497,7 @@ function needsSecret(needed, name) {
   return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/graph.ts
 var computed = (s) => s === void 0 || s === "*" || s === "?";
 var isKey = (s, key) => s?.toLowerCase() === key;
 function wholeReads(reads) {
@@ -12558,6 +12558,10 @@ function pickOutputs(names, [, b, c]) {
 function matrixKeys(job) {
   const m = job?.matrix;
   return m ? [...m.dims.map((d) => d.name), ...m.include.flatMap((inc) => Object.keys(inc.keyLocs))] : [];
+}
+function remoteKey(raw) {
+  const [owner = "", repo = "", ...rest] = raw.trim().split("/");
+  return [owner.toLowerCase(), repo.toLowerCase(), ...rest].join("/");
 }
 var sym = {
   input: (unit, name) => `${unit}#inputs.${name}`,
@@ -12620,6 +12624,23 @@ var ProjectIndex = class {
       return void 0;
     if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
     return this.project.workflows.get(job.uses.target);
+  }
+  /**
+   * The interface a job calls: its local reusable workflow, or the external unit of its remote one (see
+   * `Project.external`). Only checks of what a caller passes and reads use it; `calleeOf` never returns an external unit.
+   */
+  // fallow-ignore-next-line unused-class-member -- API for flowpact's checks of remote calls (ciatlas/flowpact#152)
+  interfaceOf(job) {
+    if (job.uses?.kind !== "remote-workflow") return this.calleeOf(job);
+    const unit = this.project.external?.get(remoteKey(job.uses.raw));
+    return unit?.kind === "workflow" && unit.call ? unit : void 0;
+  }
+  /** The interface a step uses: its local action, or the external unit of its remote one (see `interfaceOf`). */
+  // fallow-ignore-next-line unused-class-member -- API for flowpact's checks of remote actions (ciatlas/flowpact#152)
+  actionInterfaceOf(step2) {
+    if (step2.uses?.kind !== "remote-action") return this.actionOf(step2);
+    const unit = this.project.external?.get(remoteKey(step2.uses.raw));
+    return unit?.kind === "action" ? unit : void 0;
   }
   actionOf(step2) {
     if (step2.uses?.kind !== "local-action" || !step2.uses.target || step2.uses.selfRef !== void 0)
@@ -13167,7 +13188,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -13194,7 +13215,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -13248,7 +13269,7 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { posix as posix2 } from "path";
 function createParseContext(repository) {
@@ -14133,7 +14154,7 @@ function parseActionFile(dir, file, text2, ctx) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/project.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
@@ -16698,10 +16719,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml4 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16774,7 +16795,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -17063,7 +17084,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/script-writes.ts
 import { posix as posix3 } from "path";
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
@@ -17334,7 +17355,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17586,7 +17607,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
@@ -17839,11 +17860,21 @@ function loadProject(opts) {
     ignoredTargets,
     missing,
     invalidTargets: invalid,
-    unverified
+    unverified,
+    ...externalUnits(opts.remotes, ctx)
   };
 }
+function externalUnits(remotes = [], ctx) {
+  if (!remotes.length) return {};
+  const out = /* @__PURE__ */ new Map();
+  for (const r of remotes) {
+    const unit = r.kind === "workflow" ? parseWorkflowFile(r.ref, r.text, ctx) : parseActionFile(r.ref, r.ref, r.text, ctx);
+    out.set(remoteKey(r.ref), { ...unit, external: true });
+  }
+  return { external: out };
+}
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+3cb058b7b420eeb47daad3af3f5378ffc51f3d53/node_modules/@ciatlas/core/src/trace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+a04342d23260b6dcceec00befc73634866cc6917/node_modules/@ciatlas/core/src/trace.ts
 var readsGithub = (ref) => ref.context === "github";
 function usageReadsCallerEvent(index, u) {
   const wf = index.project.workflows.get(u.site.ownerPath);
@@ -22517,6 +22548,76 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
   };
 }
 
+// ../lint/src/remotes.ts
+var import_yaml8 = __toESM(require_dist(), 1);
+var REMOTES_LOCK_FILES = [`${CONFIG_DIR}/remotes.lock.yaml`, `${CONFIG_DIR}/remotes.lock.yml`];
+var inputSchema = strictObject({
+  type: optional(string2()),
+  required: boolean2(),
+  default: optional(json()),
+  options: optional(array(string2()))
+});
+var entrySchema = strictObject({
+  /** The commit the reference resolved to when the entry was written. */
+  sha: string2().check(_regex(/^[0-9a-f]{40}$/)),
+  kind: _enum(["workflow", "action"]),
+  inputs: optional(record(string2(), inputSchema)),
+  secrets: optional(record(string2(), strictObject({ required: boolean2() }))),
+  outputs: optional(array(string2()))
+});
+var remotesLockSchema = strictObject({
+  version: literal(1),
+  /** By `uses:` reference: `owner/repo/.github/workflows/<file>@<ref>` or `owner/repo[/path]@<ref>`. */
+  remotes: record(string2(), entrySchema)
+});
+function readRemotesLock(fs3) {
+  const file = REMOTES_LOCK_FILES.find((f) => fs3.read(f) !== void 0);
+  if (!file) return {};
+  let data;
+  try {
+    data = (0, import_yaml8.parse)(fs3.read(file));
+  } catch (e) {
+    return { file, error: `not valid YAML: ${e.message.split("\n")[0]}` };
+  }
+  const parsed = remotesLockSchema.safeParse(data);
+  if (parsed.success) return { file, lock: parsed.data };
+  const issues = parsed.error.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+  return { file, error: issues };
+}
+function interfaceYaml(e) {
+  const inputs = e.inputs ?? {};
+  if (e.kind === "workflow") {
+    const outputs2 = Object.fromEntries((e.outputs ?? []).map((o) => [o, { value: "" }]));
+    return (0, import_yaml8.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
+  }
+  const outputs = Object.fromEntries((e.outputs ?? []).map((o) => [o, { description: "" }]));
+  return (0, import_yaml8.stringify)({ name: "", inputs, outputs, runs: { using: "composite", steps: [] } });
+}
+var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
+var isExternal = (unit) => unit.external === true;
+function interfaceCalls(index) {
+  const remote = [];
+  for (const caller of index.project.workflows.values()) {
+    for (const job of Object.values(caller.jobs)) {
+      if (job.uses?.kind !== "remote-workflow") continue;
+      const callee = index.interfaceOf(job);
+      if (callee) remote.push({ caller, job, callee });
+    }
+  }
+  return [...index.callSites, ...remote];
+}
+var stepsOf = (unit) => unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((job) => job.steps.map((step2) => ({ job, step: step2 }))) : unit.steps.map((step2) => ({ step: step2 }));
+function interfaceUses(index) {
+  const remote = [];
+  for (const unit of index.units()) {
+    for (const { job, step: step2 } of stepsOf(unit)) {
+      const action = step2.uses?.kind === "remote-action" ? index.actionInterfaceOf(step2) : void 0;
+      if (action) remote.push({ unit, ...job ? { job } : {}, step: step2, action });
+    }
+  }
+  return [...index.actionUses, ...remote];
+}
+
 // ../lint/src/rules/types.ts
 var CATEGORIES = {
   1: { id: "inputs", title: "Inputs" },
@@ -23222,6 +23323,7 @@ function declaredInputs(unit) {
 function emptyWhenOmitted(input2) {
   return !input2.required && !input2.hasDefault && input2.type !== "boolean" && input2.type !== "number";
 }
+var declaredAt = (callee, loc, message) => isExternal(callee) ? [] : [{ loc, message }];
 var missingRequiredInput = defineRule({
   code: "FP101",
   name: "missing-required-input",
@@ -23247,8 +23349,8 @@ var missingRequiredInput = defineRule({
     }
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) reportMissingCallInputs(ctx, call);
-    for (const use of ctx.index.actionUses) reportMissingActionInputs(ctx, use);
+    for (const call of interfaceCalls(ctx.index)) reportMissingCallInputs(ctx, call);
+    for (const use of interfaceUses(ctx.index)) reportMissingActionInputs(ctx, use);
   }
 });
 function reportMissingCallInputs(ctx, call) {
@@ -23261,7 +23363,7 @@ function reportMissingCallInputs(ctx, call) {
       symbol: sym.input(call.callee.path, input2.name),
       related: [
         ...chainRelated(chainTo(ctx.index, call.caller.path)),
-        { loc: input2.loc, message: `${quote(input2.name)} is declared required here` }
+        ...declaredAt(call.callee, input2.loc, `${quote(input2.name)} is declared required here`)
       ],
       fix: `Add \`${input2.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`
     });
@@ -23274,7 +23376,7 @@ function reportMissingActionInputs(ctx, use) {
       message: `Step ${use.step.id ?? `#${use.step.index + 1}`} uses ${use.action.path} without required input ${quote(input2.name)} \u2014 GitHub will run it with an empty value`,
       loc: use.step.uses?.loc ?? use.step.loc,
       symbol: sym.input(use.action.path, input2.name),
-      related: [{ loc: input2.loc, message: `${quote(input2.name)} is declared required here` }],
+      related: declaredAt(use.action, input2.loc, `${quote(input2.name)} is declared required here`),
       fix: `Add \`${input2.name}: <value>\` under the step's \`with:\`.`
     });
   }
@@ -23296,7 +23398,8 @@ var unknownInput = defineRule({
     }
   },
   check(ctx) {
-    const check = (bindings2, inputs, target, declLoc) => {
+    const check = (bindings2, inputs, callee, declLoc) => {
+      const target = callee.path;
       const names = Object.keys(inputs);
       for (const b of Object.values(bindings2)) {
         if (lookup(inputs, b.name)) continue;
@@ -23305,17 +23408,17 @@ var unknownInput = defineRule({
           message: `${target} has no input ${quote(b.name)}${didYouMeanNote(guess)}`,
           loc: b.loc,
           symbol: sym.input(target, b.name),
-          related: declLoc ? [{ loc: declLoc, message: `declared inputs: ${listNames(names)}` }] : [],
+          related: declLoc ? declaredAt(callee, declLoc, `declared inputs: ${listNames(names)}`) : [],
           fix: guess ? `Rename ${quote(b.name)} to ${quote(guess)}.` : `Declare ${quote(b.name)} in ${target}, or remove it from \`with:\`.`
         });
       }
     };
-    for (const call of ctx.index.callSites) {
-      check(call.job.with, call.callee.call?.inputs ?? {}, call.callee.path, call.callee.call?.loc);
+    for (const call of interfaceCalls(ctx.index)) {
+      check(call.job.with, call.callee.call?.inputs ?? {}, call.callee, call.callee.call?.loc);
     }
-    for (const use of ctx.index.actionUses) {
+    for (const use of interfaceUses(ctx.index)) {
       const first = Object.values(use.action.inputs)[0];
-      check(use.step.with, use.action.inputs, use.action.path, first?.loc);
+      check(use.step.with, use.action.inputs, use.action, first?.loc);
     }
   }
 });
@@ -23341,7 +23444,7 @@ var inputTypeMismatch = defineRule({
     }
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       for (const b of Object.values(call.job.with)) checkLiteralType(ctx, call, b);
     }
   }
@@ -23358,7 +23461,7 @@ function checkLiteralType(ctx, call, b) {
     message: `Input ${quote(input2.name)} of ${call.callee.path} is a ${expected}, but jobs.${call.job.id} passes a ${actual} (${JSON.stringify(v.value)})`,
     loc: b.valueLoc,
     symbol: sym.input(call.callee.path, input2.name),
-    related: [{ loc: input2.loc, message: `declared as type: ${expected}` }],
+    related: declaredAt(call.callee, input2.loc, `declared as type: ${expected}`),
     fix: literalTypeFix(expected, b.name, v.value)
   });
 }
@@ -25019,14 +25122,14 @@ var remoteUnverified = defineRule({
   category: "structure",
   defaultSeverity: "info",
   docs: {
-    summary: "A job calls a reusable workflow in another repository; its interface is not verified.",
-    why: "flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on trust.",
-    fix: "Nothing to fix. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally."
+    summary: "A job calls a reusable workflow in another repository whose interface is not in the remote interfaces lockfile.",
+    why: "flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on trust, unless `.github/flowpact/remotes.lock.yaml` records its interface.",
+    fix: "Record its interface in `.github/flowpact/remotes.lock.yaml` to have it checked, or nothing. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally."
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
       for (const job of Object.values(wf.jobs)) {
-        if (job.uses?.kind !== "remote-workflow") continue;
+        if (job.uses?.kind !== "remote-workflow" || ctx.index.interfaceOf(job)) continue;
         ctx.report({
           message: `jobs.${job.id} calls remote workflow ${job.uses.raw}; its interface is not verified`,
           loc: job.uses.loc,
@@ -25034,6 +25137,26 @@ var remoteUnverified = defineRule({
         });
       }
     }
+  }
+});
+var remotesLockInvalid = defineRule({
+  code: "FP611",
+  name: "remotes-lock-invalid",
+  category: "structure",
+  defaultSeverity: "error",
+  docs: {
+    summary: "The remote interfaces lockfile does not parse, or does not match its schema.",
+    why: "flowpact then checks no remote call against an interface: every remote reusable workflow and action is taken on trust, as without a lockfile.",
+    fix: "Fix the entry the message names: each needs a 40-character `sha`, a `kind` and its interface."
+  },
+  check(ctx) {
+    const { file, error: error3 } = ctx.remotes ?? {};
+    if (!file || !error3) return;
+    ctx.report({
+      message: `${file} cannot be used: ${error3}`,
+      loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
+      symbol: `${file}#remotes`
+    });
   }
 });
 var needsWithoutData = defineRule({
@@ -25333,6 +25456,7 @@ var structureRules = [
   callCycle,
   nestingDepth,
   remoteUnverified,
+  remotesLockInvalid,
   needsWithoutData,
   largeInterface,
   missingLocalTarget,
@@ -25459,7 +25583,8 @@ function publishPatternsOf(config2, opts) {
     ])
   ];
 }
-function loadUnits(opts, logger, publish, repository) {
+function loadUnits(opts, logger, publish, repository, remotes) {
+  const interfaces = remoteInterfaces(remotes.lock);
   return logger.time(
     "load project",
     () => loadProject({
@@ -25468,6 +25593,7 @@ function loadUnits(opts, logger, publish, repository) {
       ...opts.paths ? { paths: opts.paths } : {},
       ...publish.length ? { publish } : {},
       ...repository ? { repository } : {},
+      ...interfaces.length ? { remotes: interfaces } : {},
       validateSchema: opts.validateSchema ?? true,
       logger
     })
@@ -25608,6 +25734,7 @@ function ruleContext(run2, rule, severity, out, extra) {
     ...run2.configFile ? { configFile: run2.configFile } : {},
     ...run2.contracts ? { contracts: run2.contracts } : {},
     ...run2.impact ? { impact: run2.impact } : {},
+    remotes: run2.remotes,
     ...extra,
     report: (input2) => {
       const finding = toFinding(rule, severity, input2, run2.registry);
@@ -25788,14 +25915,15 @@ function analyze(opts) {
     repository: repository ?? "(unknown)",
     rules: Object.keys(config2.rules).length
   });
-  const project = loadUnits(opts, logger, publishPatterns, repository);
+  const remotes = readRemotesLock(opts.fs ?? nodeFileSystem(opts.root));
+  const project = loadUnits(opts, logger, publishPatterns, repository, remotes);
   const index = logger.time("build graph", () => new ProjectIndex(project));
   logger.info(
     `graph built: ${index.nodes.size} symbols, ${index.edges.length} edges, ${index.callSites.length} reusable calls`
   );
   const { matrix: matrix2, combinations } = expandMatrices(project, config2, logger);
   const unloaded = [];
-  const { run: run2, scope } = prepareRules(opts, logger, { registry: registry2, index, config: config2, matrix: matrix2 }, unloaded);
+  const { run: run2, scope } = prepareRules(opts, logger, { registry: registry2, index, config: config2, matrix: matrix2, remotes }, unloaded);
   const { kept, suppressed, skippedInScope } = runPhases(run2, opts, logger, scope, unloaded);
   const summary2 = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
   const durationMs = Math.round(performance.now() - started);
@@ -26728,11 +26856,11 @@ function missingNode(g, uses) {
     g.nodes.set(uses.target, { id: uses.target, kind: "missing", label: uses.raw });
   return uses.target;
 }
-function stepsOf(unit, job) {
+function stepsOf2(unit, job) {
   return job ? job.steps : unit.kind === "action" ? unit.steps : [];
 }
 function stepEdges(g, unit, job, matrix2) {
-  for (const step2 of stepsOf(unit, job)) {
+  for (const step2 of stepsOf2(unit, job)) {
     if (step2.uses?.kind !== "local-action") continue;
     const to = g.index.actionOf(step2)?.path ?? missingNode(g, step2.uses);
     if (!to) continue;
@@ -27358,7 +27486,7 @@ function renderSarif(result, opts = {}) {
 }
 
 // src/main.ts
-var import_yaml8 = __toESM(require_dist(), 1);
+var import_yaml9 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -27710,7 +27838,7 @@ var fromActionDir = (p) => isAbsolute7(p) ? p : resolve7(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml8.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml9.parse)(readFileSync5(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
