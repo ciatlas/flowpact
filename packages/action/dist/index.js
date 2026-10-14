@@ -22550,7 +22550,10 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
 
 // ../lint/src/remotes.ts
 var import_yaml8 = __toESM(require_dist(), 1);
-var REMOTES_LOCK_FILES = [`${CONFIG_DIR}/remotes.lock.yaml`, `${CONFIG_DIR}/remotes.lock.yml`];
+var REMOTES_LOCK_FILES = [
+  `${CONFIG_DIR}/remotes.lock.yaml`,
+  `${CONFIG_DIR}/remotes.lock.yml`
+];
 var inputSchema = strictObject({
   type: optional(string2()),
   required: boolean2(),
@@ -25134,7 +25137,7 @@ var remoteUnverified = defineRule({
   docs: {
     summary: "A job calls a reusable workflow in another repository whose interface is not in the remote interfaces lockfile.",
     why: "flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on trust, unless `.github/flowpact/remotes.lock.yaml` records its interface.",
-    fix: "Record its interface in `.github/flowpact/remotes.lock.yaml` to have it checked, or nothing. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally."
+    fix: "Run `flowpact remotes update` to record its interface and have it checked, or nothing. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally."
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25157,7 +25160,7 @@ var remotesLockInvalid = defineRule({
   docs: {
     summary: "The remote interfaces lockfile does not parse, or does not match its schema.",
     why: "flowpact then checks no remote call against an interface: every remote reusable workflow and action is taken on trust, as without a lockfile.",
-    fix: "Fix the entry the message names: each needs a 40-character `sha`, a `kind` and its interface."
+    fix: "Run `flowpact remotes update` to write it again, or fix the entry the message names."
   },
   check(ctx) {
     const { file, error: error3 } = ctx.remotes ?? {};
@@ -26168,12 +26171,12 @@ var workingTree = (root) => ({
   walk: () => [],
   isDir: () => false
 });
-function commitOf(root, ref, fetch) {
+function commitOf(root, ref, fetch2) {
   try {
     return resolveCommit(root, ref);
   } catch (err) {
-    if (!fetch) throw new ImpactSetupError(err.message);
-    fetch([ref]);
+    if (!fetch2) throw new ImpactSetupError(err.message);
+    fetch2([ref]);
     try {
       return resolveCommit(root, ref);
     } catch (again) {
