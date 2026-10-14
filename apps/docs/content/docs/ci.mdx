@@ -1,6 +1,6 @@
 ---
 title: CI usage
-description: Run flowpact on every pull request that touches workflows, fail on errors and contract drift, and keep the report.
+description: Run flowpact on every pull request, fail on errors and contract drift, and keep the report.
 ---
 
 ## The flowpact action
@@ -11,12 +11,7 @@ downloadable artifact.
 
 ```yaml title=".github/workflows/flowpact.yml"
 name: Workflow contracts
-on:
-  pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
-      - '.github/flowpact/**'
+on: pull_request
 
 permissions:
   contents: read
@@ -31,6 +26,16 @@ jobs:
           mode: check   # or lint, if you do not commit contracts
 ```
 
+<Callout type="warn" title="No paths filter on a required check">
+  The workflow runs on every pull request. If you make the flowpact job a required status check, do not add a
+  `paths:` filter: a pull request that touches none of the paths skips the workflow, and GitHub then leaves the
+  required check pending, so the pull request cannot merge
+  ([GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks#handling-skipped-but-required-checks)).
+  To filter a check that is not required, list everything flowpact reads: `'.github/workflows/**'`,
+  `'.github/flowpact/**'`, `'**/action.yml'` and `'**/action.yaml'` (a local action can live anywhere, including the
+  repository root).
+</Callout>
+
 See [GitHub Action](/docs/action) for every input and output (`fail-on`, SARIF upload, the contracts artifact, …).
 
 ## The CLI in GitHub Actions
@@ -39,12 +44,7 @@ The CLI works in any job that has Node.js:
 
 ```yaml title=".github/workflows/flowpact.yml"
 name: Workflow contracts
-on:
-  pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
-      - '.github/flowpact/**'
+on: pull_request
 
 permissions:
   contents: read

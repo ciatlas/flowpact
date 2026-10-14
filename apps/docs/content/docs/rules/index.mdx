@@ -19,7 +19,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP105`](/docs/rules/fp105) | `optional-input-no-default-in-condition` | 🟡 warning | An optional input without a default decides an `if:` condition by its truthiness. |
 | [`FP106`](/docs/rules/fp106) | `passthrough-dropped` | 🔵 info | A caller passes a value to an input that the callee declares but never reads. |
 | [`FP107`](/docs/rules/fp107) | `optional-forwarded-to-required` | 🟡 warning | A required input of a callee is fed from an optional input that has no default. |
-| [`FP108`](/docs/rules/fp108) | `undefined-input-ref` | 🔴 error | An expression reads `inputs.\<name\>` that the workflow or action does not declare. |
+| [`FP108`](/docs/rules/fp108) | `undefined-input-ref` | 🔴 error | An expression reads `inputs.<name>` that the workflow or action does not declare. |
 
 ## Secrets (`FP2xx`)
 
@@ -36,7 +36,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | Code | Name | Default | Summary |
 | --- | --- | --- | --- |
 | [`FP301`](/docs/rules/fp301) | `undefined-output-ref` | 🔴 error | An expression reads an output (`needs.*`, `jobs.*`, `steps.*`) that is never defined. |
-| [`FP302`](/docs/rules/fp302) | `output-ref-without-needs` | 🔴 error | `needs.\<job\>` is read where the `needs` context does not contain `\<job\>`. |
+| [`FP302`](/docs/rules/fp302) | `output-ref-without-needs` | 🔴 error | `needs.<job>` is read where the `needs` context does not contain `<job>`. |
 | [`FP303`](/docs/rules/fp303) | `unused-output` | 🟡 warning | A job output, or an output of an internal reusable workflow or action, is declared but nothing reads it. |
 | [`FP304`](/docs/rules/fp304) | `step-output-never-written` | 🟡 warning | An output is read from a step whose inline script (`run:` or `actions/github-script`) writes other outputs, but never this one. |
 
@@ -55,8 +55,8 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 
 | Code | Name | Default | Summary |
 | --- | --- | --- | --- |
-| [`FP501`](/docs/rules/fp501) | `undefined-env-ref` | 🟡 warning | `$\{\{ env.NAME \}\}` reads a variable that is not defined at workflow, job or step level, nor written to `$GITHUB_ENV` earlier. |
-| [`FP502`](/docs/rules/fp502) | `expression-parse-error` | 🔴 error | A `$\{\{ \}\}` expression (or an `if:` condition) cannot be parsed. |
+| [`FP501`](/docs/rules/fp501) | `undefined-env-ref` | 🟡 warning | `${{ env.NAME }}` reads a variable that is not defined at workflow, job or step level, nor written to `$GITHUB_ENV` earlier. |
+| [`FP502`](/docs/rules/fp502) | `expression-parse-error` | 🔴 error | A `${{ }}` expression (or an `if:` condition) cannot be parsed. |
 | [`FP503`](/docs/rules/fp503) | `schema-violation` | 🔴 error | The file does not match GitHub’s workflow / action schema (validated with GitHub’s own parser). |
 | [`FP504`](/docs/rules/fp504) | `yaml-syntax-error` | 🔴 error | The file is not valid YAML. |
 | [`FP505`](/docs/rules/fp505) | `context-not-available` | 🔴 error | An expression uses a context or function that GitHub does not allow in that field (e.g. `env` in a reusable workflow call’s `with:`). |
@@ -78,7 +78,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP611`](/docs/rules/fp611) | `remotes-lock-invalid` | 🔴 error | The remote interfaces lockfile does not parse, or does not match its schema. |
 | [`FP612`](/docs/rules/fp612) | `remotes-lock-outdated` | 🟡 warning | The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, or records another commit than the one a reference pins. |
 
-## Contracts (`FP8xx`)
+## Contracts (`FP80x`)
 
 | Code | Name | Default | Summary |
 | --- | --- | --- | --- |
@@ -87,6 +87,11 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP803`](/docs/rules/fp803) | `breaking-interface-change` | 🔴 error | A change breaks the locked contract: an input became required, an input/secret/output was removed, or a type changed. |
 | [`FP804`](/docs/rules/fp804) | `orphan-contract` | 🔴 error | A contract file exists for a workflow or action that no longer exists. |
 | [`FP805`](/docs/rules/fp805) | `contract-invalid` | 🔴 error | A contract file cannot be read (invalid YAML or schema), usually because it was edited by hand or merged badly. |
+
+## Impact mode (`FP81x`)
+
+| Code | Name | Default | Summary |
+| --- | --- | --- | --- |
 | [`FP810`](/docs/rules/fp810) | `impact-under-declared` | 🔴 error | The changes to published workflows or actions need a bigger release than the pull request declares. |
 | [`FP811`](/docs/rules/fp811) | `impact-declaration-conflict` | 🔴 error | Another source declares a bigger impact than the one the release tool reads. |
 | [`FP812`](/docs/rules/fp812) | `impact-over-declared` | 🔵 info | The pull request declares a bigger impact than its workflow and action changes require. |
@@ -103,6 +108,4 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 
 ## Reserved ranges
 
-- `FP7xx` — hygiene rules (reserved).
-- `FP8xx` — contract drift (`contract-missing`, `contract-stale`, `breaking-interface-change`), shipping with `flowpact check`.
-- `FP9xx` — config and overrides (`override-expired`, `override-unused`, `invalid-config`), shipping with overrides.
+- `FP7xx`: hygiene rules (none yet).

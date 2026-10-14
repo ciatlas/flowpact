@@ -11,11 +11,11 @@ description: "An expression uses a context or function that GitHub does not allo
 
 ## Why it matters
 
-GitHub only makes some contexts available per field. `env` is not passed to reusable workflows and cannot be used in `jobs.\<id\>.with` or `jobs.\<id\>.if`; `secrets` cannot be used in `if:`. GitHub rejects the whole workflow when it is triggered — often only on the branch or event that reaches it. Reported by GitHub’s own parser.
+GitHub only makes some contexts available per field. `env` is not passed to reusable workflows and cannot be used in `jobs.<id>.with` or `jobs.<id>.if`; `secrets` cannot be used in `if:`. GitHub rejects the whole workflow when it is triggered — often only on the branch or event that reaches it. Reported by GitHub’s own parser.
 
 ## How to fix
 
-Use a context that is available there: pass values through `inputs`/`vars`, compute them in an earlier job and read `needs.\<job\>.outputs`, or move the check into a step (`if: env.X == ...` works in steps).
+Use a context that is available there: pass values through `inputs`/`vars`, compute them in an earlier job and read `needs.<job>.outputs`, or move the check into a step (`if: env.X == ...` works in steps).
 
 ## Example
 

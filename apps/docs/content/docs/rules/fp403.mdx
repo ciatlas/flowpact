@@ -15,7 +15,7 @@ Dynamic matrices (`fromJSON(...)`) hide the same empty-value failure mode as sta
 
 ## How to fix
 
-Declare the keys in the config (`matrixShapes: \{ "\<workflow\>#\<job\>": \{ keys: [os, config] \} \}`) so flowpact can verify reads, prefer a static matrix, or validate the generated JSON in the job that produces it.
+Declare the keys in the config (`matrixShapes: { "<workflow>#<job>": { keys: [os, config] } }`) so flowpact can verify reads, prefer a static matrix, or validate the generated JSON in the job that produces it.
 
 ## Configure
 

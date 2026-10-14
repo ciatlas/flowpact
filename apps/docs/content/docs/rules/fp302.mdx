@@ -11,7 +11,7 @@ description: "`needs.<job>` is read where the `needs` context does not contain `
 
 ## Why it matters
 
-The `needs` context contains the jobs listed under `needs:`. Only the job's own `if:` also sees the jobs it depends on indirectly (through one of its needs); in steps, `env`, `with:`, `name` and the matrix their values are empty. A job that does not depend on `\<job\>` at all may also run before it.
+The `needs` context contains the jobs listed under `needs:`. Only the job's own `if:` also sees the jobs it depends on indirectly (through one of its needs); in steps, `env`, `with:`, `name` and the matrix their values are empty. A job that does not depend on `<job>` at all may also run before it.
 
 ## How to fix
 

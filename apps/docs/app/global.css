@@ -2,6 +2,16 @@
 @import "fumadocs-ui/css/neutral.css";
 @import "fumadocs-ui/css/preset.css";
 
+/* flowpact's teal (assets/brand), lighter on the dark background. */
+:root {
+  --color-fd-primary: #0a7889;
+  --color-fd-primary-foreground: hsl(0, 0%, 98%);
+}
+.dark {
+  --color-fd-primary: #16a2b6;
+  --color-fd-primary-foreground: hsl(0, 0%, 9%);
+}
+
 html {
   scrollbar-gutter: stable;
 }

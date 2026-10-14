@@ -188,8 +188,9 @@ says the lockfile is out of date. Three ways to keep it current:
 - **Check the pull request anyway.** With `remotes: fetch` in your flowpact job, the bot's pull request is checked
   against `@v3`'s interface, and FP612 reminds you to update the lockfile before merging.
 - **Self-hosted Renovate:** update the lockfile in the same pull request with a post-upgrade task. Allow the command in
-  the bot's own config (`allowedPostUpgradeCommands: ["^npx --yes flowpact@"]`), and give it a token that can read the
-  remote repositories through the environment Renovate runs commands in (for example `customEnvVariables`):
+  the bot's admin config, not in `renovate.json` (`allowedCommands: ["^npx --yes flowpact@"]`, formerly
+  `allowedPostUpgradeCommands`), and give it a token that can read the remote repositories through the environment
+  Renovate runs commands in (for example `customEnvVariables`):
 
   ```json title="renovate.json"
   {
@@ -218,11 +219,11 @@ says the lockfile is out of date. Three ways to keep it current:
       runs-on: ubuntu-latest
       steps:
         - id: app
-          uses: actions/create-github-app-token@v2       # pin to a commit SHA
+          uses: actions/create-github-app-token@v3       # pin to a commit SHA
           with:
             client-id: ${{ vars.LOCK_BOT_CLIENT_ID }}
             private-key: ${{ secrets.LOCK_BOT_PRIVATE_KEY }}
-        - uses: actions/checkout@v5                       # pin to a commit SHA
+        - uses: actions/checkout@v7                       # pin to a commit SHA
           with:
             ref: ${{ github.head_ref }}
             token: ${{ steps.app.outputs.token }}

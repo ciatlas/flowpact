@@ -48,12 +48,14 @@ reports nothing here.*
   contracts show interface changes in review and mark the breaking ones, and impact mode fails a pull request whose
   title declares less than the minor or major release its changes need
   ([how](#for-publishers-of-actions-and-reusable-workflows)).
+- **You call workflows or actions from other repositories:** record their interfaces once with
+  `flowpact remotes update` and commit the lockfile. flowpact then checks the inputs and secrets you pass and the
+  outputs you read, and says when Renovate or Dependabot moves a reference past the lockfile
+  ([remote interfaces](https://ciatlas.github.io/flowpact/docs/remote-interfaces)).
 - **You edit workflows in VS Code:** the same findings as you type, with the
   [extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact).
 
-It adds little to a few standalone workflows. Calls to reusable workflows in other repositories are reported as
-unverified, not checked (cross-repository resolution is on the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap));
-the repository that publishes them can still lint them and lock their interfaces with contracts.
+It adds little to a few standalone workflows.
 
 ## Get started
 
@@ -85,6 +87,7 @@ expiry date; expired overrides bring the findings back.
 | A reusable workflow that declares no secrets reads one, and a caller does not use `secrets: inherit` | — | `FP205` |
 | A step runs `./.github/actions/...` after checking the repository out into a subdirectory | — | `FP606` |
 | A published workflow removes an output or renames a job, which can break consumers in other repositories | — | `FP803` (against the committed contracts), `FP810` (impact mode, against the base commit) |
+| A call to a reusable workflow or action in another repository passes an unknown input or leaves out a required one | popular actions only | `FP102`, `FP101`, against the [remote interfaces lockfile](https://ciatlas.github.io/flowpact/docs/remote-interfaces) |
 
 In a large public repository, flowpact found the third case: a reusable workflow that reads `secrets.CODECOV_TOKEN`
 while declaring no secrets, called from 31 places and none with `secrets: inherit`, so the token is always empty.
@@ -156,12 +159,13 @@ use the language server, `flowpact lsp` ([editors](https://ciatlas.github.io/flo
 
 ## Status
 
-Shipped: the engine, 53 rules, contracts (`flowpact generate` / `flowpact check`), overrides with reason and expiry, plugins,
-the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`), the GitHub Action, a language server and the
+Shipped: the engine, 53 rules, contracts (`flowpact generate` / `flowpact check`), impact mode, the remote interfaces
+lockfile (`flowpact remotes update`), overrides with reason and expiry, plugins, the CLI (pretty, JSON, Markdown and
+SARIF output; `flowpact graph`, `trace`), the GitHub Action, a language server and the
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (diagnostics as you
 type, hover traces, go to definition across workflow calls; also on
-[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor, then
-cross-repository resolution — see the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
+[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor — see the
+[roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
 
 ## Security
 
