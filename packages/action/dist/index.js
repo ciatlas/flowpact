@@ -20184,7 +20184,7 @@ var location_default = {
 
 // ../lint/src/version.ts
 var TOOL_NAME = "flowpact";
-var VERSION2 = "0.15.0";
+var VERSION2 = "0.16.0";
 var SCHEMA_VERSIONS = {
   config: 1,
   contract: 1,
