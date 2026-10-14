@@ -22563,7 +22563,9 @@ var entrySchema = strictObject({
   kind: _enum(["workflow", "action"]),
   inputs: optional(record(string2(), inputSchema)),
   secrets: optional(record(string2(), strictObject({ required: boolean2() }))),
-  outputs: optional(array(string2()))
+  outputs: optional(array(string2())),
+  /** An action's `runs.using`: only a composite action's outputs are all declared. */
+  using: optional(string2())
 });
 var remotesLockSchema = strictObject({
   version: literal(1),
@@ -22591,7 +22593,9 @@ function interfaceYaml(e) {
     return (0, import_yaml8.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
   }
   const outputs = Object.fromEntries((e.outputs ?? []).map((o) => [o, { description: "" }]));
-  return (0, import_yaml8.stringify)({ name: "", inputs, outputs, runs: { using: "composite", steps: [] } });
+  const using = e.using ?? "composite";
+  const runs = using === "composite" ? { using, steps: [] } : { using, main: "" };
+  return (0, import_yaml8.stringify)({ name: "", inputs, outputs, runs });
 }
 var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
 var isExternal = (unit) => unit.external === true;
@@ -24281,11 +24285,17 @@ function jobOutputRead(site, ref) {
   return isProperty(ref.path[1], "outputs") && namesKey2(output) ? output : void 0;
 }
 function jobOutputsDeclared(ctx, job, names) {
-  const callee = ctx.index.calleeOf(job);
+  const callee = ctx.index.interfaceOf(job);
+  const loc = callee && !isExternal(callee) ? callee.call?.loc : job.uses?.loc;
   return {
-    loc: callee?.call?.loc ?? job.loc,
+    loc: loc ?? job.loc,
     message: `${callee ? `${callee.path} declares` : "declared"} outputs: ${listNames(names)}`
   };
+}
+function jobOutputs(ctx, job) {
+  if (!job.uses) return ctx.index.jobOutputNames(job);
+  const callee = ctx.index.interfaceOf(job);
+  return callee?.call ? Object.values(callee.call.outputs).map((o) => o.name) : void 0;
 }
 function checkJobOutputRef(ctx, wf, site, ref, a) {
   const c = jobOutputRead(site, ref);
@@ -24297,8 +24307,8 @@ function checkJobOutputRef(ctx, wf, site, ref, a) {
     }
     return;
   }
-  if (job.uses && (job.uses.kind !== "local-workflow" || !ctx.index.calleeOf(job))) return;
-  const names = ctx.index.jobOutputNames(job);
+  const names = jobOutputs(ctx, job);
+  if (!names) return;
   if (names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
   const guess = didYouMean(c, names);
   ctx.report({
@@ -24337,7 +24347,7 @@ function checkStepOutputRef(ctx, unit, site, ref, a) {
 }
 function checkActionOutputRef(ctx, step2, ref) {
   const [, b, c] = ref.path;
-  const action = ctx.index.actionOf(step2);
+  const action = ctx.index.actionInterfaceOf(step2);
   if (!isProperty(b, "outputs") || !namesKey2(c) || !action) return;
   if (action.using !== "composite") return;
   if (lookup(action.outputs, c)) return;
@@ -24729,7 +24739,7 @@ secrets:
     }
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       if (call.job.secretsInherit) continue;
       for (const s of Object.values(call.callee.call?.secrets ?? {})) {
         if (!s.required || lookup(call.job.secrets, s.name)) continue;
@@ -24745,7 +24755,7 @@ function reportMissingSecret(ctx, call, s) {
     symbol: sym.secret(call.callee.path, s.name),
     related: [
       ...chainRelated(chainTo(ctx.index, call.caller.path)),
-      { loc: s.loc, message: "declared required here" }
+      ...isExternal(call.callee) ? [] : [{ loc: s.loc, message: "declared required here" }]
     ]
   });
 }
@@ -24760,7 +24770,7 @@ var unknownSecret = defineRule({
     fix: "Declare the secret under `on.workflow_call.secrets` in the callee, fix the name, or remove it."
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       const declared = call.callee.call?.secrets ?? {};
       for (const b of Object.values(call.job.secrets)) {
         if (lookup(declared, b.name)) continue;
@@ -24769,7 +24779,7 @@ var unknownSecret = defineRule({
           message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
           loc: b.loc,
           symbol: sym.secret(call.callee.path, b.name),
-          related: call.callee.call ? [
+          related: call.callee.call && !isExternal(call.callee) ? [
             {
               loc: call.callee.call.loc,
               message: `declared secrets: ${listNames(Object.keys(declared))}`
