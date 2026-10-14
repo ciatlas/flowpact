@@ -1,3 +1,4 @@
+import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 import * as vscode from 'vscode';
 import {
@@ -54,10 +55,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       contracts: c.get('contracts', 'auto'),
       overlappingRules: c.get('overlappingRules', 'auto'),
       hiddenRules: c.get('hiddenRules', []),
+      cacheDir: c.get('cacheDir', ''),
     };
   };
   const current = () =>
-    serverSettings(read(), { trusted: vscode.workspace.isTrusted, logLevel: output.logLevel });
+    serverSettings(read(), {
+      trusted: vscode.workspace.isTrusted,
+      logLevel: output.logLevel,
+      home: homedir(),
+    });
   const overlapHidden = () =>
     hidesOverlapInOpenedFiles(read(), {
       trusted: vscode.workspace.isTrusted,
@@ -105,8 +111,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       restart().catch((err: unknown) => output.error(`could not restart the server: ${String(err)}`));
       return;
     }
-    client
-      .sendNotification(DidChangeConfigurationNotification.type, { settings: { flowpact: settings } })
+    const c = client;
+    c.sendNotification(DidChangeConfigurationNotification.type, { settings: { flowpact: settings } })
+      .then(() => askSourcesDir(c))
       .catch((err: unknown) => output.error(`could not send the settings: ${String(err)}`));
   };
 
@@ -155,15 +162,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Go to Definition opens the sources of remote references from the server's cache: another repository's files at a
   // pinned commit, so they open read-only. The server says where its cache is.
   let sourcesDir: string | undefined;
-  const readOnlyIfSource = (editor: vscode.TextEditor | undefined) => {
-    if (editor && sourcesDir && isInside(sourcesDir, editor.document.uri.fsPath, relative))
+  // Decided by the active tab, which the command marks: focusing a Peek or a side of a diff changes the active text
+  // editor but not the tab, and must not mark the file that holds it.
+  const readOnlyIfSource = () => {
+    const path = activeTextTab();
+    if (path && sourcesDir && isInside(sourcesDir, path, relative))
       void vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
   };
   const askSourcesDir = (c: LanguageClient) =>
-    c.sendRequest<string>('flowpact/sourcesDir').then(
+    c.sendRequest<string | null>('flowpact/sourcesDir').then(
       (dir) => {
-        sourcesDir = dir;
-        readOnlyIfSource(vscode.window.activeTextEditor);
+        sourcesDir = dir ?? undefined;
+        readOnlyIfSource();
       },
       (err: unknown) => output.warn(`could not ask where remote sources are cached: ${String(err)}`),
     );
@@ -213,7 +223,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand('flowpact.restartServer', restart),
     vscode.commands.registerCommand('flowpact.showOutput', () => output.show()),
-    vscode.window.onDidChangeActiveTextEditor(readOnlyIfSource),
+    vscode.window.onDidChangeActiveTextEditor(() => readOnlyIfSource()),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('flowpact')) push();
     }),
@@ -251,6 +261,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
     (err: unknown) => output.warn(`could not search the workspace: ${String(err)}`),
   );
+}
+
+/** The file of the active tab, when a text editor shows it. */
+function activeTextTab(): string | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  return input instanceof vscode.TabInputText ? input.uri.fsPath : undefined;
 }
 
 async function atRoot(): Promise<boolean> {

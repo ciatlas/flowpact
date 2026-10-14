@@ -14,20 +14,22 @@ const defaults: ExtensionSettings = {
   contracts: 'auto',
   overlappingRules: 'auto',
   hiddenRules: [],
+  cacheDir: '',
 };
 const INFO = 3;
+const HOME = '/home/u';
 
 describe('serverSettings', () => {
   it('loads plugins only in trusted workspaces', () => {
-    expect(serverSettings(defaults, { trusted: true, logLevel: INFO }).plugins).toBe(true);
-    expect(serverSettings(defaults, { trusted: false, logLevel: INFO }).plugins).toBe(false);
-    expect(serverSettings({ ...defaults, plugins: false }, { trusted: true, logLevel: INFO }).plugins).toBe(
-      false,
-    );
+    expect(serverSettings(defaults, { trusted: true, logLevel: INFO, home: HOME }).plugins).toBe(true);
+    expect(serverSettings(defaults, { trusted: false, logLevel: INFO, home: HOME }).plugins).toBe(false);
+    expect(
+      serverSettings({ ...defaults, plugins: false }, { trusted: true, logLevel: INFO, home: HOME }).plugins,
+    ).toBe(false);
   });
 
   it('normalizes hidden rules and hides the overlapping ones everywhere only when asked', () => {
-    const env = { trusted: true, logLevel: INFO };
+    const env = { trusted: true, logLevel: INFO, home: HOME };
     expect(serverSettings({ ...defaults, hiddenRules: [' fp604 ', '', 'FP604'] }, env).hiddenRules).toEqual([
       'FP604',
     ]);
@@ -41,7 +43,8 @@ describe('serverSettings', () => {
   });
 
   it('follows the output channel’s log level', () => {
-    const level = (logLevel: number) => serverSettings(defaults, { trusted: true, logLevel }).logLevel;
+    const level = (logLevel: number) =>
+      serverSettings(defaults, { trusted: true, logLevel, home: HOME }).logLevel;
     expect([0, 1, 2, 3, 4, 5, 9].map(level)).toEqual([
       'silent',
       'trace',
@@ -74,6 +77,19 @@ describe('overlap with the GitHub Actions extension', () => {
     expect(codeOf({})).toBe('');
     const kept = withoutOverlap([{ code: { value: 'FP503' } }, { code: 'FP504' }, { code: 'FP101' }, {}]);
     expect(kept).toEqual([{ code: 'FP101' }, {}]);
+  });
+});
+
+describe('the cacheDir setting', () => {
+  const dirOf = (cacheDir: string) =>
+    serverSettings({ ...defaults, cacheDir }, { trusted: true, logLevel: INFO, home: HOME }).cacheDir;
+
+  it('is sent as written, with ~ for the home directory, and empty for the default', () => {
+    expect(dirOf('/srv/cache')).toBe('/srv/cache');
+    expect(dirOf('~')).toBe(HOME);
+    expect(dirOf('~/.flowpact')).toBe(`${HOME}/.flowpact`);
+    expect(dirOf('~other/x')).toBe('~other/x');
+    expect(dirOf('  ')).toBe('');
   });
 });
 

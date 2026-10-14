@@ -147,6 +147,12 @@
           "default": [],
           "markdownDescription": "Rule codes not to show in the editor, e.g. `FP604`. To turn a rule off everywhere (CLI and CI too), set it to `off` in the flowpact config instead."
         },
+        "flowpact.cacheDir": {
+          "scope": "machine",
+          "type": "string",
+          "default": "",
+          "markdownDescription": "flowpact's cache directory, as `flowpact remotes update --cache-dir` takes it: Go to Definition opens the [sources of remote workflows and actions](https://ciatlas.github.io/flowpact/docs/editors#remote-workflows-and-actions) from its `remotes` directory. An absolute path, or one under `~`. Empty: `FLOWPACT_CACHE_DIR`, else the per-user cache."
+        },
         "flowpact.trace.server": {
           "scope": "window",
           "type": "string",
