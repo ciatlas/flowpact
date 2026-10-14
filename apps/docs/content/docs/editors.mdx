@@ -88,18 +88,27 @@ key's syntax.
 ## Remote workflows and actions
 
 A `uses:` of another repository (`octo/ship/.github/workflows/deploy.yml@v1`, `octo/setup@v2`) has a file to open
-once its source is in your [sources cache](/docs/remote-interfaces#sources-for-the-editor), at the commit the
-[lockfile](/docs/remote-interfaces) pins: `flowpact remotes update` caches what it reads, and `flowpact remotes download`
-fills the cache for a lockfile someone else wrote. Then:
+once its source is in your [sources cache](/docs/remote-interfaces#sources-for-the-editor): `flowpact remotes update`
+caches what it reads, and `flowpact remotes download` fills the cache for a lockfile someone else wrote. The file is the
+one at the commit the `uses:` runs: its own commit when it pins one in full (`@<sha>`), else the commit the
+[lockfile](/docs/remote-interfaces) records for its tag or branch. Then:
 
 - **Go to definition** on the `uses:` value opens the file (at `workflow_call:` for a reusable workflow); on a `with:`
   or `secrets:` key, the input or secret there; on `needs.<job>.outputs.<name>` or `steps.<id>.outputs.<name>`, the
   output.
-- **Hover** adds the workflow's or action's `name:` and the descriptions of its inputs and secrets.
+- **Hover** adds the workflow's or action's `name:` and the descriptions of its inputs and secrets. When the lockfile
+  records another commit for a `uses:` pinned in full, the hover says so: run `flowpact remotes update`.
 
-Files in the cache are another repository's at a fixed commit: VS Code opens them read-only, and the server does not
-analyze them. Without the source cached, the hover links to the file on its host at that commit (github.com, or your
-repository's own host for GitHub Enterprise Server) and says to run `flowpact remotes download`.
+Files in the cache are another repository's at a fixed commit: the server does not analyze them, and VS Code opens them
+read-only (other editors open them as files you should not edit). Without the source cached, the hover says to run
+`flowpact remotes download` (with `--github-com` for one read on github.com from an enterprise server), and links to
+the file on its host when that host is certain: github.com for an entry read there, or the API that
+`flowpact remotes update` reads, as `GITHUB_API_URL` (if the editor has it) or a github.com or GHE.com `origin` tells.
+For any other origin (an enterprise server without `GITHUB_API_URL`, an SSH alias, another forge) it gives no link
+rather than a wrong one.
+
+If you keep the cache elsewhere (`--cache-dir`), set `flowpact.cacheDir` (`cacheDir` in other editors) to the same
+directory.
 
 ## VS Code
 
@@ -131,6 +140,7 @@ four rules both would report (`flowpact.overlappingRules`).
 | `flowpact.contracts` | `auto` | Report contract drift and breaking interface changes: `auto` when `.github/flowpact/contracts/` exists, `on` or `off`. |
 | `flowpact.overlappingRules` | `auto` | `FP502`–`FP505` (expression syntax, schema, YAML syntax, context availability) repeat checks the [GitHub Actions](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-github-actions) extension makes. `auto` hides them in files you open in the editor while that extension runs (it checks those files, and keeps its findings after you close them); `show` or `hide` them everywhere. |
 | `flowpact.hiddenRules` | `[]` | Rule codes not to show in the editor. To turn a rule off in the CLI and CI too, set it to `off` in the config. |
+| `flowpact.cacheDir` | `""` | flowpact's cache directory, as `flowpact remotes update --cache-dir` takes it: Go to Definition opens the [sources of remote workflows and actions](#remote-workflows-and-actions) from its `remotes` directory. An absolute path, or one under `~`; empty for `FLOWPACT_CACHE_DIR`, else the per-user cache. |
 | `flowpact.trace.server` | `messages` | When the output's log level is Trace: `messages` names each message between VS Code and the server, `verbose` adds its content. |
 
 **Logs:** the **flowpact** output channel (**flowpact: Show Output**). Its log level (**Developer: Set Log Level…**) is
@@ -169,6 +179,7 @@ for a repository above the folder you opened.
 | `plugins` | `false` | Load the plugins the config lists. Enable this only for repositories you trust. |
 | `contracts` | `auto` | `auto`, `on` or `off`, as above. |
 | `hiddenRules` | `[]` | Rule codes not to show. |
+| `cacheDir` | unset | flowpact's cache directory (an absolute path) for the [sources of remote references](#remote-workflows-and-actions); unset for `FLOWPACT_CACHE_DIR`, else the per-user cache. |
 | `logLevel` | `info` | `silent`, `error`, `warn`, `info`, `debug` or `trace`, sent to the editor's log. |
 
 ### Neovim
