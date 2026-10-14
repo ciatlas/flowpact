@@ -43,6 +43,7 @@ published one calls them — their check names appear under the caller's.
 | A new check name (matrix value added, new job) | minor |
 | `workflow_call` input or secret removed, optional → required, new required input or secret, input type changed, choice option removed | major |
 | Output removed (callers silently read `''`) | major |
+| An output set on every run is now set only under a condition: the job or step it comes from (or a job that one needs) gains an `if:` that reads a context, so callers read `''` on runs where it is false | major, uncertain ([`FP814`](/docs/rules/fp814)) |
 | Optional input, secret or output added | minor |
 | Input default changed | minor |
 | Reusable workflow moved or deleted, or `workflow_call` removed; action moved or deleted | major |
@@ -50,7 +51,7 @@ published one calls them — their check names appear under the caller's.
 | A job requests a new or higher `permissions:` scope — its own, the workflow-level ones it inherits, or a called workflow's job's (callers that grant less fail when the run starts) | major |
 | Action `runs.using` changed (for example `node20` → `node24`) | major |
 | A new third-party action or workflow used inside a published unit (organization allow-lists and SHA-pinning policies apply to consumers) | minor |
-| Narrower permissions, descriptions, internal steps, `workflow_dispatch` inputs | none |
+| Narrower permissions, descriptions, other changes to internal steps, `workflow_dispatch` inputs | none |
 
 Consumers' branch protection is not visible from the publishing repository, so every check name a published reusable
 workflow reports counts as one a consumer may require. Names are compared the way GitHub forms them — see
@@ -158,7 +159,7 @@ pull request that declares `none` does not fail either.
 | [`FP811`](/docs/rules/fp811) `impact-declaration-conflict` | error | An advisory source declares more than the authoritative one. |
 | [`FP812`](/docs/rules/fp812) `impact-over-declared` | info | The declaration is bigger than the changes require. |
 | [`FP813`](/docs/rules/fp813) `impact-undeclared` | info | Nothing is declared; the required impact is reported. |
-| [`FP814`](/docs/rules/fp814) `impact-uncertain` | warning | A change depends on something flowpact cannot evaluate (a check name built from `vars` or the event, a runtime matrix). Not counted unless `impact.uncertain: fail`. |
+| [`FP814`](/docs/rules/fp814) `impact-uncertain` | warning | A change depends on something flowpact cannot evaluate (a check name built from `vars` or the event, a runtime matrix, an output that is now set only when an `if:` holds). Not counted unless `impact.uncertain: fail`. |
 
 ## The baseline
 
