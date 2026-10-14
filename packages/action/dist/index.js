@@ -26738,8 +26738,13 @@ async function get2(url2, accept, opts) {
   });
   if (res.status === 404) return void 0;
   if (!res.ok) throw new FetchError(`${res.status} ${res.statusText || "error"} from the GitHub API`);
-  return res.text();
+  if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) throw tooLarge();
+  const text2 = await res.text();
+  if (text2.length > MAX_FILE_BYTES) throw tooLarge();
+  return text2;
 }
+var MAX_FILE_BYTES = 1e6;
+var tooLarge = () => new FetchError(`a response over ${MAX_FILE_BYTES} bytes`);
 var repoUrl = (r, opts) => `${trimChar(opts.apiUrl ?? "https://api.github.com", "/")}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
 var contentsPath = (path) => path.split("/").map(encodeURIComponent).join("/");
 async function shaOf(r, opts) {
