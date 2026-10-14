@@ -8683,7 +8683,7 @@ var require_cronstrue = __commonJS({
 import { execFileSync as execFileSync3 } from "child_process";
 import { mkdirSync as mkdirSync2, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname3, isAbsolute as isAbsolute6, join as join6, relative as relative7, resolve as resolve7, sep as sep4 } from "path";
+import { dirname as dirname4, isAbsolute as isAbsolute7, join as join6, relative as relative7, resolve as resolve7, sep as sep4 } from "path";
 import { fileURLToPath } from "url";
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -8890,22 +8890,22 @@ var __awaiter = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
-        step(generator.next(value));
+        step2(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step(generator["throw"](value));
+        step2(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step(result) {
+    function step2(result) {
       result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step((generator = generator.apply(thisArg, _arguments || [])).next());
+    step2((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var HttpCodes;
@@ -9519,22 +9519,22 @@ var __awaiter2 = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
-        step(generator.next(value));
+        step2(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step(generator["throw"](value));
+        step2(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step(result) {
+    function step2(result) {
       result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step((generator = generator.apply(thisArg, _arguments || [])).next());
+    step2((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var BearerCredentialHandler = class {
@@ -9572,22 +9572,22 @@ var __awaiter3 = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
-        step(generator.next(value));
+        step2(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step(generator["throw"](value));
+        step2(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step(result) {
+    function step2(result) {
       result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step((generator = generator.apply(thisArg, _arguments || [])).next());
+    step2((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var { access, appendFile, writeFile } = promises;
@@ -9871,22 +9871,22 @@ var __awaiter4 = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve8, reject) {
     function fulfilled(value) {
       try {
-        step(generator.next(value));
+        step2(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step(generator["throw"](value));
+        step2(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step(result) {
+    function step2(result) {
       result.done ? resolve8(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step((generator = generator.apply(thisArg, _arguments || [])).next());
+    step2((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var ExitCode;
@@ -12462,7 +12462,7 @@ var sym = {
   output: (unit, name) => `${unit}#outputs.${name}`,
   job: (unit, job) => `${unit}#jobs.${job}`,
   jobOutput: (unit, job, name) => `${unit}#jobs.${job}.outputs.${name}`,
-  stepOutput: (unit, job, step, name) => job === void 0 ? `${unit}#steps.${step}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step}.outputs.${name}`,
+  stepOutput: (unit, job, step2, name) => job === void 0 ? `${unit}#steps.${step2}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step2}.outputs.${name}`,
   env: (unit, job, name) => job === void 0 ? `${unit}#env.${name}` : `${unit}#jobs.${job}.env.${name}`,
   matrix: (unit, job, key) => `${unit}#jobs.${job}.matrix.${key}`,
   var: (name) => `vars.${name}`,
@@ -12516,10 +12516,10 @@ var ProjectIndex = class {
     if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
     return this.project.workflows.get(job.uses.target);
   }
-  actionOf(step) {
-    if (step.uses?.kind !== "local-action" || !step.uses.target || step.uses.selfRef !== void 0)
+  actionOf(step2) {
+    if (step2.uses?.kind !== "local-action" || !step2.uses.target || step2.uses.selfRef !== void 0)
       return void 0;
-    return this.project.actions.get(step.uses.target);
+    return this.project.actions.get(step2.uses.target);
   }
   usagesOf(symbol) {
     return this.usages.get(symbol) ?? [];
@@ -12651,25 +12651,25 @@ var ProjectIndex = class {
           this.edge({ from: jid, to: r, kind: "calls", loc: job.uses.loc });
         }
       }
-      for (const step of job.steps) this.indexStep(wf, job, step);
+      for (const step2 of job.steps) this.indexStep(wf, job, step2);
     }
   }
-  indexStep(unit, job, step) {
-    const action = this.actionOf(step);
+  indexStep(unit, job, step2) {
+    const action = this.actionOf(step2);
     if (!action) return;
-    this.actionUses.push({ unit, ...job ? { job } : {}, step, action });
-    if (step.uses) {
+    this.actionUses.push({ unit, ...job ? { job } : {}, step: step2, action });
+    if (step2.uses) {
       const from = job ? sym.job(unit.path, job.id) : unit.path;
-      this.edge({ from, to: action.path, kind: "uses", loc: step.uses.loc });
+      this.edge({ from, to: action.path, kind: "uses", loc: step2.uses.loc });
     }
-    if (step.id) {
+    if (step2.id) {
       for (const o of Object.values(action.outputs)) {
         const so = this.node({
-          id: sym.stepOutput(unit.path, job?.id, step.id, o.name),
+          id: sym.stepOutput(unit.path, job?.id, step2.id, o.name),
           kind: "step-output",
-          label: `steps.${step.id}.outputs.${o.name}`,
+          label: `steps.${step2.id}.outputs.${o.name}`,
           unit: unit.path,
-          loc: step.idLoc ?? step.loc
+          loc: step2.idLoc ?? step2.loc
         });
         this.edge({ from: sym.output(action.path, o.name), to: so, kind: "flows", loc: o.loc });
       }
@@ -12688,7 +12688,7 @@ var ProjectIndex = class {
         unit: u,
         loc: o.loc
       });
-    for (const step of a.steps) this.indexStep(a, void 0, step);
+    for (const step2 of a.steps) this.indexStep(a, void 0, step2);
   }
   /** Which symbol does the site's value define? (e.g. `with: { foo: ... }` on a reusable call defines the callee's `inputs.foo`). */
   sinkOf(unit, site) {
@@ -12705,8 +12705,8 @@ var ProjectIndex = class {
         return site.field === "job.with" ? sym.input(callee.path, name) : sym.secret(callee.path, name);
       }
       case "step.with": {
-        const step = this.stepOf(unit, site);
-        const action = step && this.actionOf(step);
+        const step2 = this.stepOf(unit, site);
+        const action = step2 && this.actionOf(step2);
         if (!action) return void 0;
         return sym.input(action.path, lookup(action.inputs, key)?.name ?? key);
       }
@@ -12768,8 +12768,8 @@ var ProjectIndex = class {
    * the step (it is not a symbol); its values are evaluated before it applies, so they read the outer env.
    */
   resolveEnv(unit, site, name) {
-    const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
-    if (step && lookup(step.env, name)) return void 0;
+    const step2 = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+    if (step2 && lookup(step2.env, name)) return void 0;
     const job = jobAt(unit, site);
     const own2 = job && lookup(job.env, name);
     if (own2) return sym.env(unit.path, job.id, own2.name);
@@ -12801,11 +12801,11 @@ var ProjectIndex = class {
   }
   /** The output `name` of the step `id` of the site's job, or of an action. */
   resolveStepOutput(unit, site, id, name) {
-    const step = stepsAt(unit, site).find((s) => s.id?.toLowerCase() === id.toLowerCase());
-    if (!step?.id) return void 0;
-    const action = this.actionOf(step);
+    const step2 = stepsAt(unit, site).find((s) => s.id?.toLowerCase() === id.toLowerCase());
+    if (!step2?.id) return void 0;
+    const action = this.actionOf(step2);
     const output = (action && lookup(action.outputs, name)?.name) ?? name;
-    return sym.stepOutput(unit.path, stepJob(unit, site), step.id, output);
+    return sym.stepOutput(unit.path, stepJob(unit, site), step2.id, output);
   }
   /**
    * Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
@@ -12875,10 +12875,10 @@ var ProjectIndex = class {
   }
   /** The env variables in scope at a site: the step's own, the job's and the workflow's. */
   envNames(unit, site) {
-    const step = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+    const step2 = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
     const workflow2 = unit.kind === "workflow" ? unit.env : void 0;
     return [
-      ...declaredNames(step?.env),
+      ...declaredNames(step2?.env),
       ...declaredNames(jobAt(unit, site)?.env),
       ...declaredNames(workflow2)
     ];
@@ -12923,11 +12923,11 @@ var ProjectIndex = class {
     const steps2 = stepsAt(unit, site);
     const named = computed(a) ? steps2.filter((s) => site.step === void 0 || s.index < site.step) : steps2.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
     const job = stepJob(unit, site);
-    return named.flatMap((step) => {
-      const action = this.actionOf(step);
-      if (!step.id || !action) return [];
+    return named.flatMap((step2) => {
+      const action = this.actionOf(step2);
+      if (!step2.id || !action) return [];
       return pickOutputs(Object.keys(action.outputs), ref.path).map(
-        (n) => sym.stepOutput(unit.path, job, step.id, n)
+        (n) => sym.stepOutput(unit.path, job, step2.id, n)
       );
     });
   }
@@ -13131,15 +13131,15 @@ function classify(kind, p) {
     if (p[0] === "jobs" && typeof p[1] === "string") {
       const job = p[1];
       if (p[2] === "steps" && typeof p[3] === "number") {
-        const step = p[3];
+        const step2 = p[3];
         const f2 = p[4];
-        if (f2 === "if" && p.length === 5) return { field: "step.if", job, step, cond: true };
+        if (f2 === "if" && p.length === 5) return { field: "step.if", job, step: step2, cond: true };
         if (f2 === "with" && typeof p[5] === "string")
-          return { field: "step.with", job, step, key: p[5], cond: false };
+          return { field: "step.with", job, step: step2, key: p[5], cond: false };
         if (f2 === "env" && typeof p[5] === "string")
-          return { field: "step.env", job, step, key: p[5], cond: false };
-        if (f2 === "run") return { field: "step.run", job, step, cond: false };
-        return { field: "step.other", job, step, cond: false };
+          return { field: "step.env", job, step: step2, key: p[5], cond: false };
+        if (f2 === "run") return { field: "step.run", job, step: step2, cond: false };
+        return { field: "step.other", job, step: step2, cond: false };
       }
       const f = p[2];
       if (f === "if" && p.length === 3) return { field: "job.if", job, cond: true };
@@ -13163,13 +13163,13 @@ function classify(kind, p) {
     return { field: "workflow.other", cond: false };
   }
   if (p[0] === "runs" && p[1] === "steps" && typeof p[2] === "number") {
-    const step = p[2];
+    const step2 = p[2];
     const f = p[3];
-    if (f === "if" && p.length === 4) return { field: "step.if", step, cond: true };
-    if (f === "with" && typeof p[4] === "string") return { field: "step.with", step, key: p[4], cond: false };
-    if (f === "env" && typeof p[4] === "string") return { field: "step.env", step, key: p[4], cond: false };
-    if (f === "run") return { field: "step.run", step, cond: false };
-    return { field: "step.other", step, cond: false };
+    if (f === "if" && p.length === 4) return { field: "step.if", step: step2, cond: true };
+    if (f === "with" && typeof p[4] === "string") return { field: "step.with", step: step2, key: p[4], cond: false };
+    if (f === "env" && typeof p[4] === "string") return { field: "step.env", step: step2, key: p[4], cond: false };
+    if (f === "run") return { field: "step.run", step: step2, cond: false };
+    return { field: "step.other", step: step2, cond: false };
   }
   if (p[0] === "runs" && (p[1] === "pre-if" || p[1] === "post-if") && p.length === 2) {
     return { field: "action.runs-if", cond: true };
@@ -17123,16 +17123,16 @@ function checkoutPath(b) {
   return escapes2(path) ? "outside" : { path };
 }
 var within = (path, dir) => dir === "." || path === dir || path.startsWith(`${dir}/`);
-function applyCheckout(ws, step, repository) {
-  const loc = step.uses?.loc ?? step.loc;
-  const other = checkoutRepository(step.with.repository, repository);
-  const placement = checkoutPath(step.with.path);
+function applyCheckout(ws, step2, repository) {
+  const loc = step2.uses?.loc ?? step2.loc;
+  const other = checkoutRepository(step2.with.repository, repository);
+  const placement = checkoutPath(step2.with.path);
   if (placement === "outside") return ws;
   const repo = other !== void 0 ? { repository: other } : {};
   if (placement === "dynamic")
-    return { ...ws, managed: true, dynamic: { path: text(step.with.path), ...repo, loc } };
+    return { ...ws, managed: true, dynamic: { path: text(step2.with.path), ...repo, loc } };
   const { path } = placement;
-  const ref = text(step.with.ref);
+  const ref = text(step2.with.ref);
   const mounts = ws.mounts.filter((m) => !within(m.path, path));
   mounts.push({ path, ...repo, ...other === void 0 && !runningCommit(ref) ? { ref } : {}, loc });
   return {
@@ -17214,11 +17214,11 @@ function workspaceResolver(opts) {
     if (rootless) return { kind: "local", target: rel, found: false, elsewhere: elsewhere() };
     return { kind: "local", target: rel, found: false, ...checkout };
   };
-  const record2 = (unit, job, step, outcome, rooted, via) => {
-    let r = records.get(step);
+  const record2 = (unit, job, step2, outcome, rooted, via) => {
+    let r = records.get(step2);
     if (!r) {
-      r = { unit, ...job !== void 0 ? { job } : {}, step, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
-      records.set(step, r);
+      r = { unit, ...job !== void 0 ? { job } : {}, step: step2, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
+      records.set(step2, r);
     }
     const outcomes = rooted ? r.rooted : r.assumed;
     const key = JSON.stringify(outcome);
@@ -17226,25 +17226,25 @@ function workspaceResolver(opts) {
   };
   const walk = (unit, job, steps2, start, rooted, via) => {
     let ws = start;
-    for (const step of steps2) {
-      if (step.run !== void 0) {
-        let writes = stepWrites.get(step);
+    for (const step2 of steps2) {
+      if (step2.run !== void 0) {
+        let writes = stepWrites.get(step2);
         if (!writes) {
-          const loc = step.runLoc ?? step.loc;
-          writes = scriptWrites2(step.run).map((w) => ({ ...w, loc }));
-          stepWrites.set(step, writes);
+          const loc = step2.runLoc ?? step2.loc;
+          writes = scriptWrites2(step2.run).map((w) => ({ ...w, loc }));
+          stepWrites.set(step2, writes);
         }
         if (writes.length) ws = { ...ws, writes: [...ws.writes, ...writes] };
       }
-      const uses = step.uses;
+      const uses = step2.uses;
       if (!uses) continue;
       if (isCheckout(uses)) {
-        ws = applyCheckout(ws, step, opts.repository);
+        ws = applyCheckout(ws, step2, opts.repository);
         continue;
       }
       if (uses.kind !== "local-action" || uses.target === void 0) continue;
       const outcome = resolve8(uses, ws);
-      record2(unit, job, step, outcome, rooted, via);
+      record2(unit, job, step2, outcome, rooted, via);
       const action = outcome.kind === "local" && outcome.found ? opts.loadAction(outcome.target) : void 0;
       if (action) {
         const caller = {
@@ -17253,12 +17253,12 @@ function workspaceResolver(opts) {
           loc: uses.loc,
           action: action.path
         };
-        ws = enter(action, ws, rooted, [...via, caller]);
+        ws = enter2(action, ws, rooted, [...via, caller]);
       }
     }
     return ws;
   };
-  const enter = (action, ws, rooted, via) => {
+  const enter2 = (action, ws, rooted, via) => {
     if (active.has(action)) return ws;
     const key = `${rooted}|${workspaceKey(ws)}`;
     const seen = walkedIn.get(action) ?? /* @__PURE__ */ new Map();
@@ -17285,7 +17285,7 @@ function workspaceResolver(opts) {
         const rest = [...actions.values()].filter((a) => !walkedIn.has(a));
         if (!rest.length) return;
         const used = new Set(rest.flatMap((a) => a.steps.map((s) => s.uses?.target)));
-        enter(rest.find((a) => !used.has(a.path)) ?? rest[0], initialWorkspace(), false, []);
+        enter2(rest.find((a) => !used.has(a.path)) ?? rest[0], initialWorkspace(), false, []);
       }
     },
     /** Settles every step's `uses:` and lists what is missing, invalid or not verifiable. */
@@ -17566,11 +17566,11 @@ function loadProject(opts) {
     }
   };
   const pending = [...workflows.values()];
-  const walked = /* @__PURE__ */ new Set();
+  const walked2 = /* @__PURE__ */ new Set();
   while (pending.length) {
     const wf = pending.shift();
-    if (walked.has(wf)) continue;
-    walked.add(wf);
+    if (walked2.has(wf)) continue;
+    walked2.add(wf);
     for (const job of Object.values(wf.jobs)) {
       if (job.uses?.kind === "local-workflow") noteCall(wf, job, pending);
       resolver.walkJob(wf, job);
@@ -21994,7 +21994,7 @@ function impactVerdict(changes, input2, policy) {
 }
 var matchesAny = (patterns, file) => patterns.some((p) => matchesPattern(file, p));
 var coveredBy = (within2) => (file) => !within2 || within2.targets.has(file) || within2.paths.some((p) => pathHolds(p.relative, file));
-var leftOutBy = (ignore) => (file) => ignore !== void 0 && matchesAny(ignore.baseline, file) && matchesAny(ignore.head, file);
+var leftOutBy = (ignore) => (file) => ignore !== void 0 && matchesAny(ignore.baseline, file) && matchesAny(ignore.head, file) && (!ignore.afterMerge || matchesAny(ignore.afterMerge, file));
 function unitsLookedAt(base, head, { within: within2, ignore }) {
   if (!within2 && !ignore) return void 0;
   const covered = coveredBy(within2);
@@ -22006,10 +22006,20 @@ function unitsLookedAt(base, head, { within: within2, ignore }) {
 function ignoreAddedOf(base, head, policy, { within: within2, ignore }) {
   if (!ignore) return [];
   const covered = coveredBy(within2);
-  const added = [...base.units(), ...head.units()].filter(
-    (u) => isPublished(u, policy) && covered(u.file) && matchesAny(ignore.head, u.file) && !matchesAny(ignore.baseline, u.file)
-  );
-  return [...new Set(added.map((u) => u.path))].sort();
+  const files = /* @__PURE__ */ new Map();
+  const add = (side) => (u) => {
+    if (!isPublished(u, policy) || !covered(u.file)) return;
+    const of = files.get(u.path) ?? { base: [], head: [] };
+    of[side].push(u.file);
+    files.set(u.path, of);
+  };
+  base.units().forEach(add("base"));
+  head.units().forEach(add("head"));
+  const merged2 = ignore.afterMerge ?? ignore.head;
+  const leavesOut = (patterns, of) => of.every((f) => matchesAny(patterns, f));
+  return [...files].filter(
+    ([, of]) => leavesOut(merged2, of.head.length ? of.head : of.base) && !leavesOut(ignore.baseline, [...of.base, ...of.head])
+  ).map(([path]) => path).sort();
 }
 function anchorOf(head, { within: within2, ignore }, published) {
   const headFiles = head.units().map((u) => u.file);
@@ -22318,22 +22328,22 @@ var undefinedEnvRef = defineRule({
 });
 function siteScope(wf, site) {
   const job = site.job ? wf.jobs[site.job] : void 0;
-  const step = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return { job, step };
+  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return { job, step: step2 };
 }
 function checkEnvReads(ctx, wf, site) {
-  const { job, step } = siteScope(wf, site);
+  const { job, step: step2 } = siteScope(wf, site);
   for (const seg of site.segments) {
     for (const ref of seg.refs) {
       const name = ref.path[0];
       if (ref.context !== "env" || !namesKey2(name)) continue;
-      if (envEntry(wf, job, step, name) || maybeWrittenEarlier(job, site, name)) continue;
+      if (envEntry(wf, job, step2, name) || maybeWrittenEarlier(job, site, name)) continue;
       reportUndefinedEnv(ctx, wf, site, ref, name);
     }
   }
 }
-function envEntry(wf, job, step, name) {
-  return lookup(wf.env, name) || job && lookup(job.env, name) || step && lookup(step.env, name);
+function envEntry(wf, job, step2, name) {
+  return lookup(wf.env, name) || job && lookup(job.env, name) || step2 && lookup(step2.env, name);
 }
 function maybeWrittenEarlier(job, site, name) {
   if (!job) return false;
@@ -23239,11 +23249,11 @@ function skippedIn(guard, combo) {
   return ast !== void 0 && definitelyFalsy(ast, matrixResolver(combo));
 }
 function guardsOf(job, site) {
-  const step = site.step !== void 0 ? job.steps[site.step] : void 0;
+  const step2 = site.step !== void 0 ? job.steps[site.step] : void 0;
   const jobGuard = guardOf(job);
   return [
     jobGuard !== false && jobGuard && hasMatrixRef(jobGuard) ? void 0 : jobGuard,
-    step && guardOf(step)
+    step2 && guardOf(step2)
   ].filter((g) => g !== void 0 && g !== site);
 }
 function affectedCombos(site, exp, predicate, guards = [], onlyKey, text2 = site.text) {
@@ -23374,7 +23384,7 @@ with:
   }
 });
 function withTargets(ctx, job) {
-  return [...callTargets(ctx, job), ...job.steps.flatMap((step) => stepTargets(ctx, step))];
+  return [...callTargets(ctx, job), ...job.steps.flatMap((step2) => stepTargets(ctx, step2))];
 }
 function callTargets(ctx, job) {
   const uses = job.uses;
@@ -23390,14 +23400,14 @@ function callTargets(ctx, job) {
     };
   });
 }
-function stepTargets(ctx, step) {
-  const action = ctx.index.actionOf(step);
-  return Object.values(step.with).map((b) => {
+function stepTargets(ctx, step2) {
+  const action = ctx.index.actionOf(step2);
+  return Object.values(step2.with).map((b) => {
     const input2 = action ? lookup(action.inputs, b.name) : void 0;
     return {
       binding: b,
-      target: action?.path ?? step.uses?.raw ?? `step #${step.index + 1}`,
-      step,
+      target: action?.path ?? step2.uses?.raw ?? `step #${step2.index + 1}`,
+      step: step2,
       ...action ? { callee: action } : {},
       ...input2 ? { input: input2, symbol: sym.input(action.path, input2.name) } : {}
     };
@@ -23744,8 +23754,8 @@ function checkJobOutputRef(ctx, wf, site, ref, a) {
 function checkStepOutputRef(ctx, unit, site, ref, a) {
   const c = ref.path[2];
   const steps2 = stepsInScope(unit, site.job);
-  const step = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
-  if (!step) {
+  const step2 = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step2) {
     const guess = didYouMean(
       a,
       steps2.flatMap((s) => s.id ? [s.id] : [])
@@ -23757,20 +23767,20 @@ function checkStepOutputRef(ctx, unit, site, ref, a) {
     });
     return;
   }
-  if (site.step !== void 0 && step.index >= site.step) {
+  if (site.step !== void 0 && step2.index >= site.step) {
     ctx.report({
-      message: `Step ${quote(a)} runs ${step.index === site.step ? "as" : "after"} this step, so its outputs are not available yet`,
+      message: `Step ${quote(a)} runs ${step2.index === site.step ? "as" : "after"} this step, so its outputs are not available yet`,
       loc: ref.loc,
       symbol: stepOutputSymbol(unit, site, a, c),
-      related: [{ loc: step.idLoc ?? step.loc, message: `step ${quote(a)} is defined here` }]
+      related: [{ loc: step2.idLoc ?? step2.loc, message: `step ${quote(a)} is defined here` }]
     });
     return;
   }
-  checkActionOutputRef(ctx, step, ref);
+  checkActionOutputRef(ctx, step2, ref);
 }
-function checkActionOutputRef(ctx, step, ref) {
+function checkActionOutputRef(ctx, step2, ref) {
   const [, b, c] = ref.path;
-  const action = ctx.index.actionOf(step);
+  const action = ctx.index.actionOf(step2);
   if (!isProperty(b, "outputs") || !namesKey2(c) || !action) return;
   if (action.using !== "composite") return;
   if (lookup(action.outputs, c)) return;
@@ -23780,7 +23790,7 @@ function checkActionOutputRef(ctx, step, ref) {
     message: `${action.path} has no output ${quote(c)}${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: sym.output(action.path, c),
-    related: [{ loc: step.uses?.loc ?? step.loc, message: `declared outputs: ${listNames(names)}` }]
+    related: [{ loc: step2.uses?.loc ?? step2.loc, message: `declared outputs: ${listNames(names)}` }]
   });
 }
 var outputRefWithoutNeeds = defineRule({
@@ -23958,24 +23968,24 @@ version: \${{ steps.meta.outputs.version }}`,
     }
   }
 });
-function writesAreKnown(step) {
-  const w = step.writesOutputs;
+function writesAreKnown(step2) {
+  const w = step2.writesOutputs;
   if (!w.mentions || w.dynamic) return false;
-  return !(step.uses && !step.with.script);
+  return !(step2.uses && !step2.with.script);
 }
 function checkStepOutputWritten(ctx, unit, site, ref) {
   const [a, b, c] = ref.path;
   if (!isProperty(b, "outputs") || !a || !namesKey2(c)) return;
-  const step = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
-  if (!step || !writesAreKnown(step)) return;
-  const w = step.writesOutputs;
+  const step2 = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step2 || !writesAreKnown(step2)) return;
+  const w = step2.writesOutputs;
   if (w.names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
   const guess = didYouMean(c, w.names);
   ctx.report({
     message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: stepOutputSymbol(unit, site, a, c),
-    related: [{ loc: step.runLoc ?? step.loc, message: "outputs are written here" }]
+    related: [{ loc: step2.runLoc ?? step2.loc, message: "outputs are written here" }]
   });
 }
 var outputRules = [
@@ -24345,8 +24355,8 @@ function omittedInputValue(decl) {
 }
 function guardsOf2(wf, site) {
   const job = site.job !== void 0 ? wf.jobs[site.job] : void 0;
-  const step = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return [job && guardOf(job), step && guardOf(step)].filter(
+  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return [job && guardOf(job), step2 && guardOf(step2)].filter(
     (g) => g !== void 0 && g !== site
   );
 }
@@ -25103,6 +25113,14 @@ function gradingNotes(impact, unread) {
     unread ? `the baseline's ignore lacks what the pull request's leaves out of impact mode (${units}), as the baseline's version of ${unread} cannot be read; they are graded` : `this pull request changes what ignore leaves out of impact mode (${units}); that applies after it is merged`
   ];
 }
+function lookAtOf(opts, within2, head) {
+  const baseline = opts.impact?.ignore;
+  const afterMerge = opts.impact?.ignoreAfterMerge;
+  return {
+    ...within2 ? { within: within2 } : {},
+    ...baseline ? { ignore: { baseline, head, ...afterMerge ? { afterMerge } : {} } } : {}
+  };
+}
 function impactOf(opts, index, lookAt, logger) {
   const impact = opts.impact;
   if (!impact) return { impact: void 0 };
@@ -25268,12 +25286,7 @@ function prepareRules(opts, logger, base, unloaded) {
     contractInScope: contractsInScope(index, { root: opts.root, paths: opts.paths ?? [] })
   };
   const contracts = compareContracts(opts, index, scope, logger);
-  const baselineIgnore2 = opts.impact?.ignore;
-  const lookAt = {
-    ...within2 ? { within: within2 } : {},
-    ...baselineIgnore2 ? { ignore: { baseline: baselineIgnore2, head: config2.ignore } } : {}
-  };
-  const impact = impactOf(opts, index, lookAt, logger);
+  const impact = impactOf(opts, index, lookAtOf(opts, within2, config2.ignore), logger);
   if (impact.impactSkipped) logger.debug(`impact: skipped (${impact.impactSkipped})`);
   const run2 = ruleRun({
     ...base,
@@ -25478,8 +25491,15 @@ function exitCodeFor(summary2, failOn) {
 
 // ../lint/src/impact-run.ts
 import { execFileSync as execFileSync2 } from "child_process";
-import { existsSync as existsSync5, readFileSync as readFileSync3, realpathSync as realpathSync3 } from "fs";
-import { join as join5, relative as relative5, sep as sep2 } from "path";
+import {
+  existsSync as existsSync5,
+  lstatSync as lstatSync3,
+  readFileSync as readFileSync3,
+  readlinkSync,
+  realpathSync as realpathSync3,
+  statSync as statSync2
+} from "fs";
+import { basename as basename4, dirname as dirname3, isAbsolute as isAbsolute4, join as join5, relative as relative5, sep as sep2 } from "path";
 var ImpactSetupError = class extends Error {
 };
 var followsPullRequest = (event) => event === "merge_group" || event === "push";
@@ -25667,39 +25687,6 @@ function gitOutput(dir, args) {
     return void 0;
   }
 }
-function entriesAlong(dir, commit, path) {
-  const parts = path.split("/");
-  const along = parts.map((_, i) => parts.slice(0, i + 1).join("/"));
-  const out = gitOutput(dir, ["ls-tree", "-z", "--full-tree", commit, "--", ...along]);
-  if (out === void 0) return void 0;
-  const entries2 = /* @__PURE__ */ new Map();
-  for (const entry of out.split("\0")) {
-    const tab = entry.indexOf("	");
-    if (tab < 0) continue;
-    const [mode = "", , object2 = ""] = entry.slice(0, tab).split(" ");
-    entries2.set(entry.slice(tab + 1), { mode, object: object2 });
-  }
-  return entries2;
-}
-function submoduleHolding(entries2, path) {
-  const parts = path.split("/");
-  for (let i = 1; i < parts.length; i++) {
-    const dir = parts.slice(0, i).join("/");
-    const entry = entries2.get(dir);
-    if (entry?.mode === "160000") return { path: dir, commit: entry.object };
-  }
-  return void 0;
-}
-var realTop = (root) => realpathSync3.native(gitTopLevel(root));
-function baseConfigOfRepository(root, req) {
-  const file = req.baseConfig ? req.baseConfigFile : void 0;
-  const top = file ? gitTopLevel(root) : void 0;
-  if (!file || top === void 0 || !pathInside(top, file)) return void 0;
-  const path = relative5(realTop(root), realpathSync3.native(file)).split(sep2).join("/");
-  const entries2 = entriesAlong(realTop(root), "HEAD", path);
-  if (!entries2 || entries2.has(path) || submoduleHolding(entries2, path)) return path;
-  return void 0;
-}
 function isCheckout2(dir) {
   const top = existsSync5(dir) ? gitTopLevel(dir) : void 0;
   return top !== void 0 && realpathSync3.native(top) === realpathSync3.native(dir);
@@ -25712,59 +25699,241 @@ function hasCommit(dir, commit) {
     return false;
   }
 }
-function textAt(dir, commit, path, shown = "") {
-  const sub = submoduleHolding(entriesAlong(dir, commit, path) ?? /* @__PURE__ */ new Map(), path);
-  if (!sub) return { text: baselineFiles(dir, commit).read(path) };
-  const subDir = join5(dir, sub.path);
-  if (!isCheckout2(subDir) || !hasCommit(subDir, sub.commit))
-    return { unread: `${shown}${sub.path} at ${sub.commit.slice(0, 7)}` };
-  return textAt(subDir, sub.commit, path.slice(sub.path.length + 1), `${shown}${sub.path}/`);
+function treeEntries(out) {
+  const entries2 = [];
+  for (const line of (out ?? "").split("\0")) {
+    const tab = line.indexOf("	");
+    if (tab < 0) continue;
+    const [mode = "", , object2 = ""] = line.slice(0, tab).split(" ");
+    entries2.push({ name: line.slice(tab + 1), mode, object: object2 });
+  }
+  return entries2;
 }
-function baseConfigAt(root, commit, path, notes) {
-  const read = textAt(realTop(root), commit, path);
-  if ("unread" in read) {
+var entryNamed = (entries2, name, ignoreCase) => entries2.find((e) => e.name === name) ?? (ignoreCase ? entries2.find((e) => e.name.toLowerCase() === name.toLowerCase()) : void 0);
+var sameFile = (a, b) => {
+  const [x, y] = [statSync2(a, { throwIfNoEntry: false }), statSync2(b, { throwIfNoEntry: false })];
+  return x !== void 0 && y !== void 0 && x.ino === y.ino && x.dev === y.dev;
+};
+var ignoresCase = (dir) => gitOutput(dir, ["config", "--bool", "core.ignorecase"])?.trim() === "true" || sameFile(join5(dir, ".git"), join5(dir, ".GIT"));
+var realpathOr = (p) => {
+  try {
+    return realpathSync3.native(p);
+  } catch {
+    return void 0;
+  }
+};
+function repositoryPathOf(top, file) {
+  const dirs = [];
+  for (let dir = dirname3(file); dir !== dirname3(dir); dir = dirname3(dir)) dirs.unshift(dir);
+  for (const dir of dirs) if (realpathOr(dir) === top) return relative5(dir, file).split(sep2).join("/");
+  const real = realpathOr(file);
+  return real !== void 0 && pathInside(top, real) ? relative5(top, real).split(sep2).join("/") : void 0;
+}
+var NONE = { kind: "none" };
+var MAX_LINKS3 = 40;
+function enter(w, dir, commit, head, shown) {
+  Object.assign(w, { dir, tree: commit, head, shown, at: [], ignoreCase: ignoresCase(dir) });
+}
+var walked = (w, name) => `${w.shown}${[...w.at.map((a) => a.name), name].join("/")}`;
+var fileAt = (abs) => {
+  const real = realpathOr(abs);
+  return real !== void 0 && statSync2(real).isFile() ? { kind: "file", file: real } : NONE;
+};
+function leave(w, abs) {
+  const path = repositoryPathOf(w.top, abs);
+  if (path === void 0) return fileAt(abs);
+  enter(w, w.top, w.commit, "HEAD", "");
+  w.todo = path.split("/");
+  return void 0;
+}
+function follow(w, target) {
+  if (target === void 0 || ++w.links > MAX_LINKS3) return NONE;
+  if (isAbsolute4(target)) return leave(w, join5(target, ...w.todo));
+  w.todo.unshift(...target.split("/"));
+  return void 0;
+}
+function submodule(w, entry) {
+  const path = [...w.at.map((a) => a.name), entry.name].join("/");
+  const dir = join5(w.dir, path);
+  if (!isCheckout2(dir) || !hasCommit(dir, entry.object)) {
+    const at = `${w.shown}${path} at ${entry.object.slice(0, 7)}`;
+    return { kind: "unread", submodule: at, path: [`${w.shown}${path}`, ...w.todo].join("/") };
+  }
+  enter(w, dir, entry.object, recordedAt(w, path), `${w.shown}${path}/`);
+  return void 0;
+}
+function recordedAt(w, path) {
+  let tree = w.head;
+  const parts = path.split("/");
+  for (const [i, part] of parts.entries()) {
+    if (tree === void 0) return void 0;
+    const entry = entryNamed(treeEntries(gitOutput(w.dir, ["ls-tree", "-z", tree])), part, w.ignoreCase);
+    if (i === parts.length - 1) return entry?.mode === "160000" ? entry.object : void 0;
+    tree = entry?.mode === "040000" ? entry.object : void 0;
+  }
+  return void 0;
+}
+function tracked(w, entry) {
+  switch (entry.mode) {
+    case "040000":
+      w.at.push({ name: entry.name, tree: entry.object });
+      return void 0;
+    case "120000":
+      return follow(w, gitOutput(w.dir, ["cat-file", "blob", entry.object]));
+    case "160000":
+      return submodule(w, entry);
+    default:
+      if (w.todo.length) return NONE;
+      return {
+        kind: "tracked",
+        dir: w.dir,
+        object: entry.object,
+        path: walked(w, entry.name),
+        submodule: w.shown !== ""
+      };
+  }
+}
+function trackedAtHead(w, parts) {
+  if (w.shown !== "" && trackedIn(w.dir, "HEAD", parts, w.ignoreCase)) return true;
+  return w.head === void 0 || trackedIn(w.dir, w.head, parts, w.ignoreCase);
+}
+function trackedIn(dir, commit, parts, ignoreCase) {
+  if (!hasCommit(dir, commit)) return true;
+  let tree = commit;
+  for (const part of parts) {
+    const entry = entryNamed(treeEntries(gitOutput(dir, ["ls-tree", "-z", tree])), part, ignoreCase);
+    if (!entry) return false;
+    if (entry.mode !== "040000") return true;
+    tree = entry.object;
+  }
+  return false;
+}
+function untracked(w, part) {
+  const parent = w.at.map((a) => a.name);
+  if (trackedAtHead(w, [...parent, part])) return NONE;
+  const full = join5(w.dir, ...parent, part);
+  let stat2;
+  try {
+    stat2 = lstatSync3(full);
+  } catch {
+    return NONE;
+  }
+  if (stat2.isSymbolicLink()) return follow(w, readlinkSync(full).split(sep2).join("/"));
+  if (!stat2.isDirectory()) return w.todo.length ? NONE : fileAt(full);
+  w.at.push({ name: part, tree: void 0 });
+  return void 0;
+}
+function step(w, part) {
+  if (part === "" || part === ".") return void 0;
+  if (part === "..") return w.at.pop() ? void 0 : leave(w, join5(w.dir, "..", ...w.todo));
+  const tree = w.at.length ? w.at[w.at.length - 1].tree : w.tree;
+  const entries2 = tree === void 0 ? [] : treeEntries(gitOutput(w.dir, ["ls-tree", "-z", tree]));
+  const entry = entryNamed(entries2, part, w.ignoreCase);
+  return entry ? tracked(w, entry) : untracked(w, part);
+}
+function locate2(top, commit, path) {
+  const w = {
+    top,
+    commit,
+    dir: top,
+    tree: commit,
+    head: "HEAD",
+    ignoreCase: false,
+    shown: "",
+    at: [],
+    todo: [],
+    links: 0
+  };
+  enter(w, top, commit, "HEAD", "");
+  w.todo = path.split("/");
+  let found;
+  while (!found && w.todo.length) found = step(w, w.todo.shift());
+  if (found && found.kind !== "none") return found;
+  return w.shown ? { kind: "none", submodule: `${w.shown.slice(0, -1)} at ${w.tree.slice(0, 7)}` } : NONE;
+}
+var textOf = (found) => {
+  if (found.kind === "tracked") return gitOutput(found.dir, ["cat-file", "blob", found.object]);
+  return found.kind === "file" ? workingTree(dirname3(found.file)).read(basename4(found.file)) : void 0;
+};
+function repositoryBaseConfig(root, commit, req) {
+  const file = req.baseConfig ? req.baseConfigFile : void 0;
+  const top = file ? gitTopLevel(root) : void 0;
+  if (!file || top === void 0) return void 0;
+  const realTop = realpathSync3.native(top);
+  const path = repositoryPathOf(realTop, file);
+  if (path === void 0) return void 0;
+  const baseline = locate2(realTop, commit, path);
+  if (baseline.kind === "file" && baseline.file === realpathOr(file)) return void 0;
+  return { top: realTop, path, baseline };
+}
+function asBaseConfig(text2, path) {
+  try {
+    return parseConfig(parseBaseConfig(text2, path), path);
+  } catch (err) {
+    if (err instanceof ConfigError) return err;
+    throw err;
+  }
+}
+function baseConfigAt(base, notes) {
+  const found = base.baseline;
+  if (found.kind === "unread") {
     notes.push(
-      `the baseline's version of the base config ${path} is in the submodule ${read.unread}, which this clone lacks, so impact mode reads no ignore from it for the baseline`
+      `the baseline's version of the base config ${found.path} is in the submodule ${found.submodule}, which this clone lacks, so impact mode reads no ignore from it for the baseline`
     );
     return { unread: true };
   }
-  if (read.text === void 0) return {};
-  try {
-    return { config: parseConfig(parseBaseConfig(read.text, path), path) };
-  } catch (err) {
-    if (!(err instanceof ConfigError)) throw err;
-    notes.push(`the baseline's ${path} is invalid (${err.message}); impact mode reads no ignore from it`);
+  const text2 = textOf(found);
+  if (text2 === void 0) return {};
+  const path = found.kind === "tracked" ? found.path : base.path;
+  const config2 = asBaseConfig(text2, path);
+  if (config2 instanceof ConfigError) {
+    notes.push(`the baseline's ${path} is invalid (${config2.message}); impact mode reads no ignore from it`);
     return {};
   }
+  return { config: config2 };
 }
-function baselineIgnore(root, commit, repositoryBaseConfig, config2, notes) {
+function baselineIgnore(base, config2, notes) {
   const own2 = (config2 ?? defaultConfig()).ignore;
-  if (!repositoryBaseConfig) return { patterns: own2 };
-  const base = baseConfigAt(root, commit, repositoryBaseConfig, notes);
-  if (base.unread) return { patterns: own2, unread: repositoryBaseConfig };
-  return { patterns: base.config ? [.../* @__PURE__ */ new Set([...base.config.ignore, ...own2])] : own2 };
+  if (!base) return { ignore: own2 };
+  const at = baseConfigAt(base, notes);
+  if (at.unread) return { ignore: own2, ignoreUnread: base.path };
+  return { ignore: at.config ? [.../* @__PURE__ */ new Set([...at.config.ignore, ...own2])] : own2 };
+}
+function ignoreAfterMerge(root, base, configPath, notes) {
+  const head = locate2(base.top, "HEAD", base.path);
+  if (head.kind === "file" || !head.submodule) return void 0;
+  const own2 = baselineConfig(workingTree(root), configPath, void 0, [])?.ignore ?? [];
+  if (head.kind === "unread") {
+    notes.push(
+      `the pull request's version of the base config ${head.path} is in the submodule ${head.submodule}, which this clone lacks, so impact mode reads no ignore from it for the pull request`
+    );
+    return own2;
+  }
+  if (head.kind === "none") {
+    notes.push(
+      `the pull request's commit of the submodule ${head.submodule} has no base config ${base.path}, so impact mode reads no ignore from it for the pull request`
+    );
+    return own2;
+  }
+  const recorded = asBaseConfig(textOf(head) ?? "", head.path);
+  return [.../* @__PURE__ */ new Set([...recorded instanceof ConfigError ? [] : recorded.ignore, ...own2])];
 }
 function baselinePolicy(root, baseline, req, headConfig, notes) {
   const configPath = req.configPath ? relative5(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
-  const repositoryBaseConfig = baseConfigOfRepository(root, req);
-  const baseInRepository = repositoryBaseConfig !== void 0;
-  if (baseInRepository) {
+  const repositoryBase = repositoryBaseConfig(root, baseline.commit, req);
+  if (repositoryBase) {
     notes.push(
       "the base config is a file of this repository, so the baseline's impact settings leave it out"
     );
   }
-  const config2 = baselineConfig(
-    baseline.fs,
-    configPath,
-    baseInRepository ? void 0 : req.baseConfig,
-    notes
-  );
+  const config2 = baselineConfig(baseline.fs, configPath, repositoryBase ? void 0 : req.baseConfig, notes);
   const policy = { ...(config2 ?? defaultConfig()).impact };
-  if (!baseInRepository && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
+  if (!repositoryBase && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
     notes.push("this pull request changes impact settings; they apply after it is merged");
   }
-  const ignore = baselineIgnore(root, baseline.commit, repositoryBaseConfig, config2, notes);
-  return { config: config2, policy, ignore };
+  const ignore = baselineIgnore(repositoryBase, config2, notes);
+  const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath, notes);
+  return { config: config2, policy, ignore: { ...ignore, ...afterMerge ? { ignoreAfterMerge: afterMerge } : {} } };
 }
 function titleAndLabels(req) {
   const pr = req.event?.payload?.pull_request;
@@ -25818,8 +25987,7 @@ function prepareImpact(root, headConfig, req, logger) {
       publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ignore: ignore.patterns,
-      ...ignore.unread ? { ignoreUnread: ignore.unread } : {}
+      ...ignore
     },
     notes
   };
@@ -25827,13 +25995,13 @@ function prepareImpact(root, headConfig, req, logger) {
 
 // ../lint/src/plugins.ts
 import { existsSync as existsSync6 } from "fs";
-import { isAbsolute as isAbsolute4, resolve as resolve5 } from "path";
+import { isAbsolute as isAbsolute5, resolve as resolve5 } from "path";
 import { pathToFileURL } from "url";
 var isRule = (v) => typeof v === "object" && v !== null && typeof v.code === "string" && typeof v.check === "function";
 async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   const loaded = [];
   for (const spec of config2.plugins) {
-    const abs = isAbsolute4(spec) ? spec : resolve5(root, spec);
+    const abs = isAbsolute5(spec) ? spec : resolve5(root, spec);
     if (!existsSync6(abs))
       throw new ConfigError(`Plugin not found: ${spec}`, void 0, [`plugins: ${abs} does not exist`]);
     let mod;
@@ -26105,11 +26273,11 @@ function stepsOf(unit, job) {
   return job ? job.steps : unit.kind === "action" ? unit.steps : [];
 }
 function stepEdges(g, unit, job, matrix2) {
-  for (const step of stepsOf(unit, job)) {
-    if (step.uses?.kind !== "local-action") continue;
-    const to = g.index.actionOf(step)?.path ?? missingNode(g, step.uses);
+  for (const step2 of stepsOf(unit, job)) {
+    if (step2.uses?.kind !== "local-action") continue;
+    const to = g.index.actionOf(step2)?.path ?? missingNode(g, step2.uses);
     if (!to) continue;
-    const via = job ? `jobs.${job.id} \u203A steps[${step.index}]` : `steps[${step.index}]`;
+    const via = job ? `jobs.${job.id} \u203A steps[${step2.index}]` : `steps[${step2.index}]`;
     g.edges.push({ from: unit.path, to, via, kind: "uses", ...matrix2 !== void 0 ? { matrix: matrix2 } : {} });
   }
 }
@@ -26735,8 +26903,8 @@ var import_yaml7 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
-import { readFileSync as readFileSync4, statSync as statSync2 } from "fs";
-import { isAbsolute as isAbsolute5, relative as relative6, resolve as resolve6, sep as sep3 } from "path";
+import { readFileSync as readFileSync4, statSync as statSync3 } from "fs";
+import { isAbsolute as isAbsolute6, relative as relative6, resolve as resolve6, sep as sep3 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
 var SERVICE = "github.actions.results.api.v1.ArtifactService";
@@ -26986,13 +27154,13 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
   const root = resolve6(rootDirectory);
   const entries2 = files.map((file) => {
     const path = relative6(root, resolve6(file));
-    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute5(path))
+    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute6(path))
       throw new Error(`${file} is not inside the artifact's root directory ${root}`);
     const entry = path.split(sep3).join("/");
     if (BAD_PATH.test(entry))
       throw new Error(`The path ${entry} contains one of " : < > | * ? or a line break`);
     const data = readFileSync4(file);
-    const { mode, mtime } = statSync2(file);
+    const { mode, mtime } = statSync3(file);
     return { name: entry, data, mode, mtime };
   });
   const token = process.env.ACTIONS_RUNTIME_TOKEN;
@@ -27051,7 +27219,7 @@ var DEFAULTS2 = {
   token: "${{ github.token }}",
   debug: "false"
 };
-var ACTION_DIR = resolve7(dirname3(fileURLToPath(import.meta.url)), "../../..");
+var ACTION_DIR = resolve7(dirname4(fileURLToPath(import.meta.url)), "../../..");
 var UNTRUSTED_EVENTS = /* @__PURE__ */ new Set(["pull_request_target", "workflow_run"]);
 var SUMMARY_LIMIT = 1e6;
 var PATCH_FILE = "flowpact-contracts.patch";
@@ -27079,7 +27247,7 @@ function int3(name) {
     throw new InputError(`Input ${name} must be a non-negative integer (got "${value}")`);
   return Number(value);
 }
-var fromActionDir = (p) => isAbsolute6(p) ? p : resolve7(ACTION_DIR, p);
+var fromActionDir = (p) => isAbsolute7(p) ? p : resolve7(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
@@ -27205,8 +27373,9 @@ function prepareInputImpact(root, config2, request, logger) {
 }
 var listed = (files, max = 10) => `${files.slice(0, max).join(", ")}${files.length > max ? ` and ${files.length - max} more` : ""}`;
 function nothingPublishedNote(root, logger, options, headIgnore) {
-  const { policy, publishedFiles, ignore } = options;
-  const leftOut = (file) => ignore !== void 0 && [ignore, headIgnore].every((patterns) => patterns.some((p) => matchesPattern(file, p)));
+  const { policy, publishedFiles, ignore, ignoreAfterMerge: ignoreAfterMerge2 } = options;
+  const sides = [headIgnore, ...ignoreAfterMerge2 ? [ignoreAfterMerge2] : []];
+  const leftOut = (file) => ignore !== void 0 && [ignore, ...sides].every((patterns) => patterns.some((p) => matchesPattern(file, p)));
   if (!publishedFiles?.every(leftOut)) return void 0;
   const project = loadProject({
     root,
@@ -27300,7 +27469,7 @@ function annotate(f, prefix) {
 function writeReport(workspace, file, content) {
   const abs = resolve7(workspace, file);
   assertSafeWritePath(abs, [workspace]);
-  mkdirSync2(dirname3(abs), { recursive: true });
+  mkdirSync2(dirname4(abs), { recursive: true });
   writeFileSync2(abs, content);
   const shown = toPosix2(relative7(workspace, abs));
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
