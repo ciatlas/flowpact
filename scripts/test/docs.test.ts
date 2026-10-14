@@ -26,6 +26,27 @@ describe('rule docs', () => {
     expect(readFileSync(join(RULES_DIR, 'index.mdx'), 'utf8')).toBe(indexPage(registry.all()));
   });
 
+  it('keeps code spans as the rule writes them: MDX takes them literally, so an escape would show', () => {
+    const spans = (s: string) => s.match(/(`+)[\s\S]*?[^`]\1(?!`)/g) ?? [];
+    for (const rule of registry.all()) {
+      const prose = [rule.docs.why, rule.docs.fix, rule.docs.scope ?? ''].join('\n');
+      const page = rulePage(rule);
+      for (const span of spans(prose)) expect(page, `${rule.code}: ${span}`).toContain(span);
+    }
+    // In the index's table cells a pipe stays escaped inside code too: GFM reads it as a cell border.
+    const index = indexPage(registry.all());
+    for (const rule of registry.all())
+      for (const span of spans(rule.docs.summary)) expect(index).toContain(span.replace(/\|/g, '\\|'));
+  });
+
+  it('gives impact mode its own group in the index, and reserves only FP7xx', () => {
+    const index = indexPage(registry.all());
+    expect(index).toContain('## Contracts (`FP80x`)');
+    expect(index).toContain('## Impact mode (`FP81x`)');
+    expect(index).toContain('- `FP7xx`: hygiene rules (none yet).');
+    expect(index).not.toMatch(/FP[89]xx` —/);
+  });
+
   it('every docs URL printed by the tool maps to a docs page route', () => {
     for (const rule of registry.all()) {
       const url = registry.docsUrl(rule);

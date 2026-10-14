@@ -11,15 +11,15 @@ description: "An output is read from a step whose inline script (`run:` or `acti
 
 ## Why it matters
 
-The read evaluates to an empty string. This is typically a typo in the `echo "name=value" \>\> $GITHUB_OUTPUT` line.
+The read evaluates to an empty string. This is typically a typo in the `echo "name=value" >> $GITHUB_OUTPUT` line.
 
 ## How to fix
 
-Write the output in the step (`echo "\<name\>=\<value\>" \>\> "$GITHUB_OUTPUT"`) or read the name it actually writes.
+Write the output in the step (`echo "<name>=<value>" >> "$GITHUB_OUTPUT"`) or read the name it actually writes.
 
 ## Scope
 
-Only scripts whose writes flowpact can name are judged. A step is skipped when its writes cannot be seen: `cat file \>\> "$GITHUB_OUTPUT"`, a computed name (`core.setOutput(name, …)`), or an `actions/github-script` script that loads a module (`require()`, `import()`; Node built-ins like `fs` aside), runs a program (`exec.exec()`), hands `core` to other code (`run(\{ core \})`), or takes code from an expression (`script: $\{\{ inputs.code \}\}`). Words in strings, comments and template text do not count. Steps of other actions are not judged, since an action may set outputs of its own. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
+Only scripts whose writes flowpact can name are judged. A step is skipped when its writes cannot be seen: `cat file >> "$GITHUB_OUTPUT"`, a computed name (`core.setOutput(name, …)`), or an `actions/github-script` script that loads a module (`require()`, `import()`; Node built-ins like `fs` aside), runs a program (`exec.exec()`), hands `core` to other code (`run({ core })`), or takes code from an expression (`script: ${{ inputs.code }}`). Words in strings, comments and template text do not count. Steps of other actions are not judged, since an action may set outputs of its own. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
 
 ## Example
 

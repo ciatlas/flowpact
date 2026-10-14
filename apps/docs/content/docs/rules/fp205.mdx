@@ -19,7 +19,7 @@ Declare the secret under `on.workflow_call.secrets` and pass it from every calle
 
 ## Scope
 
-Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.\<id\>.with`, `if` or `name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is left to FP202.
+Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is left to FP202.
 
 ## Configure
 
