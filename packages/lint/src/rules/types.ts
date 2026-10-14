@@ -2,6 +2,7 @@ import type { JobDecl, Loc, Logger, MatrixExpansion, ProjectIndex, UnitDecl } fr
 import type { FlowpactConfig, Override } from '../config';
 import type { ContractPlan } from '../contracts';
 import type { ImpactResult } from '../impact';
+import type { RemotesLockRead } from '../remotes';
 
 export type Severity = 'error' | 'warning' | 'info';
 export type SeveritySetting = Severity | 'off';
@@ -104,6 +105,8 @@ export interface RuleContext {
   readonly configFile?: string;
   /** Contract comparison; only present in check mode (`flowpact check`). */
   readonly contracts?: ContractPlan;
+  /** The remote interfaces lockfile as read (see `readRemotesLock`); none without a lockfile. */
+  readonly remotes?: RemotesLockRead;
   /** Impact mode: graded changes of published units and the verdict; only present when impact mode runs. */
   readonly impact?: ImpactResult;
   /** Override usage; only present for post-phase rules. */

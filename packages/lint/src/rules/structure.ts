@@ -291,14 +291,19 @@ const remoteUnverified = defineRule({
   category: 'structure',
   defaultSeverity: 'info',
   docs: {
-    summary: 'A job calls a reusable workflow in another repository; its interface is not verified.',
-    why: 'flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on trust.',
-    fix: 'Nothing to fix. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally.',
+    summary:
+      'A job calls a reusable workflow in another repository whose interface is not in the remote interfaces lockfile.',
+    why:
+      'flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on ' +
+      'trust, unless `.github/flowpact/remotes.lock.yaml` records its interface.',
+    fix:
+      'Record its interface in `.github/flowpact/remotes.lock.yaml` to have it checked, or nothing. If the workflow ' +
+      'lives in this repository, set `repository: owner/repo` in the config so it resolves locally.',
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
       for (const job of Object.values(wf.jobs)) {
-        if (job.uses?.kind !== 'remote-workflow') continue;
+        if (job.uses?.kind !== 'remote-workflow' || ctx.index.interfaceOf(job)) continue;
         ctx.report({
           message: `jobs.${job.id} calls remote workflow ${job.uses.raw}; its interface is not verified`,
           loc: job.uses.loc,
@@ -306,6 +311,29 @@ const remoteUnverified = defineRule({
         });
       }
     }
+  },
+});
+
+const remotesLockInvalid = defineRule({
+  code: 'FP611',
+  name: 'remotes-lock-invalid',
+  category: 'structure',
+  defaultSeverity: 'error',
+  docs: {
+    summary: 'The remote interfaces lockfile does not parse, or does not match its schema.',
+    why:
+      'flowpact then checks no remote call against an interface: every remote reusable workflow and action is taken ' +
+      'on trust, as without a lockfile.',
+    fix: 'Fix the entry the message names: each needs a 40-character `sha`, a `kind` and its interface.',
+  },
+  check(ctx) {
+    const { file, error } = ctx.remotes ?? {};
+    if (!file || !error) return;
+    ctx.report({
+      message: `${file} cannot be used: ${error}`,
+      loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
+      symbol: `${file}#remotes`,
+    });
   },
 });
 
@@ -679,6 +707,7 @@ export const structureRules: RuleDefinition[] = [
   callCycle,
   nestingDepth,
   remoteUnverified,
+  remotesLockInvalid,
   needsWithoutData,
   largeInterface,
   missingLocalTarget,

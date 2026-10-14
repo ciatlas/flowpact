@@ -41,6 +41,7 @@ import {
   type ImpactResult,
   type ImpactScope,
 } from './impact';
+import { type RemotesLockRead, readRemotesLock, remoteInterfaces } from './remotes';
 import { createRegistry, IMPACT_CODES } from './rules/index';
 import { CODE_PATTERN, type RuleRegistry } from './rules/registry';
 import type {
@@ -336,7 +337,9 @@ function loadUnits(
   logger: Logger,
   publish: string[],
   repository: string | undefined,
+  remotes: RemotesLockRead,
 ): Project {
+  const interfaces = remoteInterfaces(remotes.lock);
   return logger.time('load project', () =>
     loadProject({
       root: opts.root,
@@ -344,6 +347,7 @@ function loadUnits(
       ...(opts.paths ? { paths: opts.paths } : {}),
       ...(publish.length ? { publish } : {}),
       ...(repository ? { repository } : {}),
+      ...(interfaces.length ? { remotes: interfaces } : {}),
       validateSchema: opts.validateSchema ?? true,
       logger,
     }),
@@ -582,6 +586,8 @@ interface RuleRun {
   matrix: RuleContext['matrix'];
   configFile: string | undefined;
   contracts: ContractPlan | undefined;
+  /** The remote interfaces lockfile as read. */
+  remotes: RemotesLockRead;
   impact: ImpactResult | undefined;
   /** Why impact mode did not run although it was set up. */
   impactSkipped?: string;
@@ -625,6 +631,7 @@ function ruleContext(
     ...(run.configFile ? { configFile: run.configFile } : {}),
     ...(run.contracts ? { contracts: run.contracts } : {}),
     ...(run.impact ? { impact: run.impact } : {}),
+    remotes: run.remotes,
     ...extra,
     report: (input) => {
       const finding = toFinding(rule, severity, input, run.registry);
@@ -826,7 +833,7 @@ function resultOf(
 function prepareRules(
   opts: AnalyzeOptions,
   logger: Logger,
-  base: Pick<RuleRun, 'registry' | 'index' | 'config' | 'matrix'>,
+  base: Pick<RuleRun, 'registry' | 'index' | 'config' | 'matrix' | 'remotes'>,
   unloaded: string[],
 ): { run: RuleRun; scope: ReportScope } {
   const { registry, index, config } = base;
@@ -905,7 +912,8 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
     rules: Object.keys(config.rules).length,
   });
 
-  const project = loadUnits(opts, logger, publishPatterns, repository);
+  const remotes = readRemotesLock(opts.fs ?? nodeFileSystem(opts.root));
+  const project = loadUnits(opts, logger, publishPatterns, repository, remotes);
   const index = logger.time('build graph', () => new ProjectIndex(project));
   logger.info(
     `graph built: ${index.nodes.size} symbols, ${index.edges.length} edges, ${index.callSites.length} reusable calls`,
@@ -913,7 +921,7 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
   const { matrix, combinations } = expandMatrices(project, config, logger);
 
   const unloaded: string[] = [];
-  const { run, scope } = prepareRules(opts, logger, { registry, index, config, matrix }, unloaded);
+  const { run, scope } = prepareRules(opts, logger, { registry, index, config, matrix, remotes }, unloaded);
   const { kept, suppressed, skippedInScope } = runPhases(run, opts, logger, scope, unloaded);
 
   const summary = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);

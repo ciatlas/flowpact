@@ -9,6 +9,7 @@ import {
   evaluateTemplate,
   type InputDecl,
   type Json,
+  type Loc,
   type LocatedRef,
   lookup,
   type ProjectIndex,
@@ -21,6 +22,7 @@ import {
   usageReadsCallerEvent,
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
+import { interfaceCalls, interfaceUses, isExternal } from '../remotes';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, didYouMeanNote, isProperty, listNames, namesKey, quote, useInCondition } from './util';
 
@@ -108,6 +110,13 @@ function emptyWhenOmitted(input: InputDecl): boolean {
   return !input.required && !input.hasDefault && input.type !== 'boolean' && input.type !== 'number';
 }
 
+/**
+ * Where a callee declares something, for a finding's related locations: none for a remote interface, whose
+ * declaration is in another repository (the finding names it).
+ */
+const declaredAt = (callee: UnitDecl, loc: Loc, message: string) =>
+  isExternal(callee) ? [] : [{ loc, message }];
+
 const missingRequiredInput = defineRule({
   code: 'FP101',
   name: 'missing-required-input',
@@ -136,8 +145,8 @@ const missingRequiredInput = defineRule({
     },
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) reportMissingCallInputs(ctx, call);
-    for (const use of ctx.index.actionUses) reportMissingActionInputs(ctx, use);
+    for (const call of interfaceCalls(ctx.index)) reportMissingCallInputs(ctx, call);
+    for (const use of interfaceUses(ctx.index)) reportMissingActionInputs(ctx, use);
   },
 });
 
@@ -153,7 +162,7 @@ function reportMissingCallInputs(ctx: RuleContext, call: CallSite): void {
       symbol: sym.input(call.callee.path, input.name),
       related: [
         ...chainRelated(chainTo(ctx.index, call.caller.path)),
-        { loc: input.loc, message: `${quote(input.name)} is declared required here` },
+        ...declaredAt(call.callee, input.loc, `${quote(input.name)} is declared required here`),
       ],
       fix: `Add \`${input.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`,
     });
@@ -168,7 +177,7 @@ function reportMissingActionInputs(ctx: RuleContext, use: ActionUse): void {
       message: `Step ${use.step.id ?? `#${use.step.index + 1}`} uses ${use.action.path} without required input ${quote(input.name)} — GitHub will run it with an empty value`,
       loc: use.step.uses?.loc ?? use.step.loc,
       symbol: sym.input(use.action.path, input.name),
-      related: [{ loc: input.loc, message: `${quote(input.name)} is declared required here` }],
+      related: declaredAt(use.action, input.loc, `${quote(input.name)} is declared required here`),
       fix: `Add \`${input.name}: <value>\` under the step's \`with:\`.`,
     });
   }
@@ -196,9 +205,10 @@ const unknownInput = defineRule({
     const check = (
       bindings: Record<string, Binding>,
       inputs: Record<string, InputDecl>,
-      target: string,
+      callee: UnitDecl,
       declLoc: Binding['loc'] | undefined,
     ) => {
+      const target = callee.path;
       const names = Object.keys(inputs);
       for (const b of Object.values(bindings)) {
         if (lookup(inputs, b.name)) continue;
@@ -207,19 +217,19 @@ const unknownInput = defineRule({
           message: `${target} has no input ${quote(b.name)}${didYouMeanNote(guess)}`,
           loc: b.loc,
           symbol: sym.input(target, b.name),
-          related: declLoc ? [{ loc: declLoc, message: `declared inputs: ${listNames(names)}` }] : [],
+          related: declLoc ? declaredAt(callee, declLoc, `declared inputs: ${listNames(names)}`) : [],
           fix: guess
             ? `Rename ${quote(b.name)} to ${quote(guess)}.`
             : `Declare ${quote(b.name)} in ${target}, or remove it from \`with:\`.`,
         });
       }
     };
-    for (const call of ctx.index.callSites) {
-      check(call.job.with, call.callee.call?.inputs ?? {}, call.callee.path, call.callee.call?.loc);
+    for (const call of interfaceCalls(ctx.index)) {
+      check(call.job.with, call.callee.call?.inputs ?? {}, call.callee, call.callee.call?.loc);
     }
-    for (const use of ctx.index.actionUses) {
+    for (const use of interfaceUses(ctx.index)) {
       const first = Object.values(use.action.inputs)[0];
-      check(use.step.with, use.action.inputs, use.action.path, first?.loc);
+      check(use.step.with, use.action.inputs, use.action, first?.loc);
     }
   },
 });
@@ -249,7 +259,7 @@ const inputTypeMismatch = defineRule({
     },
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       for (const b of Object.values(call.job.with)) checkLiteralType(ctx, call, b);
     }
   },
@@ -268,7 +278,7 @@ function checkLiteralType(ctx: RuleContext, call: CallSite, b: Binding): void {
     message: `Input ${quote(input.name)} of ${call.callee.path} is a ${expected}, but jobs.${call.job.id} passes a ${actual} (${JSON.stringify(v.value)})`,
     loc: b.valueLoc,
     symbol: sym.input(call.callee.path, input.name),
-    related: [{ loc: input.loc, message: `declared as type: ${expected}` }],
+    related: declaredAt(call.callee, input.loc, `declared as type: ${expected}`),
     fix: literalTypeFix(expected, b.name, v.value),
   });
 }
