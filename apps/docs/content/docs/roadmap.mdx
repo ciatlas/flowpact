@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: What is shipped and what comes next — quick fixes in the editor, then cross-repository resolution.
+description: What is shipped and what comes next — quick fixes in the editor, then version changes of remote workflows and actions graded against your calls.
 ---
 
 ## Shipped
@@ -16,12 +16,16 @@ description: What is shipped and what comes next — quick fixes in the editor, 
   unused and soon-expiring overrides are reported (`FP901`–`FP903`).
 - **[GitHub Action](/docs/action):** job summary, pull request annotations, SARIF and the regenerated contracts as an
   artifact.
-- **CLI:** `lint`, `check`, `generate`, `graph` (tree, Mermaid, DOT, JSON), `trace`, `explain`, `rules`; pretty, JSON,
-  Markdown and SARIF output; debug logging.
+- **CLI:** `lint`, `check`, `impact`, `generate`, `remotes update`, `graph` (tree, Mermaid, DOT, JSON), `trace`,
+  `explain`, `rules`, `lsp`; pretty, JSON, Markdown and SARIF output; debug logging.
 - **[Plugins](/docs/custom-rules):** organization-specific rules loaded from the config.
 - **[Impact mode](/docs/impact-mode):** for publishers of reusable workflows and actions — the release impact a pull
   request declares (Conventional Commits title, labels or release version) is checked against what its changes
   require, including the check names consumers' branch protection depends on (`FP810`–`FP814`).
+- **[Remote interfaces](/docs/remote-interfaces):** `flowpact remotes update` records the interfaces of the reusable
+  workflows and actions you call from other repositories in a committed lockfile, and calls into them are checked like
+  local ones (`FP101`–`FP103`, `FP201`, `FP202`, `FP205`, `FP301`); `FP611` and `FP612` report an unusable or outdated
+  lockfile. On GitHub Enterprise Server and GHE.com, with an opt-in look on github.com as GitHub Connect does.
 - **[Language server](/docs/editors)** (`flowpact lsp`): diagnostics as you type across files, hover traces, go to
   definition across workflow calls, and references.
 - **[VS Code extension](/docs/editors#vs-code)** on the Visual Studio Marketplace and Open VSX, with the language server
@@ -33,8 +37,9 @@ description: What is shipped and what comes next — quick fixes in the editor, 
 Add a missing input, remove an unused one, add the missing matrix key, regenerate contracts, or **add an override**
 with a reason prompt, from the editor.
 
-## Later: cross-repository resolution
+## Then: version changes, graded against your calls
 
-Reusable workflows called from other repositories (`owner/repo/.github/workflows/x.yml@ref`) are reported today as
-unverified (`FP603`). Next, flowpact will resolve them — from published contracts or by fetching the referenced
-workflow — so interfaces and breaking changes can be checked across repository boundaries.
+When a remote reusable workflow or action moves to another version (a Renovate or Dependabot pull request, or a moving
+tag such as `@v4` that now points elsewhere), flowpact will compare the two interfaces and say, for each of your calls,
+whether it breaks, still fits, or cannot be fully checked: on a schedule, and on the pull request that changes the
+version.
