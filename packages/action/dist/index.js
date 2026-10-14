@@ -19322,14 +19322,14 @@ var $ZodObject = /* @__PURE__ */ $constructor("$ZodObject", (inst, def) => {
   const desc = Object.getOwnPropertyDescriptor(def, "shape");
   const sh = desc?.get ? desc.get.raw : def.shape ?? {};
   if (sh) {
-    const get2 = () => {
+    const get3 = () => {
       const newSh = { ...sh };
       Object.defineProperty(def, "shape", { value: newSh });
-      get2.raw = newSh;
+      get3.raw = newSh;
       return newSh;
     };
-    get2.raw = sh;
-    Object.defineProperty(def, "shape", { get: get2 });
+    get3.raw = sh;
+    Object.defineProperty(def, "shape", { get: get3 });
   }
   const _normalized = cached(() => normalizeDef(def));
   defineLazyInternal(inst, "propValues", (zod) => {
@@ -22624,6 +22624,55 @@ function interfaceUses(index) {
   }
   return [...index.actionUses, ...remote];
 }
+function parseRemoteRef(raw, kind) {
+  const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
+  if (!m) return void 0;
+  return { raw: raw.trim(), kind, owner: m[1], repo: m[2], path: m[3].replace(/^\//, ""), ref: m[4] };
+}
+function remoteRefsOf(index) {
+  const out = /* @__PURE__ */ new Map();
+  const add = (raw, kind) => {
+    const ref = parseRemoteRef(raw, kind);
+    if (ref && !out.has(remoteKey(raw))) out.set(remoteKey(raw), ref);
+  };
+  for (const unit of index.units()) {
+    if (unit.kind === "workflow") {
+      for (const job of Object.values(unit.jobs))
+        if (job.uses?.kind === "remote-workflow") add(job.uses.raw, "workflow");
+    }
+    for (const { step: step2 } of stepsOf(unit))
+      if (step2.uses?.kind === "remote-action") add(step2.uses.raw, "action");
+  }
+  return [...out.values()];
+}
+var lockedInput = (i) => ({
+  ...i.type ? { type: i.type } : {},
+  required: i.required,
+  ...i.hasDefault && i.default !== void 0 ? { default: i.default } : {},
+  ...i.options ? { options: i.options } : {}
+});
+var lockedInputs = (decls) => Object.fromEntries(Object.values(decls).map((i) => [i.name, lockedInput(i)]));
+function lockEntryOf(unit, sha) {
+  if (unit.kind === "workflow") {
+    const call = unit.call;
+    return {
+      sha,
+      kind: "workflow",
+      inputs: lockedInputs(call?.inputs ?? {}),
+      secrets: Object.fromEntries(
+        Object.values(call?.secrets ?? {}).map((s) => [s.name, { required: s.required }])
+      ),
+      outputs: Object.values(call?.outputs ?? {}).map((o) => o.name)
+    };
+  }
+  return {
+    sha,
+    kind: "action",
+    ...unit.using ? { using: unit.using } : {},
+    inputs: lockedInputs(unit.inputs),
+    outputs: Object.values(unit.outputs).map((o) => o.name)
+  };
+}
 
 // ../lint/src/rules/types.ts
 var CATEGORIES = {
@@ -25172,6 +25221,43 @@ var remotesLockInvalid = defineRule({
     });
   }
 });
+function lockDrift(ctx) {
+  const { lock, fetched = [] } = ctx.remotes ?? {};
+  const locked = Object.keys(lock?.remotes ?? {}).filter((r) => !fetched.includes(r));
+  const lockedKeys = new Set(locked.map(remoteKey));
+  const used = remoteRefsOf(ctx.index).map((r) => r.raw);
+  const usedKeys = new Set(used.map(remoteKey));
+  return {
+    missing: used.filter((r) => !lockedKeys.has(remoteKey(r))),
+    unused: locked.filter((r) => !usedKeys.has(remoteKey(r)))
+  };
+}
+var remotesLockOutdated = defineRule({
+  code: "FP612",
+  name: "remotes-lock-outdated",
+  category: "structure",
+  defaultSeverity: "warning",
+  docs: {
+    summary: "The remote interfaces lockfile lacks a remote workflow or action the repository uses, or has one it no longer uses.",
+    why: "A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action\u2019s `remotes: fetch` fetches it for the run). It happens when a reference moves to another version, for example in a pull request from Renovate or Dependabot, until the lockfile is updated.",
+    fix: "Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs)."
+  },
+  check(ctx) {
+    const { file, error: error3 } = ctx.remotes ?? {};
+    if (!file || error3) return;
+    const { missing, unused } = lockDrift(ctx);
+    if (!missing.length && !unused.length) return;
+    const parts = [
+      ...missing.length ? [`lacks ${missing.join(", ")}`] : [],
+      ...unused.length ? [`no longer needs ${unused.join(", ")}`] : []
+    ];
+    ctx.report({
+      message: `${file} is out of date: it ${parts.join("; it ")}. Run \`flowpact remotes update\``,
+      loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
+      symbol: `${file}#outdated`
+    });
+  }
+});
 var needsWithoutData = defineRule({
   code: "FP604",
   name: "needs-without-data",
@@ -25470,6 +25556,7 @@ var structureRules = [
   nestingDepth,
   remoteUnverified,
   remotesLockInvalid,
+  remotesLockOutdated,
   needsWithoutData,
   largeInterface,
   missingLocalTarget,
@@ -25586,6 +25673,14 @@ function fingerprint(code, symbol, file, message) {
 function effectiveConfig(opts) {
   const configured = opts.config ?? defaultConfig();
   return opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
+}
+function withFetched(read, fetched) {
+  if (!fetched || !Object.keys(fetched).length) return read;
+  return {
+    ...read,
+    lock: { version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
+    fetched: Object.keys(fetched)
+  };
 }
 function publishPatternsOf(config2, opts) {
   return [
@@ -25928,7 +26023,7 @@ function analyze(opts) {
     repository: repository ?? "(unknown)",
     rules: Object.keys(config2.rules).length
   });
-  const remotes = readRemotesLock(opts.fs ?? nodeFileSystem(opts.root));
+  const remotes = withFetched(readRemotesLock(opts.fs ?? nodeFileSystem(opts.root)), opts.fetchedRemotes);
   const project = loadUnits(opts, logger, publishPatterns, repository, remotes);
   const index = logger.time("build graph", () => new ProjectIndex(project));
   logger.info(
@@ -26132,13 +26227,13 @@ function versionOf(fs3) {
 function releaseSettings(fs3) {
   const config2 = readJson(fs3, "release-please-config.json") ?? {};
   const pkg = config2.packages?.["."] ?? {};
-  const get2 = (key) => pkg[key] ?? config2[key];
-  const component = get2("component") ?? get2("package-name");
+  const get3 = (key) => pkg[key] ?? config2[key];
+  const component = get3("component") ?? get3("package-name");
   return {
-    bumpMinorPreMajor: get2("bump-minor-pre-major") === true,
-    bumpPatchForMinorPreMajor: get2("bump-patch-for-minor-pre-major") === true,
-    includeV: get2("include-v-in-tag") !== false,
-    component: get2("include-component-in-tag") === true && typeof component === "string" ? component : void 0
+    bumpMinorPreMajor: get3("bump-minor-pre-major") === true,
+    bumpPatchForMinorPreMajor: get3("bump-patch-for-minor-pre-major") === true,
+    includeV: get3("include-v-in-tag") !== false,
+    component: get3("include-component-in-tag") === true && typeof component === "string" ? component : void 0
   };
 }
 function baselineConfig(fs3, configPath, base, notes) {
@@ -26626,6 +26721,86 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
     loaded.push(...rules);
   }
   return loaded;
+}
+
+// ../lint/src/remotes-fetch.ts
+var FetchError = class extends Error {
+};
+async function get2(url2, accept, opts) {
+  const res = await (opts.fetch ?? fetch)(url2, {
+    headers: {
+      accept,
+      "user-agent": "flowpact",
+      "x-github-api-version": "2022-11-28",
+      ...opts.token ? { authorization: `Bearer ${opts.token}` } : {}
+    },
+    signal: AbortSignal.timeout(3e4)
+  });
+  if (res.status === 404) return void 0;
+  if (!res.ok) throw new FetchError(`${res.status} ${res.statusText || "error"} from the GitHub API`);
+  return res.text();
+}
+var repoUrl = (r, opts) => `${trimChar(opts.apiUrl ?? "https://api.github.com", "/")}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
+var contentsPath = (path) => path.split("/").map(encodeURIComponent).join("/");
+async function shaOf(r, opts) {
+  const sha = await get2(
+    `${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`,
+    "application/vnd.github.sha",
+    opts
+  );
+  if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
+    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`);
+  return sha.trim();
+}
+var fileAt2 = (r, path, sha, opts) => get2(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, "application/vnd.github.raw", opts);
+async function fetchRemoteEntry(r, opts = {}) {
+  const sha = await shaOf(r, opts);
+  const ctx = createParseContext(`${r.owner}/${r.repo}`);
+  if (r.kind === "workflow") {
+    const text2 = await fileAt2(r, r.path, sha, opts);
+    if (text2 === void 0) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`);
+    return lockEntryOf(parseWorkflowFile(r.raw, text2, ctx), sha);
+  }
+  for (const name of ["action.yml", "action.yaml"]) {
+    const file = r.path ? `${r.path}/${name}` : name;
+    const text2 = await fileAt2(r, file, sha, opts);
+    if (text2 !== void 0) return lockEntryOf(parseActionFile(r.raw, file, text2, ctx), sha);
+  }
+  throw new FetchError(`no action.yml in ${r.path || "the repository root"} at ${sha.slice(0, 7)}`);
+}
+async function eachLimited(items, limit, work) {
+  let next = 0;
+  const run2 = async () => {
+    while (next < items.length) await work(items[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run2));
+}
+async function tryFetch(r, opts, failed) {
+  try {
+    return await fetchRemoteEntry(r, opts);
+  } catch (e) {
+    if (!(e instanceof FetchError) && !(e instanceof TypeError) && e.name !== "TimeoutError")
+      throw e;
+    failed.push({ ref: r.raw, error: e.message });
+    return void 0;
+  }
+}
+async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
+  const project = loadProject({
+    root,
+    fs: fs3,
+    validateSchema: false,
+    ...opts.repository ? { repository: opts.repository } : {}
+  });
+  const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
+  const missing = remoteRefsOf(new ProjectIndex(project)).filter((r) => !locked.has(remoteKey(r.raw)));
+  const out = { remotes: {}, failed: [] };
+  await eachLimited(missing, opts.concurrency ?? 8, async (r) => {
+    const entry = await tryFetch(r, opts, out.failed);
+    if (entry) out.remotes[r.raw] = entry;
+  });
+  out.failed.sort((a, b) => a.ref < b.ref ? -1 : 1);
+  return out;
 }
 
 // ../lint/src/report.ts
@@ -27816,6 +27991,7 @@ var DEFAULTS2 = {
   impact: "off",
   "expected-impact": "",
   "base-ref": "",
+  remotes: "lockfile",
   token: "${{ github.token }}",
   debug: "false"
 };
@@ -27891,6 +28067,7 @@ function readInputs() {
     impact: oneOf("impact", ["off", "auto", "on"]),
     ...input("expected-impact") ? { expectedImpact: oneOf("expected-impact", ["none", "patch", "minor", "major"]) } : {},
     baseRef: input("base-ref"),
+    remotes: oneOf("remotes", ["lockfile", "fetch"]),
     debug: bool("debug")
   };
 }
@@ -28223,6 +28400,25 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
   }
   return extraPlugins;
 }
+async function remotesToFetch(inputs, root, logger) {
+  if (inputs.remotes !== "fetch") return void 0;
+  const event = process.env.GITHUB_EVENT_NAME ?? "";
+  if (UNTRUSTED_EVENTS.has(event)) {
+    warning(
+      `remotes: fetch does not run on ${event}; only the committed remote interfaces lockfile is used.`
+    );
+    return void 0;
+  }
+  const token = getInput("token");
+  const fs3 = nodeFileSystem(root);
+  const r = await fetchMissingRemotes(root, fs3, readRemotesLock(fs3).lock, {
+    ...token && !token.startsWith("${{") ? { token } : {},
+    ...process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}
+  });
+  for (const f of r.failed) warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  logger.debug("fetched remote interfaces", { refs: Object.keys(r.remotes) });
+  return r.remotes;
+}
 async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
   const { logger } = log;
   const impact = log.loggedGroup(
@@ -28235,9 +28431,11 @@ async function analyzeRoot(inputs, root, loaded, extraPlugins, log) {
     if (inputs.plugins) await loadPlugins(root, loaded.config, registry2, logger);
     if (extraPlugins.length)
       await loadPlugins(root, { ...loaded.config, plugins: extraPlugins }, registry2, logger);
+    const fetchedRemotes = await remotesToFetch(inputs, root, logger);
     return analyze({
       root,
       config: loaded.config,
+      ...fetchedRemotes ? { fetchedRemotes } : {},
       ...inputs.paths.length ? { paths: inputs.paths } : {},
       ...loaded.file ? { configFile: loaded.file } : {},
       ...loaded.text !== void 0 ? { configText: loaded.text } : {},
