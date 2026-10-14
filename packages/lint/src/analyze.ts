@@ -157,6 +157,8 @@ export interface AnalysisResult {
   contracts?: ContractPlan;
   /** The config file, for code frames of FP9xx findings. */
   configSource?: SourceFile;
+  /** The remote interfaces lockfile as read, when there is one (or entries were fetched for this run). */
+  remotes?: RemotesLockRead;
   /** Impact mode's changes and verdict, when it ran. */
   impact?: ImpactResult;
   /**
@@ -837,6 +839,7 @@ function resultOf(
     ...(run.contracts ? { contracts: run.contracts } : {}),
     ...(r.unloaded.length ? { unloadedRules: r.unloaded } : {}),
     ...impactFieldsOf(run, r.removedPaths),
+    ...(run.remotes.file || run.remotes.lock ? { remotes: run.remotes } : {}),
     ...(opts.configFile && opts.configText !== undefined
       ? { configSource: new SourceFile(opts.configFile, opts.configText) }
       : {}),

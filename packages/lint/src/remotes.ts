@@ -109,6 +109,23 @@ function interfaceYaml(e: RemoteEntry): string {
 export const remoteInterfaces = (lock: RemotesLock | undefined): RemoteInterface[] =>
   Object.entries(lock?.remotes ?? {}).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
 
+/**
+ * What the lockfile says about a reference, matched as GitHub matches it (owner and repository in any case): its entry,
+ * or why `flowpact remotes update` could not read it. Nothing when the lockfile does not list it.
+ */
+export function lockedRemote(
+  lock: RemotesLock | undefined,
+  ref: string,
+): { entry?: RemoteEntry; unreadable?: string } {
+  const key = remoteKey(ref);
+  const find = <T>(m: Record<string, T> | undefined) =>
+    Object.entries(m ?? {}).find(([r]) => remoteKey(r) === key)?.[1];
+  const entry = find(lock?.remotes);
+  if (entry) return { entry };
+  const unreadable = find(lock?.unreadable);
+  return unreadable === undefined ? {} : { unreadable };
+}
+
 /** Whether a unit is a remote interface, which has no file of this repository to point at. */
 export const isExternal = (unit: UnitDecl) => unit.external === true;
 
