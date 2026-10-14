@@ -406,3 +406,44 @@ describe('GitHub Enterprise Server and github.com through GitHub Connect', () =>
     expect(hostOf('https://api.acme.ghe.com')).toBe('acme.ghe.com');
   });
 });
+
+describe('secrets a remote workflow reads without declaring them', () => {
+  const SHIP = yaml`
+    on:
+      workflow_call:
+        inputs:
+          publish: { type: boolean }
+        secrets:
+          declared: { required: false }
+    jobs:
+      a:
+        runs-on: x
+        steps:
+          - run: echo "\${{ secrets.NPM_TOKEN }} \${{ secrets.npm_token }} \${{ secrets.declared }} \${{ secrets.GITHUB_TOKEN }}"
+          - if: inputs.publish
+            run: echo "\${{ secrets.PUBLISH_KEY }}"
+          - if: false
+            run: echo "\${{ secrets.NEVER }}"
+      b:
+        if: github.event_name == 'push'
+        runs-on: x
+        steps:
+          - run: echo "\${{ secrets.SLACK_WEBHOOK }}"
+  `;
+
+  it('records the ones no caller’s inputs can switch off', async () => {
+    const api = fakeApi(
+      { 'octo/ship@v1': SHA('a') },
+      { [`octo/ship/.github/workflows/ship.yml@${SHA('a')}`]: SHIP },
+    );
+    const index = lint({
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  s:\n    uses: octo/ship/.github/workflows/ship.yml@v1\n',
+    }).index;
+    const u = await updateRemotesLock(index, undefined, { fetch: api.fetch });
+    // Not: declared, GITHUB_TOKEN, a read under an if: that reads inputs, nor one under if: false.
+    expect(u.lock.remotes['octo/ship/.github/workflows/ship.yml@v1']?.undeclaredSecrets).toEqual([
+      'NPM_TOKEN',
+      'SLACK_WEBHOOK',
+    ]);
+  });
+});

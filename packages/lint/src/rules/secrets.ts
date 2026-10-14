@@ -193,7 +193,7 @@ const undeclaredSecretRef = defineRule({
   defaultSeverity: 'error',
   docs: {
     summary:
-      'A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`.',
+      'A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`. For a remote reusable workflow, from the secrets the remote interfaces lockfile records it reads.',
     why:
       'Inside a called workflow only declared (or inherited) secrets exist. Reading anything else yields an empty string, ' +
       'so authentication steps fail late or, worse, fall back to anonymous access.',
@@ -218,8 +218,52 @@ const undeclaredSecretRef = defineRule({
         if (reached.length > 0) reportUndeclaredSecret(ctx, wf, ref, name, reached);
       }
     }
+    checkRemoteCalls(ctx);
   },
 });
+
+/** The secrets a remote reusable workflow reads without declaring them, empty in a call without `secrets: inherit`. */
+function emptyInCall(ctx: RuleContext, call: CallSite): string[] {
+  if (!isExternal(call.callee) || call.job.secretsInherit) return [];
+  return ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+}
+
+/**
+ * FP205 for a call of a remote reusable workflow without `secrets: inherit`: the secrets its lockfile entry says it
+ * reads without declaring are empty in the call (GitHub refuses them by name, see FP202).
+ */
+function checkRemoteCalls(ctx: RuleContext): void {
+  for (const call of interfaceCalls(ctx.index)) {
+    for (const name of emptyInCall(ctx, call)) {
+      ctx.report({
+        message: `jobs.${call.job.id} calls ${call.callee.path}, which reads secrets.${name} without declaring it — it is empty without \`secrets: inherit\``,
+        loc: call.job.uses?.loc ?? call.job.loc,
+        symbol: sym.secret(call.callee.path, name),
+        related: chainRelated(chainTo(ctx.index, call.caller.path)),
+      });
+    }
+  }
+}
+
+/**
+ * The secrets a reusable workflow reads by name without declaring them, at reads no caller's inputs can switch off: no
+ * `if:` on the way reads `inputs` or is always false. They are empty unless every caller uses `secrets: inherit`. For
+ * the remote interfaces lockfile, which keeps no body to judge a caller's inputs against (see FP205).
+ */
+export function undeclaredSecretsRead(wf: WorkflowDecl): string[] {
+  const out = new Map<string, string>();
+  for (const { site, ref } of refsOf(wf)) {
+    const name = undeclaredSecretRead(wf.call?.secrets ?? {}, ref);
+    if (!name || out.has(name.toLowerCase())) continue;
+    if (guardsOf(wf, site).some((g) => readsInputs(g) || isFalse(g, () => UNKNOWN))) continue;
+    out.set(name.toLowerCase(), name);
+  }
+  return [...out.values()].sort();
+}
+
+/** Whether a condition reads `inputs`, which a caller sets. */
+const readsInputs = (g: Guard) =>
+  g !== false && g.segments.some((s) => s.refs.some((r) => r.context === 'inputs'));
 
 /** The secret a reference reads, when it is neither one of GitHub's own nor declared in `declared`. */
 function undeclaredSecretRead(declared: Record<string, SecretDecl>, ref: LocatedRef): string | undefined {

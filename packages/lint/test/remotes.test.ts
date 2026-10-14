@@ -189,3 +189,25 @@ describe('fetched remote interfaces and an outdated lockfile', () => {
     expect(messages(exact, 'FP612')).toEqual([]);
   });
 });
+
+describe('FP205 for remote reusable workflows', () => {
+  const lockWith = `version: 1\nremotes:\n  octo/ship/.github/workflows/ship.yml@v1:\n    sha: ${SHA}\n    kind: workflow\n    undeclaredSecrets: [NPM_TOKEN, SLACK_WEBHOOK]\n`;
+  const caller = (secrets: string) =>
+    `on: push\njobs:\n  s:\n    uses: octo/ship/.github/workflows/ship.yml@v1\n${secrets}`;
+
+  it('reports each secret a call without secrets: inherit leaves empty', () => {
+    expect(messages({ [`${WF}/ci.yml`]: caller(''), [LOCK]: lockWith }, 'FP205')).toEqual([
+      'jobs.s calls octo/ship/.github/workflows/ship.yml@v1, which reads secrets.NPM_TOKEN without declaring it — it is empty without `secrets: inherit`',
+      'jobs.s calls octo/ship/.github/workflows/ship.yml@v1, which reads secrets.SLACK_WEBHOOK without declaring it — it is empty without `secrets: inherit`',
+    ]);
+    const f = byCode(lint({ [`${WF}/ci.yml`]: caller(''), [LOCK]: lockWith }), 'FP205')[0]!;
+    expect(f.loc.file).toBe(`${WF}/ci.yml`);
+  });
+
+  it('stays quiet with secrets: inherit, and without the lockfile', () => {
+    expect(
+      messages({ [`${WF}/ci.yml`]: caller('    secrets: inherit\n'), [LOCK]: lockWith }, 'FP205'),
+    ).toEqual([]);
+    expect(messages({ [`${WF}/ci.yml`]: caller('') }, 'FP205')).toEqual([]);
+  });
+});

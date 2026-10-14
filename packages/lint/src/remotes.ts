@@ -46,6 +46,11 @@ const entrySchema = z.strictObject({
   using: z.optional(z.string()),
   /** Where it was read when not from the API the run used: `github.com`, through GitHub Connect. */
   host: z.optional(z.string()),
+  /**
+   * A workflow's secrets it reads without declaring them, which only `secrets: inherit` gives it (see FP205); only
+   * reads no caller's inputs can switch off.
+   */
+  undeclaredSecrets: z.optional(z.array(z.string())),
 });
 
 const remotesLockSchema = z.strictObject({

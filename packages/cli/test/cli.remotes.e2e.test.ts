@@ -18,6 +18,8 @@ const files: Record<string, string> = {
     'name: s\ndescription: d\ninputs:\n  version: { description: v, required: true }\nruns:\n  using: composite\n  steps: []\n',
 };
 const auth: (string | undefined)[] = [];
+/** A HOME of its own: the CLI asks `gh` for a token, which writes its state under HOME (or the working directory). */
+const home = mkdtempSync(join(tmpdir(), 'flowpact-remotes-home-'));
 let server: Server;
 let api = '';
 
@@ -46,7 +48,7 @@ const run = (root: string, args: string[], env: Record<string, string> = {}) =>
   execa('node', [BIN, 'remotes', ...args, '--root', root], {
     reject: false,
     extendEnv: false,
-    env: { PATH: process.env.PATH ?? '', NO_COLOR: '1', GITHUB_API_URL: api, ...env },
+    env: { PATH: process.env.PATH ?? '', HOME: home, NO_COLOR: '1', GITHUB_API_URL: api, ...env },
   });
 
 describe('flowpact remotes update', () => {
@@ -84,7 +86,7 @@ describe('flowpact remotes update', () => {
 
   it('lint --fetch-remotes checks what the lockfile lacks for this run, writes nothing, and warns what it could not fetch', async () => {
     const root = repo();
-    const env = { NO_COLOR: '1', GITHUB_API_URL: api, PATH: process.env.PATH ?? '' };
+    const env = { NO_COLOR: '1', GITHUB_API_URL: api, PATH: process.env.PATH ?? '', HOME: home };
     const plain = await execa('node', [BIN, 'lint', '--root', root, '--format', 'json'], {
       reject: false,
       extendEnv: false,

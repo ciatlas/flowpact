@@ -22,6 +22,7 @@ import {
   remoteRefsOf,
   targetedUnits,
 } from './remotes';
+import { undeclaredSecretsRead } from './rules/secrets';
 
 export interface FetchRemotesOptions {
   /** Sent only to `apiUrl`, never logged. Public repositories can be read without one, at a low rate limit. */
@@ -173,7 +174,9 @@ export async function fetchRemoteEntry(r: RemoteRef, opts: FetchRemotesOptions =
   if (r.kind === 'workflow') {
     const text = await fileAt(r, r.path, sha, opts);
     if (text === undefined) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`, true);
-    return lockEntryOf(parseWorkflowFile(r.raw, text, ctx), sha);
+    const wf = parseWorkflowFile(r.raw, text, ctx);
+    const undeclared = undeclaredSecretsRead(wf);
+    return { ...lockEntryOf(wf, sha), ...(undeclared.length ? { undeclaredSecrets: undeclared } : {}) };
   }
   for (const name of ['action.yml', 'action.yaml']) {
     const file = r.path ? `${r.path}/${name}` : name;
