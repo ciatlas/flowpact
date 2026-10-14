@@ -50,6 +50,9 @@ published one calls them — their check names appear under the caller's.
 | A published unit no longer parses | major |
 | A job requests a new or higher `permissions:` scope — its own, the workflow-level ones it inherits, or a called workflow's job's (callers that grant less fail when the run starts) | major |
 | Action `runs.using` changed (for example `node20` → `node24`) | major |
+| A job — its own, or a called workflow's — needs a runner label or runner group it did not need before (`ubuntu-latest` → `[self-hosted, gpu]`, a new job on such runners): it runs on the caller's runners, and callers without one never start it | major |
+| A job's runners are chosen at run time (`runs-on: ${{ inputs.runner }}`) where they were not, or by another expression | major, uncertain ([`FP814`](/docs/rules/fp814)) |
+| Another GitHub-hosted image (`ubuntu-22.04` → `ubuntu-24.04`), or fewer runner labels | patch |
 | A new third-party action or workflow used inside a published unit (organization allow-lists and SHA-pinning policies apply to consumers) | minor |
 | Narrower permissions, descriptions, other changes to internal steps, `workflow_dispatch` inputs | none |
 
