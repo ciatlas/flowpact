@@ -212,10 +212,7 @@ and `ignore` leave units out of grading, so a pull request could try to leave ou
   `packages/cli/test/cli.impact.e2e.test.ts` (each bypass found in review, end to end); `packages/action/test/main.test.ts`
   (`impact: auto`). Before release, a matrix of 3,024 runs over seven kinds of base config and every event gave no run
   that passes where the stricter reading fails.
-- **Residual risk: low.** A base config named through a link outside the repository, where the pull request also turns
-  a tracked directory into a link, is read as the pull request has it
-  ([#139](https://github.com/ciatlas/flowpact/issues/139)). A base config that a workflow step generates counts on both
-  sides, so a pull request that edits that step controls it; on `pull_request` the workflow runs from the pull
+- **Residual risk: low.** A base config that a workflow step generates counts on both sides, so a pull request that edits that step controls it; on `pull_request` the workflow runs from the pull
   request's head, so the pull request controls the run anyway. Requiring the check, and reviewing changes to the
   workflow that runs it, is up to the repository.
 
