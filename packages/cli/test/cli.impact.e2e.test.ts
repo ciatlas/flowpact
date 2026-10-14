@@ -959,6 +959,29 @@ describe('ignore and impact mode', () => {
     expect(r.stderr).not.toContain('ignore leaves out');
   });
 
+  it('notes an ignore edit that leaves out the file a unit moves to once merged', async () => {
+    // The pull request moves b/action.yml to b/action.yaml, breaks it and ignores the new file.
+    const publish = 'impact:\n  publish: ["*/action.yml", "*/action.yaml"]\n';
+    const root = repo(
+      { [CONFIG]: publish, 'a/action.yml': action('a', true), 'b/action.yml': action('b', true) },
+      { [CONFIG]: `ignore: ["**/*.yaml"]\n${publish}` },
+    );
+    git(root, 'mv', 'b/action.yml', 'b/action.yaml');
+    write(root, { 'b/action.yaml': action('b', false) });
+    git(root, 'commit', '-q', '-am', 'move b');
+    const r = await flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x', '--format', 'json']);
+    expect(r.exitCode).toBe(1);
+    expect(
+      JSON.parse(r.stdout).findings.map(
+        (f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`,
+      ),
+    ).toEqual(['FP810@b/action.yaml']);
+    // Before: no note, though once merged b has only b/action.yaml, which the pull request's ignore matches.
+    expect(r.stderr).toContain(
+      'impact: this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged',
+    );
+  });
+
   describe('a base config reached through a symbolic link', () => {
     const BASE = '.github/base.yml';
     const IGNORES_B = 'ignore: ["b/**"]\n';

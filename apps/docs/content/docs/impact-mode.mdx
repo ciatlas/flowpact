@@ -100,8 +100,9 @@ graded.
   change through: one that adds a published unit to `ignore` is still graded for it until the edit is merged (the run
   notes `impact: this pull request changes what ignore leaves out of impact mode (…); that applies after it is
   merged`), and one that takes a unit out of `ignore` is graded for it at once. The note names a unit only when the
-  pull request's `ignore` matches every file of it: after a move from `action.yml` to `action.yaml`, adding the old
-  file leaves nothing out. Every other finding follows the pull request's own `ignore`.
+  pull request's `ignore` matches every file it has once merged: after a move from `action.yml` to `action.yaml`,
+  adding the old file leaves nothing out, and adding the new one leaves the unit out. Every other finding follows the
+  pull request's own `ignore`.
 - When `ignore` leaves out every published unit (within the paths), nothing is graded. `impact: auto` then skips the
   run, as in a repository that publishes nothing: `impact: the baseline's and the pull request's ignore leave out
   every published workflow and action (…); see ignore`, or with paths `impact: skipped (every published workflow or

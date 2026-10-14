@@ -693,8 +693,10 @@ function unitsLookedAt(base: ProjectIndex, head: ProjectIndex, { within, ignore 
 
 /**
  * The published units (within the paths) that the pull request's own `ignore` leaves out once it is merged and the
- * baseline's does not: graded until then. Each is a unit whose every file (in the baseline and the working tree,
- * within the paths) the pull request's matches, so a move that `ignore` does not follow leaves no unit out.
+ * baseline's does not: graded until then. Each is a unit whose every file once merged (the working tree's, or the
+ * baseline's for a unit the pull request removes, within the paths) the pull request's matches, and one of whose files
+ * on either side the baseline's does not, so a move that `ignore` does not follow leaves no unit out, and an `ignore`
+ * that follows it does.
  */
 function ignoreAddedOf(
   base: ProjectIndex,
@@ -704,13 +706,23 @@ function ignoreAddedOf(
 ): string[] {
   if (!ignore) return [];
   const covered = coveredBy(within);
-  const files = new Map<string, string[]>();
-  for (const u of [...base.units(), ...head.units()])
-    if (isPublished(u, policy) && covered(u.file)) files.set(u.path, [...(files.get(u.path) ?? []), u.file]);
+  const files = new Map<string, { base: string[]; head: string[] }>();
+  const add = (side: 'base' | 'head') => (u: UnitDecl) => {
+    if (!isPublished(u, policy) || !covered(u.file)) return;
+    const of = files.get(u.path) ?? { base: [], head: [] };
+    of[side].push(u.file);
+    files.set(u.path, of);
+  };
+  base.units().forEach(add('base'));
+  head.units().forEach(add('head'));
   const merged = ignore.afterMerge ?? ignore.head;
   const leavesOut = (patterns: readonly string[], of: string[]) => of.every((f) => matchesAny(patterns, f));
   return [...files]
-    .filter(([, of]) => leavesOut(merged, of) && !leavesOut(ignore.baseline, of))
+    .filter(
+      ([, of]) =>
+        leavesOut(merged, of.head.length ? of.head : of.base) &&
+        !leavesOut(ignore.baseline, [...of.base, ...of.head]),
+    )
     .map(([path]) => path)
     .sort();
 }

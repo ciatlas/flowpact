@@ -712,7 +712,7 @@ describe('ignore leaves units out of impact mode', () => {
     expect(r.impact?.narrowed?.ignored).toEqual([]);
   });
 
-  it('notes an ignore edit only for a unit it leaves out once merged, every file of it', () => {
+  it('notes an ignore edit only for a unit it leaves out once merged, every file it has then', () => {
     // The pull request adds the old file to ignore, which matches no file of b once merged.
     const old = moved([], ['b/action.yml']);
     expect(located(old)).toEqual(['FP810@b/action.yaml']);
@@ -721,6 +721,11 @@ describe('ignore leaves units out of impact mode', () => {
     // Adding the new file leaves b out once merged; so does adding it where the baseline ignores the old one.
     expect(moved([], ['b/action.yml', 'b/action.yaml']).impactNotes).toEqual([ADDED_B]);
     expect(moved(['b/action.yml'], ['b/action.yml', 'b/action.yaml']).impactNotes).toEqual([ADDED_B]);
+    // Adding only the new file does too, as the old one is gone once merged. Before: no note, as 0.15.0 had.
+    const added = moved([], ['b/action.yaml']);
+    expect(located(added)).toEqual(['FP810@b/action.yaml']);
+    expect(added.impactNotes).toEqual([ADDED_B]);
+    expect(moved([], ['**/*.yaml']).impactNotes).toEqual([ADDED_B]);
   });
 
   it("goes by the pull request's commits where their ignore differs from the working tree's", () => {
