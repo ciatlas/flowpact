@@ -1,6 +1,6 @@
 {
   "name": "flowpact",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "description": "Data-flow linter for GitHub Actions: finds inputs, secrets and matrix values that arrive empty across reusable workflows and local actions.",
   "keywords": [
     "github-actions",

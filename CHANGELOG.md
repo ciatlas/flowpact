@@ -4,6 +4,14 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.20.0](https://github.com/ciatlas/flowpact/compare/v0.19.1...v0.20.0) (2026-10-14)
+
+
+### Features
+
+* **cli:** look on github.com for what GitHub Enterprise Server lacks, as GitHub Connect does ([#167](https://github.com/ciatlas/flowpact/issues/167)) ([a36a5ba](https://github.com/ciatlas/flowpact/commit/a36a5bac2dde21cdc4cafe3c1e43c5658d6189dd))
+* **cli:** remotes update takes paths, shows progress and the token, and says why a fetch failed ([#165](https://github.com/ciatlas/flowpact/issues/165)) ([975d647](https://github.com/ciatlas/flowpact/commit/975d647856f02600226efb97d92cf8976cc0549b))
+
 ## [0.19.1](https://github.com/ciatlas/flowpact/compare/v0.19.0...v0.19.1) (2026-10-14)
 
 
