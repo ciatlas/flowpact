@@ -10,6 +10,8 @@ export interface ExtensionSettings {
   contracts: Settings['contracts'];
   overlappingRules: 'auto' | 'show' | 'hide';
   hiddenRules: string[];
+  /** flowpact's cache directory, as `--cache-dir` takes it: absolute, or under `~`; empty for the default. */
+  cacheDir: string;
 }
 
 export interface Environment {
@@ -17,6 +19,8 @@ export interface Environment {
   trusted: boolean;
   /** The flowpact output channel's log level, as VS Code's `LogLevel` (0 off … 5 error). */
   logLevel: number;
+  /** The user's home directory, for a `cacheDir` under `~`. */
+  home: string;
 }
 
 const LOG_LEVELS: Settings['logLevel'][] = ['silent', 'trace', 'debug', 'info', 'warn', 'error'];
@@ -30,8 +34,14 @@ export function serverSettings(s: ExtensionSettings, env: Environment): Settings
     contracts: s.contracts,
     hiddenRules: [...new Set(hidden)],
     logLevel: LOG_LEVELS[env.logLevel] ?? 'info',
+    // Sent even when empty, so clearing the setting goes back to the default.
+    cacheDir: expandHome(s.cacheDir.trim(), env.home),
   };
 }
+
+/** `~` or `~/…` (`~\…`) under the home directory; any other path as written. */
+const expandHome = (path: string, home: string) =>
+  path === '~' ? home : /^~[\\/]/.test(path) ? `${home}${path.slice(1)}` : path;
 
 /**
  * Whether to drop FP502–FP505 from files opened in the editor. GitHub's extension reports the same problems, but only
@@ -53,4 +63,13 @@ export function withoutOverlap<D extends { code?: string | number | { value: str
   diagnostics: readonly D[],
 ): D[] {
   return diagnostics.filter((d) => !OVERLAPPING_RULES.has(codeOf(d)));
+}
+
+/**
+ * Whether a file is inside a directory: the remote sources cache the server opens with Go to Definition, whose files
+ * open read-only (`path.relative` compares Windows paths in any case, as VS Code writes drive letters in lower case).
+ */
+export function isInside(dir: string, path: string, rel: (from: string, to: string) => string): boolean {
+  const r = rel(dir, path);
+  return r !== '' && !r.startsWith('..') && !/^([a-z]:|[\\/])/i.test(r);
 }

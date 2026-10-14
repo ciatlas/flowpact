@@ -412,6 +412,114 @@ describe('navigation', () => {
     expect(refs.map((l) => l.range.start.line)).toEqual([4, 7]);
   });
 
+  it('goes to the cached source of a remote call, and leaves the cached file unanalyzed', async () => {
+    const R = '.github/workflows/remote.yml';
+    const SHA = 'a'.repeat(40);
+    const text = [
+      'on: push',
+      'jobs:',
+      '  a:',
+      '    uses: octo/ship/.github/workflows/deploy.yml@v1',
+      '    with: { env: prod }',
+      '',
+    ].join('\n');
+    const lock = [
+      'version: 1',
+      'remotes:',
+      '  octo/ship/.github/workflows/deploy.yml@v1:',
+      `    sha: ${SHA}`,
+      '    kind: workflow',
+      '    inputs: { env: { type: string, required: true } }',
+      '',
+    ].join('\n');
+    const source = [
+      'on:',
+      '  workflow_call:',
+      '    inputs:',
+      '      env: { type: string, required: true }',
+      'jobs:',
+      '  d:',
+      '    runs-on: x',
+      '    steps:',
+      '      - uses: elsewhere/unlocked@v1',
+      '',
+    ].join('\n');
+    const dir = repo({ [R]: text, '.github/flowpact/remotes.lock.yaml': lock });
+    const cache = repo({});
+    const cached = join(cache, 'remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
+    write(cache, { [join('remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml')]: source });
+    const before = process.env.FLOWPACT_CACHE_DIR;
+    process.env.FLOWPACT_CACHE_DIR = cache;
+    let client: Client;
+    try {
+      client = await start(dir);
+    } finally {
+      if (before === undefined) delete process.env.FLOWPACT_CACHE_DIR;
+      else process.env.FLOWPACT_CACHE_DIR = before;
+    }
+    await client.open(dir, R, text);
+    expect(await client.conn.sendRequest('flowpact/sourcesDir')).toBe(join(cache, 'remotes'));
+    const definition = async (needle: string) =>
+      (await client.conn.sendRequest('textDocument/definition', {
+        textDocument: { uri: uri(dir, R) },
+        position: position(text, needle),
+      })) as { targetUri: string; targetRange: { start: { line: number } } }[];
+    expect((await definition('octo/ship')).map((l) => [l.targetUri, l.targetRange.start.line])).toEqual([
+      [URI.file(cached).toString(), 1],
+    ]);
+    expect((await definition('env: prod')).map((l) => [l.targetUri, l.targetRange.start.line])).toEqual([
+      [URI.file(cached).toString(), 3],
+    ]);
+    // Opening the cached file analyzes nothing there: it would report FP603 for its own remote call otherwise.
+    await client.conn.sendNotification(DidOpenTextDocumentNotification.type, {
+      textDocument: { uri: URI.file(cached).toString(), languageId: 'yaml', version: 1, text: source },
+    });
+    await client.settled();
+    expect(client.diagnostics.get(URI.file(cached).toString())).toBeUndefined();
+    expect(client.logs.some((l) => l.includes(join(cache, 'remotes')))).toBe(false);
+  });
+
+  it('reads the sources cache the cacheDir setting names, and follows it when it changes', async () => {
+    const SHA = 'b'.repeat(40);
+    const R = '.github/workflows/remote.yml';
+    const text = 'on: push\njobs:\n  a:\n    uses: octo/ship/.github/workflows/deploy.yml@v1\n';
+    const lock = `version: 1\nremotes:\n  octo/ship/.github/workflows/deploy.yml@v1:\n    sha: ${SHA}\n    kind: workflow\n`;
+    const dir = repo({ [R]: text, '.github/flowpact/remotes.lock.yaml': lock });
+    const first = repo({});
+    const second = repo({});
+    const rel = join('remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
+    write(first, { [rel]: 'on:\n  workflow_call: {}\njobs: {}\n' });
+    write(second, { [rel]: '# second\non:\n  workflow_call: {}\njobs: {}\n' });
+    const client = await start(dir, { cacheDir: first });
+    await client.open(dir, R, text);
+    const target = async () =>
+      (
+        (await client.conn.sendRequest('textDocument/definition', {
+          textDocument: { uri: uri(dir, R) },
+          position: position(text, 'octo/ship'),
+        })) as { targetUri: string }[]
+      ).map((l) => l.targetUri);
+    expect(await client.conn.sendRequest('flowpact/sourcesDir')).toBe(join(first, 'remotes'));
+    expect(await target()).toEqual([URI.file(join(first, rel)).toString()]);
+    await client.conn.sendNotification(DidChangeConfigurationNotification.type, {
+      settings: { flowpact: { cacheDir: second } },
+    });
+    expect(await client.conn.sendRequest('flowpact/sourcesDir')).toBe(join(second, 'remotes'));
+    expect(await target()).toEqual([URI.file(join(second, rel)).toString()]);
+  });
+
+  it('does not analyze a workspace folder inside the sources cache', async () => {
+    const cache = repo({});
+    const folder = join(cache, 'remotes', 'octo', 'ship', 'c'.repeat(40));
+    write(folder, {
+      '.github/workflows/deploy.yml': 'on: push\njobs:\n  a:\n    uses: elsewhere/unlocked@v1\n',
+    });
+    const client = await start(folder, { cacheDir: cache });
+    await client.settled();
+    expect(client.logs.some((l) => l.includes(`analyzing ${folder}`))).toBe(false);
+    expect(client.diagnostics.size).toBe(0);
+  });
+
   it('answers nothing where no symbol is written', async () => {
     const { dir, client } = await ready();
     const at = { textDocument: { uri: uri(dir, CALLEE) }, position: position(REPO[CALLEE]!, 'runs-on') };
@@ -423,6 +531,14 @@ describe('navigation', () => {
 });
 
 describe('readSettings', () => {
+  it('takes an absolute cacheDir, keeps it when missing, and clears it when empty or relative', () => {
+    const set = readSettings({ cacheDir: '/srv/cache' });
+    expect(set.cacheDir).toBe('/srv/cache');
+    expect(readSettings({}, set).cacheDir).toBe('/srv/cache');
+    expect(readSettings({ cacheDir: '' }, set).cacheDir).toBeUndefined();
+    expect(readSettings({ cacheDir: 'relative' }, set).cacheDir).toBeUndefined();
+  });
+
   it('keeps the previous value for anything missing or invalid', () => {
     const base = readSettings({ plugins: true, contracts: 'on', hiddenRules: ['FP503'], logLevel: 'debug' });
     expect(readSettings({ contracts: 'sometimes', hiddenRules: [1], logLevel: 'loud' }, base)).toEqual(base);

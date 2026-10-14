@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import type { LogLevel } from '@ciatlas/core';
 
 /** What the client configures, through `initializationOptions` and `workspace/didChangeConfiguration`. */
@@ -12,6 +13,11 @@ export interface Settings {
   /** Rule codes not shown, e.g. those another extension already reports. */
   hiddenRules: string[];
   logLevel: LogLevel;
+  /**
+   * flowpact's cache directory (an absolute path), whose `remotes` directory holds the sources Go to Definition opens, as
+   * `flowpact remotes update --cache-dir` keeps them; by default `FLOWPACT_CACHE_DIR`, else the per-user cache.
+   */
+  cacheDir?: string | undefined;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,5 +41,12 @@ export function readSettings(raw: unknown, base: Settings = DEFAULT_SETTINGS): S
         ? (r.hiddenRules as string[])
         : base.hiddenRules,
     logLevel: LOG_LEVELS.includes(r.logLevel as LogLevel) ? (r.logLevel as LogLevel) : base.logLevel,
+    ...cacheDirOf(r.cacheDir, base.cacheDir),
   };
+}
+
+/** The `cacheDir` setting: an absolute path; an empty (or relative) one clears it, a missing one keeps the old one. */
+function cacheDirOf(raw: unknown, base: string | undefined): Pick<Settings, 'cacheDir'> {
+  if (typeof raw !== 'string') return base ? { cacheDir: base } : {};
+  return isAbsolute(raw) ? { cacheDir: raw } : {};
 }
