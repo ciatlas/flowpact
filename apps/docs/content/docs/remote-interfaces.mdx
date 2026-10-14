@@ -84,7 +84,7 @@ flowpact remotes update --github-com          # GITHUB_COM_TOKEN for github.com,
 ```
 
 ```yaml
-- uses: ciatlas/flowpact@v0.19
+- uses: ciatlas/flowpact@v0.20
   with:
     remotes: fetch
     remotes-github-com: true
@@ -101,7 +101,7 @@ The [action](/docs/action) and the CLI read the committed lockfile and nothing e
 lockfile lacks, opt in to fetching them for the run: nothing is written back, and the lockfile's own entries stand.
 
 ```yaml title=".github/workflows/flowpact.yml"
-- uses: ciatlas/flowpact@v0.19
+- uses: ciatlas/flowpact@v0.20
   with:
     remotes: fetch            # token defaults to github.token
 ```
@@ -133,7 +133,7 @@ says the lockfile is out of date. Three ways to keep it current:
   ```json title="renovate.json"
   {
     "postUpgradeTasks": {
-      "commands": ["npx --yes flowpact@0.19 remotes update"],
+      "commands": ["npx --yes flowpact@0.20 remotes update"],
       "fileFilters": [".github/flowpact/remotes.lock.yaml"],
       "executionMode": "branch"
     }
@@ -166,7 +166,7 @@ says the lockfile is out of date. Three ways to keep it current:
             ref: ${{ github.head_ref }}
             token: ${{ steps.app.outputs.token }}
             persist-credentials: true
-        - run: npx --yes flowpact@0.19 remotes update
+        - run: npx --yes flowpact@0.20 remotes update
           env:
             GH_TOKEN: ${{ steps.app.outputs.token }}
         - run: |

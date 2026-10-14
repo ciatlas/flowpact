@@ -99,7 +99,7 @@ jobs:
       - name: flowpact
         env:
           GH_TOKEN: ${{ github.token }}
-          FLOWPACT_VERSION: 0.19.1
+          FLOWPACT_VERSION: 0.20.0
         run: |
           gh release download "v$FLOWPACT_VERSION" --repo ciatlas/flowpact \
             --pattern "flowpact-$FLOWPACT_VERSION.tgz" --dir "$RUNNER_TEMP"
@@ -142,7 +142,7 @@ acme/flowpact-action
 └── rules/acme.mjs      # optional: organization rules (below)
 ```
 
-Create `package.json` and the lockfile with `npm install --save-exact flowpact@0.19`. The flowpact package has no
+Create `package.json` and the lockfile with `npm install --save-exact flowpact@0.20`. The flowpact package has no
 dependencies of its own: everything it runs is bundled, with its license notices and an SBOM next to it.
 
 ```yaml title="action.yml"
