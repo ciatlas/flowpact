@@ -1,13 +1,19 @@
 /** Fetching remote interfaces (#152): `updateRemotesLock` against a fake GitHub API. */
 
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
+  cachedSource,
+  downloadRemoteSources,
+  type FetchedSource,
   hostOf,
   parseRemoteRef,
   type RemotesLock,
   serializeRemotesLock,
   updateRemotesLock,
 } from '@flowpact/lint';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { lint, WF, yaml } from './helpers';
 
 const SHA = (c: string) => c.repeat(40);
@@ -487,5 +493,108 @@ describe('secrets a remote workflow reads without declaring them', () => {
     }).index;
     const u = await updateRemotesLock(index, undefined, { fetch: api.fetch });
     expect(u.lock.remotes['octo/ship/.github/workflows/ship.yml@v1']?.undeclaredSecrets).toBeUndefined();
+  });
+});
+
+describe('the files read, for the sources cache', () => {
+  const api = () =>
+    fakeApi(
+      { 'octo/ship@v1': SHA('a'), 'octo/setup@v2': SHA('b') },
+      {
+        [`octo/ship/.github/workflows/deploy.yml@${SHA('a')}`]: DEPLOY,
+        [`octo/setup/action.yaml@${SHA('b')}`]: SETUP,
+      },
+    );
+  const index = lint({ [`${WF}/ci.yml`]: caller }).index;
+  const dirs: string[] = [];
+  const tempDir = () => {
+    const d = mkdtempSync(join(tmpdir(), 'flowpact-sources-'));
+    dirs.push(d);
+    return d;
+  };
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  it('hands each workflow file and action.yml read to onSource, with its commit and path', async () => {
+    const got: Omit<FetchedSource, 'ref'>[] = [];
+    await updateRemotesLock(index, undefined, {
+      fetch: api().fetch,
+      onSource: ({ ref: _, ...s }) => got.push(s),
+    });
+    expect(got.sort((a, b) => (a.file < b.file ? -1 : 1))).toEqual([
+      { sha: SHA('a'), file: '.github/workflows/deploy.yml', text: DEPLOY },
+      { sha: SHA('b'), file: 'action.yaml', text: SETUP },
+    ]);
+  });
+
+  const lock = async () => (await updateRemotesLock(index, undefined, { fetch: api().fetch })).lock;
+
+  it('downloads the sources of the locked commits without resolving a ref, then finds them cached', async () => {
+    const dir = tempDir();
+    const a = api();
+    const d = await downloadRemoteSources(index, await lock(), dir, { fetch: a.fetch, token: 't' });
+    expect(d.downloaded).toEqual(['octo/setup@v2', 'octo/ship/.github/workflows/deploy.yml@v1']);
+    // octo/gone@v1 is recorded as unreadable: there is nothing to download.
+    expect(d.notLocked).toEqual([]);
+    expect(d.skipped).toEqual([
+      {
+        ref: 'octo/gone@v1',
+        reason:
+          'the lockfile records it as not readable (octo/gone@v1 not found, or not readable with this token)',
+      },
+    ]);
+    expect(d.failed).toEqual([]);
+    expect(a.seen.map((r) => new URL(r.url).pathname).filter((p) => p.includes('/commits/'))).toEqual([]);
+    const setup = cachedSource(dir, parseRemoteRef('octo/setup@v2', 'action')!, SHA('b'))!;
+    expect(readFileSync(setup.path, 'utf8')).toBe(SETUP);
+    const again = api();
+    const d2 = await downloadRemoteSources(index, await lock(), dir, { fetch: again.fetch });
+    expect(d2.downloaded).toEqual([]);
+    expect(d2.cached).toEqual(['octo/setup@v2', 'octo/ship/.github/workflows/deploy.yml@v1']);
+    expect(again.seen).toEqual([]);
+  });
+
+  it('downloads a source read on github.com only with the github.com fallback, and says why it skips it', async () => {
+    const locked: RemotesLock = {
+      version: 1,
+      remotes: { 'octo/setup@v2': { sha: SHA('b'), kind: 'action', host: 'github.com' } },
+    };
+    const ghes = { apiUrl: 'https://ghes.example/api/v3', token: 'ghes' };
+    const a = api();
+    const skipped = await downloadRemoteSources(index, locked, tempDir(), { ...ghes, fetch: a.fetch });
+    expect(skipped.skipped).toEqual([
+      {
+        ref: 'octo/setup@v2',
+        reason: 'on github.com, which this run does not read: look there with --github-com',
+      },
+    ]);
+    expect(a.seen).toEqual([]);
+    const b = api();
+    const fallback = { apiUrl: 'https://api.github.com', token: 'dotcom' };
+    const d = await downloadRemoteSources(index, locked, tempDir(), { ...ghes, fetch: b.fetch, fallback });
+    expect(d.downloaded).toEqual(['octo/setup@v2']);
+    expect(
+      b.seen.every((r) => r.url.startsWith('https://api.github.com/') && r.auth === 'Bearer dotcom'),
+    ).toBe(true);
+  });
+
+  it('lists what it cannot download, with why, and keeps going', async () => {
+    const locked: RemotesLock = {
+      version: 1,
+      remotes: {
+        'octo/setup@v2': { sha: SHA('c'), kind: 'action' },
+        'octo/ship/.github/workflows/deploy.yml@v1': { sha: SHA('a'), kind: 'workflow' },
+      },
+    };
+    const d = await downloadRemoteSources(index, locked, tempDir(), { fetch: api().fetch });
+    expect(d.downloaded).toEqual(['octo/ship/.github/workflows/deploy.yml@v1']);
+    expect(d.notLocked).toEqual(['octo/gone@v1']);
+    expect(d.failed).toEqual([
+      {
+        ref: 'octo/setup@v2',
+        error: `no action.yml in the repository root at ${SHA('c').slice(0, 7)}, or not readable with this token`,
+      },
+    ]);
   });
 });

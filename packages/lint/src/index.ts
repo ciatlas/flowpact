@@ -5,6 +5,7 @@ export * from './impact';
 export * from './impact-run';
 export * from './plugins';
 export * from './remotes';
+export * from './remotes-cache';
 export * from './remotes-fetch';
 export * from './report';
 export * from './rules/index';

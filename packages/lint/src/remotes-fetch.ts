@@ -16,12 +16,14 @@ import {
 } from '@ciatlas/core';
 import {
   lockEntryOf,
+  lockedRemote,
   type RemoteEntry,
   type RemoteRef,
   type RemotesLock,
   remoteRefsOf,
   targetedUnits,
 } from './remotes';
+import { cachedSource, cacheSource, sourceFiles } from './remotes-cache';
 import { undeclaredSecretsRead } from './rules/secrets';
 
 export interface FetchRemotesOptions {
@@ -41,6 +43,16 @@ export interface FetchRemotesOptions {
    * enterprise server lacks to github.com.
    */
   fallback?: { apiUrl: string; token?: string };
+  /** Called with each workflow file or `action.yml` fetched, for the sources cache (see `cacheSource`). */
+  onSource?: (source: FetchedSource) => void;
+}
+
+/** A file fetched to read a remote reference's interface: the reference, the commit, the file's path and its text. */
+export interface FetchedSource {
+  ref: RemoteRef;
+  sha: string;
+  file: string;
+  text: string;
 }
 
 /** One reference done: how many of how many, and what came of it (its commit, or why it could not be fetched). */
@@ -48,8 +60,9 @@ export interface FetchProgress {
   done: number;
   total: number;
   ref: string;
-  outcome: 'fetched' | 'unreadable' | 'failed';
-  /** The commit it resolved to, or why it could not be fetched. */
+  /** `cached` and `skipped` are for `downloadRemoteSources`: the cache had the source, or it was not downloaded. */
+  outcome: 'fetched' | 'unreadable' | 'failed' | 'cached' | 'skipped';
+  /** The commit it resolved to, or why it could not be fetched (or downloaded). */
   detail: string;
 }
 
@@ -167,23 +180,35 @@ async function shaOf(r: RemoteRef, opts: FetchRemotesOptions): Promise<string> {
 const fileAt = (r: RemoteRef, path: string, sha: string, opts: FetchRemotesOptions) =>
   get(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, 'application/vnd.github.raw', opts);
 
+/**
+ * A remote reference's file at a commit: its workflow file, or its `action.yml` (else `action.yaml`); handed to
+ * `onSource` as it is read.
+ */
+async function sourceAt(
+  r: RemoteRef,
+  sha: string,
+  opts: FetchRemotesOptions,
+): Promise<{ file: string; text: string }> {
+  for (const file of sourceFiles(r)) {
+    const text = await fileAt(r, file, sha, opts);
+    if (text === undefined) continue;
+    opts.onSource?.({ ref: r, sha, file, text });
+    return { file, text };
+  }
+  const what =
+    r.kind === 'workflow' ? `${r.path} not found` : `no action.yml in ${r.path || 'the repository root'}`;
+  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, true);
+}
+
 /** The lockfile entry of a remote reference, fetched. */
 export async function fetchRemoteEntry(r: RemoteRef, opts: FetchRemotesOptions = {}): Promise<RemoteEntry> {
   const sha = await shaOf(r, opts);
   const ctx = createParseContext(`${r.owner}/${r.repo}`);
-  if (r.kind === 'workflow') {
-    const text = await fileAt(r, r.path, sha, opts);
-    if (text === undefined) throw new FetchError(`${r.path} not found at ${sha.slice(0, 7)}`, true);
-    const wf = parseWorkflowFile(r.raw, text, ctx);
-    const undeclared = undeclaredSecretsRead(wf);
-    return { ...lockEntryOf(wf, sha), ...(undeclared.length ? { undeclaredSecrets: undeclared } : {}) };
-  }
-  for (const name of ['action.yml', 'action.yaml']) {
-    const file = r.path ? `${r.path}/${name}` : name;
-    const text = await fileAt(r, file, sha, opts);
-    if (text !== undefined) return lockEntryOf(parseActionFile(r.raw, file, text, ctx), sha);
-  }
-  throw new FetchError(`no action.yml in ${r.path || 'the repository root'} at ${sha.slice(0, 7)}`, true);
+  const { file, text } = await sourceAt(r, sha, opts);
+  if (r.kind === 'action') return lockEntryOf(parseActionFile(r.raw, file, text, ctx), sha);
+  const wf = parseWorkflowFile(r.raw, text, ctx);
+  const undeclared = undeclaredSecretsRead(wf);
+  return { ...lockEntryOf(wf, sha), ...(undeclared.length ? { undeclaredSecrets: undeclared } : {}) };
 }
 
 /**
@@ -249,14 +274,17 @@ async function tryFetch(
   try {
     return await fetchWithFallback(r, opts);
   } catch (e) {
-    if (!(e instanceof FetchError) && !(e instanceof TypeError) && (e as Error).name !== 'TimeoutError')
-      throw e;
+    if (!isFetchFailure(e)) throw e;
     const problem = { ref: r.raw, error: (e as Error).message };
     if (e instanceof FetchError && e.unreadable) out.unreadable.push(problem);
     else out.failed.push(problem);
     return undefined;
   }
 }
+
+/** An error fetching is expected to raise: the API's or the file's (`FetchError`), the network's, a timeout. */
+const isFetchFailure = (e: unknown) =>
+  e instanceof FetchError || e instanceof TypeError || (e as Error).name === 'TimeoutError';
 
 /** `tryFetch`, then `onProgress` with the outcome; `count.done` counts the references finished so far. */
 async function fetchCounted(
@@ -380,4 +408,131 @@ export async function fetchMissingRemotes(
   out.failed.sort(byRef);
   out.unreadable.sort(byRef);
   return out;
+}
+
+export interface RemotesDownload {
+  /** References whose source was downloaded into the cache, and those whose source it had already. */
+  downloaded: string[];
+  cached: string[];
+  /** References the repository uses that the lockfile has no entry for: `remotes update` adds them. */
+  notLocked: string[];
+  /** References not downloaded, with why: on a host this run does not read, or a path the cache cannot hold. */
+  skipped: { ref: string; reason: string }[];
+  /** References whose source could not be downloaded or cached, with why. */
+  failed: { ref: string; error: string }[];
+}
+
+/**
+ * Downloads the sources of the remote references a project uses (with paths, those they reach) into the cache, at the
+ * commits the lockfile pins: nothing is resolved again and the lockfile does not change, so the editor opens what the
+ * checks used. A source the cache has is not downloaded again.
+ */
+export async function downloadRemoteSources(
+  index: ProjectIndex,
+  lock: RemotesLock,
+  dir: string,
+  opts: FetchRemotesOptions = {},
+): Promise<RemotesDownload> {
+  const refs = remoteRefsOf(index, targetedUnits(index));
+  const out: RemotesDownload = { downloaded: [], cached: [], notLocked: [], skipped: [], failed: [] };
+  const count = { done: 0, total: refs.length };
+  await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
+    const outcome = record(out, r.raw, await downloadOne(r, lock, dir, opts));
+    count.done++;
+    opts.onProgress?.({ ...count, ref: r.raw, ...outcome });
+  });
+  for (const list of [out.downloaded, out.cached, out.notLocked]) list.sort();
+  out.skipped.sort(byRef);
+  out.failed.sort(byRef);
+  return out;
+}
+
+/** What came of one reference's source: the list of `RemotesDownload` it goes in, with its commit or why. */
+type Downloaded =
+  | { list: 'downloaded' | 'cached'; sha: string }
+  | { list: 'notLocked' }
+  | { list: 'skipped'; reason: string }
+  | { list: 'failed'; error: string };
+
+/** One reference's source into the cache, unless the cache has it or this run cannot read it. */
+async function downloadOne(
+  r: RemoteRef,
+  lock: RemotesLock,
+  dir: string,
+  opts: FetchRemotesOptions,
+): Promise<Downloaded> {
+  const { entry, unreadable } = lockedRemote(lock, r.raw);
+  if (unreadable !== undefined)
+    return { list: 'skipped', reason: `the lockfile records it as not readable (${unreadable})` };
+  if (!entry) return { list: 'notLocked' };
+  if (cachedSource(dir, r, entry.sha)) return { list: 'cached', sha: entry.sha };
+  const api = apiFor(entry, opts);
+  if (!api)
+    return {
+      list: 'skipped',
+      reason: `on ${entry.host}, which this run does not read: look there with --github-com`,
+    };
+  const source = await sourceOrError(r, entry.sha, api);
+  return 'error' in source ? { list: 'failed', error: source.error } : keepSource(dir, r, entry.sha, source);
+}
+
+/** A reference's file at a commit, or why it could not be read; any other error is a bug and is thrown. */
+async function sourceOrError(
+  r: RemoteRef,
+  sha: string,
+  api: FetchRemotesOptions,
+): Promise<{ file: string; text: string } | { error: string }> {
+  try {
+    return await sourceAt(r, sha, { ...api, onSource: undefined });
+  } catch (e) {
+    if (!isFetchFailure(e)) throw e;
+    const unreadable = e instanceof FetchError && e.unreadable;
+    return {
+      error: unreadable ? `${(e as Error).message}, or not readable with this token` : (e as Error).message,
+    };
+  }
+}
+
+/** A downloaded file into the cache. */
+function keepSource(
+  dir: string,
+  r: RemoteRef,
+  sha: string,
+  source: { file: string; text: string },
+): Downloaded {
+  const cached = cacheSource(dir, r, sha, source.file, source.text);
+  if (cached === 'unsafe') return { list: 'skipped', reason: 'its path cannot be a file name in the cache' };
+  if (typeof cached === 'object')
+    return { list: 'failed', error: `could not write the cache: ${cached.failed}` };
+  return { list: cached === 'written' ? 'downloaded' : 'cached', sha };
+}
+
+/** Records what came of a reference's source in `out`, and returns the progress to report for it. */
+function record(out: RemotesDownload, ref: string, d: Downloaded): Pick<FetchProgress, 'outcome' | 'detail'> {
+  switch (d.list) {
+    case 'downloaded':
+    case 'cached':
+      out[d.list].push(ref);
+      return { outcome: d.list === 'downloaded' ? 'fetched' : 'cached', detail: d.sha };
+    case 'notLocked':
+      out.notLocked.push(ref);
+      return { outcome: 'skipped', detail: 'not in the lockfile' };
+    case 'skipped':
+      out.skipped.push({ ref, reason: d.reason });
+      return { outcome: 'skipped', detail: d.reason };
+    case 'failed':
+      out.failed.push({ ref, error: d.error });
+      return { outcome: 'failed', detail: d.error };
+  }
+}
+
+/**
+ * How to read an entry's source: from the API this run uses, or from the fallback when the entry was read there
+ * (its `host`); undefined when this run reads neither.
+ */
+function apiFor(entry: RemoteEntry, opts: FetchRemotesOptions): FetchRemotesOptions | undefined {
+  if (!entry.host || entry.host === hostOf(opts.apiUrl ?? 'https://api.github.com')) return opts;
+  if (!opts.fallback || hostOf(opts.fallback.apiUrl) !== entry.host) return undefined;
+  const { apiUrl, token } = opts.fallback;
+  return { ...opts, apiUrl, ...(token ? { token } : { token: undefined }) };
 }
