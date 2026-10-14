@@ -1079,6 +1079,27 @@ describe('ignore and impact mode', () => {
       expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
     });
 
+    it('reads the directory the baseline has where the path enters the repository through a link outside it', async () => {
+      // The workflow names the base config through a link outside the repository; the pull request makes the tracked
+      // .github/org a link to .github/loose, which the baseline already has and which ignores b (#139).
+      const root = linked(
+        { '.github/org/base.yml': 'ignore: []\n', '.github/loose/base.yml': IGNORES_B },
+        {},
+        {},
+      );
+      git(root, 'rm', '-rq', '.github/org');
+      symlinkSync('loose', join(root, '.github/org'));
+      git(root, 'add', '-A');
+      git(root, 'commit', '-q', '-m', 'link org to loose');
+      const ext = join(mkdtempSync(join(tmpdir(), 'flowpact-impact-ext-')), 'ext');
+      symlinkSync(join(root, '.github'), ext);
+      const r = await impact(root, join(ext, 'org/base.yml'));
+      // Before: the path was taken from the file's real path, .github/loose/base.yml, on both sides: exit 0, b left out.
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
+    });
+
     it('reads the config a tracked link points at from the working tree when no commit tracks it', async () => {
       // The organization's configs checked out into a gitignored directory; the pull request repoints the link.
       const root = linked(

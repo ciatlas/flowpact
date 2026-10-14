@@ -410,15 +410,22 @@ const realpathOr = (p: string): string | undefined => {
 /**
  * `file` (absolute) as a path of the repository whose real top directory is `top`, or undefined outside it. It is
  * taken from the outermost directory above it that is the top, so the symbolic links on the way stay parts of it, a
- * link in the repository to its own top included.
+ * link in the repository to its own top included. A path that enters the repository through a link outside it is
+ * taken from the outermost directory whose real path is in the repository, so the links inside it stay parts of it too.
  */
 function repositoryPathOf(top: string, file: string): string | undefined {
   const dirs: string[] = [];
   for (let dir = dirname(file); dir !== dirname(dir); dir = dirname(dir)) dirs.unshift(dir);
-  for (const dir of dirs) if (realpathOr(dir) === top) return relative(dir, file).split(sep).join('/');
+  const reals = dirs.map(realpathOr);
+  const atTop = reals.indexOf(top);
+  if (atTop >= 0) return toPosix(relative(dirs[atTop]!, file));
+  const inside = reals.findIndex((real) => real !== undefined && pathInside(top, real));
+  if (inside >= 0) return toPosix(join(relative(top, reals[inside]!), relative(dirs[inside]!, file)));
   const real = realpathOr(file);
-  return real !== undefined && pathInside(top, real) ? relative(top, real).split(sep).join('/') : undefined;
+  return real !== undefined && pathInside(top, real) ? toPosix(relative(top, real)) : undefined;
 }
+
+const toPosix = (path: string) => path.split(sep).join('/');
 
 /**
  * What a checkout of a commit has at a path (see `locate`): a file the commit tracks (`object` in the repository at
