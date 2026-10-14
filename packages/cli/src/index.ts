@@ -11,6 +11,7 @@ import { graphCommand } from './commands/graph';
 import { impactCommand } from './commands/impact';
 import { lintCommand } from './commands/lint';
 import { lspCommand } from './commands/lsp';
+import { remotesCommand } from './commands/remotes';
 import { rulesCommand } from './commands/rules';
 import { traceCommand } from './commands/trace';
 import { colorEnabled } from './lib/text';
@@ -20,6 +21,7 @@ const COMMANDS = {
   lint: lintCommand,
   check: checkCommand,
   generate: generateCommand,
+  remotes: remotesCommand,
   impact: impactCommand,
   trace: traceCommand,
   graph: graphCommand,

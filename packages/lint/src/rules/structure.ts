@@ -297,8 +297,8 @@ const remoteUnverified = defineRule({
       'flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on ' +
       'trust, unless `.github/flowpact/remotes.lock.yaml` records its interface.',
     fix:
-      'Record its interface in `.github/flowpact/remotes.lock.yaml` to have it checked, or nothing. If the workflow ' +
-      'lives in this repository, set `repository: owner/repo` in the config so it resolves locally.',
+      'Run `flowpact remotes update` to record its interface and have it checked, or nothing. If the workflow lives ' +
+      'in this repository, set `repository: owner/repo` in the config so it resolves locally.',
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -324,7 +324,7 @@ const remotesLockInvalid = defineRule({
     why:
       'flowpact then checks no remote call against an interface: every remote reusable workflow and action is taken ' +
       'on trust, as without a lockfile.',
-    fix: 'Fix the entry the message names: each needs a 40-character `sha`, a `kind` and its interface.',
+    fix: 'Run `flowpact remotes update` to write it again, or fix the entry the message names.',
   },
   check(ctx) {
     const { file, error } = ctx.remotes ?? {};

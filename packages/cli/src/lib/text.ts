@@ -21,6 +21,7 @@ import pc from 'picocolors';
 import { usage } from './errors';
 import type { ContractGeneration } from './generate';
 import type { RuleDocs, RuleInfo, TraceResult } from './inspect';
+import type { RemotesUpdateResult } from './remotes';
 import { oneOf } from './session';
 
 /** How text is rendered: what `--no-color`, `--ascii` and the terminal decide in the CLI. */
@@ -148,4 +149,27 @@ export function generationText(generation: ContractGeneration, opts: RenderOptio
   const patch = diff ? generation.patch() : undefined;
   if (patch === undefined) return safe(plan);
   return safe(`${plan.endsWith('\n') ? plan : `${plan}\n`}${renderPatch(patch, opts)}`);
+}
+
+/** `remotes update`: what the lockfile gained, lost or changed, and what could not be fetched. */
+export function remotesText(r: RemotesUpdateResult, opts: RenderOptions): string {
+  const c = opts.color ? pc : { bold: (s: string) => s, red: (s: string) => s, dim: (s: string) => s };
+  const lines: string[] = [];
+  const list = (label: string, refs: string[]) => {
+    for (const ref of refs) lines.push(`  ${label} ${ref}`);
+  };
+  list('new    ', r.added);
+  list('changed', r.changed);
+  list('removed', r.removed);
+  for (const f of r.failed) lines.push(`  ${c.red('failed ')} ${f.ref}: ${f.error}`);
+  const verb = r.dryRun ? 'would write' : 'wrote';
+  const head = r.changes ? `${verb} ${r.file}` : `${r.file} is up to date`;
+  lines.unshift(c.bold(head));
+  if (r.failed.length && !r.authenticated)
+    lines.push(
+      c.dim(
+        '  No token was used: set GH_TOKEN or GITHUB_TOKEN (or sign in with `gh auth login`) to read private repositories.',
+      ),
+    );
+  return safe(`${lines.join('\n')}\n`);
 }
