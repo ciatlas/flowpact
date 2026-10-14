@@ -71,7 +71,7 @@ export const reportArgs = {
   'fetch-remotes': {
     type: 'boolean',
     description:
-      'Fetch the interfaces of remote workflows and actions the remote interfaces lockfile lacks, for this run only (token: GH_TOKEN, GITHUB_TOKEN or gh)',
+      'Fetch the interfaces of remote workflows and actions the remote interfaces lockfile lacks, for this run only. Token: GH_TOKEN, GITHUB_TOKEN or `gh auth token`; private repositories need read access to their contents',
   },
   impact: {
     type: 'boolean',

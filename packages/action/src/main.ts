@@ -762,6 +762,10 @@ async function remotesToFetch(
   const r = await fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, {
     ...(token && !token.startsWith('${{') ? { token } : {}),
     ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
+    onProgress: (p) =>
+      logger.debug(
+        `remote interface ${p.done}/${p.total}: ${p.ref} ${p.outcome === 'fetched' ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`}`,
+      ),
   });
   for (const f of [...r.failed, ...r.unreadable])
     core.warning(`remote interface not fetched: ${f.ref}: ${f.error}`);

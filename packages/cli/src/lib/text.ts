@@ -21,7 +21,7 @@ import pc from 'picocolors';
 import { usage } from './errors';
 import type { ContractGeneration } from './generate';
 import type { RuleDocs, RuleInfo, TraceResult } from './inspect';
-import type { RemotesUpdateResult } from './remotes';
+import { describeToken, type RemotesUpdateResult } from './remotes';
 import { oneOf } from './session';
 
 /** How text is rendered: what `--no-color`, `--ascii` and the terminal decide in the CLI. */
@@ -164,12 +164,12 @@ export function remotesText(r: RemotesUpdateResult, opts: RenderOptions): string
   for (const u of r.unreadable) lines.push(`  ${c.dim('unread ')} ${u.ref}: ${u.error}`);
   for (const f of r.failed) lines.push(`  ${c.red('failed ')} ${f.ref}: ${f.error}`);
   const verb = r.dryRun ? 'would write' : 'wrote';
-  const head = r.changes ? `${verb} ${r.file}` : `${r.file} is up to date`;
-  lines.unshift(c.bold(head));
-  if ((r.failed.length || r.unreadable.length) && !r.authenticated)
+  lines.unshift(c.dim(`token: ${describeToken(r.tokenSource)}`));
+  lines.unshift(c.bold(r.changes ? `${verb} ${r.file}` : `${r.file} is up to date`));
+  if ((r.failed.length || r.unreadable.length) && !r.tokenSource)
     lines.push(
       c.dim(
-        '  No token was used: set GH_TOKEN or GITHUB_TOKEN (or sign in with `gh auth login`) to read private repositories.',
+        '  No token was used: set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`. It needs read access to the contents of the private repositories.',
       ),
     );
   return safe(`${lines.join('\n')}\n`);

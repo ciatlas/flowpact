@@ -55,6 +55,7 @@ describe('flowpact remotes update', () => {
     const r = await run(root, ['update'], { GH_TOKEN: 's3cr3t' });
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain(`wrote ${LOCK}`);
+    expect(r.stdout).toContain('token: GH_TOKEN');
     expect(r.stdout).toContain('new     octo/setup@v2');
     expect(r.stdout).toContain(
       'unread  octo/missing@v1: octo/missing@v1 not found, or not readable with this token',
@@ -74,6 +75,7 @@ describe('flowpact remotes update', () => {
     const root = repo();
     const dry = await run(root, ['update', '--dry-run']);
     expect(dry.stdout).toContain(`would write ${LOCK}`);
+    expect(dry.stdout).toContain('token: none: public repositories only, at 60 requests an hour');
     expect(() => readFileSync(join(root, LOCK))).toThrow();
     await run(root, ['update']);
     const again = await run(root, ['update']);

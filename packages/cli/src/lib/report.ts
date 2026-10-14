@@ -27,7 +27,7 @@ import {
   renderSarif,
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
-import { apiUrlFromEnv, tokenFor } from './remotes';
+import { apiUrlFromEnv, describeToken, logProgress, timed, tokenFor } from './remotes';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
 import { renderOptions, type TextOptions } from './text';
@@ -229,9 +229,14 @@ async function fetchRemotesFor(session: Session): Promise<AnalyzeOptions['fetche
   const { root, logger } = session;
   const fs = nodeFileSystem(root);
   const apiUrl = apiUrlFromEnv();
-  const token = tokenFor(apiUrl, undefined);
-  const r = await logger.time('fetch remote interfaces', () =>
-    fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, { apiUrl, ...(token ? { token } : {}) }),
+  const { token, source } = tokenFor(apiUrl, undefined);
+  logger.debug(`remote interfaces: token from ${describeToken(source)}`);
+  const r = await timed(logger, () =>
+    fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, {
+      apiUrl,
+      ...(token ? { token } : {}),
+      onProgress: logProgress(logger),
+    }),
   );
   for (const f of [...r.failed, ...r.unreadable])
     logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
