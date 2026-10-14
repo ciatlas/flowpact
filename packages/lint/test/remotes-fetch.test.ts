@@ -1,6 +1,6 @@
 /** Fetching remote interfaces (#152): `updateRemotesLock` against a fake GitHub API. */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -380,12 +380,19 @@ describe('GitHub Enterprise Server and github.com through GitHub Connect', () =>
 
   it('looks on github.com for what the enterprise server lacks, with its own token, never the enterprise one', async () => {
     const api = twoHosts();
+    const got: string[] = [];
     const u = await updateRemotesLock(index(), undefined, {
       fetch: api.fetch,
       apiUrl: GHES,
       token: 'ghes',
       fallback: { apiUrl: 'https://api.github.com', token: 'dotcom' },
+      onSource: (s) => got.push(`${s.ref.raw} ${s.sha} ${s.file}`),
     });
+    // The file read on github.com goes to the sources cache too.
+    expect(got.sort()).toEqual([
+      `corp/internal@v1 ${SHA('c')} action.yml`,
+      `octo/setup@v2 ${SHA('b')} action.yml`,
+    ]);
     expect(u.lock.remotes['corp/internal@v1']).not.toHaveProperty('host');
     expect(u.lock.remotes['octo/setup@v2']).toMatchObject({ sha: SHA('b'), host: 'github.com' });
     expect(u.lock.unreadable).toBeUndefined();
@@ -577,6 +584,106 @@ describe('the files read, for the sources cache', () => {
     expect(
       b.seen.every((r) => r.url.startsWith('https://api.github.com/') && r.auth === 'Bearer dotcom'),
     ).toBe(true);
+    // Without a github.com token it asks github.com without one, never with the enterprise token.
+    const c = api();
+    const anon = await downloadRemoteSources(index, locked, tempDir(), {
+      ...ghes,
+      fetch: c.fetch,
+      fallback: { apiUrl: 'https://api.github.com' },
+    });
+    expect(anon.downloaded).toEqual(['octo/setup@v2']);
+    expect(c.seen.length).toBeGreaterThan(0);
+    expect(c.seen.every((r) => r.url.startsWith('https://api.github.com/') && r.auth === undefined)).toBe(
+      true,
+    );
+  });
+
+  it('reports each reference as it is done: downloaded, cached or skipped', async () => {
+    const dir = tempDir();
+    const locked = await lock();
+    const outcomes = async () => {
+      const seen: string[] = [];
+      await downloadRemoteSources(index, locked, dir, {
+        fetch: api().fetch,
+        onProgress: (p) => seen.push(`${p.ref} ${p.outcome}`),
+      });
+      return seen.sort();
+    };
+    expect(await outcomes()).toEqual([
+      'octo/gone@v1 skipped',
+      'octo/setup@v2 fetched',
+      'octo/ship/.github/workflows/deploy.yml@v1 fetched',
+    ]);
+    expect(await outcomes()).toEqual([
+      'octo/gone@v1 skipped',
+      'octo/setup@v2 cached',
+      'octo/ship/.github/workflows/deploy.yml@v1 cached',
+    ]);
+  });
+
+  it('matches a reference to its entry in any case of owner and repository, as GitHub does', async () => {
+    const locked: RemotesLock = {
+      version: 1,
+      remotes: { 'OCTO/SETUP@v2': { sha: SHA('b'), kind: 'action' } },
+    };
+    const d = await downloadRemoteSources(index, locked, tempDir(), { fetch: api().fetch });
+    expect(d.downloaded).toEqual(['octo/setup@v2']);
+    expect(d.notLocked).not.toContain('octo/setup@v2');
+  });
+
+  it('downloads only what the given paths use', async () => {
+    const scoped = lint(
+      {
+        [`${WF}/a.yml`]: 'on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+        [`${WF}/b.yml`]: 'on: push\njobs:\n  b:\n    uses: octo/ship/.github/workflows/deploy.yml@v1\n',
+      },
+      { paths: [`${WF}/a.yml`] },
+    ).index;
+    const a = api();
+    const d = await downloadRemoteSources(scoped, await lock(), tempDir(), { fetch: a.fetch });
+    expect(d.downloaded).toEqual(['octo/setup@v2']);
+    expect(a.seen.some((r) => r.url.includes('/octo/ship/'))).toBe(false);
+  });
+
+  it('downloads a github.com entry when this run reads github.com, and skips a host it never writes', async () => {
+    const at = (host: string): RemotesLock => ({
+      version: 1,
+      remotes: { 'octo/setup@v2': { sha: SHA('b'), kind: 'action', host } },
+    });
+    const own = await downloadRemoteSources(index, at('github.com'), tempDir(), { fetch: api().fetch });
+    expect(own.downloaded).toEqual(['octo/setup@v2']);
+    const a = api();
+    const evil = await downloadRemoteSources(index, at('evil.example'), tempDir(), { fetch: a.fetch });
+    expect(evil.skipped.map((s) => s.ref)).toContain('octo/setup@v2');
+    expect(a.seen).toEqual([]);
+  });
+
+  it('skips a path the cache cannot hold before asking for it', async () => {
+    const odd = lint({
+      [`${WF}/ci.yml`]:
+        'on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: octo/setup/con@v2\n',
+    }).index;
+    const locked: RemotesLock = {
+      version: 1,
+      remotes: { 'octo/setup/con@v2': { sha: SHA('b'), kind: 'action' } },
+    };
+    const a = api();
+    const d = await downloadRemoteSources(odd, locked, tempDir(), { fetch: a.fetch });
+    expect(d.skipped).toEqual([
+      { ref: 'octo/setup/con@v2', reason: 'its path cannot be a file name in the cache' },
+    ]);
+    expect(a.seen).toEqual([]);
+  });
+
+  it('marks a failure to write the cache, which no token would fix', async () => {
+    const dir = tempDir();
+    writeFileSync(join(dir, 'octo'), '');
+    const d = await downloadRemoteSources(index, await lock(), dir, { fetch: api().fetch });
+    expect(d.failed.map((f) => [f.ref, f.cache])).toEqual([
+      ['octo/setup@v2', true],
+      ['octo/ship/.github/workflows/deploy.yml@v1', true],
+    ]);
+    expect(d.failed[0]!.error).toMatch(/^could not write the cache: /);
   });
 
   it('lists what it cannot download, with why, and keeps going', async () => {

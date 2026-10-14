@@ -2,7 +2,16 @@
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cachedSource, cachedSourcePath, cacheSource, remotesCacheDir, sourceFiles } from '@flowpact/lint';
+import {
+  cachedSource,
+  cachedSourcePath,
+  cacheSource,
+  envCacheDir,
+  inCi,
+  remotesCacheDir,
+  remotesCacheIn,
+  sourceFiles,
+} from '@flowpact/lint';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const SHA = 'a'.repeat(40);
@@ -19,28 +28,78 @@ afterEach(() => {
 
 describe('remotesCacheDir', () => {
   const home = '/home/u';
+  const at = () => home;
 
   it('uses the platform per-user cache, under flowpact/remotes', () => {
-    expect(remotesCacheDir({}, 'linux', home)).toBe(join(home, '.cache', 'flowpact', 'remotes'));
-    expect(remotesCacheDir({ XDG_CACHE_HOME: '/x/cache' }, 'linux', home)).toBe(
+    expect(remotesCacheDir({}, 'linux', at)).toBe(join(home, '.cache', 'flowpact', 'remotes'));
+    expect(remotesCacheDir({ XDG_CACHE_HOME: '/x/cache' }, 'linux', at)).toBe(
       join('/x/cache', 'flowpact', 'remotes'),
     );
-    expect(remotesCacheDir({}, 'darwin', home)).toBe(join(home, 'Library', 'Caches', 'flowpact', 'remotes'));
-    expect(remotesCacheDir({ LOCALAPPDATA: '/c/AppData/Local' }, 'win32', home)).toBe(
+    expect(remotesCacheDir({}, 'darwin', at)).toBe(join(home, 'Library', 'Caches', 'flowpact', 'remotes'));
+    expect(remotesCacheDir({ LOCALAPPDATA: '/c/AppData/Local' }, 'win32', at)).toBe(
       join('/c/AppData/Local', 'flowpact', 'Cache', 'remotes'),
     );
-    expect(remotesCacheDir({}, 'win32', home)).toBe(
+    expect(remotesCacheDir({}, 'win32', at)).toBe(
       join(home, 'AppData', 'Local', 'flowpact', 'Cache', 'remotes'),
     );
   });
 
   it('prefers FLOWPACT_CACHE_DIR, and ignores relative paths, which would depend on where flowpact runs', () => {
-    expect(remotesCacheDir({ FLOWPACT_CACHE_DIR: '/tmp/fp' }, 'linux', home)).toBe(
-      join('/tmp/fp', 'remotes'),
-    );
-    expect(remotesCacheDir({ FLOWPACT_CACHE_DIR: 'rel', XDG_CACHE_HOME: 'rel2' }, 'linux', home)).toBe(
+    expect(remotesCacheDir({ FLOWPACT_CACHE_DIR: '/tmp/fp' }, 'linux', at)).toBe(join('/tmp/fp', 'remotes'));
+    expect(remotesCacheDir({ FLOWPACT_CACHE_DIR: 'rel', XDG_CACHE_HOME: 'rel2' }, 'linux', at)).toBe(
       join(home, '.cache', 'flowpact', 'remotes'),
     );
+  });
+});
+
+describe('remotesCacheDir without a home directory', () => {
+  const throws = () => {
+    throw new Error('uv_os_homedir returned ENOENT');
+  };
+
+  it('looks for the home directory only when no variable gives a path, and never throws', () => {
+    expect(remotesCacheDir({ FLOWPACT_CACHE_DIR: '/abs' }, 'linux', throws)).toBe(join('/abs', 'remotes'));
+    expect(remotesCacheDir({ XDG_CACHE_HOME: '/x' }, 'linux', throws)).toBe(
+      join('/x', 'flowpact', 'remotes'),
+    );
+    expect(remotesCacheDir({ LOCALAPPDATA: '/l' }, 'win32', throws)).toBe(
+      join('/l', 'flowpact', 'Cache', 'remotes'),
+    );
+    expect(() => remotesCacheDir({}, 'linux', throws)).not.toThrow();
+  });
+
+  it('gives none rather than a relative one, which would put the cache wherever flowpact runs', () => {
+    for (const platform of ['linux', 'darwin', 'win32'] as const) {
+      expect(remotesCacheDir({}, platform, () => '')).toBeUndefined();
+      expect(remotesCacheDir({}, platform, () => 'relative')).toBeUndefined();
+      expect(remotesCacheDir({}, platform, () => undefined)).toBeUndefined();
+    }
+  });
+});
+
+describe('the cache directory given, and CI', () => {
+  it('puts the sources in the remotes directory of a --cache-dir, relative to where flowpact runs', () => {
+    expect(remotesCacheIn('/x/cache')).toBe(join('/x/cache', 'remotes'));
+    expect(remotesCacheIn('rel')).toBe(join(process.cwd(), 'rel', 'remotes'));
+  });
+
+  it('reads FLOWPACT_CACHE_DIR only when it is absolute', () => {
+    expect(envCacheDir({ FLOWPACT_CACHE_DIR: '/x' })).toBe('/x');
+    expect(envCacheDir({ FLOWPACT_CACHE_DIR: 'x' })).toBeUndefined();
+    expect(envCacheDir({})).toBeUndefined();
+  });
+
+  it('knows CI by CI, TF_BUILD or JENKINS_URL', () => {
+    for (const env of [
+      { CI: 'true' },
+      { CI: '1' },
+      { CI: 'True' },
+      { TF_BUILD: 'True' },
+      { JENKINS_URL: 'https://j' },
+    ])
+      expect(inCi(env), JSON.stringify(env)).toBe(true);
+    for (const env of [{}, { CI: '' }, { CI: 'false' }, { CI: '0' }])
+      expect(inCi(env), JSON.stringify(env)).toBe(false);
   });
 });
 
@@ -93,7 +152,11 @@ describe('cacheSource and cachedSource', () => {
     const found = cachedSource(dir, action, SHA)!;
     expect(found.file).toBe('setup/action.yaml');
     expect(readFileSync(found.path, 'utf8')).toBe('name: x\n');
-    if (process.platform !== 'win32') expect(statSync(found.path).mode & 0o222).toBe(0);
+    if (process.platform !== 'win32') {
+      // Read-only, and for your user alone: private repositories' files land here too.
+      expect(statSync(found.path).mode & 0o777).toBe(0o400);
+      expect(statSync(join(dir, 'octo')).mode & 0o077).toBe(0);
+    }
     expect(cacheSource(dir, SHIP, SHA, 'setup/action.yaml', 'other')).toBe('present');
     expect(readFileSync(found.path, 'utf8')).toBe('name: x\n');
   });

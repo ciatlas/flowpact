@@ -23,7 +23,7 @@ import {
   remoteRefsOf,
   targetedUnits,
 } from './remotes';
-import { cachedSource, cacheSource, sourceFiles } from './remotes-cache';
+import { cachedSource, cachedSourcePath, cacheSource, sourceFiles } from './remotes-cache';
 import { undeclaredSecretsRead } from './rules/secrets';
 
 export interface FetchRemotesOptions {
@@ -418,8 +418,8 @@ export interface RemotesDownload {
   notLocked: string[];
   /** References not downloaded, with why: on a host this run does not read, or a path the cache cannot hold. */
   skipped: { ref: string; reason: string }[];
-  /** References whose source could not be downloaded or cached, with why. */
-  failed: { ref: string; error: string }[];
+  /** References whose source could not be downloaded or cached, with why; `cache` when writing the cache failed. */
+  failed: { ref: string; error: string; cache?: true }[];
 }
 
 /**
@@ -452,7 +452,7 @@ type Downloaded =
   | { list: 'downloaded' | 'cached'; sha: string }
   | { list: 'notLocked' }
   | { list: 'skipped'; reason: string }
-  | { list: 'failed'; error: string };
+  | { list: 'failed'; error: string; cache?: true };
 
 /** One reference's source into the cache, unless the cache has it or this run cannot read it. */
 async function downloadOne(
@@ -466,6 +466,8 @@ async function downloadOne(
     return { list: 'skipped', reason: `the lockfile records it as not readable (${unreadable})` };
   if (!entry) return { list: 'notLocked' };
   if (cachedSource(dir, r, entry.sha)) return { list: 'cached', sha: entry.sha };
+  // Before any request: a path the cache cannot hold would be downloaded on every run and never kept.
+  if (!sourceFiles(r).some((f) => cachedSourcePath(dir, r, entry.sha, f))) return UNSAFE;
   const api = apiFor(entry, opts);
   if (!api)
     return {
@@ -501,11 +503,13 @@ function keepSource(
   source: { file: string; text: string },
 ): Downloaded {
   const cached = cacheSource(dir, r, sha, source.file, source.text);
-  if (cached === 'unsafe') return { list: 'skipped', reason: 'its path cannot be a file name in the cache' };
+  if (cached === 'unsafe') return UNSAFE;
   if (typeof cached === 'object')
-    return { list: 'failed', error: `could not write the cache: ${cached.failed}` };
+    return { list: 'failed', error: `could not write the cache: ${cached.failed}`, cache: true };
   return { list: cached === 'written' ? 'downloaded' : 'cached', sha };
 }
+
+const UNSAFE: Downloaded = { list: 'skipped', reason: 'its path cannot be a file name in the cache' };
 
 /** Records what came of a reference's source in `out`, and returns the progress to report for it. */
 function record(out: RemotesDownload, ref: string, d: Downloaded): Pick<FetchProgress, 'outcome' | 'detail'> {
@@ -521,7 +525,7 @@ function record(out: RemotesDownload, ref: string, d: Downloaded): Pick<FetchPro
       out.skipped.push({ ref, reason: d.reason });
       return { outcome: 'skipped', detail: d.reason };
     case 'failed':
-      out.failed.push({ ref, error: d.error });
+      out.failed.push({ ref, error: d.error, ...(d.cache ? { cache: true as const } : {}) });
       return { outcome: 'failed', detail: d.error };
   }
 }
