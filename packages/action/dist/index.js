@@ -22104,6 +22104,41 @@ function environmentChanges(base, head, b, h) {
   }
   return out;
 }
+var UPLOAD_ARTIFACT = /^actions\/upload-artifact@/i;
+function stepsRun(index, unit, seen = /* @__PURE__ */ new Set()) {
+  if (seen.has(unit.path) || seen.size > 50) return [];
+  seen.add(unit.path);
+  const own2 = unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
+  const actions = index.actionUses.filter((u) => u.unit === unit).map((u) => u.action);
+  const callees = unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((j) => j.uses ? [index.calleeOf(j)] : []) : [];
+  const ran = [...actions, ...callees].filter((u) => u !== void 0);
+  return [...own2, ...ran.flatMap((u) => stepsRun(index, u, seen))];
+}
+function artifactName(step2) {
+  const name = step2.with.name?.value;
+  return name === void 0 || name === null ? "artifact" : String(name);
+}
+function uploadsOf(index, unit) {
+  const out = { names: /* @__PURE__ */ new Set(), dynamic: false };
+  for (const step2 of stepsRun(index, unit)) {
+    if (step2.uses?.kind !== "remote-action" || !UPLOAD_ARTIFACT.test(step2.uses.raw)) continue;
+    const name = artifactName(step2);
+    if (name.includes("${{")) out.dynamic = true;
+    else out.names.add(name);
+  }
+  return out;
+}
+function artifactChanges(base, head, b, h) {
+  const after = uploadsOf(head, h);
+  return [...uploadsOf(base, b).names].filter((n) => !after.names.has(n)).map((n) => ({
+    unit: h.path,
+    kind: "artifact",
+    level: "major",
+    certain: !after.dynamic,
+    message: `no longer uploads artifact "${n}"; callers' jobs that download it fail`,
+    loc: fileStart(h.file)
+  }));
+}
 function remoteUses(unit) {
   const out = /* @__PURE__ */ new Set();
   const steps2 = unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
@@ -22274,6 +22309,7 @@ function blockingChange(path, b, h, policy) {
 function comparedChanges(base, head, b, h) {
   const out = [
     ...interfaceChanges(base, head, b, h),
+    ...artifactChanges(base, head, b, h),
     ...outputReliabilityChanges(base, head, b, h),
     ...usesChanges(b, h)
   ];
@@ -27867,8 +27903,8 @@ function writeReport(workspace, file, content) {
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
   return abs;
 }
-function artifactReadme(plan, artifactName, runId) {
-  const download = runId ? `gh run download ${runId} -n ${artifactName}` : `# download the "${artifactName}" artifact from the workflow run and unzip it here`;
+function artifactReadme(plan, artifactName2, runId) {
+  const download = runId ? `gh run download ${runId} -n ${artifactName2}` : `# download the "${artifactName2}" artifact from the workflow run and unzip it here`;
   return [
     "# Regenerated workflow contracts",
     "",
