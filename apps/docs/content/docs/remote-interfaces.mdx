@@ -13,7 +13,16 @@ reference resolved to. With it, flowpact checks remote calls as it checks local 
 
 - [`FP101`](/docs/rules/fp101): a required input is not passed;
 - [`FP102`](/docs/rules/fp102): an input that the workflow or action does not declare is passed;
-- [`FP103`](/docs/rules/fp103): a literal of the wrong type is passed to a `boolean` or `number` input.
+- [`FP103`](/docs/rules/fp103): a literal of the wrong type is passed to a `boolean` or `number` input;
+- [`FP201`](/docs/rules/fp201): a required secret is not passed to a remote reusable workflow;
+- [`FP202`](/docs/rules/fp202): a secret it does not declare is passed;
+- [`FP301`](/docs/rules/fp301): an output it does not declare is read (`needs.<job>.outputs.<name>`,
+  `steps.<id>.outputs.<name>`). A JavaScript or Docker action may set outputs it does not declare, so only a
+  composite action's are checked.
+
+What a remote workflow does with what it gets is not checked: its jobs and steps are in another repository, so rules
+about what a callee reads ([`FP203`](/docs/rules/fp203), [`FP204`](/docs/rules/fp204), [`FP106`](/docs/rules/fp106))
+stay quiet about it.
 
 Findings point at your call; the message names the remote reference, whose file is in another repository. Nothing is
 fetched during a run: flowpact reads only the committed lockfile, so results do not depend on the network.
@@ -37,6 +46,7 @@ remotes:
   octo/setup@v2:
     sha: 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432
     kind: action
+    using: composite        # runs.using; outputs are checked only for composite
     inputs:
       version: { required: true }
     outputs: [path]
