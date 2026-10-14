@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import * as vscode from 'vscode';
 import {
   DidChangeConfigurationNotification,
@@ -12,6 +12,7 @@ import {
 import {
   type ExtensionSettings,
   hidesOverlapInOpenedFiles,
+  isInside,
   serverSettings,
   withoutOverlap,
 } from './settings';
@@ -151,13 +152,32 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       },
     },
   };
+  // Go to Definition opens the sources of remote references from the server's cache: another repository's files at a
+  // pinned commit, so they open read-only. The server says where its cache is.
+  let sourcesDir: string | undefined;
+  const readOnlyIfSource = (editor: vscode.TextEditor | undefined) => {
+    if (editor && sourcesDir && isInside(sourcesDir, editor.document.uri.fsPath, relative))
+      void vscode.commands.executeCommand('workbench.action.files.setActiveEditorReadonlyInSession');
+  };
+  const askSourcesDir = (c: LanguageClient) =>
+    c.sendRequest<string>('flowpact/sourcesDir').then(
+      (dir) => {
+        sourcesDir = dir;
+        readOnlyIfSource(vscode.window.activeTextEditor);
+      },
+      (err: unknown) => output.warn(`could not ask where remote sources are cached: ${String(err)}`),
+    );
+
   const create = () => {
     const c = new LanguageClient('flowpact', 'flowpact', serverOptions, clientOptions);
     c.onDidChangeState(({ newState }) => {
       // Every start (a restart, or recovering from a crash) begins with an empty diagnostic collection.
       if (newState === State.Starting) sentDiagnostics.clear();
       showState(newState);
-      if (newState === State.Running) push();
+      if (newState === State.Running) {
+        push();
+        void askSourcesDir(c);
+      }
     });
     return c;
   };
@@ -193,6 +213,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand('flowpact.restartServer', restart),
     vscode.commands.registerCommand('flowpact.showOutput', () => output.show()),
+    vscode.window.onDidChangeActiveTextEditor(readOnlyIfSource),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('flowpact')) push();
     }),

@@ -54,3 +54,12 @@ export function withoutOverlap<D extends { code?: string | number | { value: str
 ): D[] {
   return diagnostics.filter((d) => !OVERLAPPING_RULES.has(codeOf(d)));
 }
+
+/**
+ * Whether a file is inside a directory: the remote sources cache the server opens with Go to Definition, whose files
+ * open read-only (`path.relative` compares Windows paths in any case, as VS Code writes drive letters in lower case).
+ */
+export function isInside(dir: string, path: string, rel: (from: string, to: string) => string): boolean {
+  const r = rel(dir, path);
+  return r !== '' && !r.startsWith('..') && !/^([a-z]:|[\\/])/i.test(r);
+}

@@ -1,8 +1,10 @@
+import { posix, win32 } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   codeOf,
   type ExtensionSettings,
   hidesOverlapInOpenedFiles,
+  isInside,
   serverSettings,
   withoutOverlap,
 } from '../src/settings';
@@ -72,5 +74,24 @@ describe('overlap with the GitHub Actions extension', () => {
     expect(codeOf({})).toBe('');
     const kept = withoutOverlap([{ code: { value: 'FP503' } }, { code: 'FP504' }, { code: 'FP101' }, {}]);
     expect(kept).toEqual([{ code: 'FP101' }, {}]);
+  });
+});
+
+describe('isInside', () => {
+  it('tells the files of the remote sources cache from others, on POSIX and Windows paths', () => {
+    const dir = '/home/u/.cache/flowpact/remotes';
+    expect(isInside(dir, `${dir}/octo/ship/abc/action.yml`, posix.relative)).toBe(true);
+    expect(isInside(dir, dir, posix.relative)).toBe(false);
+    expect(isInside(dir, '/home/u/.cache/flowpact/remotes-other/x.yml', posix.relative)).toBe(false);
+    expect(isInside(dir, '/home/u/repo/.github/workflows/ci.yml', posix.relative)).toBe(false);
+    const win = 'C:\\Users\\u\\AppData\\Local\\flowpact\\Cache\\remotes';
+    expect(
+      isInside(
+        win,
+        'c:\\users\\u\\appdata\\local\\flowpact\\cache\\remotes\\o\\r\\action.yml',
+        win32.relative,
+      ),
+    ).toBe(true);
+    expect(isInside(win, 'D:\\repo\\action.yml', win32.relative)).toBe(false);
   });
 });
