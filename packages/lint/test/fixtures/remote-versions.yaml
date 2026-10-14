@@ -1,0 +1,341 @@
+# Lockfile entries of real releases, as `flowpact remotes update` writes them (`lockEntryOf` of each tag's action.yml),
+# recorded 2026-10-14 for the grader's tests (remotes-grade.test.ts). Each pair is a version change callers met:
+# setup-node 6.1.0 dropped always-auth, create-github-app-token 3.3.0 dropped permission-team-discussions, setup-python
+# v7 dropped pip-install, and checkout's v4 tag moved from 4.3.1 to a commit that only adds an input.
+actions/setup-node:
+  v6.0.0:
+    sha: 2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+    kind: action
+    using: node24
+    inputs:
+      always-auth:
+        default: 'false'
+      node-version: {}
+      node-version-file: {}
+      architecture: {}
+      check-latest:
+        default: false
+      registry-url: {}
+      scope: {}
+      token:
+        default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+      cache: {}
+      package-manager-cache:
+        default: true
+      cache-dependency-path: {}
+      mirror: {}
+      mirror-token: {}
+    outputs:
+      - cache-hit
+      - node-version
+  v6.1.0:
+    sha: 395ad3262231945c25e8478fd5baf05154b1d79f
+    kind: action
+    using: node24
+    inputs:
+      node-version: {}
+      node-version-file: {}
+      architecture: {}
+      check-latest:
+        default: false
+      registry-url: {}
+      scope: {}
+      token:
+        default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+      cache: {}
+      package-manager-cache:
+        default: true
+      cache-dependency-path: {}
+      mirror: {}
+      mirror-token: {}
+    outputs:
+      - cache-hit
+      - node-version
+actions/create-github-app-token:
+  v3.2.0:
+    sha: bcd2ba49218906704ab6c1aa796996da409d3eb1
+    kind: action
+    using: node24
+    inputs:
+      client-id: {}
+      app-id: {}
+      private-key:
+        required: true
+      owner: {}
+      repositories: {}
+      enterprise: {}
+      skip-token-revoke:
+        default: 'false'
+      github-api-url:
+        default: ${{ github.api_url }}
+      permission-actions: {}
+      permission-administration: {}
+      permission-artifact-metadata: {}
+      permission-attestations: {}
+      permission-checks: {}
+      permission-codespaces: {}
+      permission-contents: {}
+      permission-custom-properties-for-organizations: {}
+      permission-dependabot-secrets: {}
+      permission-deployments: {}
+      permission-discussions: {}
+      permission-email-addresses: {}
+      permission-enterprise-custom-properties-for-organizations: {}
+      permission-environments: {}
+      permission-followers: {}
+      permission-git-ssh-keys: {}
+      permission-gpg-keys: {}
+      permission-interaction-limits: {}
+      permission-issues: {}
+      permission-members: {}
+      permission-merge-queues: {}
+      permission-metadata: {}
+      permission-organization-administration: {}
+      permission-organization-announcement-banners: {}
+      permission-organization-copilot-seat-management: {}
+      permission-organization-custom-org-roles: {}
+      permission-organization-custom-properties: {}
+      permission-organization-custom-roles: {}
+      permission-organization-events: {}
+      permission-organization-hooks: {}
+      permission-organization-packages: {}
+      permission-organization-personal-access-token-requests: {}
+      permission-organization-personal-access-tokens: {}
+      permission-organization-plan: {}
+      permission-organization-projects: {}
+      permission-organization-secrets: {}
+      permission-organization-self-hosted-runners: {}
+      permission-organization-user-blocking: {}
+      permission-packages: {}
+      permission-pages: {}
+      permission-profile: {}
+      permission-pull-requests: {}
+      permission-repository-custom-properties: {}
+      permission-repository-hooks: {}
+      permission-repository-projects: {}
+      permission-secret-scanning-alerts: {}
+      permission-secrets: {}
+      permission-security-events: {}
+      permission-single-file: {}
+      permission-starring: {}
+      permission-statuses: {}
+      permission-team-discussions: {}
+      permission-vulnerability-alerts: {}
+      permission-workflows: {}
+    outputs:
+      - token
+      - installation-id
+      - app-slug
+  v3.3.0:
+    sha: 64ab729a6294000f5aa4a4bc0b73d1f32bc45510
+    kind: action
+    using: node24
+    inputs:
+      client-id: {}
+      app-id: {}
+      private-key:
+        required: true
+      owner: {}
+      repositories: {}
+      enterprise: {}
+      skip-token-revoke:
+        default: 'false'
+      github-api-url:
+        default: ${{ github.api_url }}
+      permission-actions: {}
+      permission-administration: {}
+      permission-artifact-metadata: {}
+      permission-attestations: {}
+      permission-checks: {}
+      permission-code-quality: {}
+      permission-codespaces: {}
+      permission-contents: {}
+      permission-custom-properties-for-organizations: {}
+      permission-dependabot-secrets: {}
+      permission-deployments: {}
+      permission-discussions: {}
+      permission-email-addresses: {}
+      permission-enterprise-custom-properties-for-organizations: {}
+      permission-environments: {}
+      permission-followers: {}
+      permission-git-ssh-keys: {}
+      permission-gpg-keys: {}
+      permission-interaction-limits: {}
+      permission-issues: {}
+      permission-members: {}
+      permission-merge-queues: {}
+      permission-metadata: {}
+      permission-organization-administration: {}
+      permission-organization-announcement-banners: {}
+      permission-organization-copilot-agent-settings: {}
+      permission-organization-copilot-seat-management: {}
+      permission-organization-custom-org-roles: {}
+      permission-organization-custom-properties: {}
+      permission-organization-custom-roles: {}
+      permission-organization-events: {}
+      permission-organization-external-properties-for-repos: {}
+      permission-organization-hooks: {}
+      permission-organization-packages: {}
+      permission-organization-personal-access-token-requests: {}
+      permission-organization-personal-access-tokens: {}
+      permission-organization-plan: {}
+      permission-organization-projects: {}
+      permission-organization-secrets: {}
+      permission-organization-self-hosted-runners: {}
+      permission-organization-user-blocking: {}
+      permission-packages: {}
+      permission-pages: {}
+      permission-profile: {}
+      permission-pull-requests: {}
+      permission-repository-custom-properties: {}
+      permission-repository-hooks: {}
+      permission-repository-projects: {}
+      permission-secret-scanning-alerts: {}
+      permission-secrets: {}
+      permission-security-events: {}
+      permission-single-file: {}
+      permission-starring: {}
+      permission-statuses: {}
+      permission-vulnerability-alerts: {}
+      permission-workflows: {}
+    outputs:
+      - token
+      - installation-id
+      - app-slug
+actions/setup-python:
+  v6:
+    sha: ece7cb06caefa5fff74198d8649806c4678c61a1
+    kind: action
+    using: node24
+    inputs:
+      python-version: {}
+      python-version-file: {}
+      cache: {}
+      architecture: {}
+      check-latest:
+        default: false
+      token:
+        default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+      cache-dependency-path: {}
+      update-environment:
+        default: true
+      allow-prereleases:
+        default: false
+      freethreaded:
+        default: false
+      pip-version: {}
+      pip-install: {}
+    outputs:
+      - python-version
+      - cache-hit
+      - python-path
+  v7:
+    sha: 5fda3b95a4ea91299a34e894583c3862153e4b97
+    kind: action
+    using: node24
+    inputs:
+      python-version: {}
+      python-version-file: {}
+      cache: {}
+      architecture: {}
+      check-latest:
+        default: false
+      token:
+        default: ${{ github.server_url == 'https://github.com' && github.token || '' }}
+      cache-dependency-path: {}
+      update-environment:
+        default: true
+      allow-prereleases:
+        default: false
+      freethreaded:
+        default: false
+      pip-version: {}
+    outputs:
+      - python-version
+      - cache-hit
+      - python-path
+actions/checkout:
+  v4.3.1:
+    sha: 34e114876b0b11c390a56381ad16ebd13914f8d5
+    kind: action
+    using: node20
+    inputs:
+      repository:
+        default: ${{ github.repository }}
+      ref: {}
+      token:
+        default: ${{ github.token }}
+      ssh-key: {}
+      ssh-known-hosts: {}
+      ssh-strict:
+        default: true
+      ssh-user:
+        default: git
+      persist-credentials:
+        default: true
+      path: {}
+      clean:
+        default: true
+      filter: {}
+      sparse-checkout: {}
+      sparse-checkout-cone-mode:
+        default: true
+      fetch-depth:
+        default: 1
+      fetch-tags:
+        default: false
+      show-progress:
+        default: true
+      lfs:
+        default: false
+      submodules:
+        default: false
+      set-safe-directory:
+        default: true
+      github-server-url: {}
+    outputs:
+      - ref
+      - commit
+  v4:
+    sha: 11d5960a326750d5838078e36cf38b85af677262
+    kind: action
+    using: node20
+    inputs:
+      repository:
+        default: ${{ github.repository }}
+      ref: {}
+      token:
+        default: ${{ github.token }}
+      ssh-key: {}
+      ssh-known-hosts: {}
+      ssh-strict:
+        default: true
+      ssh-user:
+        default: git
+      persist-credentials:
+        default: true
+      path: {}
+      clean:
+        default: true
+      filter: {}
+      sparse-checkout: {}
+      sparse-checkout-cone-mode:
+        default: true
+      fetch-depth:
+        default: 1
+      fetch-tags:
+        default: false
+      show-progress:
+        default: true
+      lfs:
+        default: false
+      submodules:
+        default: false
+      set-safe-directory:
+        default: true
+      github-server-url: {}
+      allow-unsafe-pr-checkout:
+        default: false
+    outputs:
+      - ref
+      - commit
