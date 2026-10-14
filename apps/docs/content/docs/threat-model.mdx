@@ -3,7 +3,7 @@ title: Threat model
 description: What flowpact protects, where untrusted data and code cross into it, and its threats ranked by risk, each with the code and tests that defend against it and the risk that remains.
 ---
 
-This is the security assessment of flowpact 0.12.3, built on `@ciatlas/core` 0.1.0, as of 2026-10-12. It names what
+This is the security assessment of flowpact 0.17.0, built on `@ciatlas/core` 2.0.0, as of 2026-10-14. It names what
 flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
@@ -11,7 +11,7 @@ review. The [security page](/docs/security) describes what flowpact reads, write
 release; to report a vulnerability, see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
 
 Paths are in this repository, except those marked (core), which are in
-[ciatlas/core](https://github.com/ciatlas/core/tree/v0.1.0) at v0.1.0.
+[ciatlas/core](https://github.com/ciatlas/core/tree/v2.0.0) at v2.0.0.
 
 ## Assets
 
@@ -37,7 +37,7 @@ Paths are in this repository, except those marked (core), which are in
   build tools that run in CI; and `@ciatlas/core`, a git dependency on a release tag of ciatlas/core, which has the
   same maintainer.
 - **The released artifacts.** The npm package, the action at its tags (including the floating tag of each minor line,
-  such as `v0.12`), the `.vsix` on the two registries, the signed files of each GitHub release, and this site, which
+  such as `v0.17`), the `.vsix` on the two registries, the signed files of each GitHub release, and this site, which
   `docs.yml` deploys to GitHub Pages from `main`.
 
 ## Trust boundaries
@@ -66,11 +66,12 @@ are ordered by the residual risk.
 | 2 | [A compromised dependency](#a-compromised-dependency) | medium | high | medium |
 | 3 | [Injection through output](#injection-through-output) | high | medium | low |
 | 4 | [Writes through symlinks](#writes-through-symlinks) | medium | high | low |
-| 5 | [A stolen release-bot key or publishing credential](#a-stolen-release-bot-key-or-publishing-credential) | low | high | medium |
-| 6 | [A compromised `@ciatlas/core` release](#a-compromised-ciatlascore-release) | low | high | low |
-| 7 | [A tampered release](#a-tampered-release) | low | high | low |
-| 8 | [Argument injection through flag values](#argument-injection-through-flag-values) | low | high | low |
-| 9 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
+| 5 | [A pull request weakens its own impact check](#a-pull-request-weakens-its-own-impact-check) | medium | medium | low |
+| 6 | [A stolen release-bot key or publishing credential](#a-stolen-release-bot-key-or-publishing-credential) | low | high | medium |
+| 7 | [A compromised `@ciatlas/core` release](#a-compromised-ciatlascore-release) | low | high | low |
+| 8 | [A tampered release](#a-tampered-release) | low | high | low |
+| 9 | [Argument injection through flag values](#argument-injection-through-flag-values) | low | high | low |
+| 10 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
 
 ### Plugins run on untrusted code
 
@@ -189,6 +190,34 @@ another checkout, or in its `.git` directory.
   0.12.3 followed some of these links; the
   [security policy](https://github.com/ciatlas/flowpact/blob/main/SECURITY.md#security-fixes-in-past-releases) lists
   which.
+
+### A pull request weakens its own impact check
+
+Impact mode gates a pull request on how its changes to published workflows and actions affect callers. The pull
+request also controls the files that decide what is graded: the repository's config and its `ignore`, a base config
+inside the repository, the links and submodules on the way to it, and the paths the workflow passes. Since 0.15, paths
+and `ignore` leave units out of grading, so a pull request could try to leave out the unit it breaks.
+
+- **Mitigation.** A published unit is left out only when both the baseline's `ignore` and the pull request's match
+  it, so adding a unit to `ignore` still grades the pull request that adds it, with a note
+  (`ignoreAddedOf` in `packages/lint/src/impact.ts`). A base config that is a file of the repository is read on the
+  baseline side as the baseline commit has it: through links, through submodules at the commit each side records, and
+  in the letter case the file system stores, also with `core.ignorecase=false` (`repositoryPathOf`, `locate`,
+  `recordedAt`, `ignoresCase` and `ignoreAfterMerge` in `packages/lint/src/impact-run.ts`). A submodule commit the
+  clone lacks leaves nothing out, and the run says so. Paths scope the verdict and the findings together, so a run
+  never passes with a verdict that requires more than the pull request declares. `impact: auto` skips a run only when the recorded commit's config leaves out every published unit too
+  (`nothingPublishedNote` in `packages/action/src/main.ts`).
+- **Tests.** `packages/lint/test/impact-run.test.ts` and `packages/lint/test/impact.test.ts` (links, chains, a link to
+  the repository's top, submodules moved off or lacking their recorded commit, letter case);
+  `packages/cli/test/cli.impact.e2e.test.ts` (each bypass found in review, end to end); `packages/action/test/main.test.ts`
+  (`impact: auto`). Before release, a matrix of 3,024 runs over seven kinds of base config and every event gave no run
+  that passes where the stricter reading fails.
+- **Residual risk: low.** A base config named through a link outside the repository, where the pull request also turns
+  a tracked directory into a link, is read as the pull request has it
+  ([#139](https://github.com/ciatlas/flowpact/issues/139)). A base config that a workflow step generates counts on both
+  sides, so a pull request that edits that step controls it; on `pull_request` the workflow runs from the pull
+  request's head, so the pull request controls the run anyway. Requiring the check, and reviewing changes to the
+  workflow that runs it, is up to the repository.
 
 ### A stolen release-bot key or publishing credential
 
