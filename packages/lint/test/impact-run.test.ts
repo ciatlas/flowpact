@@ -285,6 +285,22 @@ describe('a base config within a submodule', () => {
     });
   });
 
+  it('leaves nothing out for the commit the pull request records, when it lacks the config checked out in its place', () => {
+    // Both record v1, which lacks base.yml; the submodule is checked out at v2, whose base.yml ignores b. Before: v2's
+    // ignore stood in for the pull request's, so its edit to ignore was noted though the pull request changes nothing.
+    const root = repo({}, {}, [{ README: 'x\n' }, { 'base.yml': IGNORES_B }]);
+    git(join(root, '.org'), 'checkout', '-q', 'main');
+    const v1 = git(join(root, '.org'), 'rev-parse', '--short=7', 'HEAD~1');
+    expect(baselineOf(root, '.org/base.yml')).toMatchObject({
+      ignore: [],
+      ignoreAfterMerge: [],
+      notes: [
+        OF_REPOSITORY,
+        `the pull request's commit of the submodule .org at ${v1} has no base config .org/base.yml, so impact mode reads no ignore from it for the pull request`,
+      ],
+    });
+  });
+
   it("names the submodule when the clone lacks the baseline's commit of it", () => {
     const root = repo({}, {}, [{ 'base.yml': IGNORES_B }], ['missing', 0]);
     expect(baselineOf(root, '.org/base.yml')).toMatchObject({

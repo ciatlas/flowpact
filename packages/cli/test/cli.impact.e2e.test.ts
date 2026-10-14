@@ -1110,10 +1110,14 @@ describe('ignore and impact mode', () => {
   describe('a base config within a submodule', () => {
     /**
      * Published actions a and b, and the base config `.org/base.yml` in the submodule `.org` (an embedded repository
-     * holding each of `versions` in turn). Main records the submodule at `versions[baseAt]` (or at a commit the clone
-     * lacks), the change at `versions[headAt]`, and breaks b.
+     * holding each of `versions` in turn, none for a commit without it). Main records the submodule at
+     * `versions[baseAt]` (or at a commit the clone lacks), the change at `versions[headAt]`, and breaks b.
      */
-    function withSubmodule(versions: string[], baseAt: number | 'missing', headAt: number): string {
+    function withSubmodule(
+      versions: (string | undefined)[],
+      baseAt: number | 'missing',
+      headAt: number,
+    ): string {
       const top = repo(
         { [CONFIG]: 'impact:\n  publish: ["*/action.yml"]\n' },
         { 'a/action.yml': action('a', true) },
@@ -1127,7 +1131,7 @@ describe('ignore and impact mode', () => {
       git(org, 'config', 'user.name', 't');
       git(org, 'config', 'commit.gpgsign', 'false');
       const commits = versions.map((text, i) => {
-        write(org, { 'base.yml': text });
+        write(org, text === undefined ? { README: 'x\n' } : { 'base.yml': text });
         git(org, 'add', '-A');
         git(org, 'commit', '-q', '-m', `v${i + 1}`);
         return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: org }).toString().trim();
@@ -1180,6 +1184,21 @@ describe('ignore and impact mode', () => {
       expect(m.exitCode).toBe(1);
       expect(m.stdout).toContain('FP810');
       expect(m.stderr).not.toContain('ignore leaves out');
+    });
+
+    it('does not note an ignore edit when the commit both record lacks the config checked out in its place', async () => {
+      // Both record v1, which lacks base.yml; the submodule is checked out at v2, whose base.yml ignores b.
+      const root = withSubmodule([undefined, IGNORES_B], 0, 0);
+      git(join(root, '.org'), 'checkout', '-q', 'main');
+      const r = await impact(root);
+      expect(r.exitCode).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      // Before: "this pull request changes what ignore leaves out of impact mode (b); that applies after it is merged",
+      // though the pull request changes nothing and v1 leaves nothing out once merged.
+      expect(r.stderr).not.toContain('ignore leaves out');
+      expect(r.stderr).toMatch(
+        /impact: the pull request's commit of the submodule \.org at [0-9a-f]{7} has no base config \.org\/base\.yml, so impact mode reads no ignore from it for the pull request/,
+      );
     });
 
     it("reads it at the baseline's commit of the submodule, so one the pull request leaves alone counts on both sides", async () => {

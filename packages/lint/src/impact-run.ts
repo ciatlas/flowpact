@@ -423,13 +423,13 @@ function repositoryPathOf(top: string, file: string): string | undefined {
 /**
  * What a checkout of a commit has at a path (see `locate`): a file the commit tracks (`object` in the repository at
  * `dir`, which is a submodule's with `submodule`; `path` from the top), a file of the working tree that no commit
- * tracks or one outside the repository (`file`, its real path), none, or `unread`: the submodule whose commit there
- * this clone lacks.
+ * tracks or one outside the repository (`file`, its real path), none (in `submodule`, at the commit there, when the
+ * path ends in one), or `unread`: the submodule whose commit there this clone lacks.
  */
 type Located =
   | { kind: 'tracked'; dir: string; object: string; path: string; submodule: boolean }
   | { kind: 'file'; file: string }
-  | { kind: 'none' }
+  | { kind: 'none'; submodule?: string }
   | { kind: 'unread'; submodule: string; path: string };
 
 const NONE: Located = { kind: 'none' };
@@ -442,9 +442,13 @@ interface Walk {
   /** The real top directory of the repository, and the commit of it the walk follows the path in. */
   top: string;
   commit: string;
-  /** The repository the walk is in (the top's, or a submodule's directory) and its commit there. */
+  /**
+   * The repository the walk is in (the top's, or a submodule's directory), its commit there, and the one the top's
+   * checked-out commit records for it (none where that commit has no submodule there).
+   */
   dir: string;
   tree: string;
+  head: string | undefined;
   ignoreCase: boolean;
   /** The submodules the walk is in, as a path (`.org/`). */
   shown: string;
@@ -455,9 +459,9 @@ interface Walk {
   links: number;
 }
 
-/** Goes on in the repository at `dir`, at its `commit`, from its top. */
-function enter(w: Walk, dir: string, commit: string, shown: string): void {
-  Object.assign(w, { dir, tree: commit, shown, at: [], ignoreCase: ignoresCase(dir) });
+/** Goes on in the repository at `dir`, at its `commit` (`head` the checked-out one's, see `Walk`), from its top. */
+function enter(w: Walk, dir: string, commit: string, head: string | undefined, shown: string): void {
+  Object.assign(w, { dir, tree: commit, head, shown, at: [], ignoreCase: ignoresCase(dir) });
 }
 
 /** The path from the top of the repository to `name` in the directory the walk is at. */
@@ -473,7 +477,7 @@ const fileAt = (abs: string): Located => {
 function leave(w: Walk, abs: string): Located | undefined {
   const path = repositoryPathOf(w.top, abs);
   if (path === undefined) return fileAt(abs);
-  enter(w, w.top, w.commit, '');
+  enter(w, w.top, w.commit, 'HEAD', '');
   w.todo = path.split('/');
   return undefined;
 }
@@ -494,7 +498,20 @@ function submodule(w: Walk, entry: TreeEntry): Located | undefined {
     const at = `${w.shown}${path} at ${entry.object.slice(0, 7)}`;
     return { kind: 'unread', submodule: at, path: [`${w.shown}${path}`, ...w.todo].join('/') };
   }
-  enter(w, dir, entry.object, `${w.shown}${path}/`);
+  enter(w, dir, entry.object, recordedAt(w, path), `${w.shown}${path}/`);
+  return undefined;
+}
+
+/** The commit the top's checked-out commit records for the submodule at `path` in the repository the walk is in. */
+function recordedAt(w: Walk, path: string): string | undefined {
+  let tree = w.head;
+  const parts = path.split('/');
+  for (const [i, part] of parts.entries()) {
+    if (tree === undefined) return undefined;
+    const entry = entryNamed(treeEntries(gitOutput(w.dir, ['ls-tree', '-z', tree])), part, w.ignoreCase);
+    if (i === parts.length - 1) return entry?.mode === '160000' ? entry.object : undefined;
+    tree = entry?.mode === '040000' ? entry.object : undefined;
+  }
   return undefined;
 }
 
@@ -521,15 +538,24 @@ function tracked(w: Walk, entry: TreeEntry): Located | undefined {
 }
 
 /**
- * Whether the commit checked out in the repository the walk is in tracks a file, link or submodule along `parts`:
- * at the last of them, or in place of a directory before it (a pull request that turns a directory into a link or a
- * submodule controls what the path reaches); also when there is no commit to tell.
+ * Whether the pull request's commits track a file, link or submodule along `parts` in the repository the walk is in
+ * (the checked-out commit, or the commit it records for the submodule the walk is in): at the last of them, or in
+ * place of a directory before it (a pull request that turns a directory into a link or a submodule controls what the
+ * path reaches); also where it records no submodule there, or there is no commit to tell. In a submodule, also when
+ * the commit checked out there does, so a file of another commit (`git submodule update --remote`) is never taken for
+ * one no commit tracks.
  */
 function trackedAtHead(w: Walk, parts: string[]): boolean {
-  if (!hasCommit(w.dir, 'HEAD')) return true;
-  let tree = 'HEAD';
+  if (w.shown !== '' && trackedIn(w.dir, 'HEAD', parts, w.ignoreCase)) return true;
+  return w.head === undefined || trackedIn(w.dir, w.head, parts, w.ignoreCase);
+}
+
+/** Whether `commit` of the repository at `dir` tracks something along `parts` (see `trackedAtHead`). */
+function trackedIn(dir: string, commit: string, parts: string[], ignoreCase: boolean): boolean {
+  if (!hasCommit(dir, commit)) return true;
+  let tree = commit;
   for (const part of parts) {
-    const entry = entryNamed(treeEntries(gitOutput(w.dir, ['ls-tree', '-z', tree])), part, w.ignoreCase);
+    const entry = entryNamed(treeEntries(gitOutput(dir, ['ls-tree', '-z', tree])), part, ignoreCase);
     if (!entry) return false;
     if (entry.mode !== '040000') return true;
     tree = entry.object;
@@ -538,9 +564,9 @@ function trackedAtHead(w: Walk, parts: string[]): boolean {
 }
 
 /**
- * Goes on through a part the commit lacks: none where the checked-out commit tracks it or something on the way to it
- * (the pull request added it), else as the working tree has it, the same on both sides: a symbolic link, a directory
- * or, last, the file.
+ * Goes on through a part the commit lacks: none where the pull request's commits track it or something on the way to
+ * it (`trackedAtHead`: the pull request added it), else as the working tree has it, the same on both sides: a symbolic
+ * link, a directory or, last, the file.
  */
 function untracked(w: Walk, part: string): Located | undefined {
   const parent = w.at.map((a) => a.name);
@@ -579,19 +605,19 @@ function locate(top: string, commit: string, path: string): Located {
     commit,
     dir: top,
     tree: commit,
+    head: 'HEAD',
     ignoreCase: false,
     shown: '',
     at: [],
     todo: [],
     links: 0,
   };
-  enter(w, top, commit, '');
+  enter(w, top, commit, 'HEAD', '');
   w.todo = path.split('/');
-  for (let part = w.todo.shift(); part !== undefined; part = w.todo.shift()) {
-    const found = step(w, part);
-    if (found) return found;
-  }
-  return NONE;
+  let found: Located | undefined;
+  while (!found && w.todo.length) found = step(w, w.todo.shift()!);
+  if (found && found.kind !== 'none') return found;
+  return w.shown ? { kind: 'none', submodule: `${w.shown.slice(0, -1)} at ${w.tree.slice(0, 7)}` } : NONE;
 }
 
 /** The text of a file `locate` found; undefined for none, or one that cannot be read. */
@@ -692,8 +718,8 @@ function baselineIgnore(
 /**
  * The pull request's `ignore` as its commits have it, when the working tree may have another: for a base config of the
  * repository in a submodule, at the commit the checked-out commit records for it (`git submodule update --remote`
- * checks out another), under the config's own. When the clone lacks that commit, the config's own alone (noted), as
- * for the baseline. Undefined otherwise: the working tree's is the pull request's.
+ * checks out another), under the config's own. When that commit lacks it, or the clone lacks that commit, the config's
+ * own alone (noted), as for the baseline. Undefined otherwise: the working tree's is the pull request's.
  */
 function ignoreAfterMerge(
   root: string,
@@ -702,12 +728,18 @@ function ignoreAfterMerge(
   notes: string[],
 ): readonly string[] | undefined {
   const head = locate(base.top, 'HEAD', base.path);
-  if (head.kind !== 'unread' && (head.kind !== 'tracked' || !head.submodule)) return undefined;
+  if (head.kind === 'file' || !head.submodule) return undefined;
   // The config's own `ignore`, without the base config's: read like the baseline's, from the working tree.
   const own = baselineConfig(workingTree(root), configPath, undefined, [])?.ignore ?? [];
   if (head.kind === 'unread') {
     notes.push(
       `the pull request's version of the base config ${head.path} is in the submodule ${head.submodule}, which this clone lacks, so impact mode reads no ignore from it for the pull request`,
+    );
+    return own;
+  }
+  if (head.kind === 'none') {
+    notes.push(
+      `the pull request's commit of the submodule ${head.submodule} has no base config ${base.path}, so impact mode reads no ignore from it for the pull request`,
     );
     return own;
   }
