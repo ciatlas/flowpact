@@ -398,11 +398,13 @@ const realpathOr = (p: string): string | undefined => {
 
 /**
  * `file` (absolute) as a path of the repository whose real top directory is `top`, or undefined outside it. It is
- * taken from the nearest directory above it that is the top, so the symbolic links on the way stay parts of it.
+ * taken from the outermost directory above it that is the top, so the symbolic links on the way stay parts of it, a
+ * link in the repository to its own top included.
  */
 function repositoryPathOf(top: string, file: string): string | undefined {
-  for (let dir = dirname(file); dir !== dirname(dir); dir = dirname(dir))
-    if (realpathOr(dir) === top) return relative(dir, file).split(sep).join('/');
+  const dirs: string[] = [];
+  for (let dir = dirname(file); dir !== dirname(dir); dir = dirname(dir)) dirs.unshift(dir);
+  for (const dir of dirs) if (realpathOr(dir) === top) return relative(dir, file).split(sep).join('/');
   const real = realpathOr(file);
   return real !== undefined && pathInside(top, real) ? relative(top, real).split(sep).join('/') : undefined;
 }

@@ -248,8 +248,8 @@ whether the pull request's commits can change it:
 - **A file of the checked-out commit** is the pull request's own version of it, so the baseline's impact settings
   leave it out. Its `ignore` counts on the baseline's side as the baseline has it (read from git): a base config the
   pull request leaves alone ignores the same on both sides, and what one it edits adds to `ignore` applies after it is
-  merged. A symbolic link on the way counts as the baseline has it too, so pointing a tracked link at another config
-  is graded like editing the config.
+  merged. A symbolic link on the way counts as the baseline has it too, so pointing a tracked link at another config,
+  or putting one in place of a directory on the way, is graded like editing the config.
 - **A file within a submodule** counts like a file of the checked-out commit, read at the baseline's commit of the
   submodule: moving the submodule to a version that ignores more is graded until the pull request is merged. What
   applies once merged is the commit the pull request records for the submodule, not another one checked out in its

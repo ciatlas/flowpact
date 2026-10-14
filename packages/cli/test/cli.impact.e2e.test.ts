@@ -1041,6 +1041,21 @@ describe('ignore and impact mode', () => {
       expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
     });
 
+    it('reads the directory the baseline has where the pull request puts a link to the top in its place', async () => {
+      // The baseline's .github/org/base.yml ignores nothing; the pull request makes .github/org a link to the top,
+      // whose base.yml ignores b.
+      const root = linked({ '.github/org/base.yml': 'ignore: []\n', 'base.yml': IGNORES_B }, {}, {});
+      git(root, 'rm', '-rq', '.github/org');
+      symlinkSync('..', join(root, '.github/org'));
+      git(root, 'add', '-A');
+      git(root, 'commit', '-q', '-m', 'link to the top');
+      const r = await impact(root, '.github/org/base.yml');
+      // Before: the baseline's top-level base.yml was read, so b was left out: "required none, ok: true" and exit 0.
+      expect(r.exitCode).toBe(1);
+      expect(JSON.parse(r.stdout).impact).toMatchObject({ required: 'major', ok: false });
+      expect(r.stderr).toContain('changes what ignore leaves out of impact mode (b)');
+    });
+
     it('reads the config a tracked link points at from the working tree when no commit tracks it', async () => {
       // The organization's configs checked out into a gitignored directory; the pull request repoints the link.
       const root = linked(

@@ -122,6 +122,19 @@ describe('a base config reached through a symbolic link', () => {
     expect(baselineOf(chain, '.github/base.yml').ignore).toEqual([]);
   });
 
+  it('reads the directory the baseline has where the pull request puts a link to the top of the repository', () => {
+    // The pull request turns .github/org into a link to the top, whose base.yml ignores b. Before: the path was taken
+    // from that link (base.yml), so the baseline's base.yml at the top counted, and b was left out on both sides.
+    const root = repo({ '.github/org/base.yml': NOTHING, 'base.yml': IGNORES_B }, {});
+    git(root, 'rm', '-rq', '.github/org');
+    put(root, { '.github/org': { link: '..' } });
+    commit(root, 'link');
+    expect(baselineOf(root, '.github/org/base.yml')).toMatchObject({ ignore: [], notes: [OF_REPOSITORY] });
+    // A link to the top that both sides have counts as each has it: the same base.yml.
+    const kept = repo({ '.github/org': { link: '..' }, 'base.yml': IGNORES_B }, {});
+    expect(baselineOf(kept, '.github/org/base.yml').ignore).toEqual(['b/**']);
+  });
+
   it('counts a link that loops in the baseline as no base config there', () => {
     const root = repo(
       { ...CONFIGS, '.github/base.yml': { link: 'base.yml' } },
