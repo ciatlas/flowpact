@@ -22641,7 +22641,12 @@ function interfaceYaml(e) {
   const runs = using === "composite" ? { using, steps: [] } : { using, main: "" };
   return (0, import_yaml8.stringify)({ name: "", inputs, outputs, runs });
 }
-var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
+var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !pinMismatch(ref, e)).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
+function pinMismatch(ref, entry) {
+  const r = parseRemoteRef(ref, entry.kind);
+  return r !== void 0 && commitOf(r, entry) !== entry.sha;
+}
+var commitOf = (r, entry) => /^[0-9a-f]{40}$/i.test(r.ref) ? r.ref.toLowerCase() : entry.sha;
 var isExternal = (unit) => unit.external === true;
 function interfaceCalls(index) {
   const remote = [];
@@ -25333,10 +25338,20 @@ function lockDrift(ctx) {
   const lockedKeys = new Set(locked.map(remoteKey));
   const used = remoteRefsOf(ctx.index).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
+  const mismatched = Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !fetched.includes(ref) && pinMismatch(ref, e)).map(([ref, e]) => `${ref} (it records ${e.sha.slice(0, 7)})`);
   return {
     missing: used.filter((r) => !lockedKeys.has(remoteKey(r))),
-    unused: locked.filter((r) => !usedKeys.has(remoteKey(r)))
+    unused: locked.filter((r) => !usedKeys.has(remoteKey(r))),
+    mismatched
   };
+}
+function driftParts(drift) {
+  const parts = [
+    [drift.missing, "lacks"],
+    [drift.unused, "no longer needs"],
+    [drift.mismatched, "records another commit than the one pinned for"]
+  ];
+  return parts.filter(([refs]) => refs.length).map(([refs, what]) => `${what} ${refs.join(", ")}`);
 }
 var remotesLockOutdated = defineRule({
   code: "FP612",
@@ -25344,19 +25359,15 @@ var remotesLockOutdated = defineRule({
   category: "structure",
   defaultSeverity: "warning",
   docs: {
-    summary: "The remote interfaces lockfile lacks a remote workflow or action the repository uses, or has one it no longer uses.",
-    why: "A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action\u2019s `remotes: fetch` fetches it for the run). It happens when a reference moves to another version, for example in a pull request from Renovate or Dependabot, until the lockfile is updated.",
+    summary: "The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, or records another commit than the one a reference pins.",
+    why: "A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action\u2019s `remotes: fetch` fetches it for the run). It happens when a reference moves to another version, for example in a pull request from Renovate or Dependabot, until the lockfile is updated. A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, so an entry that records another one describes other code: it is not used, and the calls are not checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did.",
     fix: "Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs)."
   },
   check(ctx) {
     const { file, error: error3 } = ctx.remotes ?? {};
     if (!file || error3) return;
-    const { missing, unused } = lockDrift(ctx);
-    if (!missing.length && !unused.length) return;
-    const parts = [
-      ...missing.length ? [`lacks ${missing.join(", ")}`] : [],
-      ...unused.length ? [`no longer needs ${unused.join(", ")}`] : []
-    ];
+    const parts = driftParts(lockDrift(ctx));
+    if (!parts.length) return;
     ctx.report({
       message: `${file} is out of date: it ${parts.join("; it ")}. Run \`flowpact remotes update\``,
       loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
@@ -26373,7 +26384,7 @@ var workingTree = (root) => ({
   walk: () => [],
   isDir: () => false
 });
-function commitOf(root, ref, fetch2) {
+function commitOf2(root, ref, fetch2) {
   try {
     return resolveCommit(root, ref);
   } catch (err) {
@@ -26451,10 +26462,10 @@ function lastRelease(root, commit, req) {
   };
 }
 function baselineOf(root, ref, req, pr, notes) {
-  const commit = commitOf(root, ref, req.fetch);
+  const commit = commitOf2(root, ref, req.fetch);
   const last = isReleasePullRequest(pr.title, pr.labels) ? lastRelease(root, commit, req) : void 0;
   if (!last) return { kind: "ref", ref, commit };
-  const tagCommit = commitOf(root, `refs/tags/${last.tag}`, void 0);
+  const tagCommit = commitOf2(root, `refs/tags/${last.tag}`, void 0);
   notes.push(
     `release pull request: ${last.release.previous} \u2192 ${last.release.version}, compared with ${last.tag}`
   );
