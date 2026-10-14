@@ -3,7 +3,9 @@ title: Threat model
 description: What flowpact protects, where untrusted data and code cross into it, and its threats ranked by risk, each with the code and tests that defend against it and the risk that remains.
 ---
 
-This is the security assessment of flowpact 0.19.0, built on `@ciatlas/core` 2.2.0, as of 2026-10-14. It names what
+This is the security assessment of flowpact 0.20.0 and the changes on `main` since (the sources cache,
+`remotes download` and `clean`, editor navigation into cached sources, and the remotes functions of the API), built on
+`@ciatlas/core` 2.2.0, as of 2026-10-14. It names what
 flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
@@ -58,7 +60,9 @@ Paths are in this repository, except those marked (core), which are in
    it against the signed GitHub release.
 8. **GitHub API to flowpact.** With `flowpact remotes update`, `--fetch-remotes` or the action's `remotes: fetch`,
    flowpact reads workflow and action files of other repositories, chosen by the `uses:` references of the analyzed
-   repository, with a token.
+   repository, with a token. With `--github-com` (the action's `remotes-github-com`), the references a GitHub
+   Enterprise Server lacks are looked up on github.com too, with `GITHUB_COM_TOKEN` or none. `remotes update` and
+   `remotes download` keep the files they read in a per-user cache, which the editor opens.
 
 ## Threats, ranked
 
@@ -315,9 +319,10 @@ flowpact checks calls to other repositories against interfaces it does not hold 
 [remote interfaces lockfile](/docs/remote-interfaces), which a pull request can edit, and the files it fetches, which
 those repositories serve. A pull request can try to make the checks pass with a false interface (an input marked
 optional), a remote repository can serve a file built to waste memory, a pull request that controls the
-references can try to make a privileged token read repositories it should not, and show what it read in findings, and
-a reference built with `..` can try to make the [sources cache](/docs/remote-interfaces#sources-for-the-editor) write
-outside its directory.
+references can try to make a privileged token read repositories it should not, and show what it read in findings, a
+reference built with `..` can try to make the [sources cache](/docs/remote-interfaces#sources-for-the-editor) write
+outside its directory, and a lockfile can name a host, or a commit other than the one a reference pins, to make the
+editor link or open other code than what runs. The opt-in look on github.com sends reference names to a second host.
 
 - **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
   [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a
@@ -337,7 +342,13 @@ outside its directory.
   `remotes update` nothing in CI unless asked. Cleaning (`remotes clean`, and the pruning after `update` and
   `download`) removes only directories named by a commit at `<owner>/<repo>/<sha>`, never following a link
   (`pruneCache`). References and reasons from the lockfile are printed with control
-  characters escaped (`packages/cli/src/lib/text.ts`).
+  characters escaped (`packages/cli/src/lib/text.ts`). The github.com fallback is off unless asked, is used only for
+  references the enterprise server answers as missing or unreadable, and never with the enterprise token
+  (`fetchWithFallback`, `apiFor` in `packages/lint/src/remotes-fetch.ts`); an entry read there records
+  `host: github.com`, which `remotes download` follows only with `--github-com`, and it skips any other host a lockfile
+  names. The editor opens and links the commit a reference runs (its own full SHA, else the locked commit), and links a
+  source only on a host it is sure of: github.com for an entry read there, `GITHUB_API_URL`, or a github.com or GHE.com
+  `origin` (`webHostOf`, `sourceLink` in `packages/language-server/src/sources.ts`); it never analyzes a cached file.
 - **Tests.** `packages/lint/test/remotes.test.ts` (FP611 for an invalid lockfile, then nothing checked;
   `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the token sent only to the API, a response
   over 1 MB refused, the enterprise token never sent to github.com); `packages/lint/test/remotes-cache.test.ts` (paths
@@ -345,12 +356,17 @@ outside its directory.
   `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output, control characters from the lockfile
   shown rather than sent, nothing cached by a dry run, `lint --fetch-remotes` or in CI unless asked);
   `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`); `test/external.test.ts`
-  (core; external units out of everything that follows a call).
+  (core; external units out of everything that follows a call); `packages/language-server/test/hover-remotes.test.ts`
+  (no link to a host a lockfile names, the pinned commit opened rather than the one a lockfile claims);
+  `packages/language-server/test/server.test.ts` (a cached file and a workspace folder in the cache not analyzed).
 - **Residual risk: low.** A false entry in the lockfile weakens only the checks of the repository that commits it, and
   only until a review or `flowpact remotes update` catches it. Where a job's environment sets `GITHUB_API_URL`, that is
   where the token goes; whoever writes the job already holds its token. On other events, `remotes: fetch` reads with
   whatever token the workflow gives it, so a workflow that runs untrusted code with a broad token should not
-  opt in.
+  opt in. With `--github-com`, the names of the references the enterprise server does not answer for go to github.com,
+  including those of private repositories the enterprise token cannot read; leave it off where those names are
+  sensitive. The cache holds the files of private repositories the token could read, protected by file permissions
+  only.
 
 ### Resource exhaustion
 
