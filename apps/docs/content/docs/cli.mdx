@@ -185,7 +185,13 @@ in a row changes nothing.
 
 <Screenshot name="generate-dry-run" alt="flowpact generate --dry-run listing new contract files and a unified diff of their contents" />
 
-## `flowpact remotes update`
+## `flowpact remotes`
+
+The [remote interfaces](/docs/remote-interfaces) of the workflows and actions this repository calls from other
+repositories: `update` writes the lockfile, `download` fills the sources cache from it for the editor, and `clean`
+empties that cache.
+
+### `flowpact remotes update`
 
 Fetches the interface of every remote reusable workflow and action the repository uses, and writes
 `.github/flowpact/remotes.lock.yaml` (see [Remote interfaces](/docs/remote-interfaces)).
@@ -222,7 +228,7 @@ with the first reason (`-d` logs each one), and do not fail the command. With `-
 (`CI` set, or Azure Pipelines' `TF_BUILD`, or Jenkins' `JENKINS_URL`), nothing is kept unless `--cache-dir` or
 `FLOWPACT_CACHE_DIR` says where: nobody opens the files there, and the line says so.
 
-## `flowpact remotes download`
+### `flowpact remotes download`
 
 Downloads the workflow files and `action.yml`s of the remote references the repository uses into the
 [sources cache](/docs/remote-interfaces#sources-for-the-editor), at the commits the lockfile pins, so the editor can
@@ -244,7 +250,7 @@ as `flowpact remotes update`. Unlike `remotes update`, it uses the cache in CI t
 Both commands then keep the 3 most recently used commits of each repository they used, and never one they used; the
 output counts the older commits removed. See [`flowpact remotes clean`](#flowpact-remotes-clean) to clean more.
 
-## `flowpact remotes clean`
+### `flowpact remotes clean`
 
 Removes the commits kept in the [sources cache](/docs/remote-interfaces#sources-for-the-editor).
 
