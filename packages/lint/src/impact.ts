@@ -9,6 +9,7 @@ import {
   type ContextResolver,
   calledFunctions,
   definitelyTruthy,
+  type EnvironmentDecl,
   type ExprSite,
   type JobDecl,
   type Loc,
@@ -35,7 +36,16 @@ export const maxLevel = (levels: ImpactLevel[]): ImpactLevel =>
 export interface ImpactChange {
   /** The published unit (workflow path or action directory). */
   unit: string;
-  kind: 'check-name' | 'interface' | 'output' | 'unit' | 'permissions' | 'runner' | 'runtime' | 'uses';
+  kind:
+    | 'check-name'
+    | 'environment'
+    | 'interface'
+    | 'output'
+    | 'unit'
+    | 'permissions'
+    | 'runner'
+    | 'runtime'
+    | 'uses';
   level: ImpactLevel;
   /** False when the change involves something flowpact cannot evaluate (event data, dynamic matrices, …). */
   certain: boolean;
@@ -427,6 +437,56 @@ function runnerChanges(
   return out;
 }
 
+// ---------------------------------------------------------------------------
+// Environments
+// ---------------------------------------------------------------------------
+
+const envName = (e: EnvironmentDecl | undefined) => e?.name.toLowerCase();
+
+/**
+ * How a job's environment changed. A called workflow's job deploys to the caller's environment of that name, which
+ * GitHub creates when it is missing, so nothing fails; but its protection rules (required reviewers, wait timers,
+ * branch rules) and its secrets now apply, or no longer do. Minor either way, uncertain for a name chosen at run time.
+ */
+function environmentChange(
+  at: string,
+  b: EnvironmentDecl | undefined,
+  h: EnvironmentDecl | undefined,
+  fallback: Loc,
+) {
+  if (envName(b) === envName(h)) return undefined;
+  const certain = !b?.dynamic && !h?.dynamic;
+  if (!h)
+    return {
+      certain,
+      message: `${at} no longer uses environment "${b!.name}"; its protection rules and secrets no longer apply to callers' runs`,
+      loc: fallback,
+    };
+  return {
+    certain,
+    message: `${at} now uses environment "${h.name}"${b ? ` instead of "${b.name}"` : ''}; callers' environment of that name, its protection rules and secrets now apply (GitHub creates it when missing)`,
+    loc: h.loc,
+  };
+}
+
+function environmentChanges(
+  base: ProjectIndex,
+  head: ProjectIndex,
+  b: WorkflowDecl,
+  h: WorkflowDecl,
+): ImpactChange[] {
+  const before = byJobChain(base, b, (job) => job.environment);
+  const loc = byJobChain(head, h, (job) => job.loc);
+  const out: ImpactChange[] = [];
+  for (const [chain, he] of byJobChain(head, h, (job) => job.environment)) {
+    if (!before.has(chain) && !he) continue;
+    const at = `jobs.${chain.replaceAll(' > ', ' › ')}`;
+    const change = environmentChange(at, before.get(chain), he, loc.get(chain)!);
+    if (change) out.push({ unit: h.path, kind: 'environment', level: 'minor', ...change });
+  }
+  return out;
+}
+
 function remoteUses(unit: UnitDecl): Set<string> {
   const out = new Set<string>();
   const steps = unit.kind === 'workflow' ? Object.values(unit.jobs).flatMap((j) => j.steps) : unit.steps;
@@ -696,6 +756,7 @@ function comparedChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h:
       ...checkNameChanges(base, head, b, h),
       ...permissionChanges(base, head, b, h),
       ...runnerChanges(base, head, b, h),
+      ...environmentChanges(base, head, b, h),
     );
   if (b.kind === 'action' && h.kind === 'action') out.push(...runtimeChanges(b, h));
   return out;

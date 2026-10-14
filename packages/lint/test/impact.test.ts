@@ -237,6 +237,33 @@ describe('runners', () => {
   });
 });
 
+describe('environments', () => {
+  const wf = (env: string) =>
+    `on:\n  workflow_call:\n    inputs:\n      env: { type: string, required: false }\njobs:\n  deploy:\n${env ? `    environment: ${env}\n` : ''}    runs-on: ubuntu-latest\n    steps: [{ run: 'true' }]\n`;
+  const grade = (before: string, after: string) =>
+    summary(changes({ [`${WF}/r.yml`]: wf(before) }, { [`${WF}/r.yml`]: wf(after) }));
+  const applies = `callers' environment of that name, its protection rules and secrets now apply (GitHub creates it when missing)`;
+
+  it('grades a job that gains, changes or loses its environment as minor', () => {
+    expect(grade('', 'production')).toEqual([
+      `minor jobs.deploy now uses environment "production"; ${applies}`,
+    ]);
+    expect(grade('staging', '{ name: production, url: https://x }')).toEqual([
+      `minor jobs.deploy now uses environment "production" instead of "staging"; ${applies}`,
+    ]);
+    expect(grade('production', '')).toEqual([
+      `minor jobs.deploy no longer uses environment "production"; its protection rules and secrets no longer apply to callers' runs`,
+    ]);
+  });
+
+  it('is uncertain for a name chosen at run time, and ignores the url or the letter case', () => {
+    expect(grade('production', '${{ inputs.env }}')).toEqual([
+      `minor? jobs.deploy now uses environment "\${{ inputs.env }}" instead of "production"; ${applies}`,
+    ]);
+    expect(grade('production', '{ name: Production, url: https://y }')).toEqual([]);
+  });
+});
+
 describe('output reliability', () => {
   /** A reusable workflow whose output `v` comes from step `m` of job `build`, with `jobIf` and `stepIf` on them. */
   const wf = (jobIf = '', stepIf = '', extraJobs = '', needs = '') =>
