@@ -11277,7 +11277,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11839,7 +11839,7 @@ function evaluateTemplate(text2, resolve8) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11850,7 +11850,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12052,7 +12052,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12193,11 +12193,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12264,7 +12264,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12400,7 +12400,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12413,13 +12413,99 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/queries.ts
+function* refsOf(unit) {
+  for (const site of unit.sites)
+    for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
+}
+function readsContextDynamically(unit, context) {
+  if (mayReadAnything(unit)) return true;
+  for (const { ref } of refsOf(unit)) {
+    if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
+  }
+  return false;
+}
+function mayReadAnything(unit) {
+  return unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error));
+}
+function namesOwner(ref) {
+  const owner = ref.path[0];
+  return (ref.context === "needs" || ref.context === "jobs" || ref.context === "steps") && owner !== void 0 && owner !== "?" && owner !== "*";
+}
+function chainTo(index, target) {
+  const queue = [{ path: target, chain: [] }];
+  const seen = /* @__PURE__ */ new Set([target]);
+  let fallback = [];
+  while (queue.length) {
+    const { path, chain } = queue.shift();
+    const callers = index.callersOf(path);
+    if (callers.length === 0) return chain;
+    if (chain.length > fallback.length) fallback = chain;
+    for (const c of callers) {
+      if (seen.has(c.caller.path)) continue;
+      seen.add(c.caller.path);
+      queue.push({ path: c.caller.path, chain: [c, ...chain] });
+    }
+  }
+  return fallback;
+}
+function isCallOnly(wf) {
+  return wf.triggers.length === 1 && wf.triggers[0] === "workflow_call";
+}
+var BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
+function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
+  if (seen.has(wf.path)) return { names: /* @__PURE__ */ new Set(), all: false };
+  seen.add(wf.path);
+  const out = { names: /* @__PURE__ */ new Set(), all: mayReadAnything(wf) };
+  for (const { ref } of refsOf(wf)) addSecretRead(out, ref);
+  for (const job of Object.values(wf.jobs)) addInherited(index, out, job, seen);
+  return out;
+}
+function addSecretRead(out, ref) {
+  if (ref.context !== "secrets") return;
+  const name = ref.path[0];
+  if (!name || name === "*" || name === "?") out.all = true;
+  else if (!BUILTIN_SECRETS.has(name.toLowerCase())) out.names.add(name);
+}
+function addInherited(index, out, job, seen) {
+  if (!job.secretsInherit || !job.uses) return;
+  const callee = index.calleeOf(job);
+  const inner = callee ? secretsNeededBy(index, callee, seen) : { names: [], all: true };
+  for (const name of inner.names) out.names.add(name);
+  if (inner.all) out.all = true;
+}
+function needsSecret(needed, name) {
+  const lower = name.toLowerCase();
+  if (BUILTIN_SECRETS.has(lower)) return false;
+  return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
+}
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/graph.ts
 var computed = (s) => s === void 0 || s === "*" || s === "?";
 var isKey = (s, key) => s?.toLowerCase() === key;
 function wholeReads(reads) {
-  return [...new Set(reads.map((r) => r.symbol))].map((symbol) => ({ symbol, whole: true }));
+  const first = /* @__PURE__ */ new Map();
+  for (const r of reads) if (!first.has(r.symbol)) first.set(r.symbol, { ...r, whole: true });
+  return [...first.values()];
 }
 var declaredNames = (decls) => Object.values(decls ?? {}).map((d) => d.name);
+var GITHUB_TOKEN = "GITHUB_TOKEN";
+function namedSecrets(wf) {
+  const names = /* @__PURE__ */ new Set();
+  for (const { ref } of refsOf(wf))
+    if (ref.context === "secrets" && !computed(ref.path[0])) names.add(ref.path[0]);
+  return [...names];
+}
+function addNames(names, more) {
+  const seen = new Set(names.map((n) => n.toLowerCase()));
+  const added = [];
+  for (const name of more) {
+    if (seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    added.push(name);
+  }
+  return [...names, ...added];
+}
 function inputNames(unit) {
   if (unit.kind === "action") return declaredNames(unit.inputs);
   return [...declaredNames(unit.call?.inputs), ...dispatchInputNames(unit)];
@@ -12489,6 +12575,8 @@ var ProjectIndex = class {
   actionUses = [];
   sitesById = /* @__PURE__ */ new Map();
   definitions = /* @__PURE__ */ new Map();
+  /** The secrets a whole `secrets` reads in each workflow, by path, once computed (see `secretNames`). */
+  heldSecrets = /* @__PURE__ */ new Map();
   units() {
     return [...this.project.workflows.values(), ...this.project.actions.values()];
   }
@@ -12821,7 +12909,9 @@ var ProjectIndex = class {
    *   `github`, and an action its job's, so there they read none of the unit's inputs, nor in an input's default or a
    *   `workflow_call` output's value, which GitHub evaluates only when the workflow is called;
    * - `toJSON(matrix)` or `matrix[inputs.key]`: every key of the job's matrix;
-   * - `toJSON(secrets)` or `secrets[inputs.name]`: every secret the workflow declares under `workflow_call`;
+   * - `toJSON(secrets)` or `secrets[inputs.name]`: every secret the workflow holds that the files name (see
+   *   `secretNames`): those it declares under `workflow_call`, reads by name or is passed by name, `GITHUB_TOKEN`, and
+   *   those callers that hand it every secret through `secrets: inherit` name;
    * - `toJSON(env)` or `env[inputs.name]`: every env variable in scope, a step's own read through their values.
    *
    * Variables are set in the repository's settings, not in its files, so a whole `vars` reads nothing. See
@@ -12834,9 +12924,14 @@ var ProjectIndex = class {
     const one = this.resolveRef(unit, site, ref);
     if (one) return [{ symbol: one, whole: false }];
     const members2 = this.memberRefs(unit, site, ref);
-    if (members2) return wholeReads(members2.flatMap((m) => this.reads(unit, site, m)));
+    if (members2) return wholeReads(members2.flatMap((m) => this.memberReads(unit, site, m)));
     if (ref.context === "env") return this.ownEnvReads(unit, site, ref);
     return this.outputReads(unit, site, ref).map((symbol) => ({ symbol, whole: true }));
+  }
+  /** What a reference naming one member of a whole object reads: the member, or what a step's own env value reads. */
+  memberReads(unit, site, member) {
+    const one = this.resolveRef(unit, site, member);
+    return one ? [{ symbol: one, whole: true, member }] : this.reads(unit, site, member);
   }
   /** A step's own env value is not a symbol: a read of it reads what the value reads (from the outer env). */
   ownEnvReads(unit, site, ref) {
@@ -12866,12 +12961,55 @@ var ProjectIndex = class {
       case "matrix":
         return matrixKeys(jobAt(unit, site));
       case "secrets":
-        return unit.kind === "workflow" ? declaredNames(unit.call?.secrets) : [];
+        return unit.kind === "workflow" ? this.secretNames(unit) : [];
       case "env":
         return this.envNames(unit, site);
       default:
         return void 0;
     }
+  }
+  /**
+   * The secrets a whole `secrets` holds in a workflow that the files name: each spelling of one it names itself (see
+   * `ownSecretNames`), then those it gets through `secrets: inherit` that the callers handing them on name themselves
+   * (see `inheritedSecretNames`), and `GITHUB_TOKEN`, which GitHub gives every workflow. GitHub looks secret names up
+   * ignoring case, so those last two leave out a secret named before them in another case. A secret that neither the
+   * workflow nor those callers name, such as a repository secret no file names or one only another of their callees
+   * reads, has no symbol here.
+   */
+  secretNames(wf) {
+    const known2 = this.heldSecrets.get(wf.path);
+    if (known2) return known2;
+    const names = addNames(this.ownSecretNames(wf), [...this.inheritedSecretNames(wf), GITHUB_TOKEN]);
+    this.heldSecrets.set(wf.path, names);
+    return names;
+  }
+  /**
+   * The secrets a workflow names itself, as written: those it declares under `workflow_call`, reads by name, or is
+   * passed by name under a caller's `secrets:`. GitHub rejects a secret passed to a workflow that does not declare it,
+   * but the files still send its value there (see `sinkOf`). A spelling of a declared secret is that secret (see
+   * `resolveSecret`); any other is a symbol of its own, as for a reference.
+   */
+  ownSecretNames(wf) {
+    const passed = this.callersOf(wf.path).flatMap((c) => declaredNames(c.job.secrets));
+    return [...declaredNames(wf.call?.secrets), ...namedSecrets(wf), ...passed];
+  }
+  /**
+   * The secrets a workflow gets through `secrets: inherit` that the callers handing them on name themselves (see
+   * `ownSecretNames`): each workflow that hands it every secret, directly or through others that do. Not
+   * `GITHUB_TOKEN`, which `secrets: inherit` does not pass.
+   */
+  inheritedSecretNames(wf) {
+    return this.inheritingCallers(wf).flatMap((caller) => this.ownSecretNames(caller)).filter((name) => !BUILTIN_SECRETS.has(name.toLowerCase()));
+  }
+  /** The workflows that hand `wf` every secret through `secrets: inherit`, and those that hand them every secret, … */
+  inheritingCallers(wf) {
+    const found = /* @__PURE__ */ new Map([[wf.path, wf]]);
+    for (const unit of found.values()) {
+      for (const c of this.callersOf(unit.path))
+        if (c.job.secretsInherit && !found.has(c.caller.path)) found.set(c.caller.path, c.caller);
+    }
+    found.delete(wf.path);
+    return [...found.values()];
   }
   /** The env variables in scope at a site: the step's own, the job's and the workflow's. */
   envNames(unit, site) {
@@ -12990,10 +13128,11 @@ var ProjectIndex = class {
   addUsage(unit, site, ref, read, sink) {
     const { symbol } = read;
     if (!this.nodes.has(symbol)) {
+      const named = read.member ?? ref;
       this.node({
         id: symbol,
-        kind: ref.context === "vars" ? "var" : "unresolved",
-        label: `${ref.context}.${ref.path.join(".")}`,
+        kind: named.context === "vars" ? "var" : "unresolved",
+        label: `${named.context}.${named.path.join(".")}`,
         unit: unit.path
       });
     }
@@ -13011,7 +13150,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/source.ts
 var import_yaml = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -13038,7 +13177,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -13092,7 +13231,7 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 import { posix as posix2 } from "path";
 function createParseContext(repository) {
@@ -13228,19 +13367,22 @@ function buildSite(unit, node, text2, c, p, ownerPath, ctx) {
 function rawScalar(source, node) {
   const [start, end] = node.range ?? [0, 0];
   const raw = source.text.slice(start, end);
+  const quoted = node.type === "QUOTE_SINGLE" || node.type === "QUOTE_DOUBLE";
   return {
     source,
     start,
     raw,
     quote: node.type === "QUOTE_SINGLE" ? "''" : "'",
     escapes: node.type === "QUOTE_DOUBLE",
-    open: valueStart(node.type, raw)
+    open: valueStart(node.type, raw),
+    close: quoted ? raw.length - 1 : raw.length
   };
 }
 function valueStart(type, raw) {
   if (type === "QUOTE_SINGLE" || type === "QUOTE_DOUBLE") return 1;
-  if (type === "BLOCK_LITERAL" || type === "BLOCK_FOLDED") return raw.indexOf("\n") + 1;
-  return 0;
+  if (type !== "BLOCK_LITERAL" && type !== "BLOCK_FOLDED") return 0;
+  const headerEnd = raw.indexOf("\n");
+  return headerEnd < 0 ? raw.length : headerEnd + 1;
 }
 function conditionSegment(s, text2) {
   return locateExpression(s, skipSpace(s, s.open), parseExpression(text2.trim()), false).segment;
@@ -13248,9 +13390,7 @@ function conditionSegment(s, text2) {
 function templateSegments(s, templated) {
   let searchFrom = s.open;
   return templated.map((seg) => {
-    const open2 = s.raw.indexOf("${{", searchFrom);
-    if (open2 < 0) return locateExpression(s, seg.innerStart - seg.start, seg.expr, true).segment;
-    const located = locateExpression(s, skipSpace(s, open2 + 3), seg.expr, true);
+    const located = locateExpression(s, skipSpace(s, pastWritten(s, "${{", searchFrom)), seg.expr, true);
     searchFrom = located.end;
     return located.segment;
   });
@@ -13273,8 +13413,36 @@ function escapesSpace(esc2) {
   return code < 65536 && /\s/.test(String.fromCharCode(code));
 }
 var escapedCode = (esc2) => Number.parseInt(esc2[1] ?? esc2[2] ?? esc2[3] ?? "0", 16);
+var escapedChar = (esc2) => String.fromCodePoint(Math.min(escapedCode(esc2), 1114111));
+function charAt(s, at) {
+  const esc2 = s.escapes ? ESCAPE_AT_START.exec(s.raw.slice(at, at + 10)) : null;
+  return esc2 ? [escapedChar(esc2), esc2[0].length] : [s.raw[at] ?? "", 1];
+}
+function writtenLength(s, at, text2) {
+  let i = at;
+  for (let n = 0; n < text2.length; n++) {
+    if (n > 0) i = pastJoins(s, i);
+    const [char, length] = charAt(s, i);
+    if (char !== text2[n]) return 0;
+    i += length;
+  }
+  return i - at;
+}
+function pastJoins(s, at) {
+  let i = at;
+  while (s.escapes && s.raw[i] === "\\" && /^\r?\n/.test(s.raw.slice(i + 1, i + 3))) {
+    i = s.raw.indexOf("\n", i) + 1;
+    while (s.raw[i] === " " || s.raw[i] === "	") i++;
+  }
+  return i;
+}
+function pastWritten(s, text2, from) {
+  let i = from;
+  while (i < s.close && !writtenLength(s, i, text2)) i += charAt(s, i)[1];
+  return i + writtenLength(s, i, text2);
+}
 function locateExpression(s, from, expr, closes) {
-  const scan = scanExpression(s.raw, from, s.quote, closes);
+  const scan = scanExpression(s, from, closes);
   const at = s.start + from;
   let cursor = from;
   const locs = /* @__PURE__ */ new Map();
@@ -13282,11 +13450,21 @@ function locateExpression(s, from, expr, closes) {
     const written = expr.source.slice(r.start, r.end).replaceAll("'", s.quote);
     const span = written ? spanOf(s, written, cursor, scan) : void 0;
     if (span) cursor = span[0] + 1;
-    const [start, end] = span ? [s.start + span[0], s.start + span[1]] : [at + r.start, at + r.end];
-    locs.set(r, s.source.loc(start, end));
+    const [start, end2] = span ? [s.start + span[0], s.start + span[1]] : [at + r.start, at + r.end];
+    locs.set(r, s.source.loc(start, end2));
   }
   const refs = expr.refs.map((r) => ({ ...r, loc: locs.get(r) }));
-  return { segment: { expr, loc: s.source.loc(at, at + expr.source.length), refs }, end: scan.end };
+  const end = s.start + expressionEnd(s, from, scan.end);
+  return { segment: { expr, loc: s.source.loc(at, end), refs }, end: scan.end };
+}
+function expressionEnd(s, from, to) {
+  let end = from;
+  for (let i = from; i < to; ) {
+    const space = spaceLength(s, i);
+    i += space || charAt(s, i)[1];
+    if (!space) end = i;
+  }
+  return end;
 }
 function spanOf(s, written, from, scan) {
   const found = indexOutside(s, written, from, scan);
@@ -13310,26 +13488,32 @@ function wordsEnd(s, words, from) {
   }
   return end;
 }
-function scanExpression(raw, from, quote2, closes) {
+function scanExpression(s, from, closes) {
   const strings = [];
   let i = from;
-  while (i < raw.length) {
-    if (raw.startsWith(quote2, i)) {
-      const end = stringEnd(raw, i + quote2.length, quote2);
+  while (i < s.close) {
+    const quote2 = writtenLength(s, i, s.quote);
+    if (quote2) {
+      const end = stringEnd(s, i + quote2);
       strings.push([i, end]);
       i = end;
-    } else if (closes && raw.startsWith("}}", i)) {
+    } else if (closes && writtenLength(s, i, "}}")) {
       return { end: i, strings };
     } else {
-      i++;
+      i += charAt(s, i)[1];
     }
   }
-  return { end: raw.length, strings };
+  return { end: s.close, strings };
 }
-function stringEnd(raw, i, quote2) {
-  let at = raw.indexOf(quote2, i);
-  while (at >= 0 && raw.startsWith(quote2, at + quote2.length)) at = raw.indexOf(quote2, at + 2 * quote2.length);
-  return at < 0 ? raw.length : at + quote2.length;
+function stringEnd(s, from) {
+  let i = from;
+  while (i < s.close) {
+    const doubled = writtenLength(s, i, s.quote.repeat(2));
+    const quote2 = doubled ? 0 : writtenLength(s, i, s.quote);
+    if (quote2) return i + quote2;
+    i += doubled || charAt(s, i)[1];
+  }
+  return s.close;
 }
 function indexOutside(s, text2, from, scan) {
   let at = s.raw.indexOf(text2, from);
@@ -13341,14 +13525,28 @@ function indexOutside(s, text2, from, scan) {
   return -1;
 }
 var NAME_CHAR = /[\w.-]/;
-var ESCAPE_AT_END = /(?:^|[^\\])(?:\\\\)*\\(?:[0abtnvfreN_LP]|x([\dA-Fa-f]{2})|u([\dA-Fa-f]{4})|U([\dA-Fa-f]{8}))$/;
+var ESCAPE_AT_END = /(?:^|[^\\])(?:\\\\)*\\(?:x([\dA-Fa-f]{2})|u([\dA-Fa-f]{4})|U([\dA-Fa-f]{8})|([0abtnvfreN_LP \t\n\r]))$/;
 function continuesName(s, at) {
-  const escaped2 = s.escapes ? ESCAPE_AT_END.exec(s.raw.slice(Math.max(0, at - 16), at)) : null;
-  return escaped2 ? escapesNameChar(escaped2) : NAME_CHAR.test(s.raw[at - 1] ?? "");
+  const start = spaceStart(s, at);
+  const before = charBefore(s, start);
+  return start < at ? before === "." : NAME_CHAR.test(before);
 }
-function escapesNameChar(hex) {
-  const code = escapedCode(hex);
-  return code < 128 && NAME_CHAR.test(String.fromCharCode(code));
+function spaceStart(s, at) {
+  let i = at;
+  for (let n = spaceLengthBefore(s, i); n > 0 && i - n >= s.open; n = spaceLengthBefore(s, i)) i -= n;
+  return i;
+}
+function spaceLengthBefore(s, at) {
+  const esc2 = escapeBefore(s, at);
+  if (esc2) return escapesSpace(esc2) ? esc2[0].length - esc2[0].lastIndexOf("\\") : 0;
+  return /\s/.test(s.raw[at - 1] ?? "") ? 1 : 0;
+}
+function charBefore(s, at) {
+  const esc2 = escapeBefore(s, at);
+  return esc2 ? escapedChar(esc2) : s.raw[at - 1] ?? "";
+}
+function escapeBefore(s, at) {
+  return s.escapes ? ESCAPE_AT_END.exec(s.raw.slice(Math.max(0, at - 16), at)) : null;
 }
 function bindings(unit, node, base) {
   const out = {};
@@ -13890,7 +14088,7 @@ function parseActionFile(dir, file, text2, ctx) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/project.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
@@ -16455,10 +16653,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml4 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16531,7 +16729,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -16820,7 +17018,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/script-writes.ts
 import { posix as posix3 } from "path";
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
@@ -17091,7 +17289,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17343,7 +17541,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
@@ -17600,74 +17798,7 @@ function loadProject(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/queries.ts
-function* refsOf(unit) {
-  for (const site of unit.sites)
-    for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
-}
-function readsContextDynamically(unit, context) {
-  if (mayReadAnything(unit)) return true;
-  for (const { ref } of refsOf(unit)) {
-    if (ref.context === context && ref.dynamic && !namesOwner(ref)) return true;
-  }
-  return false;
-}
-function mayReadAnything(unit) {
-  return unit.parseErrors.length > 0 || unit.sites.some((s) => s.segments.some((seg) => seg.expr.error));
-}
-function namesOwner(ref) {
-  const owner = ref.path[0];
-  return (ref.context === "needs" || ref.context === "jobs" || ref.context === "steps") && owner !== void 0 && owner !== "?" && owner !== "*";
-}
-function chainTo(index, target) {
-  const queue = [{ path: target, chain: [] }];
-  const seen = /* @__PURE__ */ new Set([target]);
-  let fallback = [];
-  while (queue.length) {
-    const { path, chain } = queue.shift();
-    const callers = index.callersOf(path);
-    if (callers.length === 0) return chain;
-    if (chain.length > fallback.length) fallback = chain;
-    for (const c of callers) {
-      if (seen.has(c.caller.path)) continue;
-      seen.add(c.caller.path);
-      queue.push({ path: c.caller.path, chain: [c, ...chain] });
-    }
-  }
-  return fallback;
-}
-function isCallOnly(wf) {
-  return wf.triggers.length === 1 && wf.triggers[0] === "workflow_call";
-}
-var BUILTIN_SECRETS = /* @__PURE__ */ new Set(["github_token"]);
-function secretsNeededBy(index, wf, seen = /* @__PURE__ */ new Set()) {
-  if (seen.has(wf.path)) return { names: /* @__PURE__ */ new Set(), all: false };
-  seen.add(wf.path);
-  const out = { names: /* @__PURE__ */ new Set(), all: mayReadAnything(wf) };
-  for (const { ref } of refsOf(wf)) addSecretRead(out, ref);
-  for (const job of Object.values(wf.jobs)) addInherited(index, out, job, seen);
-  return out;
-}
-function addSecretRead(out, ref) {
-  if (ref.context !== "secrets") return;
-  const name = ref.path[0];
-  if (!name || name === "*" || name === "?") out.all = true;
-  else if (!BUILTIN_SECRETS.has(name.toLowerCase())) out.names.add(name);
-}
-function addInherited(index, out, job, seen) {
-  if (!job.secretsInherit || !job.uses) return;
-  const callee = index.calleeOf(job);
-  const inner = callee ? secretsNeededBy(index, callee, seen) : { names: [], all: true };
-  for (const name of inner.names) out.names.add(name);
-  if (inner.all) out.all = true;
-}
-function needsSecret(needed, name) {
-  const lower = name.toLowerCase();
-  if (BUILTIN_SECRETS.has(lower)) return false;
-  return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
-}
-
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+c1c84bb5da19a7c2f1a482432d7db9d26b8fdb3b/node_modules/@ciatlas/core/src/trace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9e81c2cc10acf5d24bd3ed4cd76f749a33a41ea5/node_modules/@ciatlas/core/src/trace.ts
 var readsGithub = (ref) => ref.context === "github";
 function usageReadsCallerEvent(index, u) {
   const wf = index.project.workflows.get(u.site.ownerPath);
