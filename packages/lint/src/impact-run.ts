@@ -681,18 +681,26 @@ function baselineIgnore(
 /**
  * The pull request's `ignore` as its commits have it, when the working tree may have another: for a base config of the
  * repository in a submodule, at the commit the checked-out commit records for it (`git submodule update --remote`
- * checks out another), under the config's own. Undefined otherwise: the working tree's is the pull request's.
+ * checks out another), under the config's own. When the clone lacks that commit, the config's own alone (noted), as
+ * for the baseline. Undefined otherwise: the working tree's is the pull request's.
  */
 function ignoreAfterMerge(
   root: string,
   base: RepositoryBaseConfig,
   configPath: string | undefined,
+  notes: string[],
 ): readonly string[] | undefined {
   const head = locate(base.top, 'HEAD', base.path);
-  if (head.kind !== 'tracked' || !head.submodule) return undefined;
-  const recorded = asBaseConfig(textOf(head) ?? '', head.path);
+  if (head.kind !== 'unread' && (head.kind !== 'tracked' || !head.submodule)) return undefined;
   // The config's own `ignore`, without the base config's: read like the baseline's, from the working tree.
   const own = baselineConfig(workingTree(root), configPath, undefined, [])?.ignore ?? [];
+  if (head.kind === 'unread') {
+    notes.push(
+      `the pull request's version of the base config ${head.path} is in the submodule ${head.submodule}, which this clone lacks, so impact mode reads no ignore from it for the pull request`,
+    );
+    return own;
+  }
+  const recorded = asBaseConfig(textOf(head) ?? '', head.path);
   return [...new Set([...(recorded instanceof ConfigError ? [] : recorded.ignore), ...own])];
 }
 
@@ -724,7 +732,7 @@ function baselinePolicy(
     notes.push('this pull request changes impact settings; they apply after it is merged');
   }
   const ignore = baselineIgnore(repositoryBase, config, notes);
-  const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath);
+  const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath, notes);
   return { config, policy, ignore: { ...ignore, ...(afterMerge ? { ignoreAfterMerge: afterMerge } : {}) } };
 }
 

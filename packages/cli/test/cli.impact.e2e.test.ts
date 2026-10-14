@@ -1213,6 +1213,22 @@ describe('ignore and impact mode', () => {
         "impact: the baseline's ignore lacks what the pull request's leaves out of impact mode (b), as the baseline's version of .org/base.yml cannot be read; they are graded",
       );
     });
+
+    it('grades what it leaves out, and says why, when the clone lacks the commit the pull request records', async () => {
+      // Both record v1, which ignores b; then the pull request records a commit the clone lacks, while the submodule
+      // stays checked out at v1.
+      const root = withSubmodule([IGNORES_B], 0, 0);
+      git(root, 'update-index', '--cacheinfo', `160000,${'2'.repeat(40)},.org`);
+      git(root, 'commit', '-q', '-m', 'record a commit the clone lacks');
+      const r = await impact(root);
+      // Before: v1's ignore stood in for the recorded commit's, so b was left out: exit 0, with no word of it.
+      expect(r.exitCode).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      expect(r.stderr).toContain(
+        "impact: the pull request's version of the base config .org/base.yml is in the submodule .org at 2222222, which this clone lacks, so impact mode reads no ignore from it for the pull request",
+      );
+      expect(r.stderr).not.toContain('applies after it is merged');
+    });
   });
 });
 

@@ -258,7 +258,9 @@ whether the pull request's commits can change it:
   too. When the clone lacks the baseline's commit of the submodule (a submodule checked out at depth 1 has only the
   pull request's commit of it; actions/checkout fetches its history with `fetch-depth: 0`), its `ignore` does not count
   on the baseline's side, so what it leaves out is graded, and the run says so: `impact: the baseline's version of the
-  base config … is in the submodule … at …, which this clone lacks, …`.
+  base config … is in the submodule … at …, which this clone lacks, …`. The same goes for the commit the pull request
+  records, when the clone lacks it: its `ignore` leaves nothing out, and the run says `impact: the pull request's
+  version of the base config … is in the submodule … at …, which this clone lacks, …`.
 
 ## How check names are formed
 

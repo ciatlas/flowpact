@@ -256,6 +256,22 @@ describe('a base config within a submodule', () => {
     expect(r.ignoreAfterMerge).toBeUndefined();
   });
 
+  it('names the submodule, and leaves nothing out for it, when the clone lacks the commit the pull request records', () => {
+    // The baseline records v1, which ignores b, and the submodule is checked out there; the pull request records a
+    // commit the clone lacks. Before: the working tree's ignore stood in for it, so b was left out with no word.
+    const root = repo({}, {}, [{ 'base.yml': IGNORES_B }]);
+    git(root, 'update-index', '--cacheinfo', `160000,${'2'.repeat(40)},.org`);
+    git(root, 'commit', '-q', '-m', 'record a commit the clone lacks');
+    expect(baselineOf(root, '.org/base.yml')).toMatchObject({
+      ignore: ['b/**'],
+      ignoreAfterMerge: [],
+      notes: [
+        OF_REPOSITORY,
+        "the pull request's version of the base config .org/base.yml is in the submodule .org at 2222222, which this clone lacks, so impact mode reads no ignore from it for the pull request",
+      ],
+    });
+  });
+
   it("names the submodule when the clone lacks the baseline's commit of it", () => {
     const root = repo({}, {}, [{ 'base.yml': IGNORES_B }], ['missing', 0]);
     expect(baselineOf(root, '.org/base.yml')).toMatchObject({
