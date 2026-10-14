@@ -40,9 +40,10 @@ const impactUnderDeclared = defineRule({
     summary:
       'The changes to published workflows or actions need a bigger release than the pull request declares.',
     why:
-      'Consumers pin a floating tag (`@v1`) or a version range and take every release in it. A breaking change released ' +
-      'as a minor or patch reaches them without warning: a renamed job leaves their required status check waiting ' +
-      'forever, a removed input fails their run.',
+      'Consumers pin a floating tag (`@v1`) or a version range and take every release in it, and read the version to ' +
+      'judge an update. A change released at a lower level than it needs reaches them without warning: a breaking one ' +
+      'released as a minor or patch leaves their required status check waiting forever or fails their run, and a new ' +
+      'environment or check released as a patch changes their runs where they expected fixes only.',
     fix: 'Declare the required impact (for example retitle the pull request `feat!: …` for a major release), or keep the published interface and check names compatible.',
     examples: {
       bad: `# PR title: "fix: tidy the test job"
