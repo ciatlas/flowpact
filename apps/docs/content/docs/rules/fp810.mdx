@@ -11,7 +11,7 @@ description: "The changes to published workflows or actions need a bigger releas
 
 ## Why it matters
 
-Consumers pin a floating tag (`@v1`) or a version range and take every release in it. A breaking change released as a minor or patch reaches them without warning: a renamed job leaves their required status check waiting forever, a removed input fails their run.
+Consumers pin a floating tag (`@v1`) or a version range and take every release in it, and read the version to judge an update. A change released at a lower level than it needs reaches them without warning: a breaking one released as a minor or patch leaves their required status check waiting forever or fails their run, and a new environment or check released as a patch changes their runs where they expected fixes only.
 
 ## How to fix
 

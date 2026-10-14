@@ -198,8 +198,10 @@ flowpact remotes update [--dry-run]
 
 It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
 through the GitHub API, and its workflow file or `action.yml` is read at that commit. Entries of references nothing uses
-any more are dropped. A reference that cannot be fetched (it does not exist, or the token cannot read it) is listed as
-failed, keeps its previous entry, and makes the command exit `1`.
+any more are dropped. A reference that does not exist, or that the token cannot read, is listed as `unread` and, without
+a previous entry, recorded under the lockfile's `unreadable:`, so [`FP612`](/docs/rules/fp612) counts it as accounted
+for. Any other failure (the network, a timeout, an error from the API, a file over 1 MB) is listed as `failed`, keeps
+the reference's previous entry, and makes the command exit `1`.
 
 The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`). It is sent only to the GitHub
 API (`GITHUB_API_URL` on GitHub Enterprise Server) and never printed. Public repositories can be read without one, at

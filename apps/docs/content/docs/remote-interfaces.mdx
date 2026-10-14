@@ -149,6 +149,15 @@ remotes:
     outputs: [path]
 ```
 
+A reference `flowpact remotes update` cannot read (it does not exist, or the token cannot read it, as for a private
+repository of another organization) is recorded under `unreadable:`, with why. It is not checked, but the lockfile
+accounts for it, so [`FP612`](/docs/rules/fp612) does not report it:
+
+```yaml
+unreadable:
+  vercel/gh-sts-action@c30f0b7a16e0766c4ffbc0d210b54d0e75053fd2: not found, or not readable with this token
+```
+
 The owner and repository of a reference match in any letter case, the path and the ref as written. A reference the
 lockfile does not have stays unchecked. A lockfile that does not parse or does not match this shape is reported by
 [`FP611`](/docs/rules/fp611), and then no remote call is checked.
