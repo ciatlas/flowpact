@@ -19136,6 +19136,10 @@ var $ZodNull = /* @__PURE__ */ $constructor("$ZodNull", (inst, def) => {
     return payload;
   };
 });
+var $ZodUnknown = /* @__PURE__ */ $constructor("$ZodUnknown", (inst, def) => {
+  $ZodType.init(inst, def);
+  inst._zod.parse = (payload) => payload;
+});
 var $ZodNever = /* @__PURE__ */ $constructor("$ZodNever", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, _ctx) => {
@@ -20040,6 +20044,12 @@ function _null2(Class, params) {
   });
 }
 // @__NO_SIDE_EFFECTS__
+function _unknown(Class) {
+  return new Class({
+    type: "unknown"
+  });
+}
+// @__NO_SIDE_EFFECTS__
 function _never(Class, params) {
   return new Class({
     type: "never",
@@ -20202,6 +20212,14 @@ var ZodMiniNull = /* @__PURE__ */ $constructor("ZodMiniNull", (inst, def) => {
 function _null3(params) {
   return _null2(ZodMiniNull, params);
 }
+var ZodMiniUnknown = /* @__PURE__ */ $constructor("ZodMiniUnknown", (inst, def) => {
+  $ZodUnknown.init(inst, def);
+  ZodMiniType.init(inst, def);
+});
+// @__NO_SIDE_EFFECTS__
+function unknown() {
+  return _unknown(ZodMiniUnknown);
+}
 var ZodMiniNever = /* @__PURE__ */ $constructor("ZodMiniNever", (inst, def) => {
   $ZodNever.init(inst, def);
   ZodMiniType.init(inst, def);
@@ -20242,6 +20260,15 @@ function strictObject(shape, params) {
     type: "object",
     shape,
     catchall: /* @__PURE__ */ never(),
+    ...normalizeParams(params)
+  });
+}
+// @__NO_SIDE_EFFECTS__
+function looseObject(shape, params) {
+  return new ZodMiniObject({
+    type: "object",
+    shape,
+    catchall: /* @__PURE__ */ unknown(),
     ...normalizeParams(params)
   });
 }
@@ -22555,19 +22582,19 @@ var REMOTES_LOCK_FILES = [
   `${CONFIG_DIR}/remotes.lock.yaml`,
   `${CONFIG_DIR}/remotes.lock.yml`
 ];
-var inputSchema = strictObject({
+var inputSchema = looseObject({
   type: optional(string2()),
   /** Written only when true. */
   required: optional(boolean2()),
   default: optional(json()),
   options: optional(array(string2()))
 });
-var entrySchema = strictObject({
+var entrySchema = looseObject({
   /** The commit the reference resolved to when the entry was written. */
   sha: string2().check(_regex(/^[0-9a-f]{40}$/)),
   kind: _enum(["workflow", "action"]),
   inputs: optional(record(string2(), inputSchema)),
-  secrets: optional(record(string2(), strictObject({ required: optional(boolean2()) }))),
+  secrets: optional(record(string2(), looseObject({ required: optional(boolean2()) }))),
   outputs: optional(array(string2())),
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
   using: optional(string2()),
@@ -22579,7 +22606,7 @@ var entrySchema = strictObject({
    */
   undeclaredSecrets: optional(array(string2()))
 });
-var remotesLockSchema = strictObject({
+var remotesLockSchema = looseObject({
   version: literal(1),
   /** By `uses:` reference: `owner/repo/.github/workflows/<file>@<ref>` or `owner/repo[/path]@<ref>`. */
   remotes: record(string2(), entrySchema),
@@ -24939,9 +24966,10 @@ var undeclaredSecretRef = defineRule({
   category: "secrets",
   defaultSeverity: "error",
   docs: {
-    summary: "A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`. For a remote reusable workflow, from the secrets the remote interfaces lockfile records it reads.",
+    summary: "A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`.",
     why: "Inside a called workflow only declared (or inherited) secrets exist. Reading anything else yields an empty string, so authentication steps fail late or, worse, fall back to anonymous access.",
-    fix: "Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`)."
+    fix: "Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`). For a remote reusable workflow, which you cannot change: call it with `secrets: inherit` (it passes secrets within one organization or enterprise), ask its maintainers to declare the secret, or add an override.",
+    scope: "Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is left to FP202."
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -24950,7 +24978,7 @@ var undeclaredSecretRef = defineRule({
       if (strictCallers.length === 0) continue;
       const resolvers = new Map(strictCallers.map((c) => [c, callerInputsResolver(wf, c)]));
       for (const { site, ref } of refsOf(wf)) {
-        const name = undeclaredSecretRead(wf.call.secrets, ref);
+        const name = undeclaredSecretRead(wf.call.secrets, ref, site);
         if (!name) continue;
         const guards = guardsOf2(wf, site);
         const reached = strictCallers.filter((c) => !guards.some((g) => isFalse(g, resolvers.get(c))));
@@ -24962,13 +24990,14 @@ var undeclaredSecretRef = defineRule({
 });
 function emptyInCall(ctx, call) {
   if (!isExternal(call.callee) || call.job.secretsInherit) return [];
-  return ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+  const read = ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+  return read.filter((name) => !lookup(call.job.secrets, name));
 }
 function checkRemoteCalls(ctx) {
   for (const call of interfaceCalls(ctx.index)) {
     for (const name of emptyInCall(ctx, call)) {
       ctx.report({
-        message: `jobs.${call.job.id} calls ${call.callee.path}, which reads secrets.${name} without declaring it \u2014 it is empty without \`secrets: inherit\``,
+        message: `jobs.${call.job.id} calls ${call.callee.path}, which reads secrets.${name} without declaring it \u2014 it is empty unless the call uses \`secrets: inherit\` (from the same organization or enterprise)`,
         loc: call.job.uses?.loc ?? call.job.loc,
         symbol: sym.secret(call.callee.path, name),
         related: chainRelated(chainTo(ctx.index, call.caller.path))
@@ -24977,19 +25006,42 @@ function checkRemoteCalls(ctx) {
   }
 }
 function undeclaredSecretsRead(wf) {
+  if (!wf.call) return [];
   const out = /* @__PURE__ */ new Map();
   for (const { site, ref } of refsOf(wf)) {
-    const name = undeclaredSecretRead(wf.call?.secrets ?? {}, ref);
-    if (!name || out.has(name.toLowerCase())) continue;
-    if (guardsOf2(wf, site).some((g) => readsInputs(g) || isFalse(g, () => UNKNOWN))) continue;
+    const name = undeclaredSecretRead(wf.call.secrets, ref, site);
+    if (!name || out.has(name.toLowerCase()) || site.isCondition || !runsOnEveryCall(wf, site)) continue;
     out.set(name.toLowerCase(), name);
   }
   return [...out.values()].sort();
 }
-var readsInputs = (g) => g !== false && g.segments.some((s) => s.refs.some((r) => r.context === "inputs"));
-function undeclaredSecretRead(declared, ref) {
+function runsOnEveryCall(wf, site) {
+  const job = site.job !== void 0 ? wf.jobs[site.job] : void 0;
+  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return !(step2 && hasCondition(step2)) && !(job && jobMayBeSkipped(wf, job, /* @__PURE__ */ new Set()));
+}
+var hasCondition = (d) => d.ifValue === false || !!d.ifSite?.segments.some((s) => s.refs.length);
+function jobMayBeSkipped(wf, job, seen) {
+  if (seen.has(job.id)) return false;
+  seen.add(job.id);
+  if (hasCondition(job)) return true;
+  if (job.ifSite?.segments.some((s) => calledFunctions(s.expr).length)) return false;
+  return job.needs.some((n) => {
+    const needed = wf.jobs[n.id];
+    return needed !== void 0 && jobMayBeSkipped(wf, needed, seen);
+  });
+}
+var SECRETS_UNAVAILABLE = /* @__PURE__ */ new Set([
+  "input.default",
+  "workflow.output",
+  "job.if",
+  "job.name",
+  "job.with",
+  "job.strategy"
+]);
+function undeclaredSecretRead(declared, ref, site) {
   const name = ref.path[0];
-  if (ref.context !== "secrets" || !namesKey2(name)) return void 0;
+  if (ref.context !== "secrets" || !namesKey2(name) || SECRETS_UNAVAILABLE.has(site.field)) return void 0;
   if (BUILTIN_SECRETS.has(name.toLowerCase()) || lookup(declared, name)) return void 0;
   return name;
 }
@@ -25702,21 +25754,21 @@ var SEVERITY_ORDER = { error: 0, warning: 1, info: 2 };
 function resolveSeverities(registry2, config2, opts = {}) {
   const out = /* @__PURE__ */ new Map();
   for (const rule of registry2.all()) out.set(rule.code, rule.defaultSeverity);
-  const unknown = { hard: [], tolerated: [] };
+  const unknown2 = { hard: [], tolerated: [] };
   for (const [key, setting] of Object.entries(config2.rules)) {
     const rule = registry2.get(key);
     if (!rule) {
-      triageUnknown(registry2, key, `rules.${key}`, unknown);
+      triageUnknown(registry2, key, `rules.${key}`, unknown2);
       continue;
     }
     out.set(rule.code, setting);
   }
-  if (unknown.hard.length) throw new ConfigError("Config references unknown rules", void 0, unknown.hard);
-  if (unknown.tolerated.length) {
+  if (unknown2.hard.length) throw new ConfigError("Config references unknown rules", void 0, unknown2.hard);
+  if (unknown2.tolerated.length) {
     opts.logger?.warn(
-      `config sets severities for rules that are not loaded: ${unknown.tolerated.join("; ")}`
+      `config sets severities for rules that are not loaded: ${unknown2.tolerated.join("; ")}`
     );
-    opts.unloaded?.push(...unknown.tolerated);
+    opts.unloaded?.push(...unknown2.tolerated);
   }
   return out;
 }
@@ -26185,10 +26237,10 @@ function overrideMatches(o, code, f) {
 }
 function applyOverrides(findings, config2, registry2, locs, now, opts = {}) {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const unknown = { hard: [], tolerated: [] };
+  const unknown2 = { hard: [], tolerated: [] };
   const usage = config2.overrides.map((override, index) => {
     const rule = registry2.get(override.rule);
-    if (!rule) triageUnknown(registry2, override.rule, `overrides.${index}.rule`, unknown);
+    if (!rule) triageUnknown(registry2, override.rule, `overrides.${index}.rule`, unknown2);
     const daysLeft = override.expires ? Math.round((Date.parse(`${override.expires}T00:00:00Z`) - today) / DAY) : void 0;
     return {
       index,
@@ -26200,9 +26252,9 @@ function applyOverrides(findings, config2, registry2, locs, now, opts = {}) {
       ...daysLeft !== void 0 ? { daysLeft } : {}
     };
   });
-  if (unknown.hard.length)
-    throw new ConfigError("Config overrides reference unknown rules", void 0, unknown.hard);
-  opts.unloaded?.push(...unknown.tolerated);
+  if (unknown2.hard.length)
+    throw new ConfigError("Config overrides reference unknown rules", void 0, unknown2.hard);
+  opts.unloaded?.push(...unknown2.tolerated);
   const kept = [];
   const suppressed = [];
   for (const f of findings) {
