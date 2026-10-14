@@ -1,5 +1,14 @@
 /** `flowpact remotes update` against a local stand-in for the GitHub API (#152). */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -144,7 +153,7 @@ describe('flowpact remotes update', () => {
   it('refuses another action', async () => {
     const r = await run(repo(), ['check']);
     expect(r.exitCode).toBe(2);
-    expect(r.stderr).toContain('use `flowpact remotes update` or `flowpact remotes download`');
+    expect(r.stderr).toContain('use `flowpact remotes update`, `download` or `clean`');
   });
 });
 
@@ -211,6 +220,42 @@ describe('the sources cache', () => {
     const download = await run(root, ['download', '--no-cache']);
     expect(download.exitCode).toBe(2);
     expect(download.stderr).toContain('--no-cache is for `flowpact remotes update`');
+  });
+
+  it('keeps the 3 most recently used commits of each repository it uses, and remotes clean empties the cache', async () => {
+    rmSync(cache, { recursive: true, force: true });
+    const ship = join(cache, 'remotes', 'octo', 'setup');
+    for (const [i, c] of ['1', '2', '3', '4'].entries()) {
+      mkdirSync(join(ship, c.repeat(40)), { recursive: true });
+      writeFileSync(join(ship, c.repeat(40), 'action.yml'), c);
+      const at = new Date(1_700_000_000_000 + i * 1000);
+      utimesSync(join(ship, c.repeat(40)), at, at);
+    }
+    const root = repo();
+    const r = await run(root, ['update']);
+    expect(r.stdout).toContain(`sources: ${join(cache, 'remotes')} (1 new, 2 old commits removed)`);
+    expect(readdirSync(ship).sort()).toEqual(['3'.repeat(40), '4'.repeat(40), SHA]);
+    const keep = await run(root, ['clean', '--keep', '1']);
+    expect(keep.stdout).toContain(`removed 2 cached commits from ${join(cache, 'remotes')}`);
+    expect(keep.stdout).toContain('kept the 1 most recently used of each repository');
+    expect(readdirSync(ship)).toEqual([SHA]);
+    const all = await run(root, ['clean']);
+    expect(all.exitCode).toBe(0);
+    expect(all.stdout).toContain('removed 1 cached commit from');
+    expect(existsSync(ship)).toBe(false);
+    expect((await run(root, ['clean'])).stdout).toContain('nothing to remove in');
+  });
+
+  it('remotes clean takes no paths, --dry-run, --no-cache or a --keep that is not a whole number; --keep is for clean', async () => {
+    const root = repo();
+    for (const args of [
+      ['clean', '.github/workflows/ci.yml'],
+      ['clean', '--dry-run'],
+      ['clean', '--no-cache'],
+      ['clean', '--keep', 'two'],
+      ['update', '--keep', '2'],
+    ])
+      expect((await run(root, args)).exitCode, args.join(' ')).toBe(2);
   });
 
   it('remotes download takes --cache-dir, and caches in CI too: downloading is all it does', async () => {

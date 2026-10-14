@@ -9,12 +9,15 @@ import { escapeControl, type Logger, nodeFileSystem } from '@ciatlas/core';
 import {
   assertSafeWritePath,
   cacheSource,
+  commitKey,
   downloadRemoteSources,
   envCacheDir,
   type FetchedSource,
   type FetchProgress,
   hostOf,
   inCi,
+  KEEP_COMMITS,
+  pruneCache,
   REMOTES_LOCK_FILES,
   type RemotesDownload,
   type RemotesLock,
@@ -23,6 +26,7 @@ import {
   remotesCacheDir,
   remotesCacheIn,
   serializeRemotesLock,
+  touchCommit,
   updateRemotesLock,
 } from '@flowpact/lint';
 import { attempt, usage } from './errors';
@@ -89,6 +93,8 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
 export interface SourcesKept {
   dir: string;
   written: number;
+  /** Older commits removed afterwards: the cache keeps the `KEEP_COMMITS` most recent of each repository used. */
+  removed: number;
   /** How many files could not be written, and why the first one could not; the lockfile is written all the same. */
   notKept: number;
   failed?: string;
@@ -195,6 +201,7 @@ export async function runRemotesUpdate(
   const update = await timed(logger, () =>
     updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch }),
   );
+  keep.finish();
   const text = serializeRemotesLock(update.lock);
   const changes = fs.read(file) !== text;
   if (changes && !dryRun) writeLock(root, file, text);
@@ -232,12 +239,22 @@ const NO_CACHE_DIR =
 function sourcesKeeper(
   cache: { dir?: string; why?: string },
   logger: Logger,
-): { fetch: { onSource?: (s: FetchedSource) => void }; result: Partial<RemotesUpdateResult> } {
-  if (!cache.dir) return { fetch: {}, result: cache.why ? { sourcesNotKept: cache.why } : {} };
+): {
+  fetch: { onSource?: (s: FetchedSource) => void };
+  result: Partial<RemotesUpdateResult>;
+  finish: () => void;
+} {
+  if (!cache.dir)
+    return { fetch: {}, result: cache.why ? { sourcesNotKept: cache.why } : {}, finish: () => undefined };
   const dir = cache.dir;
-  const kept: SourcesKept = { dir, written: 0, notKept: 0 };
+  const kept: SourcesKept = { dir, written: 0, removed: 0, notKept: 0 };
+  const used = new Set<string>();
   const onSource = (s: FetchedSource) => {
     const outcome = cacheSource(dir, s.ref, s.sha, s.file, s.text);
+    if (outcome === 'written' || outcome === 'present') {
+      touchCommit(dir, s.ref, s.sha);
+      used.add(commitKey(s.ref, s.sha));
+    }
     if (outcome === 'written') kept.written++;
     else if (outcome === 'unsafe')
       logger.debug(`source not cached: ${escapeControl(s.ref.raw)}: its path cannot be a file name`);
@@ -247,7 +264,22 @@ function sourcesKeeper(
       kept.failed ??= outcome.failed;
     }
   };
-  return { fetch: { onSource }, result: { sources: kept } };
+  const finish = () => {
+    kept.removed = pruneUsed(dir, used, logger);
+  };
+  return { fetch: { onSource }, result: { sources: kept }, finish };
+}
+
+/**
+ * Removes the older commits of the repositories a run used, keeping the `KEEP_COMMITS` most recently used of each and
+ * every one the run used; returns how many it removed.
+ */
+function pruneUsed(dir: string, commits: Iterable<string>, logger: Logger): number {
+  const keep = new Set(commits);
+  const repos = [...keep].map((k) => k.split('/').slice(0, 2).join('/'));
+  const pruned = pruneCache(dir, KEEP_COMMITS, { repos, keep });
+  if (pruned.failed) logger.debug(`old sources not removed: ${pruned.failed}`);
+  return pruned.removed;
 }
 
 export interface RemotesDownloadOptions
@@ -260,6 +292,8 @@ export interface RemotesDownloadOptions
 }
 
 export interface RemotesDownloadResult extends RemotesDownload {
+  /** Older commits removed afterwards (see `SourcesKept.removed`). */
+  removed: number;
   /** The lockfile, relative to the root, and the sources cache's directory. */
   file: string;
   dir: string;
@@ -282,7 +316,32 @@ export async function runRemotesDownload(
   const { fetch, source } = fetchOptions(logger, options, 'remote source');
   logger.debug(`remote sources: ${dir}`);
   const download = await timed(logger, () => downloadRemoteSources(result.index, lock, dir, fetch));
-  return { ...download, file, dir, ...(source ? { tokenSource: source } : {}) };
+  const removed = pruneUsed(dir, download.commits, logger);
+  return { ...download, file, dir, removed, ...(source ? { tokenSource: source } : {}) };
+}
+
+export interface RemotesCleanOptions {
+  /** flowpact's cache directory (`--cache-dir`); by default `FLOWPACT_CACHE_DIR`, else the per-user cache. */
+  cacheDir?: string;
+  /** Keep this many of the most recently used commits of each repository (`--keep`); 0, the default, keeps none. */
+  keep?: number;
+}
+
+export interface RemotesCleanResult {
+  dir: string;
+  keep: number;
+  /** How many cached commits were removed, and why one could not be. */
+  removed: number;
+  failed?: string;
+}
+
+/** `remotes clean`: the sources cache emptied, or cut to the most recently used commits of each repository. */
+export function runRemotesClean(options: RemotesCleanOptions = {}): RemotesCleanResult {
+  const dir = options.cacheDir !== undefined ? cacheDirIn(options.cacheDir) : remotesCacheDir();
+  if (!dir) throw usage(`no cache to clean: ${NO_CACHE_DIR}`);
+  const keep = options.keep ?? 0;
+  if (!Number.isInteger(keep) || keep < 0) throw usage('keep must be a whole number, 0 or more');
+  return { dir, keep, ...pruneCache(dir, keep) };
 }
 
 /** The lockfile, which `remotes download` needs: none, or one it cannot use, is a usage error. */
@@ -292,4 +351,58 @@ function requireLock(root: string): { file: string; lock: RemotesLock } {
     throw usage(`no remotes lockfile: run \`flowpact remotes update\` to write ${REMOTES_LOCK_FILES[0]}`);
   if (!read.lock) throw usage(`${read.file} cannot be used: ${read.error}`);
   return { file: read.file, lock: read.lock };
+}
+
+export type RemotesAction = 'update' | 'download' | 'clean';
+
+/** The command line of `flowpact remotes`, as parsed. */
+export interface RemotesArgs {
+  _: string[];
+  'dry-run'?: boolean;
+  cache?: boolean;
+  'cache-dir'?: string;
+  keep?: string;
+}
+
+/** The action asked for; another one is refused. */
+export function remotesAction(action: string): RemotesAction {
+  if (action === 'update' || action === 'download' || action === 'clean') return action;
+  throw usage(`unknown action "${action}": use \`flowpact remotes update\`, \`download\` or \`clean\``);
+}
+
+/** The paths after the action. */
+export const remotesPaths = (positionals: string[], action: string) =>
+  positionals.filter((p, i) => !(i === 0 && p === action) && p !== 'remotes');
+
+/** The actions each option is for; given to another one, it is a usage error. */
+const OPTION_ACTIONS: {
+  option: string;
+  given: (a: RemotesArgs, action: string) => boolean;
+  for: RemotesAction[];
+}[] = [
+  { option: '--dry-run is', given: (a) => Boolean(a['dry-run']), for: ['update'] },
+  { option: '--no-cache is', given: (a) => a.cache === false, for: ['update'] },
+  { option: '--keep is', given: (a) => a.keep !== undefined, for: ['clean'] },
+  {
+    option: 'paths are',
+    given: (a, action) => remotesPaths(a._, action).length > 0,
+    for: ['update', 'download'],
+  },
+];
+
+/**
+ * The flags of `flowpact remotes`. An option the action does not take, `--no-cache` with `--cache-dir`, and a `--keep`
+ * that is no whole number are refused.
+ */
+export function remotesFlags(
+  args: RemotesArgs,
+  action: RemotesAction,
+): { dryRun: boolean; noCache: boolean; keep: number } {
+  const refused = OPTION_ACTIONS.find((o) => o.given(args, action) && !o.for.includes(action));
+  if (refused)
+    throw usage(`${refused.option} for ${refused.for.map((a) => `\`flowpact remotes ${a}\``).join(' and ')}`);
+  if (args.cache === false && args['cache-dir'] !== undefined)
+    throw usage('give --no-cache or --cache-dir, not both');
+  if (!/^\d+$/.test(args.keep ?? '0')) throw usage(`--keep takes a whole number, not "${args.keep}"`);
+  return { dryRun: Boolean(args['dry-run']), noCache: args.cache === false, keep: Number(args.keep ?? 0) };
 }

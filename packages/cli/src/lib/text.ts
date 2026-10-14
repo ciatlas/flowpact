@@ -23,6 +23,7 @@ import type { ContractGeneration } from './generate';
 import type { RuleDocs, RuleInfo, TraceResult } from './inspect';
 import {
   describeToken,
+  type RemotesCleanResult,
   type RemotesDownloadResult,
   type RemotesUpdateResult,
   type SourcesKept,
@@ -193,10 +194,16 @@ const NO_TOKEN =
   '  No token was used: set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`. It needs read access to the contents of the private repositories.';
 
 /** Where `remotes update` kept the files it read, for the editor, and how many it could not keep, and why. */
-const sourcesLine = (s: SourcesKept) =>
-  s.failed
-    ? `sources: ${s.dir} (${s.written} new, ${s.notKept} not kept: ${s.failed})`
-    : `sources: ${s.dir}${s.written ? ` (${s.written} new)` : ''}`;
+function sourcesLine(s: SourcesKept): string {
+  const counts = [
+    s.written || s.failed ? `${s.written} new` : undefined,
+    s.removed ? `${commits(s.removed)} removed` : undefined,
+    s.failed ? `${s.notKept} not kept: ${s.failed}` : undefined,
+  ].filter(Boolean);
+  return `sources: ${s.dir}${counts.length ? ` (${counts.join(', ')})` : ''}`;
+}
+
+const commits = (k: number) => `${k} old commit${k === 1 ? '' : 's'}`;
 
 const sources = (k: number) => `${k} source${k === 1 ? '' : 's'}`;
 
@@ -214,11 +221,22 @@ export function remotesDownloadText(r: RemotesDownloadResult, opts: RenderOption
   const c = opts.color ? pc : { bold: (s: string) => s, red: (s: string) => s, dim: (s: string) => s };
   const lines = [c.bold(downloadHead(r)), c.dim(`token: ${describeToken(r.tokenSource)}`)];
   if (r.cached.length) lines.push(c.dim(`  ${sources(r.cached.length)} already there`));
+  if (r.removed) lines.push(c.dim(`  ${commits(r.removed)} removed`));
   for (const ref of r.notLocked)
     lines.push(`  ${c.dim('unlocked')} ${shown(ref)}: not in ${r.file}; \`flowpact remotes update\` adds it`);
   for (const s of r.skipped) lines.push(`  ${c.dim('skipped ')} ${shown(s.ref)}: ${shown(s.reason)}`);
   for (const f of r.failed) lines.push(`  ${c.red('failed  ')} ${shown(f.ref)}: ${shown(f.error)}`);
   // A failure to write the cache is local: no token would help.
   if (r.failed.some((f) => !f.cache) && !r.tokenSource) lines.push(c.dim(NO_TOKEN));
+  return safe(`${lines.join('\n')}\n`);
+}
+
+/** `remotes clean`: how many cached commits went, and what was kept. */
+export function remotesCleanText(r: RemotesCleanResult, opts: RenderOptions): string {
+  const c = opts.color ? pc : { bold: (s: string) => s, dim: (s: string) => s };
+  const n = `${r.removed} cached commit${r.removed === 1 ? '' : 's'}`;
+  const lines = [c.bold(r.removed ? `removed ${n} from ${r.dir}` : `nothing to remove in ${r.dir}`)];
+  if (r.keep) lines.push(c.dim(`kept the ${r.keep} most recently used of each repository`));
+  if (r.failed) lines.push(c.dim(`some could not be removed: ${r.failed}`));
   return safe(`${lines.join('\n')}\n`);
 }

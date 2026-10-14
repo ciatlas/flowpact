@@ -1,11 +1,16 @@
 import { type ArgsDef, defineCommand } from 'citty';
 import {
+  type RemotesAction,
   type RemotesDownloadOptions,
   type RemotesUpdateOptions,
+  remotesAction,
+  remotesFlags,
+  remotesPaths,
+  runRemotesClean,
   runRemotesDownload,
   runRemotesUpdate,
 } from '../lib/remotes';
-import { remotesDownloadText, remotesText } from '../lib/text';
+import { remotesCleanText, remotesDownloadText, remotesText } from '../lib/text';
 import {
   type CliContext,
   commonArgs,
@@ -29,7 +34,7 @@ export const remotesCommand = defineCommand({
       type: 'positional',
       required: true,
       description:
-        '`update`: fetch the remote references and write the lockfile; `download`: download the sources of the commits the lockfile pins into the cache, for go to definition in the editor (the lockfile does not change)',
+        '`update`: fetch the remote references and write the lockfile; `download`: download the sources of the commits the lockfile pins into the cache, for go to definition in the editor (the lockfile does not change); `clean`: empty the sources cache (or keep the most recent with --keep)',
     },
     paths: {
       type: 'positional',
@@ -58,55 +63,49 @@ export const remotesCommand = defineCommand({
       type: 'boolean',
       description: '`update` only: show what would change without writing the lockfile or the cache',
     },
+    keep: {
+      type: 'string',
+      valueHint: 'n',
+      description:
+        '`clean` only: keep the n most recently used commits of each repository (update and download keep 3 of those they use)',
+    },
   },
   run: ({ args, rawArgs, cmd }) =>
     guard(async () => {
-      const action = actionOf(args.action);
-      const flags = flagsOf(args);
+      const action = remotesAction(args.action);
+      const flags = remotesFlags(args, action);
       const ctx = createContext(args, rawArgs, cmd.args as ArgsDef);
+      if (action === 'clean') return clean(ctx, flags.keep, args['cache-dir']);
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
-      const counter = counterFor(ctx.level, action === 'update' ? 'remote interfaces' : 'remote sources');
-      const options = {
-        ...optionsOf(args, action, ctx.root),
-        ...(counter ? { onProgress: counter.update } : {}),
-      };
+      const counter = counterFor(ctx.level, action);
+      const options = optionsOf(args, action, ctx.root, counter?.update);
       try {
-        return action === 'download'
-          ? await download(ctx, options, flags)
-          : await update(ctx, options, flags);
+        return action === 'download' ? await download(ctx, options) : await update(ctx, options, flags);
       } finally {
         counter?.clear();
       }
     }),
 });
 
-/** The options both actions take, from the command line. */
+/** The options both `update` and `download` take, from the command line. */
 function optionsOf(
   args: { _: string[]; 'github-com'?: boolean; 'cache-dir'?: string },
   action: string,
   root: string,
+  onProgress: ((p: { done: number; total: number }) => void) | undefined,
 ) {
   return {
     paths: pathArgs(remotesPaths(args._, action), 'remotes', root),
     githubCom: Boolean(args['github-com']),
     ...(args['cache-dir'] !== undefined ? { cacheDir: args['cache-dir'] } : {}),
+    ...(onProgress ? { onProgress } : {}),
   };
 }
 
-/** `--dry-run` and `--no-cache`; `--no-cache` with `--cache-dir` is refused. */
-function flagsOf(args: { 'dry-run'?: boolean; cache?: boolean; 'cache-dir'?: string }) {
-  const noCache = args.cache === false;
-  if (noCache && args['cache-dir'] !== undefined)
-    throw new UsageError('give --no-cache or --cache-dir, not both');
-  return { dryRun: Boolean(args['dry-run']), noCache };
-}
-
-/** The action asked for; another one is refused. */
-function actionOf(action: string): 'update' | 'download' {
-  if (action === 'update' || action === 'download') return action;
-  throw new UsageError(
-    `unknown action "${action}": use \`flowpact remotes update\` or \`flowpact remotes download\``,
-  );
+function clean(ctx: CliContext, keep: number, cacheDir: string | undefined): number {
+  const r = runRemotesClean({ keep, ...(cacheDir !== undefined ? { cacheDir } : {}) });
+  ctx.stdout(remotesCleanText(r, ctx.render));
+  return r.failed ? EXIT.findings : EXIT.ok;
 }
 
 async function update(
@@ -123,28 +122,17 @@ async function update(
   return r.failed.length ? EXIT.findings : EXIT.ok;
 }
 
-async function download(
-  ctx: CliContext,
-  options: RemotesDownloadOptions,
-  flags: { dryRun: boolean; noCache: boolean },
-): Promise<number> {
-  if (flags.dryRun) throw new UsageError('--dry-run is for `flowpact remotes update`');
-  if (flags.noCache)
-    throw new UsageError(
-      '--no-cache is for `flowpact remotes update`: `remotes download` only fills the cache',
-    );
+async function download(ctx: CliContext, options: RemotesDownloadOptions): Promise<number> {
   const r = await runRemotesDownload(ctx.session, options);
   ctx.stdout(remotesDownloadText(r, ctx.render));
   return r.failed.length ? EXIT.findings : EXIT.ok;
 }
 
-/** The paths after `remotes update` (or `download`). */
-const remotesPaths = (positionals: string[], action: string) =>
-  positionals.filter((p, i) => !(i === 0 && p === action) && p !== 'remotes');
-
 /** A live count in a terminal at the default level; -v and -d log a line per reference instead, -q nothing. */
-const counterFor = (level: string, what: string) =>
-  level === 'warn' && process.stderr.isTTY ? progressCounter(what) : undefined;
+const counterFor = (level: string, action: RemotesAction) =>
+  level === 'warn' && process.stderr.isTTY
+    ? progressCounter(action === 'update' ? 'remote interfaces' : 'remote sources')
+    : undefined;
 
 /** A one-line count of the references done so far, rewritten in place on stderr, and cleared when done. */
 function progressCounter(what: string) {

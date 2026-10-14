@@ -1,0 +1,46 @@
+/** The options `flowpact remotes` takes for each action, and the ones it refuses. */
+import { describe, expect, it } from 'vitest';
+import { type RemotesArgs, remotesAction, remotesFlags, remotesPaths } from '../src/lib/remotes';
+
+const args = (more: Partial<RemotesArgs> = {}): RemotesArgs => ({ _: [], ...more });
+
+describe('flowpact remotes options', () => {
+  it('takes update, download and clean', () => {
+    expect(['update', 'download', 'clean'].map(remotesAction)).toEqual(['update', 'download', 'clean']);
+    expect(() => remotesAction('check')).toThrow('use `flowpact remotes update`, `download` or `clean`');
+  });
+
+  it('reads the flags each action takes', () => {
+    expect(remotesFlags(args({ 'dry-run': true, cache: false }), 'update')).toEqual({
+      dryRun: true,
+      noCache: true,
+      keep: 0,
+    });
+    expect(remotesFlags(args({ keep: '2' }), 'clean')).toEqual({ dryRun: false, noCache: false, keep: 2 });
+    expect(remotesFlags(args({ _: ['download', 'a.yml'] }), 'download').keep).toBe(0);
+  });
+
+  it('refuses an option given to an action that does not take it', () => {
+    const refused: [Partial<RemotesArgs>, 'update' | 'download' | 'clean', string][] = [
+      [{ 'dry-run': true }, 'download', '--dry-run is for `flowpact remotes update`'],
+      [{ cache: false }, 'download', '--no-cache is for `flowpact remotes update`'],
+      [{ 'dry-run': true }, 'clean', '--dry-run is for `flowpact remotes update`'],
+      [{ keep: '2' }, 'update', '--keep is for `flowpact remotes clean`'],
+      [
+        { _: ['clean', 'a.yml'] },
+        'clean',
+        'paths are for `flowpact remotes update` and `flowpact remotes download`',
+      ],
+      [{ cache: false, 'cache-dir': '/c' }, 'update', 'give --no-cache or --cache-dir, not both'],
+      [{ keep: 'two' }, 'clean', '--keep takes a whole number, not "two"'],
+      [{ keep: '-1' }, 'clean', '--keep takes a whole number, not "-1"'],
+    ];
+    for (const [more, action, message] of refused)
+      expect(() => remotesFlags(args(more), action)).toThrow(message);
+  });
+
+  it('reads the paths after the action', () => {
+    expect(remotesPaths(['update', 'a.yml', 'b'], 'update')).toEqual(['a.yml', 'b']);
+    expect(remotesPaths(['download'], 'download')).toEqual([]);
+  });
+});
