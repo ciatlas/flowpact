@@ -56,7 +56,8 @@ published one calls them — their check names appear under the caller's.
 | Another GitHub-hosted image (`ubuntu-22.04` → `ubuntu-24.04`), or fewer runner labels | patch |
 | A job gains, changes or loses its `environment:` (a called workflow's job deploys to the caller's environment of that name: GitHub creates a missing one, so nothing fails, but its protection rules and secrets now apply, or no longer do) | minor (uncertain for a name chosen at run time) |
 | A new third-party action or workflow used inside a published unit (organization allow-lists and SHA-pinning policies apply to consumers) | minor |
-| Narrower permissions, descriptions, other changes to internal steps, `workflow_dispatch` inputs | none |
+| Nothing above, but the unit's jobs or steps changed, or those of a local action or internal workflow it runs (comments, formatting and key order aside): callers' runs may do something else | patch |
+| Narrower permissions, descriptions, `workflow_dispatch` inputs | none |
 
 Consumers' branch protection is not visible from the publishing repository, so every check name a published reusable
 workflow reports counts as one a consumer may require. Names are compared the way GitHub forms them — see
