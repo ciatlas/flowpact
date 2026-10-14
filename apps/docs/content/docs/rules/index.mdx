@@ -76,7 +76,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP609`](/docs/rules/fp609) | `callee-not-reusable` | 🔴 error | A job calls a local workflow that has no `on.workflow_call` trigger. |
 | [`FP610`](/docs/rules/fp610) | `workspace-unverified` | 🔵 info | A step’s `uses: ./...` points to a place in the runner’s workspace that flowpact cannot read, so the action is not verified. |
 | [`FP611`](/docs/rules/fp611) | `remotes-lock-invalid` | 🔴 error | The remote interfaces lockfile does not parse, or does not match its schema. |
-| [`FP612`](/docs/rules/fp612) | `remotes-lock-outdated` | 🟡 warning | The remote interfaces lockfile lacks a remote workflow or action the repository uses, or has one it no longer uses. |
+| [`FP612`](/docs/rules/fp612) | `remotes-lock-outdated` | 🟡 warning | The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, or records another commit than the one a reference pins. |
 
 ## Contracts (`FP8xx`)
 

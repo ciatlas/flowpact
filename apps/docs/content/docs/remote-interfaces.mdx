@@ -171,6 +171,11 @@ and the findings would show what it read.
 A lockfile that lacks a reference the repository uses, or has one nothing uses, is reported by
 [`FP612`](/docs/rules/fp612) (a warning), also when the run fetched it: run `flowpact remotes update` and commit it.
 
+A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, whatever the lockfile says.
+`flowpact remotes update` records that same commit for it; an entry that records another one was edited by hand, and
+describes other code than what runs. flowpact does not check calls against such an entry (they are unverified, as
+without one), and FP612 reports it.
+
 ## Renovate and Dependabot
 
 When Renovate or Dependabot moves a reference to another version (`octo/setup@v2` → `@v3`), the lockfile still has

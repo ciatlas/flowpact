@@ -322,7 +322,9 @@ outside its directory.
 - **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
   [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a
   commit SHA, and `flowpact remotes update` rewrites it from the source, so a false entry shows in the pull request's
-  diff. Fetched files are parsed, never run, and refused over 1 MB or after 30 seconds, eight at a time
+  diff. An entry that records another commit than the full SHA its reference pins is not used at all, and
+  [`FP612`](/docs/rules/fp612) reports it (`pinMismatch` in `packages/lint/src/remotes.ts`): a false entry cannot make
+  the calls of a pinned reference pass. Fetched files are parsed, never run, and refused over 1 MB or after 30 seconds, eight at a time
   (`packages/lint/src/remotes-fetch.ts`). A remote unit has no body: nothing that follows a call into a callee reaches
   it (core `ProjectIndex.interfaceOf`, `actionInterfaceOf`). Fetching is opt-in; the token goes only to the GitHub API
   (`GITHUB_API_URL`) as an authorization header and is never printed; the action does not fetch on
