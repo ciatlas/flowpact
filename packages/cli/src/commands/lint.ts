@@ -68,6 +68,11 @@ export const reportArgs = {
     default: true,
     description: 'Validate against GitHub’s workflow schema (--no-schema to skip)',
   },
+  'fetch-remotes': {
+    type: 'boolean',
+    description:
+      'Fetch the interfaces of remote workflows and actions the remote interfaces lockfile lacks, for this run only (token: GH_TOKEN, GITHUB_TOKEN or gh)',
+  },
   impact: {
     type: 'boolean',
     description:
@@ -115,6 +120,7 @@ type ReportFlags = {
   schema?: boolean | undefined;
   patch?: string | undefined;
   impact?: boolean | undefined;
+  'fetch-remotes'?: boolean | undefined;
   base?: string | undefined;
   expect?: string | undefined;
   title?: string | undefined;
@@ -178,6 +184,7 @@ function analysisOptions(args: ReportArgs, paths: string[]): AnalysisOptions {
     ...(args.only ? { only: splitList(args.only) } : {}),
     schema: args.schema !== false,
     impact: Boolean(args.impact),
+    ...(args['fetch-remotes'] ? { fetchRemotes: true } : {}),
     ...(args.base !== undefined ? { base: args.base } : {}),
     ...(args.expect ? { expect: args.expect as ImpactLevel } : {}),
     ...(args.title !== undefined ? { title: args.title } : {}),

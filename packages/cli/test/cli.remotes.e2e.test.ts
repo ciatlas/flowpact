@@ -80,6 +80,28 @@ describe('flowpact remotes update', () => {
     expect(again.stdout).toContain(`${LOCK} is up to date`);
   });
 
+  it('lint --fetch-remotes checks what the lockfile lacks for this run, writes nothing, and warns what it could not fetch', async () => {
+    const root = repo();
+    const env = { NO_COLOR: '1', GITHUB_API_URL: api, PATH: process.env.PATH ?? '' };
+    const plain = await execa('node', [BIN, 'lint', '--root', root, '--format', 'json'], {
+      reject: false,
+      extendEnv: false,
+      env,
+    });
+    expect(JSON.parse(plain.stdout).findings.map((f: { code: string }) => f.code)).not.toContain('FP101');
+    const r = await execa('node', [BIN, 'lint', '--root', root, '--format', 'json', '--fetch-remotes'], {
+      reject: false,
+      extendEnv: false,
+      env,
+    });
+    const findings = JSON.parse(r.stdout).findings as { code: string; message: string }[];
+    expect(findings.filter((f) => f.code === 'FP101').map((f) => f.message)).toEqual([
+      'Step #1 uses octo/setup@v2 without required input "version" — GitHub will run it with an empty value',
+    ]);
+    expect(r.stderr).toContain('remote interface not fetched: octo/missing@v1');
+    expect(() => readFileSync(join(root, LOCK))).toThrow();
+  });
+
   it('refuses another action', async () => {
     const r = await run(repo(), ['check']);
     expect(r.exitCode).toBe(2);

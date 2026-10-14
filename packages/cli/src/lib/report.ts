@@ -1,11 +1,12 @@
 /** `lint`, `check` and `impact`: the analysis, and the reports rendered from it. */
 import { resolve } from 'node:path';
-import { neutralizeWorkflowCommands } from '@ciatlas/core';
+import { neutralizeWorkflowCommands, nodeFileSystem } from '@ciatlas/core';
 import {
   type AnalysisResult,
   type AnalyzeOptions,
   contractPatch,
   exitCodeFor,
+  fetchMissingRemotes,
   followsPullRequest,
   githubEvent,
   IMPACT_CODES,
@@ -13,6 +14,7 @@ import {
   type JsonReport,
   type PreparedImpact,
   prepareImpact,
+  readRemotesLock,
 } from '@flowpact/lint';
 import {
   type GithubAnnotation,
@@ -25,6 +27,7 @@ import {
   renderSarif,
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
+import { apiUrlFromEnv, tokenFor } from './remotes';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
 import { renderOptions, type TextOptions } from './text';
@@ -61,6 +64,11 @@ export interface ReportOptions extends ImpactFlags {
   impact?: boolean;
   /** Clock for override expiry (the CLI's `FLOWPACT_NOW`). Default: now. */
   now?: Date;
+  /**
+   * Fetch the interfaces of the remote references the remote interfaces lockfile lacks, for this run (`--fetch-remotes`);
+   * nothing is written. Default: false.
+   */
+  fetchRemotes?: boolean;
 }
 
 export interface PrettyOptions extends TextOptions {
@@ -203,15 +211,30 @@ function commandOptions(
   paths: string[],
   only: string[] | undefined,
   impact: PreparedImpact | undefined,
+  fetched: AnalyzeOptions['fetchedRemotes'],
 ): Partial<AnalyzeOptions> {
   return {
     ...(options.now ? { now: options.now } : {}),
+    ...(fetched ? { fetchedRemotes: fetched } : {}),
     paths,
     validateSchema: command === 'impact' ? false : bool('schema', options.schema) !== false,
     checkContracts: command === 'check',
     ...onlyRules(command, only),
     ...(impact && 'options' in impact ? { impact: impact.options } : {}),
   };
+}
+
+/** The remote interfaces the lockfile lacks, fetched for this run; a reference that cannot be fetched is a warning. */
+async function fetchRemotesFor(session: Session): Promise<AnalyzeOptions['fetchedRemotes']> {
+  const { root, logger } = session;
+  const fs = nodeFileSystem(root);
+  const apiUrl = apiUrlFromEnv();
+  const token = tokenFor(apiUrl, undefined);
+  const r = await logger.time('fetch remote interfaces', () =>
+    fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, { apiUrl, ...(token ? { token } : {}) }),
+  );
+  for (const f of r.failed) logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  return r.remotes;
 }
 
 /** The options `runReport` checks before it runs: paths, rules, labels, the declared impact and the clock. */
@@ -263,7 +286,11 @@ export async function runReport(
     root,
     hooks.elsewhere,
   );
-  const result = await analyzeSession(session, commandOptions(command, options, paths, only, impact));
+  const fetched = bool('fetchRemotes', options.fetchRemotes) ? await fetchRemotesFor(session) : undefined;
+  const result = await analyzeSession(
+    session,
+    commandOptions(command, options, paths, only, impact, fetched),
+  );
   // In impact mode, a path the change removed (one that names a workflow or action of the baseline) is not missing.
   const accepted = unrefused(result, impact);
   const analyzed = analyzedNotes(impact, result, accepted.notes);

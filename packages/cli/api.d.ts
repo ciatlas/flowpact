@@ -88,6 +88,11 @@ export interface LintOptions extends CommonOptions, PluginOptions, ImpactModeOpt
   impact?: boolean;
   /** The current time, for the expiry of overrides (the CLI reads `FLOWPACT_NOW`). Default: now. */
   now?: Date;
+  /**
+   * Fetch the interfaces of the remote workflows and actions the remote interfaces lockfile lacks, for this run only
+   * (`--fetch-remotes`), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. Default: false.
+   */
+  fetchRemotes?: boolean;
 }
 
 export interface CheckOptions extends LintOptions {}

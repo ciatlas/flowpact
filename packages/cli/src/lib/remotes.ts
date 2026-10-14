@@ -34,6 +34,9 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
   authenticated: boolean;
 }
 
+/** The GitHub API: `GITHUB_API_URL` (GitHub Enterprise Server), else github.com's. */
+export const apiUrlFromEnv = () => process.env.GITHUB_API_URL || 'https://api.github.com';
+
 /** The GitHub CLI's token, when it is installed and signed in; never printed. */
 function ghToken(): string | undefined {
   const r = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8', timeout: 10_000 });
@@ -41,7 +44,7 @@ function ghToken(): string | undefined {
 }
 
 /** The token to read remote repositories with: the option, `GH_TOKEN`, `GITHUB_TOKEN`, or github.com's `gh` token. */
-function tokenFor(apiUrl: string, given: string | undefined): string | undefined {
+export function tokenFor(apiUrl: string, given: string | undefined): string | undefined {
   if (given) return given;
   const env = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
   if (env) return env;
@@ -66,7 +69,7 @@ export async function runRemotesUpdate(
   const fs = nodeFileSystem(root);
   const read = readRemotesLock(fs);
   const file = read.file ?? REMOTES_LOCK_FILES[0];
-  const apiUrl = options.apiUrl ?? process.env.GITHUB_API_URL ?? 'https://api.github.com';
+  const apiUrl = options.apiUrl ?? apiUrlFromEnv();
   const token = tokenFor(apiUrl, options.token);
   const update = await logger.time('fetch remote interfaces', () =>
     updateRemotesLock(result.index, read.lock, { apiUrl, ...(token ? { token } : {}) }),
