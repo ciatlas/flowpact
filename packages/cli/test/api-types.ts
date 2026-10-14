@@ -8,11 +8,17 @@ import type {
   Finding as EngineFinding,
   RuleContext as EngineRuleContext,
   RuleDefinition as EngineRuleDefinition,
+  FetchProgress,
   JsonReport,
   RuleRegistry,
 } from '@flowpact/lint';
 import type { CallGraph as EngineCallGraph, GithubAnnotation, MarkdownOptions } from '@flowpact/reporters';
 import type * as Api from '../api';
+import type {
+  RemotesCleanOptions as EngineCleanOptions,
+  RemotesDownloadOptions as EngineDownloadOptions,
+  RemotesUpdateOptions as EngineUpdateOptions,
+} from '../src/lib/remotes';
 import type { Analysis as EngineAnalysis } from '../src/lib/report';
 
 /** True when A and B are the same type, property for property (optional and readonly included). */
@@ -31,6 +37,12 @@ same<Api.Severity, EngineFinding['severity']>(true);
 // What the API returns is what the CLI renders from.
 const analysis = (a: EngineAnalysis): Api.Analysis => a;
 
+// The remotes functions pass their options to the commands' code as they are, and report progress as it does.
+same<Api.RemoteProgress, FetchProgress>(true);
+const updateOptions = (o: Api.RemotesUpdateOptions): EngineUpdateOptions => o;
+const downloadOptions = (o: Api.RemotesDownloadOptions): EngineDownloadOptions => o;
+const cleanOptions = (o: Api.RemotesCleanOptions): EngineCleanOptions => o;
+
 // A plugin rule written against the declarations is a rule the engine runs, and the context the engine passes it is
 // the context the declarations describe (the members a rule can use are there, with compatible types).
 const register = (registry: RuleRegistry, rule: Api.RuleDefinition) => registry.register(rule);
@@ -38,4 +50,13 @@ const context = (ctx: EngineRuleContext): Api.RuleContext => ctx;
 const index = (i: EngineIndex): Api.ProjectIndex => i;
 const builtIn = (rule: EngineRuleDefinition): Api.RuleDefinition => rule;
 
-export const checks = [analysis, register, context, index, builtIn];
+export const checks = [
+  analysis,
+  register,
+  context,
+  index,
+  builtIn,
+  updateOptions,
+  downloadOptions,
+  cleanOptions,
+];

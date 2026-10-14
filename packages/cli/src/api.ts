@@ -8,12 +8,16 @@ import type * as Api from '../api';
 import { FlowpactError as FlowpactErrorClass } from './lib/errors';
 import { runGenerate } from './lib/generate';
 import { callGraph, explainRule, listRules, traceSymbol } from './lib/inspect';
+import { runRemotesClean, runRemotesDownload, runRemotesUpdate } from './lib/remotes';
 import { type ReportCommand, runReport } from './lib/report';
 import { openSession } from './lib/session';
 import {
   explainText,
   generationText,
   graphText,
+  remotesCleanText,
+  remotesDownloadText,
+  remotesText,
   renderOptions,
   rulesText,
   terminalRender,
@@ -47,6 +51,14 @@ export const rules: typeof Api.rules = async (options = {}) => listRules(openSes
 export const explain: typeof Api.explain = async (codeOrName, options = {}) =>
   explainRule(openSession(options), codeOrName);
 
+export const remotesUpdate: typeof Api.remotesUpdate = async (options = {}) =>
+  runRemotesUpdate(openSession(options), options);
+
+export const remotesDownload: typeof Api.remotesDownload = async (options = {}) =>
+  runRemotesDownload(openSession(options), options);
+
+export const remotesClean: typeof Api.remotesClean = async (options = {}) => runRemotesClean(options);
+
 // What the commands print, from what the functions above return: the same text as the CLI's for the same options.
 
 export const formatGraph: typeof Api.formatGraph = (graph, options = {}) =>
@@ -62,6 +74,15 @@ export const formatExplain: typeof Api.formatExplain = (rule, options) =>
 
 export const formatGeneration: typeof Api.formatGeneration = (generation, options = {}) =>
   generationText(generation, renderOptions(options), Boolean(options.diff));
+
+export const formatRemotesUpdate: typeof Api.formatRemotesUpdate = (result, options = {}) =>
+  remotesText(result, renderOptions(options));
+
+export const formatRemotesDownload: typeof Api.formatRemotesDownload = (result, options = {}) =>
+  remotesDownloadText(result, renderOptions(options));
+
+export const formatRemotesClean: typeof Api.formatRemotesClean = (result, options = {}) =>
+  remotesCleanText(result, renderOptions(options));
 
 export const terminalOptions: typeof Api.terminalOptions = () => {
   const { color, width, hyperlinks, ascii } = terminalRender();

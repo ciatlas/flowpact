@@ -15,14 +15,16 @@ import {
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { createRequire } from 'node:module';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { reportSchema, VERSION } from '@flowpact/lint';
 import { build } from 'esbuild';
 import { execa } from 'execa';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const PKG = join(ROOT, 'packages/cli');
@@ -143,17 +145,23 @@ describe('the package', () => {
       'formatExplain',
       'formatGeneration',
       'formatGraph',
+      'formatRemotesClean',
+      'formatRemotesDownload',
+      'formatRemotesUpdate',
       'formatRules',
       'formatTrace',
       'generate',
       'graph',
       'impact',
       'lint',
+      'remotesClean',
+      'remotesDownload',
+      'remotesUpdate',
       'rules',
       'terminalOptions',
       'trace',
     ]);
-    expect(r.types).toEqual(['function', 'string', ...Array.from({ length: 15 }, () => 'function')]);
+    expect(r.types).toEqual(['function', 'string', ...Array.from({ length: 21 }, () => 'function')]);
     expect(r.version).toBe(VERSION);
     expect(fileURLToPath(r.resolved)).toBe(realpathSync(join(PKG, 'dist/api.js')));
     const pkg = JSON.parse(readFileSync(join(PKG, 'package.json'), 'utf8'));
@@ -835,6 +843,101 @@ process.stdout.write(JSON.stringify({ rules: a.report.rules.map((r) => r.code).f
   }, 120_000);
 });
 
+describe('remotes', () => {
+  const SHA = 'a'.repeat(40);
+  const ACTION =
+    'name: Setup\ninputs:\n  version: { required: true }\nruns:\n  using: composite\n  steps: []\n';
+  const routes: Record<string, string> = {
+    '/repos/octo/setup/commits/v2': SHA,
+    [`/repos/octo/setup/contents/action.yml?ref=${SHA}`]: ACTION,
+  };
+  let server: Server;
+  let env: Record<string, string>;
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      const body = routes[req.url ?? ''];
+      res.writeHead(body === undefined ? 404 : 200).end(body ?? '');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    // A token of its own, so the GitHub CLI of whoever runs the tests is never asked.
+    env = { GITHUB_API_URL: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, GH_TOKEN: 'test' };
+  });
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  const remoteRepo = () => {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-api-remotes-'));
+    write(root, {
+      '.github/workflows/ci.yml':
+        'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n      - uses: octo/gone@v1\n',
+    });
+    return root;
+  };
+
+  it('remotesUpdate returns what remotes update prints from, and reports progress', async () => {
+    const root = remoteRepo();
+    const cache = join(root, '..', `${root.split('/').at(-1)}-cache`);
+    const r = await api<{ result: Record<string, unknown>; text: string; progress: string[] }>(
+      `const progress = [];
+const result = await flowpact.remotesUpdate({ root: ${JSON.stringify(root)}, dryRun: true, onProgress: (p) => progress.push(p.ref + ' ' + p.outcome) });
+out({ result, text: flowpact.formatRemotesUpdate(result, { color: false }), progress: progress.sort() });`,
+      env,
+    );
+    expect(r.result).toMatchObject({
+      file: '.github/flowpact/remotes.lock.yaml',
+      changes: true,
+      dryRun: true,
+      added: ['octo/setup@v2'],
+      unreadable: [{ ref: 'octo/gone@v1', error: 'octo/gone@v1 not found, or not readable with this token' }],
+      tokenSource: 'GH_TOKEN',
+    });
+    expect(r.progress).toEqual(['octo/gone@v1 unreadable', 'octo/setup@v2 fetched']);
+    expect(existsSync(join(root, '.github/flowpact/remotes.lock.yaml'))).toBe(false);
+    const printed = await cli(['remotes', 'update', '--dry-run', '--root', root], env);
+    expect(r.text).toBe(`${printed.stdout}\n`);
+    // Written, with the files read kept in the cache given.
+    const written = await api<{ sources: { dir: string; written: number } }>(
+      `out(await flowpact.remotesUpdate({ root: ${JSON.stringify(root)}, cacheDir: ${JSON.stringify(cache)} }));`,
+      env,
+    );
+    expect(written.sources).toMatchObject({ dir: join(cache, 'remotes'), written: 1 });
+    expect(readFileSync(join(root, '.github/flowpact/remotes.lock.yaml'), 'utf8')).toContain(`sha: ${SHA}`);
+  });
+
+  it('remotesDownload fills the cache from the lockfile, and remotesClean empties it', async () => {
+    const root = remoteRepo();
+    const cache = mkdtempSync(join(tmpdir(), 'flowpact-api-cache-'));
+    await api(`out(await flowpact.remotesUpdate({ root: ${JSON.stringify(root)}, cacheDir: false }));`, env);
+    const r = await api<{ download: Record<string, unknown>; text: string; clean: Record<string, unknown> }>(
+      `const download = await flowpact.remotesDownload({ root: ${JSON.stringify(root)}, cacheDir: ${JSON.stringify(cache)} });
+const text = flowpact.formatRemotesDownload(download, { color: false });
+const clean = await flowpact.remotesClean({ cacheDir: ${JSON.stringify(cache)} });
+out({ download, text, clean });`,
+      env,
+    );
+    expect(r.download).toMatchObject({
+      dir: join(cache, 'remotes'),
+      downloaded: ['octo/setup@v2'],
+      commits: [`octo/setup/${SHA}`],
+      removed: 0,
+    });
+    expect(r.text).toContain(`downloaded 1 source to ${join(cache, 'remotes')}`);
+    expect(r.clean).toEqual({ dir: join(cache, 'remotes'), keep: 0, removed: 1 });
+  });
+
+  it('throws a usage error for remotesDownload without a lockfile, and for a remotesClean keep below 0', async () => {
+    const r = await api<{ download: { kind: string; message: string }; clean: { kind: string } }>(
+      `out({ download: await failure(flowpact.remotesDownload({ root: ${JSON.stringify(remoteRepo())} })),
+  clean: await failure(flowpact.remotesClean({ keep: -1 })) });`,
+      env,
+    );
+    expect(r.download).toMatchObject({
+      kind: 'usage',
+      message: expect.stringContaining('no remotes lockfile'),
+    });
+    expect(r.clean).toMatchObject({ kind: 'usage' });
+  });
+});
+
 describe('the declarations', () => {
   it('are self-contained and type a consumer written in TypeScript', async () => {
     const dts = readFileSync(join(PKG, 'dist/api.d.ts'), 'utf8');
@@ -859,6 +962,8 @@ describe('the declarations', () => {
   type Analysis, type Annotation, check, defineRule, explain, type Finding, FlowpactError, formatExplain,
   formatGeneration, formatGraph, formatRules, formatTrace, generate, graph, impact, lint, type Loc, type Report,
   type RuleContext, rules, type Severity, terminalOptions, type TextOptions, trace, VERSION,
+  remotesUpdate, remotesDownload, remotesClean, formatRemotesUpdate, formatRemotesDownload, formatRemotesClean,
+  type RemotesUpdateResult, type RemoteProgress,
 } from 'flowpact';
 
 const log: string[] = [];
@@ -893,6 +998,16 @@ const texts: string[] = [
   formatGeneration(await generate({ dryRun: true }), { diff: true, color: options.color }),
 ];
 const unit: string | undefined = (await trace({ symbol: 'ci.yml' })).unit;
+const progress: RemoteProgress[] = [];
+const updated: RemotesUpdateResult = await remotesUpdate({ paths: ['.github/workflows/ci.yml'], dryRun: true,
+  token: 't', apiUrl: 'https://ghes.example/api/v3', githubCom: true, cacheDir: false, onProgress: (p) => void progress.push(p) });
+const kept: number | undefined = updated.sources?.written;
+const downloaded: string[] = (await remotesDownload({ cacheDir: '/tmp/c' })).downloaded;
+const cleaned: number = (await remotesClean({ keep: 2 })).removed;
+const remoteTexts: string[] = [formatRemotesUpdate(updated), formatRemotesDownload(await remotesDownload(), options),
+  formatRemotesClean(await remotesClean())];
+// @ts-expect-error: download always caches
+await remotesDownload({ cacheDir: false });
 
 const rule = defineRule({
   code: 'ACME601', name: 'prod-deploy-needs-approval', category: 'structure', defaultSeverity: 'error',
@@ -927,7 +1042,7 @@ a.exitCode('sometimes');
 // @ts-expect-error: the report is read-only
 a.report = report;
 
-export { VERSION, code, outputs, patch, required, graded, written, nodes, drawn, traced, listed, why, rule, where, severity, annotations, texts, unit, preview };
+export { VERSION, code, outputs, patch, required, graded, written, nodes, drawn, traced, listed, why, rule, where, severity, annotations, texts, unit, preview, kept, downloaded, cleaned, remoteTexts };
 `,
     });
     const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');

@@ -130,6 +130,67 @@ export interface GraphOptions extends CommonOptions {
   paths?: string[];
 }
 
+/** Options of `remotesUpdate` and `remotesDownload`: how to read the remote repositories. */
+export interface RemotesFetchOptions extends CommonOptions {
+  /**
+   * Workflow and action files or directories, relative to the root: only the remote references they use, and those of
+   * the local workflows and actions they call. Default: all.
+   */
+  paths?: string[];
+  /**
+   * The token to read the remote repositories with, sent only to `apiUrl`. Default: `GH_TOKEN`, else `GITHUB_TOKEN`,
+   * else the GitHub CLI's (`gh auth token`); none for public repositories only.
+   */
+  token?: string;
+  /** The GitHub API. Default: `GITHUB_API_URL`, else `https://api.github.com`. */
+  apiUrl?: string;
+  /**
+   * On GitHub Enterprise Server or GHE.com, also look on github.com for the references the enterprise server lacks, as
+   * GitHub Connect does, with `GITHUB_COM_TOKEN` or none, never `token` (`--github-com`). It sends their names to
+   * github.com. Default: false.
+   */
+  githubCom?: boolean;
+  /** Called as each reference is done, for a progress display. */
+  onProgress?: (progress: RemoteProgress) => void;
+}
+
+/** One remote reference done, of how many. */
+export interface RemoteProgress {
+  done: number;
+  total: number;
+  ref: string;
+  /** `cached` and `skipped` are `remotesDownload`'s: the cache had the source, or it was not downloaded. */
+  outcome: 'fetched' | 'unreadable' | 'failed' | 'cached' | 'skipped';
+  /** The commit, or why it could not be fetched or downloaded. */
+  detail: string;
+}
+
+export interface RemotesUpdateOptions extends RemotesFetchOptions {
+  /** Compute the lockfile without writing it, or anything to the cache (`--dry-run`). */
+  dryRun?: boolean;
+  /**
+   * flowpact's cache directory, whose `remotes` directory keeps the files read, for the editor (`--cache-dir`; relative
+   * to the working directory); `false` keeps none (`--no-cache`). Default: `FLOWPACT_CACHE_DIR`, else none in CI (`CI`,
+   * `TF_BUILD` or `JENKINS_URL` set), else the per-user cache.
+   */
+  cacheDir?: string | false;
+}
+
+export interface RemotesDownloadOptions extends RemotesFetchOptions {
+  /**
+   * flowpact's cache directory, whose `remotes` directory the sources go to (`--cache-dir`; relative to the working
+   * directory). Default: `FLOWPACT_CACHE_DIR`, else the per-user cache, also in CI.
+   */
+  cacheDir?: string;
+}
+
+export interface RemotesCleanOptions {
+  /** flowpact's cache directory (`--cache-dir`). Default: `FLOWPACT_CACHE_DIR`, else the per-user cache. */
+  cacheDir?: string;
+  /** Keep this many of the most recently used commits of each repository (`--keep`). Default: 0, none. */
+  keep?: number;
+}
+
 export interface TraceOptions extends CommonOptions, PluginOptions {
   /** e.g. `pipeline.yml#inputs.config`, `pipeline.yml:config`, or `pipeline.yml` for its whole interface. */
   symbol: string;
@@ -402,6 +463,72 @@ export interface ContractGeneration {
   patch(): string | undefined;
 }
 
+/** A remote reference and why it could not be fetched. */
+export interface RemoteProblem {
+  ref: string;
+  error: string;
+}
+
+/** What `remotesUpdate` wrote to the remote interfaces lockfile, or with `dryRun` would write. */
+export interface RemotesUpdateResult {
+  /** The lockfile, relative to the root. */
+  file: string;
+  /** Whether its text changes. */
+  changes: boolean;
+  dryRun: boolean;
+  /** References whose entry is new, changed (another commit or interface), or gone because nothing uses them. */
+  added: string[];
+  changed: string[];
+  removed: string[];
+  /** References that could not be fetched (the network, the API, the file); their previous entries are kept. */
+  failed: RemoteProblem[];
+  /** References that do not exist, or the token cannot read; recorded under the lockfile's `unreadable`. */
+  unreadable: RemoteProblem[];
+  /** Where the token came from (`GH_TOKEN`, `GITHUB_TOKEN`, the GitHub CLI, the option); undefined without one. */
+  tokenSource?: string;
+  /** The sources cache, unless none was kept. */
+  sources?: {
+    dir: string;
+    /** Files written to it, and older commits removed afterwards (the 3 most recently used of each repository stay). */
+    written: number;
+    removed: number;
+    /** Files that could not be written, and why the first one could not; the lockfile is written all the same. */
+    notKept: number;
+    failed?: string;
+  };
+  /** Why no file was kept although that was not asked for: in CI, or without a home directory. */
+  sourcesNotKept?: string;
+}
+
+/** What `remotesDownload` put in the sources cache. */
+export interface RemotesDownloadResult {
+  /** The lockfile, relative to the root, and the cache's directory. */
+  file: string;
+  dir: string;
+  /** References whose source was downloaded, and those whose source the cache had. */
+  downloaded: string[];
+  cached: string[];
+  /** References the lockfile has no entry for: `remotesUpdate` adds them. */
+  notLocked: string[];
+  /** References not downloaded, with why: recorded as unreadable, on a host this run does not read, an unsafe path. */
+  skipped: { ref: string; reason: string }[];
+  /** References whose source could not be downloaded or cached; `cache` when writing the cache failed. */
+  failed: { ref: string; error: string; cache?: true }[];
+  /** The cached commits this run used (`owner/repo/sha`), and older commits removed afterwards. */
+  commits: string[];
+  removed: number;
+  tokenSource?: string;
+}
+
+/** What `remotesClean` removed from the sources cache. */
+export interface RemotesCleanResult {
+  dir: string;
+  keep: number;
+  /** Cached commits removed, and why one could not be. */
+  removed: number;
+  failed?: string;
+}
+
 export type CallGraphNodeKind = 'workflow' | 'action' | 'remote' | 'missing' | 'invalid';
 
 /**
@@ -617,6 +744,21 @@ export declare function rules(options?: RulesOptions): Promise<RuleInfo[]>;
 /** `flowpact explain`: a rule's documentation, by code (`FP401`) or name. */
 export declare function explain(codeOrName: string, options?: ExplainOptions): Promise<RuleDocs>;
 
+/**
+ * `flowpact remotes update`: fetches the interfaces of the remote workflows and actions the repository uses into the
+ * remote interfaces lockfile, and keeps the files read in the sources cache.
+ */
+export declare function remotesUpdate(options?: RemotesUpdateOptions): Promise<RemotesUpdateResult>;
+
+/**
+ * `flowpact remotes download`: downloads the sources of the commits the lockfile pins into the sources cache, without
+ * changing the lockfile. Without a lockfile, or with one it cannot use, it throws a usage error.
+ */
+export declare function remotesDownload(options?: RemotesDownloadOptions): Promise<RemotesDownloadResult>;
+
+/** `flowpact remotes clean`: empties the sources cache, or keeps the most recently used commits of each repository. */
+export declare function remotesClean(options?: RemotesCleanOptions): Promise<RemotesCleanResult>;
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Text: what the commands print, from what they return. The same text as the CLI's for the same options, and like
 // it, safe to print in a CI log: no line of it is read as a GitHub workflow command. Written for people; parse the
@@ -652,6 +794,15 @@ export declare function formatGeneration(
   generation: ContractGeneration,
   options?: GenerationFormatOptions,
 ): string;
+
+/** `flowpact remotes update`: what the lockfile gained, lost or changed, the token, the cache, and what failed. */
+export declare function formatRemotesUpdate(result: RemotesUpdateResult, options?: TextOptions): string;
+
+/** `flowpact remotes download`: what the cache now has, and each reference not downloaded, with why. */
+export declare function formatRemotesDownload(result: RemotesDownloadResult, options?: TextOptions): string;
+
+/** `flowpact remotes clean`: how many cached commits went, and what was kept. */
+export declare function formatRemotesClean(result: RemotesCleanResult, options?: TextOptions): string;
 
 /**
  * The options the CLI uses for its standard output, for text printed there. Colors: off with `NO_COLOR` or
