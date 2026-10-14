@@ -36,14 +36,18 @@ function outsideCode(s: string, prose: (t: string) => string, code = (t: string)
  */
 const mdx = (s: string) => outsideCode(s, (t) => t.replace(/[\\{}<>]/g, (c) => `\\${c}`));
 /**
- * `mdx` for a table cell: pipes are escaped in the same pass, after an already escaped backslash run, and inside code
- * spans too, where a GFM table still reads `|` as a cell border.
+ * `mdx` for a table cell: pipes are escaped in the same pass, after an already escaped backslash run. A code span in a
+ * cell is refused when it holds a pipe (a GFM table reads it as a cell border, even in code) or a backslash (which would
+ * then escape it): no summary needs one, and rewording beats a cell that renders differently from its source.
  */
 const mdxCell = (s: string) =>
   outsideCode(
     s,
     (t) => t.replace(/[\\{}<>|]/g, (c) => `\\${c}`),
-    (t) => t.replace(/\|/g, '\\|'),
+    (t) => {
+      if (/[|\\]/.test(t)) throw new Error(`a code span in a table cell holds a pipe or a backslash: ${t}`);
+      return t;
+    },
   );
 
 export function rulePage(rule: RuleDefinition): string {

@@ -33,10 +33,13 @@ describe('rule docs', () => {
       const page = rulePage(rule);
       for (const span of spans(prose)) expect(page, `${rule.code}: ${span}`).toContain(span);
     }
-    // In the index's table cells a pipe stays escaped inside code too: GFM reads it as a cell border.
+    // Summaries go in the index's table cells, where a code span cannot hold a pipe or a backslash.
     const index = indexPage(registry.all());
     for (const rule of registry.all())
-      for (const span of spans(rule.docs.summary)) expect(index).toContain(span.replace(/\|/g, '\\|'));
+      for (const span of spans(rule.docs.summary)) {
+        expect(span, `${rule.code}: ${span}`).not.toMatch(/[|\\]/);
+        expect(index).toContain(span);
+      }
   });
 
   it('gives impact mode its own group in the index, and reserves only FP7xx', () => {
