@@ -4,6 +4,26 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.19.0](https://github.com/ciatlas/flowpact/compare/v0.18.0...v0.19.0) (2026-10-14)
+
+
+### Features
+
+* **action:** fetch the remote interfaces a lockfile lacks in CI, report an outdated lockfile, and document Renovate and Dependabot ([#161](https://github.com/ciatlas/flowpact/issues/161)) ([694955a](https://github.com/ciatlas/flowpact/commit/694955a72f6e793c046f018b89cef158f93ba273))
+* **cli:** flowpact remotes update fetches the remote interfaces lockfile ([#160](https://github.com/ciatlas/flowpact/issues/160)) ([d1b8ab9](https://github.com/ciatlas/flowpact/commit/d1b8ab9026f37b3b80723a358e13a292ae929e3a))
+* **impact:** grade a job that gains, changes or loses its environment ([#155](https://github.com/ciatlas/flowpact/issues/155)) ([a02ad35](https://github.com/ciatlas/flowpact/commit/a02ad35aee38c53c5dbe0ae4c2eb4cbba5d0a6dd))
+* **impact:** grade a job that needs runners callers may not have ([#154](https://github.com/ciatlas/flowpact/issues/154)) ([4d27fd2](https://github.com/ciatlas/flowpact/commit/4d27fd2b43f6e6782137c288c0325066224655eb))
+* **impact:** grade an artifact a published unit no longer uploads ([#156](https://github.com/ciatlas/flowpact/issues/156)) ([72146e0](https://github.com/ciatlas/flowpact/commit/72146e05c20351b03870b8d6eb8acc6ee7f7f6a5))
+* **impact:** grade an output that is now set only when an if: holds ([#153](https://github.com/ciatlas/flowpact/issues/153)) ([5a34a90](https://github.com/ciatlas/flowpact/commit/5a34a90c338cd9ca406c69967f66e70c67884ef4))
+* **impact:** grade changed jobs or steps of a published unit as a patch ([#157](https://github.com/ciatlas/flowpact/issues/157)) ([ef22a21](https://github.com/ciatlas/flowpact/commit/ef22a219d5af186c64ec1e587b73cf5940304750))
+* **lint:** check inputs passed to remote workflows and actions against a lockfile of their interfaces ([#158](https://github.com/ciatlas/flowpact/issues/158)) ([debbe85](https://github.com/ciatlas/flowpact/commit/debbe85f08d4afc36c94c784464556f94a690551))
+* **lint:** check secrets passed to, and outputs read from, remote workflows and actions ([#159](https://github.com/ciatlas/flowpact/issues/159)) ([53e2ca4](https://github.com/ciatlas/flowpact/commit/53e2ca4056516c214a8291ff01f7294ac9174f8b))
+
+
+### Bug Fixes
+
+* **deps:** update dependency zod to v4.6.6 ([#149](https://github.com/ciatlas/flowpact/issues/149)) ([7b11e6e](https://github.com/ciatlas/flowpact/commit/7b11e6e9719e5bf0e54a90f0a8e1745cac955877))
+
 ## [0.18.0](https://github.com/ciatlas/flowpact/compare/v0.17.1...v0.18.0) (2026-10-14)
 
 
