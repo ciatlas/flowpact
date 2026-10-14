@@ -17,7 +17,8 @@ release: see [Install without a marketplace](#install-without-a-marketplace). Yo
 - **Hover** — how an input, secret, output, env variable or matrix key is declared, where its value comes from and
   where it flows, through every level of nesting.
 - **Go to definition** across workflow calls and local actions: from `with: config:` to the callee's input, from
-  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output.
+  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output. Into
+  [other repositories' workflows and actions](#remote-workflows-and-actions) too, once their sources are cached.
 - **Find references** and **highlights** across files.
 
 <Screenshot name="editor-diagnostics" format="png" alt="VS Code showing FP401 on matrix.config in tests.yml: the windows matrix entry has no config, with the call chain and flowpact's hover card" caption="A finding as you type: the windows matrix entry passes an empty config to run-suite.yml." />
@@ -76,12 +77,29 @@ Hovering an input, secret, output, env variable, matrix key, job or `uses:` valu
   the commit, the inputs, secrets and outputs, and the secrets a reusable workflow reads without declaring them (only
   `secrets: inherit` passes those), or why the reference has no entry. On a remote call's `with:` or
   `secrets:` key it shows the input or secret as recorded there, and **Find All References** lists every call that passes
-  it. A read of a remote call's or action's output says whether the reference declares it.
+  it. A read of a remote call's or action's output says whether the reference declares it. See
+  [Remote workflows and actions](#remote-workflows-and-actions).
 
 Other extensions add their own sections below it; GitHub's GitHub Actions extension, for example, describes the
 key's syntax.
 
 <Screenshot name="editor-hover" format="png" alt="flowpact hover card on inputs.environment in build.yml: a required string input, from pipeline.yml's input, to package.yml's input" caption="The input comes from pipeline.yml and goes on to package.yml." />
+
+## Remote workflows and actions
+
+A `uses:` of another repository (`octo/ship/.github/workflows/deploy.yml@v1`, `octo/setup@v2`) has a file to open
+once its source is in your [sources cache](/docs/remote-interfaces#sources-for-the-editor), at the commit the
+[lockfile](/docs/remote-interfaces) pins: `flowpact remotes update` caches what it reads, and `flowpact remotes download`
+fills the cache for a lockfile someone else wrote. Then:
+
+- **Go to definition** on the `uses:` value opens the file (at `workflow_call:` for a reusable workflow); on a `with:`
+  or `secrets:` key, the input or secret there; on `needs.<job>.outputs.<name>` or `steps.<id>.outputs.<name>`, the
+  output.
+- **Hover** adds the workflow's or action's `name:` and the descriptions of its inputs and secrets.
+
+Files in the cache are another repository's at a fixed commit: VS Code opens them read-only, and the server does not
+analyze them. Without the source cached, the hover links to the file on its host at that commit (github.com, or your
+repository's own host for GitHub Enterprise Server) and says to run `flowpact remotes download`.
 
 ## VS Code
 
