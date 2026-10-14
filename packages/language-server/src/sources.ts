@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import {
   createParseContext,
@@ -219,27 +219,41 @@ export function originHost(root: string): string | undefined {
 /**
  * The git config of the repository a directory is in: `.git/config`, found upwards. A `.git` file names the git
  * directory: a worktree's has a `commondir` naming the main repository's; a submodule's (or one made with
- * `--separate-git-dir`) is its own.
+ * `--separate-git-dir`) is its own. Each file is read, not checked first: nothing can change between a check and a read.
  */
 function gitConfigOf(root: string): string | undefined {
-  let top = root;
-  while (!existsSync(join(top, '.git'))) {
+  for (let top = root; ; top = dirname(top)) {
+    const git = join(top, '.git');
+    const found = readGit(git);
+    if (found === DIRECTORY) return join(git, 'config');
+    if (found !== undefined) return configOfGitdir(top, found);
     if (dirname(top) === top) return undefined;
-    top = dirname(top);
   }
-  const git = join(top, '.git');
+}
+
+const DIRECTORY = Symbol('directory');
+
+/** A `.git` entry: a directory, the text of a `.git` file, or undefined when there is none (or it cannot be read). */
+function readGit(path: string): string | typeof DIRECTORY | undefined {
   try {
-    if (statSync(git).isDirectory()) return join(git, 'config');
-    if (!statSync(git).isFile()) return undefined;
-    const gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(git, 'utf8'))?.[1]?.trim();
-    if (!gitdir) return undefined;
-    const dir = isAbsolute(gitdir) ? gitdir : join(top, gitdir);
-    const common = join(dir, 'commondir');
-    const base = existsSync(common) ? join(dir, readFileSync(common, 'utf8').trim()) : dir;
-    return join(base, 'config');
-  } catch {
-    return undefined;
+    return readFileSync(path, 'utf8');
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EISDIR' ? DIRECTORY : undefined;
   }
+}
+
+/** The config of the git directory a `.git` file names (`gitdir: …`), through its `commondir` when it has one. */
+function configOfGitdir(top: string, text: string): string | undefined {
+  const gitdir = /^gitdir:\s*(.+)$/m.exec(text)?.[1]?.trim();
+  if (!gitdir) return undefined;
+  const dir = isAbsolute(gitdir) ? gitdir : join(top, gitdir);
+  let common: string | undefined;
+  try {
+    common = readFileSync(join(dir, 'commondir'), 'utf8').trim();
+  } catch {
+    // No commondir: the git directory is its own (a submodule's, or one made with --separate-git-dir).
+  }
+  return join(common ? join(dir, common) : dir, 'config');
 }
 
 /** The host of a git remote's URL: `https://host/…`, `ssh://git@host:22/…`, or `git@host:owner/repo`. */
