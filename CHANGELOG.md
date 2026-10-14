@@ -4,6 +4,20 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.17.0](https://github.com/ciatlas/flowpact/compare/v0.16.0...v0.17.0) (2026-10-14)
+
+
+### Features
+
+* **trace:** follow a whole secrets read to every secret a workflow holds, and name the workflow of a secret no file declares, with core 2.0.0; see https://ciatlas.github.io/flowpact/docs/upgrading ([#141](https://github.com/ciatlas/flowpact/issues/141)) ([f6a5ffa](https://github.com/ciatlas/flowpact/commit/f6a5ffab8b0b726bd31ab761a5a38b2989b2b6b3))
+
+
+### Bug Fixes
+
+* **impact:** note an ignore edit only for the units the pull request's ignore leaves out once merged ([#140](https://github.com/ciatlas/flowpact/issues/140)) ([746df9f](https://github.com/ciatlas/flowpact/commit/746df9f21b0a6aff30c73b7a670d1c91fddc77b0))
+* **impact:** read a base config through links, submodules and letter case as the baseline has it, so a pull request can no longer leave a published unit out of impact mode with its own ignore ([#140](https://github.com/ciatlas/flowpact/issues/140)) ([746df9f](https://github.com/ciatlas/flowpact/commit/746df9f21b0a6aff30c73b7a670d1c91fddc77b0))
+* **lint:** locate a finding's end, and a reference after a property that follows a dot and spaces, where the source has them ([#141](https://github.com/ciatlas/flowpact/issues/141)) ([f6a5ffa](https://github.com/ciatlas/flowpact/commit/f6a5ffab8b0b726bd31ab761a5a38b2989b2b6b3))
+
 ## [0.16.0](https://github.com/ciatlas/flowpact/compare/v0.15.0...v0.16.0) (2026-10-14)
 
 

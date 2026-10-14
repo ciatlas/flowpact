@@ -1,6 +1,6 @@
 {
   "name": "@flowpact/lint",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "private": true,
   "description": "flowpact's checks on the workflow model: rules, config, contracts, impact mode and reports.",
   "type": "module",
