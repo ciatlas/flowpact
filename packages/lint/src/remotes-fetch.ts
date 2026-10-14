@@ -15,6 +15,7 @@ import {
   trimChar,
 } from '@ciatlas/core';
 import {
+  commitOf,
   lockEntryOf,
   lockedRemote,
   type RemoteEntry,
@@ -465,17 +466,18 @@ async function downloadOne(
   if (unreadable !== undefined)
     return { list: 'skipped', reason: `the lockfile records it as not readable (${unreadable})` };
   if (!entry) return { list: 'notLocked' };
-  if (cachedSource(dir, r, entry.sha)) return { list: 'cached', sha: entry.sha };
+  const sha = commitOf(r, entry);
+  if (cachedSource(dir, r, sha)) return { list: 'cached', sha };
   // Before any request: a path the cache cannot hold would be downloaded on every run and never kept.
-  if (!sourceFiles(r).some((f) => cachedSourcePath(dir, r, entry.sha, f))) return UNSAFE;
+  if (!sourceFiles(r).some((f) => cachedSourcePath(dir, r, sha, f))) return UNSAFE;
   const api = apiFor(entry, opts);
   if (!api)
     return {
       list: 'skipped',
       reason: `on ${entry.host}, which this run does not read: look there with --github-com`,
     };
-  const source = await sourceOrError(r, entry.sha, api);
-  return 'error' in source ? { list: 'failed', error: source.error } : keepSource(dir, r, entry.sha, source);
+  const source = await sourceOrError(r, sha, api);
+  return 'error' in source ? { list: 'failed', error: source.error } : keepSource(dir, r, sha, source);
 }
 
 /** A reference's file at a commit, or why it could not be read; any other error is a bug and is thrown. */

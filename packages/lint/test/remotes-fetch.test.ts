@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   cachedSource,
+  commitOf,
   downloadRemoteSources,
   type FetchedSource,
   hostOf,
@@ -673,6 +674,29 @@ describe('the files read, for the sources cache', () => {
       { ref: 'octo/setup/con@v2', reason: 'its path cannot be a file name in the cache' },
     ]);
     expect(a.seen).toEqual([]);
+  });
+
+  it('downloads the commit a uses: pins in full, not one a lockfile entry claims for it', async () => {
+    const pinned = SHA('d');
+    const at = lint({
+      [`${WF}/ci.yml`]: `on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: octo/setup@${pinned}\n`,
+    }).index;
+    const locked: RemotesLock = {
+      version: 1,
+      remotes: { [`octo/setup@${pinned}`]: { sha: SHA('b'), kind: 'action' } },
+    };
+    const a = fakeApi(
+      {},
+      { [`octo/setup/action.yml@${pinned}`]: SETUP, [`octo/setup/action.yml@${SHA('b')}`]: 'name: x' },
+    );
+    const dir = tempDir();
+    const d = await downloadRemoteSources(at, locked, dir, { fetch: a.fetch });
+    expect(d.downloaded).toEqual([`octo/setup@${pinned}`]);
+    const ref = parseRemoteRef(`octo/setup@${pinned}`, 'action')!;
+    expect(cachedSource(dir, ref, pinned)).toBeDefined();
+    expect(cachedSource(dir, ref, SHA('b'))).toBeUndefined();
+    expect(commitOf({ ref: 'v2' }, { sha: SHA('b') })).toBe(SHA('b'));
+    expect(commitOf({ ref: pinned.toUpperCase() }, { sha: SHA('b') })).toBe(pinned);
   });
 
   it('marks a failure to write the cache, which no token would fix', async () => {

@@ -126,6 +126,13 @@ export function lockedRemote(
   return unreadable === undefined ? {} : { unreadable };
 }
 
+/**
+ * The commit a remote reference runs: its own ref when that is a full commit SHA (GitHub runs that commit, whatever the
+ * lockfile says), else the commit the lockfile pins for it. The sources cache keeps, and the editor opens, this one.
+ */
+export const commitOf = (r: Pick<RemoteRef, 'ref'>, entry: Pick<RemoteEntry, 'sha'>): string =>
+  /^[0-9a-f]{40}$/i.test(r.ref) ? r.ref.toLowerCase() : entry.sha;
+
 /** Whether a unit is a remote interface, which has no file of this repository to point at. */
 export const isExternal = (unit: UnitDecl) => unit.external === true;
 
