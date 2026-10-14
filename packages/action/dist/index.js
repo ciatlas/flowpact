@@ -22570,7 +22570,9 @@ var entrySchema = strictObject({
   secrets: optional(record(string2(), strictObject({ required: optional(boolean2()) }))),
   outputs: optional(array(string2())),
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
-  using: optional(string2())
+  using: optional(string2()),
+  /** Where it was read when not from the API the run used: `github.com`, through GitHub Connect. */
+  host: optional(string2())
 });
 var remotesLockSchema = strictObject({
   version: literal(1),
@@ -26834,6 +26836,24 @@ async function fetchRemoteEntry(r, opts = {}) {
   }
   throw new FetchError(`no action.yml in ${r.path || "the repository root"} at ${sha.slice(0, 7)}`, true);
 }
+async function fetchWithFallback(r, opts) {
+  try {
+    return await fetchRemoteEntry(r, opts);
+  } catch (e) {
+    if (!opts.fallback || !(e instanceof FetchError && e.unreadable)) throw e;
+    const { apiUrl, token } = opts.fallback;
+    const entry = await fetchRemoteEntry(r, {
+      ...opts,
+      apiUrl,
+      ...token ? { token } : { token: void 0 }
+    });
+    return { ...entry, host: hostOf(apiUrl) };
+  }
+}
+function hostOf(apiUrl) {
+  const { hostname } = new URL(apiUrl);
+  return hostname.startsWith("api.") ? hostname.slice(4) : hostname;
+}
 async function eachLimited(items, limit, work) {
   let next = 0;
   const run2 = async () => {
@@ -26843,7 +26863,7 @@ async function eachLimited(items, limit, work) {
 }
 async function tryFetch(r, opts, out) {
   try {
-    return await fetchRemoteEntry(r, opts);
+    return await fetchWithFallback(r, opts);
   } catch (e) {
     if (!(e instanceof FetchError) && !(e instanceof TypeError) && e.name !== "TimeoutError")
       throw e;
@@ -28075,6 +28095,8 @@ var DEFAULTS2 = {
   "expected-impact": "",
   "base-ref": "",
   remotes: "lockfile",
+  "remotes-github-com": "false",
+  "github-com-token": "",
   token: "${{ github.token }}",
   debug: "false"
 };
@@ -28151,6 +28173,7 @@ function readInputs() {
     ...input("expected-impact") ? { expectedImpact: oneOf("expected-impact", ["none", "patch", "minor", "major"]) } : {},
     baseRef: input("base-ref"),
     remotes: oneOf("remotes", ["lockfile", "fetch"]),
+    remotesGithubCom: bool("remotes-github-com"),
     debug: bool("debug")
   };
 }
@@ -28483,6 +28506,12 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
   }
   return extraPlugins;
 }
+function githubComFallback(inputs) {
+  const api = process.env.GITHUB_API_URL;
+  if (!inputs.remotesGithubCom || !api || hostOf(api) === "github.com") return {};
+  const token = getInput("github-com-token");
+  return { fallback: { apiUrl: "https://api.github.com", ...token ? { token } : {} } };
+}
 async function remotesToFetch(inputs, root, logger) {
   if (inputs.remotes !== "fetch") return void 0;
   const event = process.env.GITHUB_EVENT_NAME ?? "";
@@ -28497,6 +28526,7 @@ async function remotesToFetch(inputs, root, logger) {
   const r = await fetchMissingRemotes(root, fs3, readRemotesLock(fs3).lock, {
     ...token && !token.startsWith("${{") ? { token } : {},
     ...process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {},
+    ...githubComFallback(inputs),
     onProgress: (p) => logger.debug(
       `remote interface ${p.done}/${p.total}: ${p.ref} ${p.outcome === "fetched" ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`}`
     )
