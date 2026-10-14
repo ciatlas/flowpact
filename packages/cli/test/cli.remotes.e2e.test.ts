@@ -1,5 +1,5 @@
 /** `flowpact remotes update` against a local stand-in for the GitHub API (#152). */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -32,7 +32,10 @@ beforeAll(async () => {
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   api = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
-afterAll(() => new Promise<void>((r) => server.close(() => r())));
+afterAll(async () => {
+  rmSync(home, { recursive: true, force: true });
+  await new Promise<void>((r) => server.close(() => r()));
+});
 
 function repo(): string {
   const root = mkdtempSync(join(tmpdir(), 'flowpact-remotes-'));

@@ -413,25 +413,48 @@ describe('secrets a remote workflow reads without declaring them', () => {
       workflow_call:
         inputs:
           publish: { type: boolean }
+          i: { type: string, default: '\${{ secrets.IN_DEFAULT }}' }
         secrets:
           declared: { required: false }
+        outputs:
+          o: { value: '\${{ secrets.OUT_VALUE }}' }
     jobs:
       a:
         runs-on: x
+        env:
+          OPT: \${{ secrets.OPT_TOKEN }}
         steps:
           - run: echo "\${{ secrets.NPM_TOKEN }} \${{ secrets.npm_token }} \${{ secrets.declared }} \${{ secrets.GITHUB_TOKEN }}"
           - if: inputs.publish
             run: echo "\${{ secrets.PUBLISH_KEY }}"
           - if: false
             run: echo "\${{ secrets.NEVER }}"
+          - if: \${{ secrets.CHECKED != '' }}
+            run: echo "\${{ secrets.CHECKED }}"
+          - if: env.OPT != ''
+            run: echo "\${{ env.OPT }}"
       b:
         if: github.event_name == 'push'
         runs-on: x
         steps:
           - run: echo "\${{ secrets.SLACK_WEBHOOK }}"
+      c:
+        needs: b
+        runs-on: x
+        steps:
+          - run: echo "\${{ secrets.AFTER_PUSH }}"
+      d:
+        needs: b
+        if: always()
+        runs-on: x
+        steps:
+          - run: echo "\${{ secrets.ALWAYS }}"
+      e:
+        uses: ./.github/workflows/inner.yml
+        with: { x: '\${{ secrets.IN_WITH }}' }
   `;
 
-  it('records the ones no caller’s inputs can switch off', async () => {
+  it('records only reads that run on every call, where GitHub allows secrets', async () => {
     const api = fakeApi(
       { 'octo/ship@v1': SHA('a') },
       { [`octo/ship/.github/workflows/ship.yml@${SHA('a')}`]: SHIP },
@@ -440,10 +463,29 @@ describe('secrets a remote workflow reads without declaring them', () => {
       [`${WF}/ci.yml`]: 'on: push\njobs:\n  s:\n    uses: octo/ship/.github/workflows/ship.yml@v1\n',
     }).index;
     const u = await updateRemotesLock(index, undefined, { fetch: api.fetch });
-    // Not: declared, GITHUB_TOKEN, a read under an if: that reads inputs, nor one under if: false.
+    // Recorded: a plain read (in any case), a job env value, and a job that runs whatever the jobs it needs did.
+    // Not: declared, GITHUB_TOKEN, a read under any if: (inputs, false, a secret check, env, the caller's event, or a
+    // job it needs that has one), a read in a condition, nor where GitHub allows no secrets (an input default, a
+    // workflow_call output, a call's with:).
     expect(u.lock.remotes['octo/ship/.github/workflows/ship.yml@v1']?.undeclaredSecrets).toEqual([
+      'ALWAYS',
       'NPM_TOKEN',
-      'SLACK_WEBHOOK',
+      'OPT_TOKEN',
     ]);
+  });
+
+  it('records nothing for a file that cannot be called', async () => {
+    const api = fakeApi(
+      { 'octo/ship@v1': SHA('a') },
+      {
+        [`octo/ship/.github/workflows/ship.yml@${SHA('a')}`]:
+          'on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - run: echo "${{ secrets.X }}"\n',
+      },
+    );
+    const index = lint({
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  s:\n    uses: octo/ship/.github/workflows/ship.yml@v1\n',
+    }).index;
+    const u = await updateRemotesLock(index, undefined, { fetch: api.fetch });
+    expect(u.lock.remotes['octo/ship/.github/workflows/ship.yml@v1']?.undeclaredSecrets).toBeUndefined();
   });
 });

@@ -2,6 +2,7 @@ import {
   BUILTIN_SECRETS,
   type CallSite,
   type ContextResolver,
+  calledFunctions,
   chainTo,
   definitelyFalsy,
   didYouMean,
@@ -10,6 +11,7 @@ import {
   escapeControl,
   evaluateTemplate,
   type InputDecl,
+  type JobDecl,
   known,
   type LocatedRef,
   lookup,
@@ -193,7 +195,7 @@ const undeclaredSecretRef = defineRule({
   defaultSeverity: 'error',
   docs: {
     summary:
-      'A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`. For a remote reusable workflow, from the secrets the remote interfaces lockfile records it reads.',
+      'A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`.',
     why:
       'Inside a called workflow only declared (or inherited) secrets exist. Reading anything else yields an empty string, ' +
       'so authentication steps fail late or, worse, fall back to anonymous access.',
@@ -201,7 +203,15 @@ const undeclaredSecretRef = defineRule({
       'Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. ' +
       "Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in " +
       "`if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads " +
-      'under an `if:` that is always false (`if: false`).',
+      'under an `if:` that is always false (`if: false`). For a remote reusable workflow, which you cannot change: call ' +
+      'it with `secrets: inherit` (it passes secrets within one organization or enterprise), ask its maintainers to ' +
+      'declare the secret, or add an override.',
+    scope:
+      'Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or ' +
+      '`name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the ' +
+      'remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none ' +
+      'under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is ' +
+      'left to FP202.',
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -210,7 +220,7 @@ const undeclaredSecretRef = defineRule({
       if (strictCallers.length === 0) continue;
       const resolvers = new Map(strictCallers.map((c) => [c, callerInputsResolver(wf, c)]));
       for (const { site, ref } of refsOf(wf)) {
-        const name = undeclaredSecretRead(wf.call.secrets, ref);
+        const name = undeclaredSecretRead(wf.call.secrets, ref, site);
         if (!name) continue;
         // A caller whose inputs make the job's or step's `if:` false never runs the read.
         const guards = guardsOf(wf, site);
@@ -225,7 +235,9 @@ const undeclaredSecretRef = defineRule({
 /** The secrets a remote reusable workflow reads without declaring them, empty in a call without `secrets: inherit`. */
 function emptyInCall(ctx: RuleContext, call: CallSite): string[] {
   if (!isExternal(call.callee) || call.job.secretsInherit) return [];
-  return ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+  // A name the call passes is FP202's: GitHub refuses it outright.
+  const read = ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+  return read.filter((name) => !lookup(call.job.secrets, name));
 }
 
 /**
@@ -236,7 +248,7 @@ function checkRemoteCalls(ctx: RuleContext): void {
   for (const call of interfaceCalls(ctx.index)) {
     for (const name of emptyInCall(ctx, call)) {
       ctx.report({
-        message: `jobs.${call.job.id} calls ${call.callee.path}, which reads secrets.${name} without declaring it — it is empty without \`secrets: inherit\``,
+        message: `jobs.${call.job.id} calls ${call.callee.path}, which reads secrets.${name} without declaring it — it is empty unless the call uses \`secrets: inherit\` (from the same organization or enterprise)`,
         loc: call.job.uses?.loc ?? call.job.loc,
         symbol: sym.secret(call.callee.path, name),
         related: chainRelated(chainTo(ctx.index, call.caller.path)),
@@ -246,29 +258,67 @@ function checkRemoteCalls(ctx: RuleContext): void {
 }
 
 /**
- * The secrets a reusable workflow reads by name without declaring them, at reads no caller's inputs can switch off: no
- * `if:` on the way reads `inputs` or is always false. They are empty unless every caller uses `secrets: inherit`. For
- * the remote interfaces lockfile, which keeps no body to judge a caller's inputs against (see FP205).
+ * The secrets a reusable workflow reads by name without declaring them, at reads that run on every call: none under a
+ * condition (see `runsOnEveryCall`), and none in a condition itself, which checks the secret rather than uses it. Only
+ * `secrets: inherit` gives them to it. For the remote interfaces lockfile, which keeps no body to judge a caller against
+ * (see FP205); nothing for a file that cannot be called.
  */
 export function undeclaredSecretsRead(wf: WorkflowDecl): string[] {
+  if (!wf.call) return [];
   const out = new Map<string, string>();
   for (const { site, ref } of refsOf(wf)) {
-    const name = undeclaredSecretRead(wf.call?.secrets ?? {}, ref);
-    if (!name || out.has(name.toLowerCase())) continue;
-    if (guardsOf(wf, site).some((g) => readsInputs(g) || isFalse(g, () => UNKNOWN))) continue;
+    const name = undeclaredSecretRead(wf.call.secrets, ref, site);
+    if (!name || out.has(name.toLowerCase()) || site.isCondition || !runsOnEveryCall(wf, site)) continue;
     out.set(name.toLowerCase(), name);
   }
   return [...out.values()].sort();
 }
 
-/** Whether a condition reads `inputs`, which a caller sets. */
-const readsInputs = (g: Guard) =>
-  g !== false && g.segments.some((s) => s.refs.some((r) => r.context === 'inputs'));
+/**
+ * Whether a site runs on every call: neither its step nor its job has a condition, nor any job its job needs (unless its
+ * own `if:` calls a status function, so it runs whatever those jobs did). A condition on the caller's inputs or event,
+ * a matrix, an env value or a secret may each leave it out.
+ */
+function runsOnEveryCall(wf: WorkflowDecl, site: ExprSite): boolean {
+  const job = site.job !== undefined ? wf.jobs[site.job] : undefined;
+  const step = job && site.step !== undefined ? job.steps[site.step] : undefined;
+  return !(step && hasCondition(step)) && !(job && jobMayBeSkipped(wf, job, new Set()));
+}
+
+/** Whether an `if:` is a real condition: `if: false`, or one that reads a context (status functions alone are not). */
+const hasCondition = (d: { ifValue?: boolean; ifSite?: ExprSite }) =>
+  d.ifValue === false || !!d.ifSite?.segments.some((s) => s.refs.length);
+
+/** Whether a job may be skipped: its own condition, or one of a job it needs when its `if:` calls no status function. */
+function jobMayBeSkipped(wf: WorkflowDecl, job: JobDecl, seen: Set<string>): boolean {
+  if (seen.has(job.id)) return false;
+  seen.add(job.id);
+  if (hasCondition(job)) return true;
+  if (job.ifSite?.segments.some((s) => calledFunctions(s.expr).length)) return false;
+  return job.needs.some((n) => {
+    const needed = wf.jobs[n.id];
+    return needed !== undefined && jobMayBeSkipped(wf, needed, seen);
+  });
+}
+
+/** Where GitHub allows no `secrets` context: a read there is refused, not empty, so FP205 does not judge it. */
+const SECRETS_UNAVAILABLE: ReadonlySet<ExprSite['field']> = new Set([
+  'input.default',
+  'workflow.output',
+  'job.if',
+  'job.name',
+  'job.with',
+  'job.strategy',
+]);
 
 /** The secret a reference reads, when it is neither one of GitHub's own nor declared in `declared`. */
-function undeclaredSecretRead(declared: Record<string, SecretDecl>, ref: LocatedRef): string | undefined {
+function undeclaredSecretRead(
+  declared: Record<string, SecretDecl>,
+  ref: LocatedRef,
+  site: ExprSite,
+): string | undefined {
   const name = ref.path[0];
-  if (ref.context !== 'secrets' || !namesKey(name)) return undefined;
+  if (ref.context !== 'secrets' || !namesKey(name) || SECRETS_UNAVAILABLE.has(site.field)) return undefined;
   if (BUILTIN_SECRETS.has(name.toLowerCase()) || lookup(declared, name)) return undefined;
   return name;
 }

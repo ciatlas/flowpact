@@ -197,11 +197,37 @@ describe('FP205 for remote reusable workflows', () => {
 
   it('reports each secret a call without secrets: inherit leaves empty', () => {
     expect(messages({ [`${WF}/ci.yml`]: caller(''), [LOCK]: lockWith }, 'FP205')).toEqual([
-      'jobs.s calls octo/ship/.github/workflows/ship.yml@v1, which reads secrets.NPM_TOKEN without declaring it — it is empty without `secrets: inherit`',
-      'jobs.s calls octo/ship/.github/workflows/ship.yml@v1, which reads secrets.SLACK_WEBHOOK without declaring it — it is empty without `secrets: inherit`',
+      'jobs.s calls octo/ship/.github/workflows/ship.yml@v1, which reads secrets.NPM_TOKEN without declaring it — it is empty unless the call uses `secrets: inherit` (from the same organization or enterprise)',
+      'jobs.s calls octo/ship/.github/workflows/ship.yml@v1, which reads secrets.SLACK_WEBHOOK without declaring it — it is empty unless the call uses `secrets: inherit` (from the same organization or enterprise)',
     ]);
     const f = byCode(lint({ [`${WF}/ci.yml`]: caller(''), [LOCK]: lockWith }), 'FP205')[0]!;
     expect(f.loc.file).toBe(`${WF}/ci.yml`);
+  });
+
+  it('leaves a secret the call passes by name to FP202', () => {
+    const files = { [`${WF}/ci.yml`]: caller('    secrets: { NPM_TOKEN: x }\n'), [LOCK]: lockWith };
+    expect(messages(files, 'FP205').map((m) => m.split('reads ')[1])).toEqual([
+      'secrets.SLACK_WEBHOOK without declaring it — it is empty unless the call uses `secrets: inherit` (from the same organization or enterprise)',
+    ]);
+    expect(messages(files, 'FP202')).toEqual([
+      'octo/ship/.github/workflows/ship.yml@v1 has no secret "NPM_TOKEN"',
+    ]);
+  });
+
+  it('reads a lockfile with keys it does not know', () => {
+    const later = lockWith.replace('    kind: workflow\n', '    kind: workflow\n    addedLater: 1\n');
+    expect(messages({ [`${WF}/ci.yml`]: caller(''), [LOCK]: `${later}someday: true\n` }, 'FP611')).toEqual(
+      [],
+    );
+  });
+
+  it('does not report a local workflow’s secret read where GitHub allows no secrets', () => {
+    const lib = `on:\n  workflow_call:\n    outputs:\n      o: { value: '\${{ secrets.OUT }}' }\njobs:\n  a:\n    runs-on: x\n    steps: [{ run: x }]\n`;
+    const files = {
+      [`${WF}/lib.yml`]: lib,
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  c:\n    uses: ./.github/workflows/lib.yml\n',
+    };
+    expect(messages(files, 'FP205')).toEqual([]);
   });
 
   it('stays quiet with secrets: inherit, and without the lockfile', () => {

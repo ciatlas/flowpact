@@ -27,7 +27,8 @@ export const REMOTES_LOCK_FILES = [
   `${CONFIG_DIR}/remotes.lock.yml`,
 ] as const;
 
-const inputSchema = z.strictObject({
+// Loose objects: a key a later flowpact adds is ignored here rather than making the whole lockfile unusable (FP611).
+const inputSchema = z.looseObject({
   type: z.optional(z.string()),
   /** Written only when true. */
   required: z.optional(z.boolean()),
@@ -35,12 +36,12 @@ const inputSchema = z.strictObject({
   options: z.optional(z.array(z.string())),
 });
 
-const entrySchema = z.strictObject({
+const entrySchema = z.looseObject({
   /** The commit the reference resolved to when the entry was written. */
   sha: z.string().check(z.regex(/^[0-9a-f]{40}$/)),
   kind: z.enum(['workflow', 'action']),
   inputs: z.optional(z.record(z.string(), inputSchema)),
-  secrets: z.optional(z.record(z.string(), z.strictObject({ required: z.optional(z.boolean()) }))),
+  secrets: z.optional(z.record(z.string(), z.looseObject({ required: z.optional(z.boolean()) }))),
   outputs: z.optional(z.array(z.string())),
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
   using: z.optional(z.string()),
@@ -53,7 +54,7 @@ const entrySchema = z.strictObject({
   undeclaredSecrets: z.optional(z.array(z.string())),
 });
 
-const remotesLockSchema = z.strictObject({
+const remotesLockSchema = z.looseObject({
   version: z.literal(1),
   /** By `uses:` reference: `owner/repo/.github/workflows/<file>@<ref>` or `owner/repo[/path]@<ref>`. */
   remotes: z.record(z.string(), entrySchema),
