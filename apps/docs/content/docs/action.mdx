@@ -13,9 +13,9 @@ engine as the [CLI](/docs/cli), bundled into the action itself, so the job does 
   artifact, so anyone can update them without running flowpact.
 
 <Callout title="Version tag">
-  `ciatlas/flowpact@v0.18` follows the patch releases of its minor line. Before 1.0 each minor line has its own tag
+  `ciatlas/flowpact@v0.19` follows the patch releases of its minor line. Before 1.0 each minor line has its own tag
   (`v0.<minor>`), because a minor release can change what is reported, so moving to the next one is your choice; a
-  breaking change is a major release (1.0.0 and `v1` next). Pin an exact release (`ciatlas/flowpact@v0.18.0`) or a commit SHA to control every update.
+  breaking change is a major release (1.0.0 and `v1` next). Pin an exact release (`ciatlas/flowpact@v0.19.0`) or a commit SHA to control every update.
 </Callout>
 
 ## Usage
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.18
+      - uses: ciatlas/flowpact@v0.19
 ```
 
 The step fails when there are errors. Use `fail-on: warning` to be stricter or `fail-on: never` to report without
@@ -53,7 +53,7 @@ rule and also fails when the contracts no longer match the workflows:
 ```yaml
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.18
+      - uses: ciatlas/flowpact@v0.19
         with:
           mode: check
 ```
@@ -72,7 +72,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.18
+      - uses: ciatlas/flowpact@v0.19
         with:
           report-sarif: flowpact.sarif
       - if: always()
@@ -90,7 +90,7 @@ has no way to mark them as accepted and would open an alert for each. The JSON r
 
 ```yaml
       - id: flowpact
-        uses: ciatlas/flowpact@v0.18
+        uses: ciatlas/flowpact@v0.19
         with:
           mode: check
           fail-on: never
@@ -185,7 +185,7 @@ locations are links:
 ````markdown
 ## flowpact lint
 
-<sub>flowpact v0.18.0 · config schema v1 · contract schema v1 · report schema v1 · 24 ms</sub>
+<sub>flowpact v0.19.0 · config schema v1 · contract schema v1 · report schema v1 · 24 ms</sub>
 
 ❌ **1 error**
 
