@@ -16,12 +16,16 @@ reference resolved to. With it, flowpact checks remote calls as it checks local 
 - [`FP103`](/docs/rules/fp103): a literal of the wrong type is passed to a `boolean` or `number` input;
 - [`FP201`](/docs/rules/fp201): a required secret is not passed to a remote reusable workflow;
 - [`FP202`](/docs/rules/fp202): a secret it does not declare is passed;
+- [`FP205`](/docs/rules/fp205): a remote reusable workflow reads a secret it does not declare (relying on
+  `secrets: inherit`), and your call passes secrets by name instead, so the secret is empty. `flowpact remotes update`
+  records such secrets when it reads the workflow, only where no caller's inputs can switch the read off (an `if:` on
+  the way that reads `inputs`, or is always false, leaves the read out);
 - [`FP301`](/docs/rules/fp301): an output it does not declare is read (`needs.<job>.outputs.<name>`,
   `steps.<id>.outputs.<name>`). A JavaScript or Docker action may set outputs it does not declare, so only a
   composite action's are checked.
 
-What a remote workflow does with what it gets is not checked: its jobs and steps are in another repository, so rules
-about what a callee reads ([`FP203`](/docs/rules/fp203), [`FP204`](/docs/rules/fp204), [`FP106`](/docs/rules/fp106))
+Otherwise, what a remote workflow does with what it gets is not checked: its jobs and steps are in another repository,
+so rules about what a callee reads ([`FP203`](/docs/rules/fp203), [`FP204`](/docs/rules/fp204), [`FP106`](/docs/rules/fp106))
 stay quiet about it.
 
 Findings point at your call; the message names the remote reference, whose file is in another repository. Nothing is
@@ -196,6 +200,7 @@ remotes:
     secrets:
       token: { required: true }
     outputs: [url]
+    undeclaredSecrets: [NPM_TOKEN]   # read without being declared: only secrets: inherit gives it
   octo/setup@v2:
     sha: 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432
     kind: action
