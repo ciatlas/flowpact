@@ -276,7 +276,7 @@ Breaking change to .github/workflows/deploy.yml: input "region" was removed — 
 
 **Related locations:**
 
-- \`.github/flowpact/contracts/workflows/deploy.contract.yml:1:1\` — locked contract
+- \`.github/flowpact/contracts/workflows/deploy.contract.yaml:1:1\` — locked contract
 - \`.github/workflows/release.yml:5:11\` — consumer: .github/workflows/release.yml › jobs.deploy
 
 </details>
@@ -293,14 +293,14 @@ Breaking change to .github/workflows/deploy.yml: input "token-scope" was added a
 
 **Related locations:**
 
-- \`.github/flowpact/contracts/workflows/deploy.contract.yml:1:1\` — locked contract
+- \`.github/flowpact/contracts/workflows/deploy.contract.yaml:1:1\` — locked contract
 - \`.github/workflows/release.yml:5:11\` — consumer: .github/workflows/release.yml › jobs.deploy
 
 </details>
 
 **[\`FP802\`](https://ciatlas.github.io/flowpact/docs/rules/fp802) contract-outdated** · \`.github/workflows/deploy.yml:11:7\`
 
-Contract .github/flowpact/contracts/workflows/deploy.contract.yml is outdated: input "legacy" was added
+Contract .github/flowpact/contracts/workflows/deploy.contract.yaml is outdated: input "legacy" was added
 
 <details><summary>Why / fix</summary>
 
@@ -310,7 +310,7 @@ Contract .github/flowpact/contracts/workflows/deploy.contract.yml is outdated: i
 
 **Related locations:**
 
-- \`.github/flowpact/contracts/workflows/deploy.contract.yml:1:1\` — locked contract
+- \`.github/flowpact/contracts/workflows/deploy.contract.yaml:1:1\` — locked contract
 
 </details>
 
@@ -320,9 +320,9 @@ Contract .github/flowpact/contracts/workflows/deploy.contract.yml is outdated: i
 
 | File | Status | Breaking |
 | --- | --- | ---: |
-| \`.github/flowpact/contracts/workflows/deploy.contract.yml\` | changed | 2 |
+| \`.github/flowpact/contracts/workflows/deploy.contract.yaml\` | changed | 2 |
 
-- \`.github/flowpact/contracts/workflows/deploy.contract.yml\`
+- \`.github/flowpact/contracts/workflows/deploy.contract.yaml\`
   - **input "region" was removed — callers that pass it will fail** (breaking)
   - **input "token-scope" was added and must be passed — existing callers do not pass it** (breaking)
   - input "legacy" was added

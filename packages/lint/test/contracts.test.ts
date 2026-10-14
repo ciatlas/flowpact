@@ -350,30 +350,30 @@ describe('serializeContract', () => {
 describe('contractFileFor', () => {
   it('maps workflows and actions to stable file names', () => {
     expect(contractFileFor({ kind: 'workflow', path: `${WF}/ci.yml` })).toBe(
-      `${CD}/workflows/ci.contract.yml`,
+      `${CD}/workflows/ci.contract.yaml`,
     );
     expect(contractFileFor({ kind: 'workflow', path: `${WF}/ci.yaml` })).toBe(
-      `${CD}/workflows/ci.contract.yml`,
+      `${CD}/workflows/ci.contract.yaml`,
     );
     expect(contractFileFor({ kind: 'action', path: '.github/actions/setup' })).toBe(
-      `${CD}/actions/setup.contract.yml`,
+      `${CD}/actions/setup.contract.yaml`,
     );
     expect(contractFileFor({ kind: 'action', path: '.github/actions/node/setup' })).toBe(
-      `${CD}/actions/node__setup.contract.yml`,
+      `${CD}/actions/node__setup.contract.yaml`,
     );
     expect(contractFileFor({ kind: 'action', path: 'tools/build' })).toBe(
-      `${CD}/actions/tools__build.contract.yml`,
+      `${CD}/actions/tools__build.contract.yaml`,
     );
-    expect(contractFileFor({ kind: 'action', path: '.' })).toBe(`${CD}/actions/root.contract.yml`);
+    expect(contractFileFor({ kind: 'action', path: '.' })).toBe(`${CD}/actions/root.contract.yaml`);
   });
 
   it('keeps the extension when a .yml and .yaml stem collide, and numbers other collisions', () => {
-    const taken = new Set([`${CD}/workflows/ci.contract.yml`, `${CD}/actions/tools__build.contract.yml`]);
+    const taken = new Set([`${CD}/workflows/ci.contract.yaml`, `${CD}/actions/tools__build.contract.yaml`]);
     expect(contractFileFor({ kind: 'workflow', path: `${WF}/ci.yml` }, taken)).toBe(
-      `${CD}/workflows/ci.yml.contract.yml`,
+      `${CD}/workflows/ci.yml.contract.yaml`,
     );
     expect(contractFileFor({ kind: 'action', path: 'tools/build' }, taken)).toBe(
-      `${CD}/actions/tools__build-2.contract.yml`,
+      `${CD}/actions/tools__build-2.contract.yaml`,
     );
   });
 
@@ -387,10 +387,10 @@ describe('contractFileFor', () => {
     };
     const plan = planContracts(index(files), memoryFileSystem(files));
     expect(plan.entries.map((e) => [e.file, e.unit])).toEqual([
-      [`${CD}/actions/tools__build-2.contract.yml`, 'tools/build'],
-      [`${CD}/actions/tools__build.contract.yml`, '.github/actions/tools/build'],
-      [`${CD}/workflows/ci.contract.yml`, `${WF}/ci.yaml`],
-      [`${CD}/workflows/ci.yml.contract.yml`, `${WF}/ci.yml`],
+      [`${CD}/actions/tools__build-2.contract.yaml`, 'tools/build'],
+      [`${CD}/actions/tools__build.contract.yaml`, '.github/actions/tools/build'],
+      [`${CD}/workflows/ci.contract.yaml`, `${WF}/ci.yaml`],
+      [`${CD}/workflows/ci.yml.contract.yaml`, `${WF}/ci.yml`],
     ]);
   });
 
@@ -403,8 +403,8 @@ describe('contractFileFor', () => {
     };
     const plan = planContracts(index(two), memoryFileSystem(two));
     expect(plan.entries.map((e) => [e.file, e.status, e.unit])).toEqual([
-      [`${CD}/workflows/ci.contract.yml`, 'unchanged', `${WF}/ci.yml`],
-      [`${CD}/workflows/ci.yaml.contract.yml`, 'create', `${WF}/ci.yaml`],
+      [`${CD}/workflows/ci.contract.yaml`, 'unchanged', `${WF}/ci.yml`],
+      [`${CD}/workflows/ci.yaml.contract.yaml`, 'create', `${WF}/ci.yaml`],
     ]);
   });
 });
@@ -655,9 +655,9 @@ describe('planContracts', () => {
   it('creates every contract for a repository without any', () => {
     const plan = planContracts(index(base), memoryFileSystem(base));
     expect(plan.entries.map((e) => [e.file, e.status])).toEqual([
-      [`${CD}/actions/setup.contract.yml`, 'create'],
-      [`${CD}/workflows/caller.contract.yml`, 'create'],
-      [`${CD}/workflows/reusable.contract.yml`, 'create'],
+      [`${CD}/actions/setup.contract.yaml`, 'create'],
+      [`${CD}/workflows/caller.contract.yaml`, 'create'],
+      [`${CD}/workflows/reusable.contract.yaml`, 'create'],
     ]);
     expect(plan).toMatchObject({
       drift: true,
@@ -670,18 +670,17 @@ describe('planContracts', () => {
     const files = {
       ...base,
       ...generated(base),
-      [`${CD}/workflows/gone.contract.yml`]: generated(base)[`${CD}/workflows/caller.contract.yml`]!.replace(
-        'path: .github/workflows/caller.yml',
-        'path: .github/workflows/gone.yml',
-      ),
+      [`${CD}/workflows/gone.contract.yaml`]: generated(base)[
+        `${CD}/workflows/caller.contract.yaml`
+      ]!.replace('path: .github/workflows/caller.yml', 'path: .github/workflows/gone.yml'),
       [`${WF}/reusable.yml`]: reusable.replace('default: 1', 'required: true'),
     };
     const plan = planContracts(index(files), memoryFileSystem(files));
     expect(plan.entries.map((e) => [e.file, e.status, e.unit])).toEqual([
-      [`${CD}/actions/setup.contract.yml`, 'unchanged', '.github/actions/setup'],
-      [`${CD}/workflows/caller.contract.yml`, 'unchanged', `${WF}/caller.yml`],
-      [`${CD}/workflows/gone.contract.yml`, 'delete', `${WF}/gone.yml`],
-      [`${CD}/workflows/reusable.contract.yml`, 'update', `${WF}/reusable.yml`],
+      [`${CD}/actions/setup.contract.yaml`, 'unchanged', '.github/actions/setup'],
+      [`${CD}/workflows/caller.contract.yaml`, 'unchanged', `${WF}/caller.yml`],
+      [`${CD}/workflows/gone.contract.yaml`, 'delete', `${WF}/gone.yml`],
+      [`${CD}/workflows/reusable.contract.yaml`, 'update', `${WF}/reusable.yml`],
     ]);
     const update = plan.entries[3]!;
     expect(update.changes).toEqual([
@@ -708,21 +707,72 @@ describe('planContracts', () => {
     const files = {
       ...base,
       ...generated(base),
-      [`${CD}/workflows/caller.contract.yml`]: 'interface: [unclosed\n',
-      [`${CD}/workflows/reusable.contract.yml`]: generated(base)[
-        `${CD}/workflows/reusable.contract.yml`
+      [`${CD}/workflows/caller.contract.yaml`]: 'interface: [unclosed\n',
+      [`${CD}/workflows/reusable.contract.yaml`]: generated(base)[
+        `${CD}/workflows/reusable.contract.yaml`
       ]!.replace('version: 1', 'version: 2'),
-      [`${CD}/workflows/stray.contract.yml`]: 'just: text\n',
+      [`${CD}/workflows/stray.contract.yaml`]: 'just: text\n',
     };
     const plan = planContracts(index(files), memoryFileSystem(files));
     const byFile = Object.fromEntries(plan.entries.map((e) => [e.file.split('/').pop(), e]));
-    expect(byFile['caller.contract.yml']).toMatchObject({ status: 'update', changes: [] });
-    expect(byFile['caller.contract.yml']!.invalid).toMatch(/^not valid YAML: /);
-    expect(byFile['reusable.contract.yml']).toMatchObject({ status: 'update', changes: [] });
-    expect(byFile['reusable.contract.yml']!.invalid).toContain('version:');
-    expect(byFile['stray.contract.yml']).toMatchObject({ status: 'delete' });
-    expect(byFile['stray.contract.yml']!.unit).toBeUndefined();
-    expect(byFile['stray.contract.yml']!.invalid).toContain('(root)');
+    expect(byFile['caller.contract.yaml']).toMatchObject({ status: 'update', changes: [] });
+    expect(byFile['caller.contract.yaml']!.invalid).toMatch(/^not valid YAML: /);
+    expect(byFile['reusable.contract.yaml']).toMatchObject({ status: 'update', changes: [] });
+    expect(byFile['reusable.contract.yaml']!.invalid).toContain('version:');
+    expect(byFile['stray.contract.yaml']).toMatchObject({ status: 'delete' });
+    expect(byFile['stray.contract.yaml']!.unit).toBeUndefined();
+    expect(byFile['stray.contract.yaml']!.invalid).toContain('(root)');
+  });
+
+  it('reads a contract named .contract.yml and keeps its name', () => {
+    // A contract written by 0.17 or earlier, or renamed to .yml, is the unit's contract: compared, kept and updated
+    // under that name.
+    const yaml = generated(base);
+    const files: Record<string, string> = {
+      ...base,
+      ...yaml,
+      [`${CD}/workflows/reusable.contract.yml`]: yaml[`${CD}/workflows/reusable.contract.yaml`]!,
+    };
+    delete files[`${CD}/workflows/reusable.contract.yaml`];
+    const plan = planContracts(index(files), memoryFileSystem(files));
+    expect(plan.drift).toBe(false);
+    expect(plan.entries.map((e) => [e.file, e.status])).toContainEqual([
+      `${CD}/workflows/reusable.contract.yml`,
+      'unchanged',
+    ]);
+    const changed = { ...files, [`${WF}/reusable.yml`]: reusable.replace('default: 1', 'required: true') };
+    const update = planContracts(index(changed), memoryFileSystem(changed)).entries.find(
+      (e) => e.status === 'update',
+    );
+    expect(update?.file).toBe(`${CD}/workflows/reusable.contract.yml`);
+    expect(codes(check(files))).toEqual([]);
+  });
+
+  it('names a new contract .contract.yml where every existing one is', () => {
+    const yml = Object.fromEntries(
+      Object.entries(generated(base)).map(([f, text]) => [f.replace(/\.yaml$/, '.yml'), text]),
+    );
+    const files = { ...base, ...yml, [`${WF}/other.yml`]: reusable };
+    const created = planContracts(index(files), memoryFileSystem(files)).entries.filter(
+      (e) => e.status === 'create',
+    );
+    expect(created.map((e) => e.file)).toEqual([`${CD}/workflows/other.contract.yml`]);
+  });
+
+  it('deletes a second contract of the same unit, under the other extension', () => {
+    const yaml = generated(base);
+    const files = {
+      ...base,
+      ...yaml,
+      [`${CD}/workflows/reusable.contract.yml`]: yaml[`${CD}/workflows/reusable.contract.yaml`]!,
+    };
+    const plan = planContracts(index(files), memoryFileSystem(files));
+    expect(
+      plan.entries
+        .filter((e) => e.unit === `${WF}/reusable.yml`)
+        .map((e) => e.status)
+        .sort(),
+    ).toEqual(['delete', 'unchanged']);
   });
 
   it('ignores files in the contracts directory that are not contracts', () => {
@@ -746,9 +796,9 @@ describe('contractPatch and writeContracts', () => {
     const contracts = generated(base);
     const files: Record<string, string> = {
       ...base,
-      [`${CD}/workflows/caller.contract.yml`]: contracts[`${CD}/workflows/caller.contract.yml`]!,
-      [`${CD}/workflows/reusable.contract.yml`]: contracts[`${CD}/workflows/reusable.contract.yml`]!,
-      [`${CD}/workflows/old.contract.yml`]: contracts[`${CD}/workflows/caller.contract.yml`]!.replace(
+      [`${CD}/workflows/caller.contract.yaml`]: contracts[`${CD}/workflows/caller.contract.yaml`]!,
+      [`${CD}/workflows/reusable.contract.yaml`]: contracts[`${CD}/workflows/reusable.contract.yaml`]!,
+      [`${CD}/workflows/old.contract.yaml`]: contracts[`${CD}/workflows/caller.contract.yaml`]!.replace(
         'caller.yml',
         'old.yml',
       ),
@@ -773,13 +823,13 @@ describe('contractPatch and writeContracts', () => {
     expect(p.counts).toEqual({ create: 1, update: 1, delete: 1, unchanged: 1 });
     const patch = contractPatch(p);
     expect(patch).toContain(
-      `diff --git a/${CD}/actions/setup.contract.yml b/${CD}/actions/setup.contract.yml\nnew file mode 100644\n--- /dev/null`,
+      `diff --git a/${CD}/actions/setup.contract.yaml b/${CD}/actions/setup.contract.yaml\nnew file mode 100644\n--- /dev/null`,
     );
     expect(patch).toContain(
-      `deleted file mode 100644\n--- a/${CD}/workflows/old.contract.yml\n+++ /dev/null`,
+      `deleted file mode 100644\n--- a/${CD}/workflows/old.contract.yaml\n+++ /dev/null`,
     );
-    expect(patch).toContain(`+++ b/${CD}/workflows/reusable.contract.yml\n@@`);
-    expect(patch).not.toContain('caller.contract.yml');
+    expect(patch).toContain(`+++ b/${CD}/workflows/reusable.contract.yaml\n@@`);
+    expect(patch).not.toContain('caller.contract.yaml');
     writeFileSync(join(root, 'contracts.patch'), patch);
     git(root, 'apply', '--check', 'contracts.patch');
     git(root, 'apply', 'contracts.patch');
@@ -794,11 +844,11 @@ describe('contractPatch and writeContracts', () => {
     const { root, plan } = repo();
     const written = writeContracts(root, plan());
     expect(written.sort()).toEqual([
-      `${CD}/actions/setup.contract.yml`,
-      `${CD}/workflows/old.contract.yml`,
-      `${CD}/workflows/reusable.contract.yml`,
+      `${CD}/actions/setup.contract.yaml`,
+      `${CD}/workflows/old.contract.yaml`,
+      `${CD}/workflows/reusable.contract.yaml`,
     ]);
-    expect(existsSync(join(root, CD, 'workflows/old.contract.yml'))).toBe(false);
+    expect(existsSync(join(root, CD, 'workflows/old.contract.yaml'))).toBe(false);
     expect(plan().drift).toBe(false);
   });
 
@@ -808,15 +858,15 @@ describe('contractPatch and writeContracts', () => {
     const p = plan();
     const written = writeContracts(root, p, out);
     expect(written.sort()).toEqual([
-      `${CD}/actions/setup.contract.yml`,
-      `${CD}/workflows/caller.contract.yml`,
-      `${CD}/workflows/reusable.contract.yml`,
+      `${CD}/actions/setup.contract.yaml`,
+      `${CD}/workflows/caller.contract.yaml`,
+      `${CD}/workflows/reusable.contract.yaml`,
     ]);
     for (const file of written) {
       expect(readFileSync(join(out, file), 'utf8')).toBe(p.entries.find((e) => e.file === file)!.after);
     }
-    expect(existsSync(join(root, CD, 'workflows/old.contract.yml'))).toBe(true);
-    expect(existsSync(join(root, CD, 'actions/setup.contract.yml'))).toBe(false);
+    expect(existsSync(join(root, CD, 'workflows/old.contract.yaml'))).toBe(true);
+    expect(existsSync(join(root, CD, 'actions/setup.contract.yaml'))).toBe(false);
     expect(plan().drift).toBe(true);
   });
 });
@@ -849,7 +899,7 @@ describe('check mode (FP8xx)', () => {
       [`${WF}/reusable.yml`, 1, `${WF}/reusable.yml`, 'error'],
     ]);
     expect(byCode(r, 'FP801')[0]!.message).toBe(
-      `.github/actions/setup has no contract (expected ${CD}/actions/setup.contract.yml)`,
+      `.github/actions/setup has no contract (expected ${CD}/actions/setup.contract.yaml)`,
     );
   });
 
@@ -865,19 +915,19 @@ describe('check mode (FP8xx)', () => {
     expect(codes(r)).toEqual(['FP802']);
     const f = r.findings[0]!;
     expect(f.message).toBe(
-      `Contract ${CD}/workflows/reusable.contract.yml is outdated: input "extra" was added`,
+      `Contract ${CD}/workflows/reusable.contract.yaml is outdated: input "extra" was added`,
     );
     expect(f.loc).toMatchObject({ file: `${WF}/reusable.yml`, line: 12 });
     expect(f.related).toEqual([
       {
-        loc: expect.objectContaining({ file: `${CD}/workflows/reusable.contract.yml` }),
+        loc: expect.objectContaining({ file: `${CD}/workflows/reusable.contract.yaml` }),
         message: 'locked contract',
       },
     ]);
   });
 
   it('FP802: a hand-edited contract with no semantic change is still outdated', () => {
-    const file = `${CD}/workflows/caller.contract.yml`;
+    const file = `${CD}/workflows/caller.contract.yaml`;
     const r = check({ ...locked, [file]: locked[file]!.replace(/^# .*\n/gm, '') });
     expect(byCode(r, 'FP802').map((f) => f.message)).toEqual([
       `Contract ${file} is outdated: formatting or ordering changed`,
@@ -903,7 +953,7 @@ describe('check mode (FP8xx)', () => {
     expect(f.symbol).toBe(`${WF}/reusable.yml#inputs.count`);
     expect(f.loc).toMatchObject({ file: `${WF}/reusable.yml`, line: 9 });
     expect(f.related.map((x) => [x.loc.file, x.message])).toEqual([
-      [`${CD}/workflows/reusable.contract.yml`, 'locked contract'],
+      [`${CD}/workflows/reusable.contract.yaml`, 'locked contract'],
       [`${WF}/caller.yml`, `consumer: ${WF}/caller.yml › jobs.build`],
       [`${WF}/caller.yml`, `consumer: ${WF}/caller.yml › jobs.other`],
     ]);
@@ -934,8 +984,8 @@ describe('check mode (FP8xx)', () => {
     const r = check(rest);
     expect(byCode(r, 'FP804').map((f) => [f.message, f.loc.file, f.symbol])).toEqual([
       [
-        `Contract ${CD}/workflows/caller.contract.yml describes ${WF}/caller.yml which no longer exists`,
-        `${CD}/workflows/caller.contract.yml`,
+        `Contract ${CD}/workflows/caller.contract.yaml describes ${WF}/caller.yml which no longer exists`,
+        `${CD}/workflows/caller.contract.yaml`,
         `${WF}/caller.yml`,
       ],
     ]);
@@ -944,12 +994,12 @@ describe('check mode (FP8xx)', () => {
   it('FP805: unreadable contracts, reported once', () => {
     const r = check({
       ...locked,
-      [`${CD}/workflows/caller.contract.yml`]: 'interface: [unclosed\n',
-      [`${CD}/workflows/stray.contract.yml`]: 'kind: workflow\n',
+      [`${CD}/workflows/caller.contract.yaml`]: 'interface: [unclosed\n',
+      [`${CD}/workflows/stray.contract.yaml`]: 'kind: workflow\n',
     });
     expect(r.findings.map((f) => [f.code, f.loc.file])).toEqual([
-      ['FP805', `${CD}/workflows/caller.contract.yml`],
-      ['FP805', `${CD}/workflows/stray.contract.yml`],
+      ['FP805', `${CD}/workflows/caller.contract.yaml`],
+      ['FP805', `${CD}/workflows/stray.contract.yaml`],
     ]);
     expect(r.findings[0]!.message).toMatch(/^Contract .* is invalid: not valid YAML: /);
   });
@@ -993,7 +1043,7 @@ describe('review fixes', () => {
 
   it('reports an invalid contract of a targeted workflow', () => {
     const files = { ...base, ...generated(base) };
-    files[`${CD}/workflows/reusable.contract.yml`] += '<<<<<<< HEAD\nfoo\n=======\nbar\n>>>>>>> x\n';
+    files[`${CD}/workflows/reusable.contract.yaml`] += '<<<<<<< HEAD\nfoo\n=======\nbar\n>>>>>>> x\n';
     const r = analyze({
       root: '/virtual/repo',
       fs: memoryFileSystem(files),

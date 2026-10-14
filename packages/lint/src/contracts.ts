@@ -296,16 +296,18 @@ export function serializeContract(c: Contract): string {
 
 /**
  * Repo-relative contract file for a unit:
- * `.github/workflows/ci.yml` → `.github/flowpact/contracts/workflows/ci.contract.yml`,
- * `.github/actions/setup` → `.github/flowpact/contracts/actions/setup.contract.yml`,
- * `tools/build` → `.github/flowpact/contracts/actions/tools__build.contract.yml`.
+ * `.github/workflows/ci.yml` → `.github/flowpact/contracts/workflows/ci.contract.yaml`,
+ * `.github/actions/setup` → `.github/flowpact/contracts/actions/setup.contract.yaml`,
+ * `tools/build` → `.github/flowpact/contracts/actions/tools__build.contract.yaml`.
+ * `extension` is `yml` in a repository whose contracts all use it, so a new contract matches them.
  */
 export function contractFileFor(
   unit: Pick<UnitDecl, 'kind' | 'path'>,
   taken: Set<string> = new Set(),
   dir: string = CONTRACTS_DIR,
+  extension: 'yaml' | 'yml' = 'yaml',
 ): string {
-  const fileOf = (base: string) => `${dir}/${base}.contract.yml`;
+  const fileOf = (base: string) => `${dir}/${base}.contract.${extension}`;
   let base: string;
   if (unit.kind === 'workflow') {
     base = `workflows/${unit.path
@@ -576,12 +578,15 @@ export interface ExistingContract {
   error?: string;
 }
 
+/** A contract file's name: `.contract.yaml` or `.contract.yml`; `generate` keeps the name a contract has. */
+const CONTRACT_FILE = /\.contract\.ya?ml$/;
+
 /** Every contract file. */
 export function readContracts(fs: FileSystem): Map<string, ExistingContract> {
   const out = new Map<string, ExistingContract>();
   for (const file of fs
     .walk(CONTRACTS_DIR)
-    .filter((f) => f.endsWith('.contract.yml'))
+    .filter((f) => CONTRACT_FILE.test(f))
     .sort()) {
     const text = fs.read(file) ?? '';
     try {
@@ -649,13 +654,18 @@ function expectedFiles(
   }
   const expected = new Map<string, UnitDecl>();
   const taken = new Set(lockedFile.values());
+  const extension = contractExtension([...existing.keys()]);
   for (const unit of units) {
-    const file = lockedFile.get(unit.path) ?? contractFileFor(unit, taken, dir);
+    const file = lockedFile.get(unit.path) ?? contractFileFor(unit, taken, dir, extension);
     taken.add(file);
     expected.set(file, unit);
   }
   return expected;
 }
+
+/** The extension of new contracts: `yml` where every existing contract has it, so a directory keeps one; else `yaml`. */
+const contractExtension = (files: string[]): 'yaml' | 'yml' =>
+  files.length > 0 && files.every((f) => f.endsWith('.yml')) ? 'yml' : 'yaml';
 
 /** The regenerated consumers, with the entries of callers that do not parse taken from the locked contract. */
 const withBrokenConsumers = (current: Consumer[], locked: Consumer[], broken: Set<string>): Consumer[] =>

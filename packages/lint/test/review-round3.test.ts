@@ -160,7 +160,7 @@ describe('symlinks and .git (#10)', () => {
     );
     symlinkSync(
       join(outside, 'victim.txt'),
-      join(root, '.github/flowpact/contracts/workflows/ci.contract.yml'),
+      join(root, '.github/flowpact/contracts/workflows/ci.contract.yaml'),
     );
     const r = analyze({ root, validateSchema: false, only: [], repository: 'a/b' });
     const plan = planContracts(r.index, nodeFileSystem(root));

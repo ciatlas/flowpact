@@ -299,14 +299,14 @@ describe('generate', () => {
     expect(r.preview.patch).toContain('new file mode 100644');
     expect(r.before).toBe(false);
     expect(r.written.sort()).toEqual([
-      '.github/flowpact/contracts/actions/setup-node.contract.yml',
-      '.github/flowpact/contracts/workflows/ci.contract.yml',
-      '.github/flowpact/contracts/workflows/test.contract.yml',
+      '.github/flowpact/contracts/actions/setup-node.contract.yaml',
+      '.github/flowpact/contracts/workflows/ci.contract.yaml',
+      '.github/flowpact/contracts/workflows/test.contract.yaml',
     ]);
     expect(r.drift).toBe(false);
     expect(r.again).toEqual({ drift: false, patch: null });
     expect(r.elsewhere).toHaveLength(3);
-    expect(existsSync(join(out, '.github/flowpact/contracts/workflows/ci.contract.yml'))).toBe(true);
+    expect(existsSync(join(out, '.github/flowpact/contracts/workflows/ci.contract.yaml'))).toBe(true);
   });
 });
 
@@ -707,7 +707,7 @@ describe('errors', () => {
     const linked = copy('clean');
     const outside = mkdtempSync(join(tmpdir(), 'flowpact-api-outside-'));
     mkdirSync(join(linked, '.github/flowpact/contracts/workflows'), { recursive: true });
-    symlinkSync(join(outside, 'x'), join(linked, '.github/flowpact/contracts/workflows/ci.contract.yml'));
+    symlinkSync(join(outside, 'x'), join(linked, '.github/flowpact/contracts/workflows/ci.contract.yaml'));
     const empty = mkdtempSync(join(tmpdir(), 'flowpact-api-empty-'));
     const r = await api<Record<string, Record<string, unknown> | null>>(`
       const clean = ${JSON.stringify(fixture('clean'))};

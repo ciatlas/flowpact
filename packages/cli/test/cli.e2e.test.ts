@@ -224,7 +224,7 @@ describe('flowpact trace', () => {
     writeFileSync(join(outside, 'victim.txt'), 'keep\n');
     symlinkSync(
       join(outside, 'victim.txt'),
-      join(root, '.github/flowpact/contracts/workflows/ci.contract.yml'),
+      join(root, '.github/flowpact/contracts/workflows/ci.contract.yaml'),
     );
     const r = await flowpact(['generate', '--root', root]);
     expect(r.exitCode).toBe(2);
@@ -232,7 +232,7 @@ describe('flowpact trace', () => {
     expect(r.stderr).not.toContain('crashed');
     expect(r.stdout).not.toContain('Wrote');
     expect(readFileSync(join(outside, 'victim.txt'), 'utf8')).toBe('keep\n');
-    expect(existsSync(join(root, '.github/flowpact/contracts/workflows/a.contract.yml'))).toBe(false);
+    expect(existsSync(join(root, '.github/flowpact/contracts/workflows/a.contract.yaml'))).toBe(false);
   });
 
   it('traces down and up', async () => {

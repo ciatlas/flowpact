@@ -177,8 +177,8 @@ describe('renderMarkdown contracts and suppressions', () => {
     expect(out).toMatchSnapshot();
     expect(out).toContain('### Contracts');
     expect(out).toContain('| File | Status | Breaking |');
-    expect(out).toContain('| `.github/flowpact/contracts/workflows/deploy.contract.yml` | changed |');
-    expect(out).not.toContain('release.contract.yml` | unchanged');
+    expect(out).toContain('| `.github/flowpact/contracts/workflows/deploy.contract.yaml` | changed |');
+    expect(out).not.toContain('release.contract.yaml` | unchanged');
     expect(out).toMatch(/- \*\*input "region" was removed[^*]*\*\* \(breaking\)/);
     expect(out).toContain('Run `flowpact generate` and commit the result');
   });
@@ -304,7 +304,7 @@ describe('markdown escaping of untrusted names', () => {
     ).entries;
     const files: Record<string, string> = { ...v1 };
     for (const e of locked) files[e.file] = e.after ?? '';
-    const contract = locked.find((e) => e.file.endsWith('d.contract.yml'))!.file;
+    const contract = locked.find((e) => e.file.endsWith('d.contract.yaml'))!.file;
     files[contract] = files[contract]!.replace(
       /inputs:\n/,
       'inputs:\n    "`\\n\\n[pwn](https://evil.example) <ins>x</ins> `": { type: 5 }\n',

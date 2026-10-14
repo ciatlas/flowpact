@@ -19,7 +19,9 @@ const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 const BIN = join(ROOT, 'packages/cli/dist/index.js');
 const CD = '.github/flowpact/contracts';
 const CONTRACT_RULES = 'FP801,FP802,FP803,FP804,FP805';
-const CONTRACTS = ['build', 'package', 'pipeline', 'publish'].map((n) => `${CD}/workflows/${n}.contract.yml`);
+const CONTRACTS = ['build', 'package', 'pipeline', 'publish'].map(
+  (n) => `${CD}/workflows/${n}.contract.yaml`,
+);
 
 const SCRUB = [
   'NO_COLOR',
@@ -75,15 +77,15 @@ describe('flowpact generate / flowpact check', () => {
     const missing = await flowpact(['check', '--root', root, '--only', CONTRACT_RULES]);
     expect(missing.exitCode).toBe(1);
     expect(missing.stdout.match(/FP801 contract-missing/g)).toHaveLength(4);
-    expect(flat(missing.stdout)).toContain(`(expected ${CD}/workflows/build.contract.yml)`);
+    expect(flat(missing.stdout)).toContain(`(expected ${CD}/workflows/build.contract.yaml)`);
 
     const gen = await flowpact(['generate', '--root', root]);
     expect(gen.exitCode).toBe(0);
     expect(contractsIn(root)).toEqual([
-      'build.contract.yml',
-      'package.contract.yml',
-      'pipeline.contract.yml',
-      'publish.contract.yml',
+      'build.contract.yaml',
+      'package.contract.yaml',
+      'pipeline.contract.yaml',
+      'publish.contract.yaml',
     ]);
     expect(read(root, CONTRACTS[3]!)).toContain('path: .github/workflows/publish.yml');
 
@@ -175,7 +177,7 @@ describe('flowpact generate / flowpact check', () => {
     const r = await flowpact(['generate', '.github/workflows/pipeline.yml', '--root', root]);
     expect(r.exitCode).toBe(0);
     // build.yml's contract lists pipeline.yml as a consumer; package.yml and publish.yml are left alone.
-    expect(contractsIn(root)).toEqual(['build.contract.yml', 'pipeline.contract.yml']);
+    expect(contractsIn(root)).toEqual(['build.contract.yaml', 'pipeline.contract.yaml']);
     const check = await flowpact([
       'check',
       '.github/workflows/pipeline.yml',

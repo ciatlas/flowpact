@@ -702,7 +702,7 @@ describe('check with paths and the contracts of what the change removed', () => 
         (f: { code: string; loc: { file: string } }) => `${f.code}@${f.loc.file}`,
       );
     };
-    const orphan = 'FP804@.github/flowpact/contracts/actions/actions__old.contract.yml';
+    const orphan = 'FP804@.github/flowpact/contracts/actions/actions__old.contract.yaml';
     // Before: FP804 only without paths; the removed unit's own path left its contract out of scope.
     for (const paths of [['actions/old'], ['actions/old/action.yml'], ['actions']])
       expect(await codes(['check', '--impact', ...paths])).toContain(orphan);
@@ -712,7 +712,7 @@ describe('check with paths and the contracts of what the change removed', () => 
     expect(await codes(['check', '--impact', 'actions/keep'])).not.toContain(orphan);
     // generate with the same paths deletes it.
     const dry = await flowpact(root, ['generate', 'actions', '--dry-run']);
-    expect(dry.stdout).toContain('actions__old.contract.yml');
+    expect(dry.stdout).toContain('actions__old.contract.yaml');
   });
 });
 

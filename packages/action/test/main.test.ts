@@ -426,7 +426,7 @@ describe('check mode', () => {
     expect(inArtifact).toContain('flowpact-contracts.patch');
     expect(inArtifact).toContain('flowpact-contracts/README.md');
     expect(inArtifact).toContain(
-      'flowpact-contracts/.github/flowpact/contracts/workflows/build.contract.yml',
+      'flowpact-contracts/.github/flowpact/contracts/workflows/build.contract.yaml',
     );
     for (const f of upload.files) expect(existsSync(f)).toBe(true);
     expect(s.outputs.patch).toBe(join(upload.root, 'flowpact-contracts.patch'));
@@ -449,7 +449,7 @@ describe('check mode', () => {
     addRequiredInput(root);
     const s = await action(workspace, { mode: 'check', 'working-directory': 'apps/ci' });
     const patch = s.uploads[0]!.patch;
-    expect(patch).toContain('diff --git a/apps/ci/.github/flowpact/contracts/workflows/build.contract.yml');
+    expect(patch).toContain('diff --git a/apps/ci/.github/flowpact/contracts/workflows/build.contract.yaml');
     execFileSync('git', ['apply', '--check', s.outputs.patch!], { cwd: workspace });
   });
 
