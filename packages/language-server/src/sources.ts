@@ -35,7 +35,8 @@ export interface CachedUnit {
  * commit never changes. Without a directory (no home directory to keep one in), it has nothing.
  */
 export class RemoteSources {
-  private readonly parsed = new Map<string, UnitDecl | null>();
+  /** Files parsed, by path. Only files read: one that could not be (pruned meanwhile) is read again next time. */
+  private readonly parsed = new Map<string, UnitDecl>();
   private readonly realDir: string | undefined;
 
   constructor(readonly dir: string | undefined = remotesCacheDir()) {
@@ -48,11 +49,9 @@ export class RemoteSources {
     const r = entry && parseRemoteRef(ref, entry.kind);
     const found = r && this.dir && cachedSource(this.dir, r, commitOf(r, entry));
     if (!found) return undefined;
-    let unit = this.parsed.get(found.path);
-    if (unit === undefined) {
-      unit = parseCached(found.path, found.file, entry, `${r.owner}/${r.repo}`) ?? null;
-      this.parsed.set(found.path, unit);
-    }
+    const unit =
+      this.parsed.get(found.path) ?? parseCached(found.path, found.file, entry, `${r.owner}/${r.repo}`);
+    if (unit) this.parsed.set(found.path, unit);
     return unit ? { ...found, unit } : undefined;
   }
 

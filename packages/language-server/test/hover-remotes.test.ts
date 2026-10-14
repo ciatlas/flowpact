@@ -296,6 +296,28 @@ describe('remote references with their sources cached', () => {
     expect(new RemoteSources(undefined).of(undefined, DEPLOY)).toBeUndefined();
   });
 
+  it('reads a source again once it is back, after it could not be read', () => {
+    const fresh = mkdtempSync(join(tmpdir(), 'flowpact-reread-'));
+    try {
+      const own = new RemoteSources(fresh);
+      const lockOf = analyze({
+        root: '/r',
+        fs: memoryFileSystem({ [CI]: ci, [LOCK]: lock }),
+        config: parseConfig({}),
+        validateSchema: false,
+      }).remotes?.lock;
+      // A directory where the file would be: found, but not readable as a file.
+      const file = join(fresh, 'octo', 'setup', SHA, 'action.yml');
+      mkdirSync(file, { recursive: true });
+      expect(own.of(lockOf, 'octo/setup@v2')).toBeUndefined();
+      rmSync(file, { recursive: true });
+      cacheSource(fresh, { owner: 'octo', repo: 'setup' }, SHA, 'action.yml', SETUP_SOURCE);
+      expect(own.of(lockOf, 'octo/setup@v2')?.unit.name).toBe('Setup');
+    } finally {
+      rmSync(fresh, { recursive: true, force: true });
+    }
+  });
+
   it('opens the commit a uses: pins in full, and says when the lockfile records another', () => {
     const pinned = 'd'.repeat(40);
     const pinnedCi = `on: push\njobs:\n  a:\n    uses: octo/ship/.github/workflows/deploy.yml@${pinned}\n`;
