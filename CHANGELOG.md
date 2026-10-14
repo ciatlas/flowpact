@@ -4,6 +4,19 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.16.0](https://github.com/ciatlas/flowpact/compare/v0.15.0...v0.16.0) (2026-10-14)
+
+
+### Features
+
+* **rules:** FP104, FP105, FP106 and FP401 follow inputs read through github as GitHub does, with core 1.0.0; some findings change, see https://ciatlas.github.io/flowpact/docs/upgrading ([#137](https://github.com/ciatlas/flowpact/issues/137)) ([ce3c119](https://github.com/ciatlas/flowpact/commit/ce3c11930242be379f756dd4ff603e00551efe35))
+
+
+### Bug Fixes
+
+* **rules:** FP104 reports the inputs of a workflow or composite action that reads github.event as a whole, and a dispatch input read only in the workflow's own input defaults or workflow_call outputs ([#137](https://github.com/ciatlas/flowpact/issues/137)) ([ce3c119](https://github.com/ciatlas/flowpact/commit/ce3c11930242be379f756dd4ff603e00551efe35))
+* **rules:** FP106 reports a callee that reads a passed input only through github, also through a step's own env, and FP401 no longer reports such a condition ([#137](https://github.com/ciatlas/flowpact/issues/137)) ([ce3c119](https://github.com/ciatlas/flowpact/commit/ce3c11930242be379f756dd4ff603e00551efe35))
+
 ## [0.15.0](https://github.com/ciatlas/flowpact/compare/v0.14.1...v0.15.0) (2026-10-13)
 
 
