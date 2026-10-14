@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { createLogger, type Logger, type LogRecord } from '@ciatlas/core';
-import { VERSION } from '@flowpact/lint';
+import { remotesCacheDir, VERSION } from '@flowpact/lint';
 import {
   type Connection,
   createConnection,
@@ -37,8 +37,10 @@ export function startServer(connection: Connection): void {
   let logger = createLogger();
   let analysisLogger = createLogger();
   let workspace: Workspace | undefined;
-  /** The remote sources cache, where it is when the server starts (`FLOWPACT_CACHE_DIR`, else the platform's). */
-  const sources = new RemoteSources();
+  /** The remote sources cache: the client's `cacheDir` setting, else `FLOWPACT_CACHE_DIR`, else the per-user cache. */
+  const sourcesFor = (s: Settings) =>
+    new RemoteSources(s.cacheDir ? join(s.cacheDir, 'remotes') : remotesCacheDir());
+  let sources = sourcesFor(settings);
   let linkSupport = false;
   let watchFiles = false;
   let folderEvents = false;
@@ -66,6 +68,7 @@ export function startServer(connection: Connection): void {
 
   connection.onInitialize((params) => {
     settings = readSettings(params.initializationOptions);
+    sources = sourcesFor(settings);
     setLevel(settings.logLevel);
     linkSupport = params.capabilities.textDocument?.definition?.linkSupport === true;
     watchFiles = params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
@@ -92,7 +95,7 @@ export function startServer(connection: Connection): void {
       },
       settings,
       folders.filter((f): f is string => f !== undefined),
-      sources,
+      () => sources,
     );
     return {
       capabilities: {
@@ -131,7 +134,9 @@ export function startServer(connection: Connection): void {
 
   connection.onDidChangeConfiguration((params) => {
     const raw = (params.settings as { flowpact?: unknown } | null)?.flowpact ?? params.settings;
+    const before = settings.cacheDir;
     settings = readSettings(raw, settings);
+    if (settings.cacheDir !== before) sources = sourcesFor(settings);
     setLevel(settings.logLevel);
     workspace?.configure(settings);
   });
@@ -216,7 +221,7 @@ export function startServer(connection: Connection): void {
   });
 
   // The remote sources cache, so the client can open its files read-only.
-  connection.onRequest('flowpact/sourcesDir', () => sources.dir);
+  connection.onRequest('flowpact/sourcesDir', () => sources.dir ?? null);
 
   // Lets tests (and clients that want to) wait until every pending edit is analyzed.
   connection.onRequest('flowpact/settled', async () => {

@@ -13,7 +13,14 @@ import {
   trace,
   type UnitDecl,
 } from '@ciatlas/core';
-import { DOCS_BASE_URL, lockedRemote, type RemoteEntry, type RemotesLockRead } from '@flowpact/lint';
+import {
+  commitOf,
+  DOCS_BASE_URL,
+  lockedRemote,
+  parseRemoteRef,
+  type RemoteEntry,
+  type RemotesLockRead,
+} from '@flowpact/lint';
 import type { RemoteBinding } from './remotes';
 import { type CachedUnit, declarationIn, type RemoteSources, sourceLink } from './sources';
 
@@ -429,29 +436,45 @@ function remoteFacts(remote: RemoteContext, ref: string): Facts {
   return { line, description: `${code('flowpact remotes update')} records it in ${lock}.` };
 }
 
-/** A remote reference the lockfile has: its commit, its source's name, its interface, and where its source is. */
+/**
+ * A remote reference the lockfile has: the commit it runs, its source's name, its interface, and where its source is.
+ * A `uses:` pinned to a full SHA runs that commit, whatever the lockfile says; a different one there is called out.
+ */
 function lockedFacts(remote: RemoteContext, ref: string, entry: RemoteEntry): Facts {
-  const where = `at ${code(entry.sha.slice(0, 7))}${entry.host ? ` on ${text(entry.host)}` : ''}`;
+  const r = parseRemoteRef(ref, entry.kind);
+  const sha = r ? commitOf(r, entry) : entry.sha;
+  const where = `at ${code(sha.slice(0, 7))}${entry.host ? ` on ${text(entry.host)}` : ''}`;
   const kind = entry.kind === 'workflow' ? 'reusable workflow' : 'action';
   const cached = remote.sources?.of(remote.lock?.lock, ref);
-  const name = cached?.unit.name ? text(cached.unit.name) : undefined;
-  const parts = [name, interfaceLines(entry), sourceLine(ref, entry, cached !== undefined, remote.webHost)];
+  const name = cached?.unit.name;
+  const mismatch =
+    sha !== entry.sha
+      ? `${lockName(remote.lock)} records commit ${code(entry.sha.slice(0, 7))} for it, not the one it pins: ${code('flowpact remotes update')} corrects it.`
+      : undefined;
+  const parts = [
+    mismatch,
+    interfaceLines(entry),
+    sourceLine(ref, entry, cached !== undefined, remote.webHost),
+  ];
   return {
-    line: `${kind} ${where}, recorded in ${lockName(remote.lock)}`,
+    line: joinFacts([
+      name ? `name ${code(name)}` : undefined,
+      `${kind} ${where}, recorded in ${lockName(remote.lock)}`,
+    ]),
     description: parts.filter(Boolean).join('\n\n'),
   };
 }
 
 /**
  * Where a remote reference's source is: in the cache, where Go to Definition opens it, else on its host (a link, when
- * the host is known), with how to cache it.
+ * the host is certain), with how to cache it (on github.com, from an enterprise server, with `--github-com`).
  */
 function sourceLine(ref: string, entry: RemoteEntry, cached: boolean, webHost: string | undefined): string {
-  const at = code(entry.sha.slice(0, 7));
-  if (cached) return `Go to Definition opens its source at ${at}.`;
-  const download = `${code('flowpact remotes download')} caches it for Go to Definition.`;
+  if (cached) return 'Go to Definition opens its source.';
+  const command = entry.host ? 'flowpact remotes download --github-com' : 'flowpact remotes download';
+  const download = `${code(command)} caches it for Go to Definition.`;
   const link = sourceLink(ref, entry, webHost);
-  return link ? `[Source at ${at}](${link}) · ${download}` : `Its source is not cached: ${download}`;
+  return link ? `[Source](${link}) · ${download}` : `Its source is not cached: ${download}`;
 }
 
 /**

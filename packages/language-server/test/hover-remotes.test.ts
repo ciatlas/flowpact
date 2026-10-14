@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { memoryFileSystem, SymbolLocator } from '@ciatlas/core';
@@ -6,7 +6,7 @@ import { analyze, cacheSource, parseConfig } from '@flowpact/lint';
 import { afterAll, describe, expect, it } from 'vitest';
 import { hoverMarkdown, remoteBindingMarkdown } from '../src/hover';
 import { RemoteBindings } from '../src/remotes';
-import { hostOfGitUrl, originHost, RemoteSources, remoteTarget, sourceLink } from '../src/sources';
+import { hostOfGitUrl, originHost, RemoteSources, remoteTarget, sourceLink, webHostOf } from '../src/sources';
 
 const CI = '.github/workflows/ci.yml';
 const LOCK = '.github/flowpact/remotes.lock.yaml';
@@ -104,7 +104,22 @@ function setup(files: Record<string, string>, ctx: { sources?: RemoteSources; we
     if (!occurrence || !ctx.sources) throw new Error(`no symbol at ${needle}`);
     return remoteTarget(locator, result.remotes?.lock, ctx.sources, occurrence, binding);
   };
-  return { hover, key, target, remotes, locator };
+  /** The hover at `needle` in another file, given its text. */
+  const hoverIn = (file: string, text: string, needle: string) => {
+    const lines = text.slice(0, text.indexOf(needle)).split('\n');
+    const at = locator.at(file, lines.length, lines.at(-1)!.length + 1);
+    if (!at) throw new Error(`no symbol at ${needle}`);
+    return hoverMarkdown(locator, at, { ...(result.remotes ? { lock: result.remotes } : {}), ...ctx });
+  };
+  /** Where Go to Definition goes from `needle` in another file. */
+  const targetIn = (file: string, needle: string) => {
+    const text = files[file]!;
+    const lines = text.slice(0, text.indexOf(needle)).split('\n');
+    const at = locator.at(file, lines.length, lines.at(-1)!.length + 1);
+    if (!at || !ctx.sources) throw new Error(`no symbol at ${needle}`);
+    return remoteTarget(locator, result.remotes?.lock, ctx.sources, at);
+  };
+  return { hover, hoverIn, key, target, targetIn, remotes, locator };
 }
 
 describe('hover on remote references, from the lockfile', () => {
@@ -131,6 +146,16 @@ describe('hover on remote references, from the lockfile', () => {
       '`Octo/Setup@v2` · action at `abcdef1` on github\\.com, recorded in `remotes.lock.yaml`',
     );
     expect(text).toContain('**Inputs** `version` (required)  \n**Outputs** `path`');
+    // Read on github.com, from an enterprise server: downloading it needs --github-com.
+    expect(text).toContain('`flowpact remotes download --github-com` caches it for Go to Definition.');
+  });
+
+  it('links an uncached source on the host it is read from', () => {
+    const linked = setup({ [CI]: ci, [LOCK]: lock }, { webHost: 'github.com' });
+    expect(linked.hover(DEPLOY).split('\n').at(-1)).toBe(
+      `[Source](https://github.com/octo/ship/blob/${SHA}/.github/workflows/deploy.yml) · ` +
+        '`flowpact remotes download` caches it for Go to Definition.',
+    );
   });
 
   it('says why a reference has no interface: unreadable, or not recorded yet', () => {
@@ -213,9 +238,27 @@ describe('remote references with their sources cached', () => {
 
   it('names the source in the hover and says Go to Definition opens it', () => {
     const text = hover(DEPLOY);
-    expect(text).toContain('\n\nDeploy\n\n**Inputs**');
-    expect(text).toContain('Go to Definition opens its source at `abcdef1`.');
+    expect(text).toContain(
+      `\`${DEPLOY}\` · name \`Deploy\` · reusable workflow at \`abcdef1\`, recorded in \`remotes.lock.yaml\``,
+    );
+    expect(text.split('\n').at(-1)).toBe('Go to Definition opens its source.');
     expect(hover('octo/new')).toContain('`flowpact remotes update` records it in');
+  });
+
+  it('goes to the output of a remote action a local composite action uses', () => {
+    const composite = setup(
+      {
+        [CI]: ci,
+        [LOCK]: lock,
+        '.github/actions/build/action.yml':
+          'name: b\nruns:\n  using: composite\n  steps:\n    - id: s\n      uses: octo/setup@v2\n    - run: echo ${{ steps.s.outputs.path }}\n      shell: bash\n',
+      },
+      { sources },
+    );
+    expect(composite.targetIn('.github/actions/build/action.yml', 'outputs.path')).toEqual({
+      path: setupFile,
+      loc: expect.objectContaining({ line: 5 }),
+    });
   });
 
   it('adds the description the source gives a key a remote call passes', () => {
@@ -236,10 +279,71 @@ describe('remote references with their sources cached', () => {
     expect(target('octo/new')).toBeUndefined();
   });
 
-  it('knows which files are in the cache', () => {
+  it('knows which files are in the cache, also through a link to it', () => {
     expect(sources.contains(deployFile)).toBe(true);
     expect(sources.contains(join(dir, '..', 'elsewhere.yml'))).toBe(false);
     expect(sources.contains(dir)).toBe(false);
+    const link = `${dir}-link`;
+    symlinkSync(dir, link);
+    try {
+      expect(sources.contains(join(link, 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'))).toBe(
+        true,
+      );
+    } finally {
+      rmSync(link);
+    }
+    expect(new RemoteSources(undefined).contains(deployFile)).toBe(false);
+    expect(new RemoteSources(undefined).of(undefined, DEPLOY)).toBeUndefined();
+  });
+
+  it('opens the commit a uses: pins in full, and says when the lockfile records another', () => {
+    const pinned = 'd'.repeat(40);
+    const pinnedCi = `on: push\njobs:\n  a:\n    uses: octo/ship/.github/workflows/deploy.yml@${pinned}\n`;
+    const forged = `version: 1\nremotes:\n  octo/ship/.github/workflows/deploy.yml@${pinned}:\n    sha: ${SHA}\n    kind: workflow\n`;
+    const files = { [CI]: pinnedCi, [LOCK]: forged };
+    // The cache has the lockfile's commit, not the pinned one: nothing to open.
+    expect(
+      sources.of(
+        analyze({ root: '/r', fs: memoryFileSystem(files), config: parseConfig({}), validateSchema: false })
+          .remotes?.lock,
+        `octo/ship/.github/workflows/deploy.yml@${pinned}`,
+      ),
+    ).toBeUndefined();
+    const text = setup(files, { sources, webHost: 'github.com' }).hoverIn(CI, pinnedCi, 'octo/ship');
+    expect(text).toContain('reusable workflow at `ddddddd`');
+    expect(text).toContain('`remotes.lock.yaml` records commit `abcdef1` for it, not the one it pins');
+    expect(text).toContain(`(https://github.com/octo/ship/blob/${pinned}/.github/workflows/deploy.yml)`);
+  });
+});
+
+describe('the host to link sources on', () => {
+  const withOrigin = (url: string) => {
+    const repo = mkdtempSync(join(tmpdir(), 'flowpact-webhost-'));
+    mkdirSync(join(repo, '.git'));
+    writeFileSync(join(repo, '.git', 'config'), `[remote "origin"]\n\turl = ${url}\n`);
+    return repo;
+  };
+
+  it('is where remotes update reads: GITHUB_API_URL, or github.com and GHE.com origins, and nothing it would guess', () => {
+    const cases: [string, string | undefined][] = [
+      ['https://github.com/o/r.git', 'github.com'],
+      ['git@github.com:o/r.git', 'github.com'],
+      ['ssh://git@ssh.github.com:443/o/r.git', 'github.com'],
+      ['git@github.com-work:o/r.git', 'github.com'],
+      ['https://acme.ghe.com/o/r', 'acme.ghe.com'],
+      ['git@work:o/r.git', undefined],
+      ['https://ghes.example/o/r', undefined],
+      ['https://gitlab.com/o/r', undefined],
+    ];
+    for (const [url, host] of cases) {
+      const repo = withOrigin(url);
+      try {
+        expect(webHostOf(repo, {}), url).toBe(host);
+        expect(webHostOf(repo, { GITHUB_API_URL: 'https://ghes.example/api/v3' }), url).toBe('ghes.example');
+      } finally {
+        rmSync(repo, { recursive: true, force: true });
+      }
+    }
   });
 });
 
@@ -281,6 +385,17 @@ describe('links to remote sources', () => {
       expect(originHost(join(repo, 'main'))).toBe('ghes.example');
       expect(originHost(join(repo, 'wt'))).toBe('ghes.example');
       expect(originHost(repo)).toBeUndefined();
+      // A directory below the top level, and a submodule, whose git directory (no commondir) is its own.
+      mkdirSync(join(repo, 'main', 'nested'));
+      expect(originHost(join(repo, 'main', 'nested'))).toBe('ghes.example');
+      mkdirSync(join(repo, 'main', '.git', 'modules', 'sub'), { recursive: true });
+      writeFileSync(
+        join(repo, 'main', '.git', 'modules', 'sub', 'config'),
+        '[remote "origin"]\n\turl = https://github.com/o/sub\n',
+      );
+      mkdirSync(join(repo, 'main', 'sub'));
+      writeFileSync(join(repo, 'main', 'sub', '.git'), 'gitdir: ../.git/modules/sub\n');
+      expect(originHost(join(repo, 'main', 'sub'))).toBe('github.com');
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }

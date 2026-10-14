@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import {
   createParseContext,
@@ -12,6 +12,8 @@ import {
 } from '@ciatlas/core';
 import {
   cachedSource,
+  commitOf,
+  hostOf,
   lockedRemote,
   parseRemoteRef,
   type RemoteEntry,
@@ -29,18 +31,22 @@ export interface CachedUnit {
 
 /**
  * The remote sources cache as the editor reads it (see `remotesCacheDir`): the file of a remote reference at the commit
- * the lockfile pins. Each file is parsed once: a file at a commit never changes.
+ * it runs (`commitOf`: its own full SHA, else the commit the lockfile pins). Each file is parsed once: a file at a
+ * commit never changes. Without a directory (no home directory to keep one in), it has nothing.
  */
 export class RemoteSources {
   private readonly parsed = new Map<string, UnitDecl | null>();
+  private readonly realDir: string | undefined;
 
-  constructor(readonly dir: string = remotesCacheDir()) {}
+  constructor(readonly dir: string | undefined = remotesCacheDir()) {
+    this.realDir = dir && real(dir);
+  }
 
-  /** The cached source of a remote reference the lockfile pins; undefined without an entry, or a file in the cache. */
+  /** The cached source of a remote reference the lockfile has; undefined without an entry, or a file in the cache. */
   of(lock: RemotesLock | undefined, ref: string): CachedUnit | undefined {
     const { entry } = lockedRemote(lock, ref);
     const r = entry && parseRemoteRef(ref, entry.kind);
-    const found = r && cachedSource(this.dir, r, entry.sha);
+    const found = r && this.dir && cachedSource(this.dir, r, commitOf(r, entry));
     if (!found) return undefined;
     let unit = this.parsed.get(found.path);
     if (unit === undefined) {
@@ -50,10 +56,30 @@ export class RemoteSources {
     return unit ? { ...found, unit } : undefined;
   }
 
-  /** Whether a file is in the cache: it is another repository's, at a commit, so it is not analyzed. */
+  /**
+   * Whether a file (or directory) is in the cache: it is another repository's, at a commit, so it is not analyzed. Also
+   * through another path to it: a link, or another case of a case-insensitive file system.
+   */
   contains(path: string): boolean {
-    const rel = relative(this.dir, path);
-    return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+    if (!this.dir) return false;
+    if (inside(this.dir, path)) return true;
+    if (!this.realDir) return false;
+    const file = real(path);
+    return file !== undefined && inside(this.realDir, file);
+  }
+}
+
+const inside = (dir: string, path: string) => {
+  const rel = relative(dir, path);
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+};
+
+/** A path as the file system has it (links resolved, case corrected), or undefined when it does not exist. */
+function real(path: string): string | undefined {
+  try {
+    return realpathSync.native(path);
+  } catch {
+    return undefined;
   }
 }
 
@@ -134,7 +160,8 @@ export function declarationIn(
 function remoteOutput(locator: SymbolLocator, symbol: string): { ref: string; name: string } | undefined {
   const job = /^(.*)#jobs\.([^.]+)\.outputs\.(.+)$/.exec(symbol);
   if (job) return remoteJobOutput(locator, job[1]!, job[2]!, job[3]!);
-  const step = /\.steps\.[^.]+\.outputs\.(.+)$/.exec(symbol);
+  // In a workflow's job (`#jobs.<job>.steps…`) or in a composite action (`#steps…`); ids hold no dots.
+  const step = /#(?:jobs\.[^.]+\.)?steps\.[^.]+\.outputs\.(.+)$/.exec(symbol);
   return step ? remoteStepOutput(locator, symbol, step[1]!) : undefined;
 }
 
@@ -152,7 +179,31 @@ function remoteStepOutput(locator: SymbolLocator, symbol: string, name: string) 
   return uses?.kind === 'remote-action' ? { ref: uses.raw, name } : undefined;
 }
 
-/** The host of a repository's `origin` remote (`github.com`, a GitHub Enterprise Server), for links to its sources. */
+/**
+ * The host to link the sources of remote references on, when it is certain: where `flowpact remotes update` reads them
+ * (`GITHUB_API_URL`, else github.com's API), told by `GITHUB_API_URL`, or by an `origin` on github.com (an SSH alias
+ * such as `github.com-work` included) or GHE.com. Another origin host may be an SSH alias or another forge, so no
+ * link is better than a wrong one.
+ */
+export function webHostOf(
+  root: string,
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  if (env.GITHUB_API_URL) {
+    try {
+      return plainHost(hostOf(env.GITHUB_API_URL));
+    } catch {
+      return undefined;
+    }
+  }
+  const origin = originHost(root);
+  if (!origin) return undefined;
+  if (origin === 'github.com' || origin === 'ssh.github.com' || origin.startsWith('github.com-'))
+    return 'github.com';
+  return origin.endsWith('.ghe.com') ? origin : undefined;
+}
+
+/** The host of the `origin` remote of the repository a directory is in (or below), as its URL writes it. */
 export function originHost(root: string): string | undefined {
   const config = gitConfigOf(root);
   let text: string;
@@ -166,16 +217,26 @@ export function originHost(root: string): string | undefined {
   return url ? hostOfGitUrl(url) : undefined;
 }
 
-/** `.git/config`, also of a worktree, whose `.git` is a file naming its directory in the main repository. */
+/**
+ * The git config of the repository a directory is in: `.git/config`, found upwards. A `.git` file names the git
+ * directory: a worktree's has a `commondir` naming the main repository's; a submodule's (or one made with
+ * `--separate-git-dir`) is its own.
+ */
 function gitConfigOf(root: string): string | undefined {
-  const git = join(root, '.git');
+  let top = root;
+  while (!existsSync(join(top, '.git'))) {
+    if (dirname(top) === top) return undefined;
+    top = dirname(top);
+  }
+  const git = join(top, '.git');
   try {
     if (statSync(git).isDirectory()) return join(git, 'config');
+    if (!statSync(git).isFile()) return undefined;
     const gitdir = /^gitdir:\s*(.+)$/m.exec(readFileSync(git, 'utf8'))?.[1]?.trim();
     if (!gitdir) return undefined;
-    const dir = isAbsolute(gitdir) ? gitdir : join(root, gitdir);
+    const dir = isAbsolute(gitdir) ? gitdir : join(top, gitdir);
     const common = join(dir, 'commondir');
-    const base = existsSync(common) ? join(dir, readFileSync(common, 'utf8').trim()) : dirname(dirname(dir));
+    const base = existsSync(common) ? join(dir, readFileSync(common, 'utf8').trim()) : dir;
     return join(base, 'config');
   } catch {
     return undefined;
@@ -193,19 +254,22 @@ export function hostOfGitUrl(url: string): string | undefined {
       return undefined;
     }
   }
-  return /^[a-z0-9.-]+$/i.test(host) ? host.toLowerCase() : undefined;
+  return plainHost(host);
 }
 
+/** A host name as links may use it: letters, digits, dots and hyphens only, in lower case. */
+const plainHost = (host: string) => (/^[a-z0-9.-]+$/i.test(host) ? host.toLowerCase() : undefined);
+
 /**
- * A link to a remote reference's file (an action's directory) on its host at the commit the lockfile pins: the host an
- * entry was read from (`github.com`, the only one flowpact writes), else the repository's own (`webHost`).
+ * A link to a remote reference's file (an action's directory) on its host at the commit it runs (`commitOf`): the host
+ * an entry was read from (`github.com`, the only one flowpact writes), else where `remotes update` reads (`webHost`).
  */
 export function sourceLink(ref: string, entry: RemoteEntry, webHost: string | undefined): string | undefined {
   const host = entry.host === 'github.com' ? entry.host : entry.host ? undefined : webHost;
   const r = parseRemoteRef(ref, entry.kind);
   if (!host || !r) return undefined;
   const path = r.path.split('/').filter(Boolean).map(encodeURIComponent).join('/');
-  const where =
-    r.kind === 'workflow' ? `blob/${entry.sha}/${path}` : `tree/${entry.sha}${path ? `/${path}` : ''}`;
+  const sha = commitOf(r, entry);
+  const where = r.kind === 'workflow' ? `blob/${sha}/${path}` : `tree/${sha}${path ? `/${path}` : ''}`;
   return `https://${host}/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}/${where}`;
 }
