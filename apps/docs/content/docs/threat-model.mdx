@@ -3,7 +3,7 @@ title: Threat model
 description: What flowpact protects, where untrusted data and code cross into it, and its threats ranked by risk, each with the code and tests that defend against it and the risk that remains.
 ---
 
-This is the security assessment of flowpact 0.17.0, built on `@ciatlas/core` 2.0.0, as of 2026-10-14. It names what
+This is the security assessment of flowpact 0.19.0, built on `@ciatlas/core` 2.2.0, as of 2026-10-14. It names what
 flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
@@ -11,7 +11,7 @@ review. The [security page](/docs/security) describes what flowpact reads, write
 release; to report a vulnerability, see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
 
 Paths are in this repository, except those marked (core), which are in
-[ciatlas/core](https://github.com/ciatlas/core/tree/v2.0.0) at v2.0.0.
+[ciatlas/core](https://github.com/ciatlas/core/tree/v2.2.0) at v2.2.0.
 
 ## Assets
 
@@ -21,10 +21,12 @@ Paths are in this repository, except those marked (core), which are in
 - **Plugins.** JavaScript modules named by the config, the action's `plugin` input or `--plugin`. Once loaded, a
   plugin is trusted code with every right of the process; flowpact does not sandbox it.
 - **The CI runner.** The job's secrets and environment, the workspace, the action's `token` input (`github.token` by
-  default, used only for the `git fetch` of impact mode) and the runner's own token for the drift artifact. The runner
+  default, used for the `git fetch` of impact mode and, with `remotes: fetch`, for GitHub API reads of remote
+  repositories) and the runner's own token for the drift artifact. The runner
   reads flowpact's log for workflow commands, and reviewers read its annotations and job summary.
 - **The user's machine.** For the CLI, the language server and the VS Code extension: files outside the repository,
-  the terminal that shows the output, and the editor.
+  the terminal that shows the output, the editor, and the GitHub token `flowpact remotes update` and `--fetch-remotes`
+  read remote repositories with (`GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's).
 - **The release pipeline.** `release.yml`, running from `main`. The release bot's private key
   (`RELEASE_BOT_PRIVATE_KEY`, an organization secret that only ciatlas/flowpact and ciatlas/core can read). The
   publishing identities, each exchanged for a short-lived token at each publish: npm and Open VSX accept `release.yml`
@@ -37,7 +39,7 @@ Paths are in this repository, except those marked (core), which are in
   build tools that run in CI; and `@ciatlas/core`, a git dependency on a release tag of ciatlas/core, which has the
   same maintainer.
 - **The released artifacts.** The npm package, the action at its tags (including the floating tag of each minor line,
-  such as `v0.17`), the `.vsix` on the two registries, the signed files of each GitHub release, and this site, which
+  such as `v0.19`), the `.vsix` on the two registries, the signed files of each GitHub release, and this site, which
   `docs.yml` deploys to GitHub Pages from `main`.
 
 ## Trust boundaries
@@ -54,6 +56,9 @@ Paths are in this repository, except those marked (core), which are in
    into what users install.
 7. **Registries to users.** Users get flowpact from npm, the action's tags, the Marketplace or Open VSX, and can check
    it against the signed GitHub release.
+8. **GitHub API to flowpact.** With `flowpact remotes update`, `--fetch-remotes` or the action's `remotes: fetch`,
+   flowpact reads workflow and action files of other repositories, chosen by the `uses:` references of the analyzed
+   repository, with a token.
 
 ## Threats, ranked
 
@@ -71,7 +76,8 @@ are ordered by the residual risk.
 | 7 | [A compromised `@ciatlas/core` release](#a-compromised-ciatlascore-release) | low | high | low |
 | 8 | [A tampered release](#a-tampered-release) | low | high | low |
 | 9 | [Argument injection through flag values](#argument-injection-through-flag-values) | low | high | low |
-| 10 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
+| 10 | [Remote interfaces mislead the checks or the token](#remote-interfaces-mislead-the-checks-or-the-token) | low | medium | low |
+| 11 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
 
 ### Plugins run on untrusted code
 
@@ -302,6 +308,34 @@ A workflow passes untrusted text as a flag value, such as `--title "$PR_TITLE"`.
 - **Residual risk: low.** Only flag values are protected. A positional argument, such as a path, that starts with `-`
   is still read as an option; put untrusted paths after `--` (`flowpact lint -- "$PATHS"`). Quoting is the workflow's
   job: pass untrusted text through `env:`, not by expression interpolation in `run:`.
+
+### Remote interfaces mislead the checks or the token
+
+flowpact checks calls to other repositories against interfaces it does not hold itself: the
+[remote interfaces lockfile](/docs/remote-interfaces), which a pull request can edit, and the files it fetches, which
+those repositories serve. A pull request can try to make the checks pass with a false interface (an input marked
+optional), a remote repository can serve a file built to waste memory, and a pull request that controls the
+references can try to make a privileged token read repositories it should not, and show what it read in findings.
+
+- **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
+  [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a
+  commit SHA, and `flowpact remotes update` rewrites it from the source, so a false entry shows in the pull request's
+  diff. Fetched files are parsed, never run, and refused over 1 MB or after 30 seconds, eight at a time
+  (`packages/lint/src/remotes-fetch.ts`). A remote unit has no body: nothing that follows a call into a callee reaches
+  it (core `ProjectIndex.interfaceOf`, `actionInterfaceOf`). Fetching is opt-in; the token goes only to the GitHub API
+  (`GITHUB_API_URL`) as an authorization header and is never printed; the action does not fetch on
+  `pull_request_target` or `workflow_run`, where an untrusted pull request would choose the references while the token
+  may be privileged (`remotesToFetch` in `packages/action/src/main.ts`).
+- **Tests.** `packages/lint/test/remotes.test.ts` (FP611 for an invalid lockfile, then nothing checked;
+  `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the token sent only to the API, a response
+  over 1 MB refused); `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output);
+  `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`); `test/external.test.ts`
+  (core; external units out of everything that follows a call).
+- **Residual risk: low.** A false entry in the lockfile weakens only the checks of the repository that commits it, and
+  only until a review or `flowpact remotes update` catches it. Where a job's environment sets `GITHUB_API_URL`, that is
+  where the token goes; whoever writes the job already holds its token. On other events, `remotes: fetch` reads with
+  whatever token the workflow gives it, so a workflow that runs untrusted code with a broad token should not
+  opt in.
 
 ### Resource exhaustion
 

@@ -14,10 +14,12 @@ it and the risk that remains.
 ## What it reads and writes
 
 - **Reads** the repository it analyzes: `.github/workflows/*.yml`, local actions (`action.yml`), the config
-  (`.github/flowpact/flowpact.config.yml`) and the contracts (`.github/flowpact/contracts/`). With
-  [impact mode](/docs/impact-mode), it also reads the same files at the pull request's base commit through git.
-- **Writes** only what you ask for: reports to stdout or `--output`, contracts with `flowpact generate`, and a patch
-  with `flowpact check --patch`. It never commits or pushes.
+  (`.github/flowpact/flowpact.config.yml`), the contracts (`.github/flowpact/contracts/`) and the
+  [remote interfaces lockfile](/docs/remote-interfaces). With [impact mode](/docs/impact-mode), it also reads the same
+  files at the pull request's base commit through git.
+- **Writes** only what you ask for: reports to stdout or `--output`, contracts with `flowpact generate`, the remote
+  interfaces lockfile with `flowpact remotes update`, and a patch with `flowpact check --patch`. It never commits or
+  pushes.
 - **The GitHub Action** additionally writes annotations, the job summary and its outputs, and, in `mode: check` when
   contracts drifted, uploads the regenerated contracts as a workflow artifact (`upload-contracts`).
 
@@ -31,7 +33,8 @@ flowpact treats the analyzed files as untrusted input:
   at the start of a line, `##[…]` anywhere), except the annotations it prints on purpose with `--format github`;
 - it reads the value of a flag only as that flag: `--title "$PR_TITLE"` cannot add a `--plugin` or an `-o`, turn off
   `--no-plugins`, or end the run as `--help` would;
-- it caps matrix expansion and YAML alias expansion.
+- it caps matrix expansion and YAML alias expansion;
+- it only parses the remote workflow and action files it fetches, never runs them, and refuses one over 1 MB.
 
 Reports of a way around any of this are in scope of the
 [security policy](https://github.com/ciatlas/flowpact/security/policy).
@@ -40,22 +43,31 @@ Reports of a way around any of this are in scope of the
 
 flowpact has **no telemetry** and sends nothing anywhere.
 
-- The CLI, the language server and the VS Code extension make **no network requests**.
-- The GitHub Action makes two kinds, both to GitHub and both optional:
+- The language server and the VS Code extension make **no network requests**.
+- The CLI makes requests only when you ask it to fetch [remote interfaces](/docs/remote-interfaces):
+  `flowpact remotes update`, or `lint`/`check` with `--fetch-remotes`. It reads the remote repositories' workflow and
+  action files from the GitHub API (`GITHUB_API_URL`, `https://api.github.com` by default), with `GH_TOKEN`,
+  `GITHUB_TOKEN` or the GitHub CLI's token as the authorization header, sent to that API only and never printed.
+- The GitHub Action makes three kinds, all to GitHub and all optional:
   - in impact mode, when the checkout is shallow, a `git fetch` of the base commit (and, for release pull requests, the
     release tags) from the repository's own `origin`, with the `token` input as a one-off authorization header;
   - in `mode: check` with `upload-contracts`, the upload of the contract drift artifact, made the way
     `actions/upload-artifact` makes it: to the runner's artifact service, and the zip itself to the storage address
-    that service signs for it. It uses the runner's own token for the artifact service, not the `token` input.
+    that service signs for it. It uses the runner's own token for the artifact service, not the `token` input;
+  - with `remotes: fetch`, GitHub API reads of the remote workflow and action files the lockfile lacks, with the
+    `token` input, the same way as the CLI. Never on `pull_request_target` or `workflow_run`, where an untrusted pull
+    request would choose which repositories the token reads.
 
-On GitHub Enterprise Server, the `git fetch` goes to the enterprise server, never to github.com. The artifact upload is
+On GitHub Enterprise Server, the `git fetch` and the API reads go to the enterprise server, never to github.com. The artifact upload is
 not available there: the action warns that it could not upload the artifact and still writes the patch (the `patch`
 output). Set `upload-contracts: false` there.
 
 ## Permissions
 
 - **CLI and editor:** none beyond reading the repository. They run with the permissions of whoever runs them.
-- **GitHub Action:** `contents: read` to check out the repository; the action itself does not call the GitHub API.
+- **GitHub Action:** `contents: read` to check out the repository. The action calls the GitHub API only with
+  `remotes: fetch`, to read the remote workflows and actions a run uses: `github.token` reads public repositories;
+  private and internal ones of the organization need a `token` that can read their contents.
   Uploading SARIF to code scanning is a separate step (`github/codeql-action/upload-sarif`) that needs
   `security-events: write`. See [action permissions](/docs/action#permissions).
 
