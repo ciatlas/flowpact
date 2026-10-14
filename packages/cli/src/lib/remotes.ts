@@ -12,10 +12,15 @@ import {
   updateRemotesLock,
 } from '@flowpact/lint';
 import { attempt, usage } from './errors';
-import { analyzeSession, bool, type Session } from './session';
-import { protectedTrees } from './targets';
+import { analyzeSession, bool, type Session, stringList } from './session';
+import { checkTargets, protectedTrees } from './targets';
 
 export interface RemotesUpdateOptions {
+  /**
+   * Workflow and action files or directories, relative to the root: fetch only the remote references they, and the
+   * local workflows and actions they reach, use. Other entries are kept. Default: all.
+   */
+  paths?: string[];
   /** Compute the lockfile without writing it. */
   dryRun?: boolean;
   /** The token to read the remote repositories with; by default `GH_TOKEN`, `GITHUB_TOKEN` or `gh auth token`. */
@@ -65,7 +70,9 @@ export async function runRemotesUpdate(
 ): Promise<RemotesUpdateResult> {
   if (options.token !== undefined && typeof options.token !== 'string') throw usage('token must be a string');
   const { root, logger } = session;
-  const result = await analyzeSession(session, { only: [], validateSchema: false });
+  const paths = stringList('paths', options.paths) ?? [];
+  const result = await analyzeSession(session, { paths, only: [], validateSchema: false });
+  checkTargets(result.project, paths, root);
   const fs = nodeFileSystem(root);
   const read = readRemotesLock(fs);
   const file = read.file ?? REMOTES_LOCK_FILES[0];

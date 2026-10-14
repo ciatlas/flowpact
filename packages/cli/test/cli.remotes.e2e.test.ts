@@ -102,6 +102,19 @@ describe('flowpact remotes update', () => {
     expect(() => readFileSync(join(root, LOCK))).toThrow();
   });
 
+  it('fetches only what the given paths use, and refuses a path that does not exist', async () => {
+    const root = repo();
+    writeFileSync(
+      join(root, '.github/workflows/other.yml'),
+      'on: push\njobs:\n  o:\n    runs-on: x\n    steps:\n      - uses: octo/elsewhere@v9\n',
+    );
+    const r = await run(root, ['update', '.github/workflows/other.yml']);
+    expect(r.stdout).not.toContain('octo/setup@v2');
+    expect(r.stdout).toContain('unread  octo/elsewhere@v9');
+    const missing = await run(root, ['update', '.github/workflows/nope.yml']);
+    expect(missing.exitCode).toBe(2);
+  });
+
   it('refuses another action', async () => {
     const r = await run(repo(), ['check']);
     expect(r.exitCode).toBe(2);

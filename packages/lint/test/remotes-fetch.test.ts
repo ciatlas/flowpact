@@ -213,3 +213,52 @@ describe('unreadable references', () => {
     expect(findings).not.toContain('FP611');
   });
 });
+
+describe('updateRemotesLock with paths', () => {
+  const files = {
+    [`${WF}/a.yml`]: 'on: push\njobs:\n  c:\n    uses: ./.github/workflows/_inner.yml\n',
+    [`${WF}/_inner.yml`]:
+      'on: workflow_call\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+    [`${WF}/b.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/other@v1\n',
+  };
+  const api = fakeApi(
+    { 'octo/setup@v2': SHA('b'), 'octo/other@v1': SHA('c') },
+    {
+      [`octo/setup/action.yml@${SHA('b')}`]: SETUP,
+      [`octo/other/action.yml@${SHA('c')}`]: SETUP,
+    },
+  );
+  const previous: RemotesLock = {
+    version: 1,
+    remotes: {
+      'octo/other@v1': { sha: SHA('d'), kind: 'action', inputs: {}, outputs: [] },
+      'octo/unused@v1': { sha: SHA('e'), kind: 'action', inputs: {}, outputs: [] },
+    },
+    unreadable: { 'octo/private@v1': 'not readable' },
+  };
+
+  it('fetches only what the given workflows reach, keeps other entries, and drops only what nothing uses', async () => {
+    api.seen.length = 0;
+    const index = lint(files, { paths: [`${WF}/a.yml`] }).index;
+    const u = await updateRemotesLock(index, previous, { fetch: api.fetch });
+    // a.yml reaches octo/setup@v2 through _inner.yml; b.yml's octo/other@v1 is not fetched and keeps its entry.
+    expect(api.seen.map((r) => new URL(r.url).pathname)).not.toContain('/repos/octo/other/commits/v1');
+    expect(u.added).toEqual(['octo/setup@v2']);
+    expect(u.lock.remotes['octo/other@v1']!.sha).toBe(SHA('d'));
+    expect(u.removed).toEqual(['octo/unused@v1']);
+    expect(Object.keys(u.lock.remotes).sort()).toEqual(['octo/other@v1', 'octo/setup@v2']);
+    // octo/private@v1 is used nowhere: it goes with the rest.
+    expect(u.lock.unreadable).toBeUndefined();
+  });
+
+  it('keeps an unreadable reference used outside the paths', async () => {
+    const withPrivate = {
+      ...files,
+      [`${WF}/b.yml`]: `${files[`${WF}/b.yml`]}      - uses: octo/private@v1\n`,
+    };
+    const u = await updateRemotesLock(lint(withPrivate, { paths: [`${WF}/a.yml`] }).index, previous, {
+      fetch: api.fetch,
+    });
+    expect(u.lock.unreadable).toEqual({ 'octo/private@v1': 'not readable' });
+  });
+});

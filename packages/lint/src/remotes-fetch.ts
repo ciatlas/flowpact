@@ -14,7 +14,14 @@ import {
   remoteKey,
   trimChar,
 } from '@ciatlas/core';
-import { lockEntryOf, type RemoteEntry, type RemoteRef, type RemotesLock, remoteRefsOf } from './remotes';
+import {
+  lockEntryOf,
+  type RemoteEntry,
+  type RemoteRef,
+  type RemotesLock,
+  remoteRefsOf,
+  targetedUnits,
+} from './remotes';
 
 export interface FetchRemotesOptions {
   /** Sent only to `apiUrl`, never logged. Public repositories can be read without one, at a low rate limit. */
@@ -165,7 +172,8 @@ export async function updateRemotesLock(
   previous: RemotesLock | undefined,
   opts: FetchRemotesOptions = {},
 ): Promise<RemotesUpdate> {
-  const refs = remoteRefsOf(index);
+  const scope = targetedUnits(index);
+  const refs = remoteRefsOf(index, scope);
   const before = new Map(Object.entries(previous?.remotes ?? {}).map(([ref, e]) => [remoteKey(ref), e]));
   const remotes: RemotesLock['remotes'] = {};
   const out: RemotesUpdate = {
@@ -184,15 +192,34 @@ export async function updateRemotesLock(
     if (entry && !old) out.added.push(r.raw);
     else if (entry && !same(old, entry)) out.changed.push(r.raw);
   });
-  const used = new Set(refs.map((r) => remoteKey(r.raw)));
+  // An entry is dropped only when nothing in the repository uses it; with paths, the others are kept as they were.
+  const used = new Set(remoteRefsOf(index).map((r) => remoteKey(r.raw)));
+  if (scope) keepOutside(previous, used, new Set(refs.map((r) => remoteKey(r.raw))), out);
   out.removed = Object.keys(previous?.remotes ?? {}).filter((ref) => !used.has(remoteKey(ref)));
   for (const list of [out.added, out.changed, out.removed]) list.sort();
   out.failed.sort(byRef);
   out.unreadable.sort(byRef);
   // A reference without an entry that cannot be read is recorded, so the lockfile accounts for it (see FP612).
   const unreadable = out.unreadable.filter((u) => !remotes[u.ref]);
-  if (unreadable.length) out.lock.unreadable = Object.fromEntries(unreadable.map((u) => [u.ref, u.error]));
+  if (unreadable.length)
+    out.lock.unreadable = {
+      ...out.lock.unreadable,
+      ...Object.fromEntries(unreadable.map((u) => [u.ref, u.error])),
+    };
   return out;
+}
+
+/** With paths: the previous entries (and unreadable references) of references used outside them, kept as they were. */
+function keepOutside(
+  previous: RemotesLock | undefined,
+  used: Set<string>,
+  fetched: Set<string>,
+  out: RemotesUpdate,
+): void {
+  const outside = (ref: string) => used.has(remoteKey(ref)) && !fetched.has(remoteKey(ref));
+  for (const [ref, e] of Object.entries(previous?.remotes ?? {})) if (outside(ref)) out.lock.remotes[ref] = e;
+  const unreadable = Object.entries(previous?.unreadable ?? {}).filter(([ref]) => outside(ref));
+  if (unreadable.length) out.lock.unreadable = Object.fromEntries(unreadable);
 }
 
 export interface FetchedRemotes {

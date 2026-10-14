@@ -1,7 +1,16 @@
 import { type ArgsDef, defineCommand } from 'citty';
 import { runRemotesUpdate } from '../lib/remotes';
 import { remotesText } from '../lib/text';
-import { commonArgs, createContext, displayPath, EXIT, guard, printBanner, UsageError } from '../shared';
+import {
+  commonArgs,
+  createContext,
+  displayPath,
+  EXIT,
+  guard,
+  pathArgs,
+  printBanner,
+  UsageError,
+} from '../shared';
 
 export const remotesCommand = defineCommand({
   meta: {
@@ -13,7 +22,13 @@ export const remotesCommand = defineCommand({
     action: {
       type: 'positional',
       required: true,
-      description: '`update`: fetch every remote reference and write the lockfile',
+      description: '`update`: fetch the remote references and write the lockfile',
+    },
+    paths: {
+      type: 'positional',
+      required: false,
+      description:
+        'Workflow/action files or directories whose remote references to fetch, with those of what they call (default: all); other entries are kept',
     },
     ...commonArgs,
     'dry-run': {
@@ -27,7 +42,12 @@ export const remotesCommand = defineCommand({
         throw new UsageError(`unknown action "${args.action}": use \`flowpact remotes update\``);
       const ctx = createContext(args, rawArgs, cmd.args as ArgsDef);
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
-      const r = await runRemotesUpdate(ctx.session, { dryRun: Boolean(args['dry-run']) });
+      const paths = pathArgs(
+        args._.filter((p, i) => !(i === 0 && p === 'update') && p !== 'remotes'),
+        'remotes',
+        ctx.root,
+      );
+      const r = await runRemotesUpdate(ctx.session, { paths, dryRun: Boolean(args['dry-run']) });
       ctx.stdout(remotesText(r, ctx.render));
       return r.failed.length ? EXIT.findings : EXIT.ok;
     }),

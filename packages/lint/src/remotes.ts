@@ -159,13 +159,13 @@ export function parseRemoteRef(raw: string, kind: RemoteRef['kind']): RemoteRef 
 }
 
 /** The remote reusable workflows and actions a project uses, once each (by `remoteKey`), in the order they are met. */
-export function remoteRefsOf(index: ProjectIndex): RemoteRef[] {
+export function remoteRefsOf(index: ProjectIndex, units: Iterable<UnitDecl> = index.units()): RemoteRef[] {
   const out = new Map<string, RemoteRef>();
   const add = (raw: string, kind: RemoteRef['kind']) => {
     const ref = parseRemoteRef(raw, kind);
     if (ref && !out.has(remoteKey(raw))) out.set(remoteKey(raw), ref);
   };
-  for (const unit of index.units()) {
+  for (const unit of units) {
     if (unit.kind === 'workflow')
       for (const job of Object.values(unit.jobs))
         if (job.uses?.kind === 'remote-workflow') add(job.uses.raw, 'workflow');
@@ -173,6 +173,24 @@ export function remoteRefsOf(index: ProjectIndex): RemoteRef[] {
       if (step.uses?.kind === 'remote-action') add(step.uses.raw, 'action');
   }
   return [...out.values()];
+}
+
+/**
+ * The units the requested paths name (`Project.targets`), and the local workflows and actions they reach; undefined
+ * when no paths were given, which is every unit.
+ */
+export function targetedUnits(index: ProjectIndex): Set<UnitDecl> | undefined {
+  const { targets } = index.project;
+  if (!targets.size) return undefined;
+  const out = new Set<UnitDecl>();
+  const visit = (unit: UnitDecl) => {
+    if (out.has(unit)) return;
+    out.add(unit);
+    for (const c of index.callSites) if (c.caller === unit) visit(c.callee);
+    for (const u of index.actionUses) if (u.unit === unit) visit(u.action);
+  };
+  for (const unit of index.units()) if (targets.has(unit.file)) visit(unit);
+  return out;
 }
 
 /** An input as the lockfile records it. */
