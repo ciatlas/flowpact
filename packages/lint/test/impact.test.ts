@@ -345,6 +345,11 @@ describe('artifacts', () => {
     ]);
   });
 
+  it('points at the unit’s own upload step', () => {
+    const [c] = changes({ [`${WF}/r.yml`]: wf(upload('dist')) }, { [`${WF}/r.yml`]: wf(upload('pkg')) });
+    expect(c?.loc).toMatchObject({ file: `${WF}/r.yml`, line: 8 });
+  });
+
   it('is uncertain where a name is now chosen at run time, and does not grade new artifacts', () => {
     expect(grade(wf(upload('dist')), wf(upload('dist-${{ inputs.os }}')))).toEqual([
       `major? no longer uploads artifact "dist"; callers' jobs that download it fail`,

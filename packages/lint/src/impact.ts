@@ -500,6 +500,8 @@ const UPLOAD_ARTIFACT = /^actions\/upload-artifact@/i;
 interface Uploads {
   names: Set<string>;
   dynamic: boolean;
+  /** The first upload step in the unit's own file, where a finding about its uploads points. */
+  at?: Loc;
 }
 
 /** The units that run when a unit runs: itself, the local actions its steps use, and the workflows it calls. */
@@ -535,6 +537,7 @@ function uploadsOf(index: ProjectIndex, unit: UnitDecl): Uploads {
   const out: Uploads = { names: new Set(), dynamic: false };
   for (const step of stepsRun(index, unit)) {
     if (step.uses?.kind !== 'remote-action' || !UPLOAD_ARTIFACT.test(step.uses.raw)) continue;
+    if (!out.at && step.loc.file === unit.file) out.at = step.uses.loc;
     const name = artifactName(step);
     if (name.includes('${{')) out.dynamic = true;
     else out.names.add(name);
@@ -556,7 +559,7 @@ function artifactChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h:
       level: 'major' as const,
       certain: !after.dynamic,
       message: `no longer uploads artifact "${n}"; callers' jobs that download it fail`,
-      loc: fileStart(h.file),
+      loc: after.at ?? fileStart(h.file),
     }));
 }
 
