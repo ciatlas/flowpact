@@ -13,6 +13,7 @@ import {
   loadProject,
   matchesPattern,
   neutralizeWorkflowCommands,
+  nodeFileSystem,
   resolveCommit,
   resolveLogLevel,
 } from '@ciatlas/core';
@@ -29,6 +30,7 @@ import {
   exitCodeFor,
   type Finding,
   type FlowpactConfig,
+  fetchMissingRemotes,
   followsPullRequest,
   githubEvent,
   type ImpactLevel,
@@ -41,6 +43,7 @@ import {
   type PreparedImpact,
   pathInside,
   prepareImpact,
+  readRemotesLock,
   UnsafePathError,
   writeContracts,
 } from '@flowpact/lint';
@@ -78,6 +81,7 @@ export const DEFAULTS = {
   impact: 'off',
   'expected-impact': '',
   'base-ref': '',
+  remotes: 'lockfile',
   token: '${{ github.token }}',
   debug: 'false',
 } as const;
@@ -132,6 +136,8 @@ interface Inputs {
   impact: 'off' | 'auto' | 'on';
   expectedImpact?: ImpactLevel;
   baseRef: string;
+  /** `lockfile`: only the committed remote interfaces; `fetch`: also fetch the references it lacks, for this run. */
+  remotes: 'lockfile' | 'fetch';
   debug: boolean;
 }
 
@@ -227,6 +233,7 @@ function readInputs(): Inputs {
       ? { expectedImpact: oneOf('expected-impact', ['none', 'patch', 'minor', 'major']) as ImpactLevel }
       : {}),
     baseRef: input('base-ref'),
+    remotes: oneOf('remotes', ['lockfile', 'fetch']),
     debug: bool('debug'),
   };
 }
@@ -732,6 +739,35 @@ function inputPlugins(inputs: Inputs, { workspace, root }: Place, pluginsOff: st
   return extraPlugins;
 }
 
+/**
+ * With `remotes: fetch`, the interfaces of the remote references the lockfile lacks, fetched with `token` for this run.
+ * Not on events whose checkout may be untrusted while the token is privileged: the pull request would choose which
+ * repositories the token reads, and the findings would show what it read.
+ */
+async function remotesToFetch(
+  inputs: Inputs,
+  root: string,
+  logger: Logger,
+): Promise<AnalyzeOptions['fetchedRemotes']> {
+  if (inputs.remotes !== 'fetch') return undefined;
+  const event = process.env.GITHUB_EVENT_NAME ?? '';
+  if (UNTRUSTED_EVENTS.has(event)) {
+    core.warning(
+      `remotes: fetch does not run on ${event}; only the committed remote interfaces lockfile is used.`,
+    );
+    return undefined;
+  }
+  const token = core.getInput('token');
+  const fs = nodeFileSystem(root);
+  const r = await fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, {
+    ...(token && !token.startsWith('${{') ? { token } : {}),
+    ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
+  });
+  for (const f of r.failed) core.warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  logger.debug('fetched remote interfaces', { refs: Object.keys(r.remotes) });
+  return r.remotes;
+}
+
 /** Impact mode's baseline (in a group of its own), then the analysis with the plugins that may run. */
 async function analyzeRoot(
   inputs: Inputs,
@@ -751,9 +787,11 @@ async function analyzeRoot(
     if (inputs.plugins) await loadPlugins(root, loaded.config, registry, logger);
     if (extraPlugins.length)
       await loadPlugins(root, { ...loaded.config, plugins: extraPlugins }, registry, logger);
+    const fetchedRemotes = await remotesToFetch(inputs, root, logger);
     return analyze({
       root,
       config: loaded.config,
+      ...(fetchedRemotes ? { fetchedRemotes } : {}),
       ...(inputs.paths.length ? { paths: inputs.paths } : {}),
       ...(loaded.file ? { configFile: loaded.file } : {}),
       ...(loaded.text !== undefined ? { configText: loaded.text } : {}),

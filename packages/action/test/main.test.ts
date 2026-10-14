@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { analyze, writeContracts } from '@flowpact/lint';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse } from 'yaml';
 
 interface Annotation {
@@ -1252,5 +1252,70 @@ describe('review fixes', () => {
     const md = summaryWithinLimit(result, { maxFindings: 50 });
     expect(Buffer.byteLength(md)).toBeLessThan(SUMMARY_LIMIT);
     expect(md).toContain('more suppressed findings');
+  });
+});
+
+describe('remotes: fetch', () => {
+  const SHA = 'b'.repeat(40);
+  const hits: string[] = [];
+  let server: import('node:http').Server;
+  let api = '';
+
+  beforeAll(async () => {
+    const { createServer } = await import('node:http');
+    server = createServer((req, res) => {
+      hits.push(req.url ?? '');
+      const body =
+        req.url === '/repos/octo/setup/commits/v2'
+          ? SHA
+          : req.url === `/repos/octo/setup/contents/action.yml?ref=${SHA}`
+            ? 'name: s\ndescription: d\ninputs:\n  version: { description: v, required: true }\nruns:\n  using: composite\n  steps: []\n'
+            : undefined;
+      res.writeHead(body === undefined ? 404 : 200).end(body ?? '');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    api = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+  });
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+
+  function workspace(): string {
+    const root = join(temp, 'remotes');
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    writeFileSync(
+      join(root, '.github/workflows/ci.yml'),
+      'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+    );
+    return root;
+  }
+  const fp101 = () => state.annotations.filter((a) => a.message.includes('without required input "version"'));
+
+  it('fetches the interfaces the lockfile lacks with the token, for this run', async () => {
+    process.env.GITHUB_API_URL = api;
+    try {
+      hits.length = 0;
+      await action(workspace(), { remotes: 'fetch', token: 'tkn' });
+      expect(fp101()).toHaveLength(1);
+      expect(hits).toContain('/repos/octo/setup/commits/v2');
+    } finally {
+      delete process.env.GITHUB_API_URL;
+    }
+  });
+
+  it('does not fetch by default, nor on pull_request_target', async () => {
+    process.env.GITHUB_API_URL = api;
+    try {
+      hits.length = 0;
+      await action(workspace(), { token: 'tkn' });
+      expect(fp101()).toEqual([]);
+      process.env.GITHUB_EVENT_NAME = 'pull_request_target';
+      await action(workspace(), { remotes: 'fetch', token: 'tkn' });
+      expect(fp101()).toEqual([]);
+      expect(state.annotations.map((a) => a.message)).toContain(
+        'remotes: fetch does not run on pull_request_target; only the committed remote interfaces lockfile is used.',
+      );
+      expect(hits).toEqual([]);
+    } finally {
+      delete process.env.GITHUB_API_URL;
+    }
   });
 });

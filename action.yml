@@ -90,8 +90,12 @@ inputs:
     description: 'Baseline to compare with in impact mode: a commit, tag or branch (read from origin/<branch>, fetched when missing). Empty uses the pull request base, the commit before a push, or the last release tag for a release pull request.'
     required: false
     default: ''
+  remotes:
+    description: 'Remote workflows and actions: lockfile (check them against the committed .github/flowpact/remotes.lock.yaml only) or fetch (also fetch, with token, the interfaces of the references the lockfile lacks, for this run; not on pull_request_target or workflow_run).'
+    required: false
+    default: 'lockfile'
   token:
-    description: 'Token used only to fetch the baseline commit or release tags when the checkout is shallow (contents: read is enough).'
+    description: 'Token used only to fetch the baseline commit or release tags when the checkout is shallow, and with remotes: fetch to read the remote repositories through the GitHub API (contents: read is enough; private and internal repositories of the organization need a token that can read them).'
     required: false
     default: '${{ github.token }}'
   debug:
