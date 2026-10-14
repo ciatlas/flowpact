@@ -4,6 +4,13 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.19.1](https://github.com/ciatlas/flowpact/compare/v0.19.0...v0.19.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **lint:** fixes from smoke-testing 0.19.0 on real repositories ([#163](https://github.com/ciatlas/flowpact/issues/163)) ([68d789a](https://github.com/ciatlas/flowpact/commit/68d789a551bcbd8211ce072126ac34dd8a9cf45f))
+
 ## [0.19.0](https://github.com/ciatlas/flowpact/compare/v0.18.0...v0.19.0) (2026-10-14)
 
 
