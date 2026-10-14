@@ -8,7 +8,8 @@ flowpact ships a language server, so the analysis runs while you edit instead of
 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact); in VSCodium,
 Cursor, Windsurf and other editors built on VS Code, from
 [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact). The extension bundles the server. Other editors
-start it with [`flowpact lsp`](#other-editors). You get:
+start it with [`flowpact lsp`](#other-editors). Where neither registry is reachable, install the `.vsix` from a GitHub
+release: see [Install without a marketplace](#install-without-a-marketplace). You get:
 
 - **Diagnostics as you type** — the findings of `flowpact lint` for the whole repository, closed files included,
   updated on every edit (unsaved ones too). Editing a reusable workflow updates its callers' findings at once. When
@@ -25,6 +26,39 @@ The server treats every directory with a `.github` folder as a repository, so mo
 without configuration: the workspace folders are analyzed when the editor starts, and a repository nested inside one
 once you open one of its files. Your [config](/docs/configuration) (severities, overrides, ignores) applies as in the
 CLI.
+
+## Install without a marketplace
+
+Each [GitHub release](https://github.com/ciatlas/flowpact/releases) attaches the extension as
+`flowpact-vscode-X.Y.Z.vsix`, the same file published to the Marketplace and Open VSX, with its signed provenance. Where
+your network or policy blocks both registries:
+
+1. **Download** the `.vsix` from the release's **Assets**, or with the GitHub CLI:
+
+   ```sh
+   gh release download vX.Y.Z --repo ciatlas/flowpact --pattern 'flowpact-vscode-*.vsix*'
+   ```
+
+2. **Verify** that the release workflow built it (optional, recommended; see [Verify a release](/docs/security#verify-a-release)).
+   Online, or offline against the bundle attached next to it:
+
+   ```sh
+   gh attestation verify flowpact-vscode-X.Y.Z.vsix --repo ciatlas/flowpact
+   gh attestation verify flowpact-vscode-X.Y.Z.vsix --repo ciatlas/flowpact \
+     --bundle flowpact-vscode-X.Y.Z.vsix.sigstore.json
+   ```
+
+3. **Install** it. In the editor, open the Extensions view, then **⋯ → Install from VSIX…**, and pick the file. Or from
+   a terminal, with the editor's command line (`code`, `cursor`, `codium`, `windsurf`):
+
+   ```sh
+   code --install-extension flowpact-vscode-X.Y.Z.vsix
+   ```
+
+The extension needs VS Code 1.101 or later (or an editor built on it). It bundles the language server, so it needs no
+network access once installed. An extension installed from a `.vsix` does not update itself while the registries are
+unreachable: install the next release's `.vsix` the same way, over the old one. To install it for a whole team, check
+the `.vsix` into a shared location and run the same command, or use your organization's extension policy.
 
 ## Hover
 
