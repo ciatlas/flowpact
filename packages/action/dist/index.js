@@ -22557,7 +22557,8 @@ var REMOTES_LOCK_FILES = [
 ];
 var inputSchema = strictObject({
   type: optional(string2()),
-  required: boolean2(),
+  /** Written only when true. */
+  required: optional(boolean2()),
   default: optional(json()),
   options: optional(array(string2()))
 });
@@ -22566,7 +22567,7 @@ var entrySchema = strictObject({
   sha: string2().check(_regex(/^[0-9a-f]{40}$/)),
   kind: _enum(["workflow", "action"]),
   inputs: optional(record(string2(), inputSchema)),
-  secrets: optional(record(string2(), strictObject({ required: boolean2() }))),
+  secrets: optional(record(string2(), strictObject({ required: optional(boolean2()) }))),
   outputs: optional(array(string2())),
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
   using: optional(string2())
@@ -22653,30 +22654,40 @@ function remoteRefsOf(index, units = index.units()) {
 }
 var lockedInput = (i) => ({
   ...i.type ? { type: i.type } : {},
-  required: i.required,
+  ...i.required ? { required: true } : {},
   ...i.hasDefault && i.default !== void 0 ? { default: i.default } : {},
   ...i.options ? { options: i.options } : {}
 });
 var lockedInputs = (decls) => Object.fromEntries(Object.values(decls).map((i) => [i.name, lockedInput(i)]));
+var ifAny = (key, value) => Object.keys(value).length ? { [key]: value } : {};
 function lockEntryOf(unit, sha) {
   if (unit.kind === "workflow") {
     const call = unit.call;
     return {
       sha,
       kind: "workflow",
-      inputs: lockedInputs(call?.inputs ?? {}),
-      secrets: Object.fromEntries(
-        Object.values(call?.secrets ?? {}).map((s) => [s.name, { required: s.required }])
+      ...ifAny("inputs", lockedInputs(call?.inputs ?? {})),
+      ...ifAny(
+        "secrets",
+        Object.fromEntries(
+          Object.values(call?.secrets ?? {}).map((s) => [s.name, s.required ? { required: true } : {}])
+        )
       ),
-      outputs: Object.values(call?.outputs ?? {}).map((o) => o.name)
+      ...ifAny(
+        "outputs",
+        Object.values(call?.outputs ?? {}).map((o) => o.name)
+      )
     };
   }
   return {
     sha,
     kind: "action",
     ...unit.using ? { using: unit.using } : {},
-    inputs: lockedInputs(unit.inputs),
-    outputs: Object.values(unit.outputs).map((o) => o.name)
+    ...ifAny("inputs", lockedInputs(unit.inputs)),
+    ...ifAny(
+      "outputs",
+      Object.values(unit.outputs).map((o) => o.name)
+    )
   };
 }
 
@@ -26740,18 +26751,52 @@ var FetchError = class extends Error {
   unreadable;
 };
 async function get2(url2, accept, opts) {
-  const res = await (opts.fetch ?? fetch)(url2, {
-    headers: {
-      accept,
-      "user-agent": "flowpact",
-      "x-github-api-version": "2022-11-28",
-      ...opts.token ? { authorization: `Bearer ${opts.token}` } : {}
-    },
-    signal: AbortSignal.timeout(3e4)
-  });
+  let res;
+  try {
+    res = await (opts.fetch ?? fetch)(url2, {
+      headers: {
+        accept,
+        "user-agent": "flowpact",
+        "x-github-api-version": "2022-11-28",
+        ...opts.token ? { authorization: `Bearer ${opts.token}` } : {}
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS)
+    });
+  } catch (e) {
+    throw networkError(url2, e);
+  }
   if (res.status === 404 || res.status === 422) return void 0;
-  if (!res.ok) throw new FetchError(`${res.status} ${res.statusText || "error"} from the GitHub API`);
+  if (!res.ok) throw httpError(res, opts);
   return bodyOf(res);
+}
+var TIMEOUT_MS = 3e4;
+function networkError(url2, e) {
+  const host = new URL(url2).origin;
+  if (e.name === "TimeoutError")
+    return new FetchError(
+      `no answer from ${host} within ${TIMEOUT_MS / 1e3} s: check the network, or try again`
+    );
+  const cause = e.cause;
+  const why = cause?.code ?? cause?.message ?? e.message;
+  return new FetchError(
+    `could not reach ${host} (${why}): check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1`
+  );
+}
+function httpError(res, opts) {
+  const status = `${res.status}${res.statusText ? ` ${res.statusText}` : ""}`;
+  if (res.status === 401)
+    return new FetchError(
+      `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\``
+    );
+  if ((res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0")
+    return new FetchError(
+      `the GitHub API rate limit is used up (${status})${opts.token ? "; try again later" : ": without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`"}`
+    );
+  if (res.status === 403)
+    return new FetchError(
+      `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`
+    );
+  return new FetchError(`${status} from the GitHub API`);
 }
 async function bodyOf(res) {
   if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) throw tooLarge();
@@ -26808,6 +26853,18 @@ async function tryFetch(r, opts, out) {
     return void 0;
   }
 }
+async function fetchCounted(r, opts, out, count) {
+  const entry = await tryFetch(r, opts, out);
+  count.done++;
+  if (opts.onProgress) opts.onProgress({ ...count, ref: r.raw, ...outcomeOf(r.raw, entry, out) });
+  return entry;
+}
+function outcomeOf(ref, entry, out) {
+  if (entry) return { outcome: "fetched", detail: entry.sha };
+  const unreadable = out.unreadable.find((p) => p.ref === ref);
+  if (unreadable) return { outcome: "unreadable", detail: unreadable.error };
+  return { outcome: "failed", detail: out.failed.find((p) => p.ref === ref)?.error ?? "" };
+}
 var byRef = (a, b) => a.ref < b.ref ? -1 : 1;
 async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
   const project = loadProject({
@@ -26819,8 +26876,9 @@ async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
   const missing = remoteRefsOf(new ProjectIndex(project)).filter((r) => !locked.has(remoteKey(r.raw)));
   const out = { remotes: {}, failed: [], unreadable: [] };
+  const count = { done: 0, total: missing.length };
   await eachLimited(missing, opts.concurrency ?? 8, async (r) => {
-    const entry = await tryFetch(r, opts, out);
+    const entry = await fetchCounted(r, opts, out, count);
     if (entry) out.remotes[r.raw] = entry;
   });
   out.failed.sort(byRef);
@@ -28438,7 +28496,10 @@ async function remotesToFetch(inputs, root, logger) {
   const fs3 = nodeFileSystem(root);
   const r = await fetchMissingRemotes(root, fs3, readRemotesLock(fs3).lock, {
     ...token && !token.startsWith("${{") ? { token } : {},
-    ...process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}
+    ...process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {},
+    onProgress: (p) => logger.debug(
+      `remote interface ${p.done}/${p.total}: ${p.ref} ${p.outcome === "fetched" ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`}`
+    )
   });
   for (const f of [...r.failed, ...r.unreadable])
     warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
