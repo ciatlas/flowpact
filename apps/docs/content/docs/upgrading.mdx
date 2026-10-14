@@ -32,6 +32,88 @@ with `--fetch-remotes` or the action's `remotes: fetch`, those it fetches for th
 an override on the symbol (`octo/ship/.github/workflows/ship.yml@v1#secrets.NPM_TOKEN`). FP205 no longer reports a
 read where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`).
 
+[FP612](/docs/rules/fp612) also reports a lockfile entry that records another commit than the full commit SHA its
+reference pins (`octo/setup@<sha>`). `remotes update` never writes one, so only an edited lockfile has it; flowpact no
+longer checks calls against such an entry. Run `flowpact remotes update` to correct it.
+
+### Sources cache
+
+`flowpact remotes update` now keeps the workflow files and `action.yml`s it reads in a per-user
+[sources cache](/docs/remote-interfaces#sources-for-the-editor), for go to definition in the editor, and prunes it to
+the 3 most recently used commits of each repository. Nothing to do: it keeps nothing in CI unless you ask
+(`--cache-dir`), and `--no-cache` turns it off. `remotes update` also no longer loads the plugins your config lists: it
+runs no rule.
+
+## 0.19 → 0.20
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.20`.
+- **CLI:** `npx flowpact@0.20`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Remote interfaces lockfile
+
+0.20 writes a leaner lockfile: an input or secret is marked `required: true` only when it is, and `required: false`
+is left out. An entry read on github.com through the new opt-in fallback records `host: github.com`. flowpact 0.19
+refuses such a lockfile ([FP611](/docs/rules/fp611)) and then checks no remote call, so **update every flowpact that
+reads the lockfile (the action's pin, the CLI, the editor extension) before running `remotes update` with 0.20**.
+
+`flowpact remotes update` takes paths, like the other commands, to fetch only what given workflows and actions use;
+a path that names nothing is an error (exit 2). It shows its progress and the source of its token, and says why a
+reference could not be fetched.
+
+### GitHub Enterprise Server and GHE.com
+
+`--github-com` (the action's `remotes-github-com` and `github-com-token` inputs) also looks on github.com for the
+references the enterprise server lacks, as the runner does through GitHub Connect. It is opt-in, because it sends
+those references' names to github.com; see
+[Remote interfaces](/docs/remote-interfaces#github-enterprise-server-and-ghecom).
+
+## 0.18 → 0.19
+
+0.19 checks calls into other repositories, once you record their interfaces, and grades more kinds of change in
+impact mode.
+
+### Move to the new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.19`.
+- **CLI:** `npx flowpact@0.19`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+### Remote interfaces
+
+`flowpact remotes update` writes `.github/flowpact/remotes.lock.yaml`, the interfaces of the reusable workflows and
+actions you call from other repositories. With it committed, those calls are checked like local ones
+(FP101–FP103, FP201, FP202, FP301), and [FP603](/docs/rules/fp603) no longer reports a remote workflow the lockfile
+has. Without a lockfile nothing changes. Two new rules apply only when there is one:
+[FP611](/docs/rules/fp611) (error) for a lockfile that cannot be used, and [FP612](/docs/rules/fp612) (warning) for
+one that lacks a reference the repository uses or has one it no longer uses, as after a Renovate or Dependabot
+update. The action reads the lockfile as committed; `remotes: fetch` fetches what it lacks for the run. See
+[Remote interfaces](/docs/remote-interfaces).
+
+0.19.1 records references it cannot read under the lockfile's `unreadable:`, which 0.19.0 refuses (FP611). Use
+0.19.1 or later wherever the lockfile is read.
+
+### Impact mode grades more
+
+Impact mode now also grades what a published reusable workflow or action does in its callers' runs, so a pull request
+can require more than before:
+
+| Change | Required |
+| --- | --- |
+| An output is now set only when an `if:` holds | major, uncertain ([FP814](/docs/rules/fp814)) |
+| A job needs a runner label or group callers may not have | major (uncertain when chosen at run time) |
+| A job gains, changes or loses its `environment:` | minor |
+| An artifact callers download is no longer uploaded, or renamed | major |
+| Jobs or steps changed, and nothing else is graded | patch |
+
+A patch never fails a pull request, so most repositories see the change only in the verdict: a `chore:` pull request
+that changes steps now reports "requires patch" ([FP813](/docs/rules/fp813)) instead of "none". A pull request whose
+title declares less than a minor or major it now requires fails with [FP810](/docs/rules/fp810); declare the release
+it needs, or accept the finding with an [override](/docs/configuration#overrides). See
+[Impact mode](/docs/impact-mode).
+
 ## 0.17 → 0.18
 
 0.18 writes new contracts as `.contract.yaml` and reads `.contract.yaml` and `.contract.yml` alike. Existing contracts

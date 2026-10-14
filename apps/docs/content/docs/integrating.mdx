@@ -80,8 +80,10 @@ Repositories then use `uses: acme/flowpact@<commit-sha>` with every input of the
 and its `plugin` replaces your list rather than adding to it (list `rules/acme.mjs` with the workflow's own plugins).
 To enforce the policy, require the workflow centrally ([below](#run-the-cli-in-a-step)). To update, copy the next
 archive the same way and keep the two defaults. The action
-reaches the network only in [impact mode](/docs/impact-mode) (a `git fetch` of the base commit) and to upload
-regenerated contracts, which GitHub Enterprise Server does not support (set `upload-contracts: false` there).
+reaches the network only in [impact mode](/docs/impact-mode) (a `git fetch` of the base commit), with `remotes: fetch`
+(GitHub API reads of the [remote](/docs/remote-interfaces) workflows and actions the lockfile lacks), and to upload
+regenerated contracts, which GitHub Enterprise Server does not support (set `upload-contracts: false` there); see
+[Security](/docs/security#network-and-telemetry).
 
 ## Run the CLI in a step
 

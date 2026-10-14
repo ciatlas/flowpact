@@ -3,13 +3,33 @@ title: How it works
 description: From YAML to a data-flow graph — how flowpact finds problems that span workflows and matrix combinations.
 ---
 
-flowpact is a static analyzer. Nothing is executed and no GitHub API is called; everything comes from the files in your
-repository.
+flowpact is a static analyzer. Nothing is executed and no GitHub API is called during analysis; everything comes from the
+files in your repository, including the [remote interfaces lockfile](/docs/remote-interfaces) for calls into other
+repositories. Only `flowpact remotes update`, `--fetch-remotes` and the action's `remotes: fetch` read the GitHub API,
+when you ask them to.
 
-```text
- YAML files ──▶ IR ──▶ expressions ──▶ graph ──▶ matrix expansion ──▶ contracts ──▶ rules ──▶ overrides ──▶ reporters
-   (yaml +    (jobs,   (@actions/    (symbols,    (exact include/    (flowpact check)  (53 rules)  (reason,  (terminal, JSON,
- positions)   steps)  expressions)    edges)      exclude rules)                               expiry)  Markdown, SARIF)
+```mermaid
+flowchart TD
+  accTitle: From YAML to findings
+  Y["Workflows and local actions (YAML)"]
+  IR["IR: jobs, steps, interfaces, positions"]
+  X["Expressions, parsed with @actions/expressions"]
+  G["Data-flow graph: symbols and edges"]
+  RL[("remotes.lock.yaml")]
+  MX["Matrix expansion: every include and exclude"]
+  C[("Contracts, in flowpact check")]
+  RU["53 rules"]
+  O["Overrides: reason, expiry"]
+  REP["Terminal · JSON · Markdown · SARIF · editor · annotations"]
+  Y --> IR
+  IR --> X
+  X --> G
+  RL -.-> G
+  G --> MX
+  MX --> RU
+  C -.-> RU
+  RU --> O
+  O --> REP
 ```
 
 <Steps>
@@ -118,7 +138,9 @@ counts and `--fail-on`.
 
 - **Guess runtime values.** Anything that depends on events, previous job results or scripts is *unknown*, so flowpact stays
   quiet rather than produce false positives.
-- **Analyze other repositories.** Calls to reusable workflows in other repositories are reported as unverified
-  (`FP603`).
+- **Analyze other repositories' jobs.** A call into another repository is checked against the interface the
+  [remote interfaces lockfile](/docs/remote-interfaces) records for it (the inputs, secrets and outputs), not against
+  what its jobs do. Without an entry, a call to a reusable workflow in another repository is reported as unverified
+  ([`FP603`](/docs/rules/fp603)).
 - **Replace actionlint.** actionlint checks single files in depth (shell scripts, action inputs of marketplace actions,
   runner labels). Run both — see [Comparison](/docs/comparison).

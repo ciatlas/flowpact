@@ -30,7 +30,7 @@ What each tool reports, from small test repositories and the tools' own document
 | A matrix key that no combination defines | ✓ | ✓ | ✓ [`FP404`](/docs/rules/fp404) |
 | A `${{ }}` expression that does not parse, or calls a function with the wrong number of arguments | ✓ | ✓ | ✓ [`FP502`](/docs/rules/fp502) |
 | A context used where GitHub does not allow it, such as `secrets` in a job's `if:` | ✓ | ✓ | ✓ [`FP505`](/docs/rules/fp505) |
-| A call to an action or reusable workflow in another repository passes an unknown input | ✓ for popular actions such as `actions/checkout`; not for reusable workflows | not compared | — (a call to a reusable workflow in another repository is reported as unverified, [`FP603`](/docs/rules/fp603)) |
+| A call to an action or reusable workflow in another repository passes an unknown input | ✓ for popular actions such as `actions/checkout`; not for reusable workflows | not compared | ✓ against the [remote interfaces lockfile](/docs/remote-interfaces) ([`FP102`](/docs/rules/fp102), with [`FP101`](/docs/rules/fp101), [`FP103`](/docs/rules/fp103), [`FP201`](/docs/rules/fp201), [`FP202`](/docs/rules/fp202)); without an entry, a remote reusable workflow call is reported as unverified ([`FP603`](/docs/rules/fp603)) |
 | A property that a built-in context does not have, such as `github.reff` or `runner.oss` | ✓ | ✓ as a warning | — |
 | An expression whose type does not fit, such as `${{ github.ref_name }}` (a string) in `timeout-minutes`, or an object in `${{ }}` | ✓ | — (only a literal such as `${{ 'abc' }}`) | — (only a literal, [`FP503`](/docs/rules/fp503)) |
 | A cron schedule that is invalid (hour 25) or runs more often than every 5 minutes | ✓ | ✓ | — |

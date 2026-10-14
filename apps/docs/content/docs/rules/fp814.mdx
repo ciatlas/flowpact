@@ -15,7 +15,7 @@ For example a check name built from the triggering event, `needs` outputs or `va
 
 ## How to fix
 
-Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `$\{\{ steps.m.outputs.v || 'none' \}\}`), or declare the change as major.
+Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.
 
 ## Configure
 
