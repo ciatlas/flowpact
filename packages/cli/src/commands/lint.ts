@@ -73,6 +73,12 @@ export const reportArgs = {
     description:
       'Fetch the interfaces of remote workflows and actions the remote interfaces lockfile lacks, for this run only. Token: GH_TOKEN, GITHUB_TOKEN or `gh auth token`; private repositories need read access to their contents',
   },
+  'github-com': {
+    type: 'boolean',
+    description:
+      'With --fetch-remotes: ' +
+      'On GitHub Enterprise Server or GHE.com (GITHUB_API_URL), also look on github.com for the remote references the enterprise server lacks, as GitHub Connect does; token: GITHUB_COM_TOKEN or none, never the enterprise token. Sends their names to github.com',
+  },
   impact: {
     type: 'boolean',
     description:
@@ -121,6 +127,7 @@ type ReportFlags = {
   patch?: string | undefined;
   impact?: boolean | undefined;
   'fetch-remotes'?: boolean | undefined;
+  'github-com'?: boolean | undefined;
   base?: string | undefined;
   expect?: string | undefined;
   title?: string | undefined;
@@ -185,6 +192,7 @@ function analysisOptions(args: ReportArgs, paths: string[]): AnalysisOptions {
     schema: args.schema !== false,
     impact: Boolean(args.impact),
     ...(args['fetch-remotes'] ? { fetchRemotes: true } : {}),
+    ...(args['github-com'] ? { githubCom: true } : {}),
     ...(args.base !== undefined ? { base: args.base } : {}),
     ...(args.expect ? { expect: args.expect as ImpactLevel } : {}),
     ...(args.title !== undefined ? { title: args.title } : {}),

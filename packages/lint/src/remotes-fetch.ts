@@ -34,6 +34,12 @@ export interface FetchRemotesOptions {
   concurrency?: number;
   /** Called as each reference is done, for a progress display or a log line. */
   onProgress?: (p: FetchProgress) => void;
+  /**
+   * Where to look for a reference the API does not have, as GitHub Enterprise Server's runner does through GitHub
+   * Connect: github.com's API, with its own token (never `token`). Opt-in: it sends the names of the references the
+   * enterprise server lacks to github.com.
+   */
+  fallback?: { apiUrl: string; token?: string };
 }
 
 /** One reference done: how many of how many, and what came of it (its commit, or why it could not be fetched). */
@@ -177,6 +183,32 @@ export async function fetchRemoteEntry(r: RemoteRef, opts: FetchRemotesOptions =
   throw new FetchError(`no action.yml in ${r.path || 'the repository root'} at ${sha.slice(0, 7)}`, true);
 }
 
+/**
+ * A reference's entry from the API, or, when it does not exist there or cannot be read and a fallback is set, from
+ * the fallback (github.com through GitHub Connect), marked with that host. The fallback's own failure is reported when
+ * the reference is on neither.
+ */
+async function fetchWithFallback(r: RemoteRef, opts: FetchRemotesOptions): Promise<RemoteEntry> {
+  try {
+    return await fetchRemoteEntry(r, opts);
+  } catch (e) {
+    if (!opts.fallback || !(e instanceof FetchError && e.unreadable)) throw e;
+    const { apiUrl, token } = opts.fallback;
+    const entry = await fetchRemoteEntry(r, {
+      ...opts,
+      apiUrl,
+      ...(token ? { token } : { token: undefined }),
+    });
+    return { ...entry, host: hostOf(apiUrl) };
+  }
+}
+
+/** The host a GitHub API serves: `github.com` for `api.github.com`, the server for `https://<host>/api/v3`. */
+export function hostOf(apiUrl: string): string {
+  const { hostname } = new URL(apiUrl);
+  return hostname.startsWith('api.') ? hostname.slice(4) : hostname;
+}
+
 /** Runs `work` on each item, `limit` at a time. */
 async function eachLimited<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
@@ -212,7 +244,7 @@ async function tryFetch(
   out: Problems,
 ): Promise<RemoteEntry | undefined> {
   try {
-    return await fetchRemoteEntry(r, opts);
+    return await fetchWithFallback(r, opts);
   } catch (e) {
     if (!(e instanceof FetchError) && !(e instanceof TypeError) && (e as Error).name !== 'TimeoutError')
       throw e;

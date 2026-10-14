@@ -27,7 +27,7 @@ import {
   renderSarif,
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
-import { apiUrlFromEnv, describeToken, logProgress, timed, tokenFor } from './remotes';
+import { fetchOptions, timed } from './remotes';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
 import { renderOptions, type TextOptions } from './text';
@@ -69,6 +69,11 @@ export interface ReportOptions extends ImpactFlags {
    * nothing is written. Default: false.
    */
   fetchRemotes?: boolean;
+  /**
+   * With `fetchRemotes` on a GitHub Enterprise Server or GHE.com, also look on github.com for the references it lacks,
+   * as GitHub Connect does (`--github-com`). Default: false.
+   */
+  githubCom?: boolean;
 }
 
 export interface PrettyOptions extends TextOptions {
@@ -225,19 +230,14 @@ function commandOptions(
 }
 
 /** The remote interfaces the lockfile lacks, fetched for this run; a reference that cannot be fetched is a warning. */
-async function fetchRemotesFor(session: Session): Promise<AnalyzeOptions['fetchedRemotes']> {
+async function fetchRemotesFor(
+  session: Session,
+  githubCom: boolean | undefined,
+): Promise<AnalyzeOptions['fetchedRemotes']> {
   const { root, logger } = session;
   const fs = nodeFileSystem(root);
-  const apiUrl = apiUrlFromEnv();
-  const { token, source } = tokenFor(apiUrl, undefined);
-  logger.debug(`remote interfaces: token from ${describeToken(source)}`);
-  const r = await timed(logger, () =>
-    fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, {
-      apiUrl,
-      ...(token ? { token } : {}),
-      onProgress: logProgress(logger),
-    }),
-  );
+  const { fetch } = fetchOptions(logger, { ...(githubCom ? { githubCom } : {}) });
+  const r = await timed(logger, () => fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, fetch));
   for (const f of [...r.failed, ...r.unreadable])
     logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
   return r.remotes;
@@ -292,7 +292,9 @@ export async function runReport(
     root,
     hooks.elsewhere,
   );
-  const fetched = bool('fetchRemotes', options.fetchRemotes) ? await fetchRemotesFor(session) : undefined;
+  const fetched = bool('fetchRemotes', options.fetchRemotes)
+    ? await fetchRemotesFor(session, bool('githubCom', options.githubCom))
+    : undefined;
   const result = await analyzeSession(
     session,
     commandOptions(command, options, paths, only, impact, fetched),

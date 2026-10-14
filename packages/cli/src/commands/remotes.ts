@@ -31,6 +31,11 @@ export const remotesCommand = defineCommand({
         'Workflow/action files or directories whose remote references to fetch, with those of what they call (default: all); other entries are kept',
     },
     ...commonArgs,
+    'github-com': {
+      type: 'boolean',
+      description:
+        'On GitHub Enterprise Server or GHE.com (GITHUB_API_URL), also look on github.com for the remote references the enterprise server lacks, as GitHub Connect does; token: GITHUB_COM_TOKEN or none, never the enterprise token. Sends their names to github.com',
+    },
     'dry-run': {
       type: 'boolean',
       description: 'Show what would change without writing the lockfile',
@@ -47,6 +52,7 @@ export const remotesCommand = defineCommand({
       const r = await runRemotesUpdate(ctx.session, {
         paths,
         dryRun: Boolean(args['dry-run']),
+        githubCom: Boolean(args['github-com']),
         ...(counter ? { onProgress: counter.update } : {}),
       }).finally(() => counter?.clear());
       ctx.stdout(remotesText(r, ctx.render));

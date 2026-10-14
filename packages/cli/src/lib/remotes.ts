@@ -6,6 +6,7 @@ import { type Logger, nodeFileSystem } from '@ciatlas/core';
 import {
   assertSafeWritePath,
   type FetchProgress,
+  hostOf,
   REMOTES_LOCK_FILES,
   type RemotesUpdate,
   readRemotesLock,
@@ -28,12 +29,17 @@ export interface RemotesUpdateOptions {
   token?: string;
   /** The GitHub API; by default `GITHUB_API_URL` or `https://api.github.com`. */
   apiUrl?: string;
+  /**
+   * On a GitHub Enterprise Server or GHE.com, also look for the references it lacks on github.com, as GitHub Connect
+   * does (`--github-com`). Opt-in: it sends their names to github.com.
+   */
+  githubCom?: boolean;
   /** Called as each reference is fetched (or not), after its debug log line; for a progress display. */
   onProgress?: (p: FetchProgress) => void;
 }
 
 /** A debug log line per reference as it is done, then `then`, if given. */
-export function logProgress(logger: Logger, then?: (p: FetchProgress) => void): (p: FetchProgress) => void {
+function logProgress(logger: Logger, then?: (p: FetchProgress) => void): (p: FetchProgress) => void {
   return (p) => {
     const what = p.outcome === 'fetched' ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`;
     logger.debug(`remote interface ${p.done}/${p.total}: ${p.ref} ${what}`);
@@ -52,21 +58,40 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
 }
 
 /** The GitHub API: `GITHUB_API_URL` (GitHub Enterprise Server), else github.com's. */
-export const apiUrlFromEnv = () => process.env.GITHUB_API_URL || 'https://api.github.com';
+const apiUrlFromEnv = () => process.env.GITHUB_API_URL || 'https://api.github.com';
 
 /** The GitHub CLI's token, when it is installed and signed in; never printed. */
-function ghToken(): string | undefined {
-  const r = spawnSync('gh', ['auth', 'token'], { encoding: 'utf8', timeout: 10_000 });
+function ghToken(host: string): string | undefined {
+  const r = spawnSync('gh', ['auth', 'token', '--hostname', host], { encoding: 'utf8', timeout: 10_000 });
   return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : undefined;
 }
 
-/** The token to read remote repositories with: the option, `GH_TOKEN`, `GITHUB_TOKEN`, or github.com's `gh` token. */
-export function tokenFor(apiUrl: string, given: string | undefined): { token?: string; source?: string } {
+/**
+ * The token to read remote repositories with: the option, `GH_TOKEN`, `GITHUB_TOKEN`, or the GitHub CLI's for the
+ * API's host (`gh auth token --hostname`, so a GitHub Enterprise Server sign-in works too).
+ */
+function tokenFor(apiUrl: string, given: string | undefined): { token?: string; source?: string } {
   if (given) return { token: given, source: 'the token option' };
   for (const name of ['GH_TOKEN', 'GITHUB_TOKEN'] as const)
     if (process.env[name]) return { token: process.env[name], source: name };
-  const gh = apiUrl === 'https://api.github.com' ? ghToken() : undefined;
-  return gh ? { token: gh, source: '`gh auth token`' } : {};
+  const host = hostOf(apiUrl);
+  const gh = ghToken(host);
+  return gh ? { token: gh, source: `\`gh auth token --hostname ${host}\`` } : {};
+}
+
+const GITHUB_COM_API = 'https://api.github.com';
+
+/**
+ * With `githubCom`, on a GitHub Enterprise Server or GHE.com: look for the references the API lacks on github.com, as
+ * the runner does through GitHub Connect, with `GITHUB_COM_TOKEN` or none (never the enterprise token).
+ */
+function githubComFallback(apiUrl: string, githubCom: boolean | undefined, logger: Logger) {
+  if (!githubCom || hostOf(apiUrl) === 'github.com') return {};
+  const token = process.env.GITHUB_COM_TOKEN;
+  logger.debug(
+    `remote interfaces: also looking on github.com, with ${token ? 'GITHUB_COM_TOKEN' : 'no token'}`,
+  );
+  return { fallback: { apiUrl: GITHUB_COM_API, ...(token ? { token } : {}) } };
 }
 
 /** Where the token for remote interfaces comes from, for a log line; the token itself is never shown. */
@@ -82,13 +107,21 @@ export async function timed<T>(logger: Logger, run: () => Promise<T>): Promise<T
 }
 
 /** How to fetch: the API, the token (and, for the output, where it came from), and the progress to report. */
-function fetchOptions(logger: Logger, options: RemotesUpdateOptions) {
+export function fetchOptions(
+  logger: Logger,
+  options: Pick<RemotesUpdateOptions, 'apiUrl' | 'token' | 'githubCom' | 'onProgress'>,
+) {
   const apiUrl = options.apiUrl ?? apiUrlFromEnv();
   const { token, source } = tokenFor(apiUrl, options.token);
-  logger.debug(`remote interfaces: token from ${describeToken(source)}`);
+  logger.debug(`remote interfaces: ${apiUrl}, token from ${describeToken(source)}`);
   return {
     source,
-    fetch: { apiUrl, ...(token ? { token } : {}), onProgress: logProgress(logger, options.onProgress) },
+    fetch: {
+      apiUrl,
+      ...(token ? { token } : {}),
+      ...githubComFallback(apiUrl, options.githubCom, logger),
+      onProgress: logProgress(logger, options.onProgress),
+    },
   };
 }
 

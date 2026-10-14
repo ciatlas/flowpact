@@ -1,6 +1,12 @@
 /** Fetching remote interfaces (#152): `updateRemotesLock` against a fake GitHub API. */
 
-import { parseRemoteRef, type RemotesLock, serializeRemotesLock, updateRemotesLock } from '@flowpact/lint';
+import {
+  hostOf,
+  parseRemoteRef,
+  type RemotesLock,
+  serializeRemotesLock,
+  updateRemotesLock,
+} from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { lint, WF, yaml } from './helpers';
 
@@ -329,5 +335,74 @@ describe('an unchanged entry read back from the lockfile', () => {
       fetch: api.fetch,
     });
     expect(again).toMatchObject({ added: [], changed: [], removed: [] });
+  });
+});
+
+describe('GitHub Enterprise Server and github.com through GitHub Connect', () => {
+  const GHES = 'https://ghes.example/api/v3';
+  const index = () =>
+    lint({
+      [`${WF}/ci.yml`]:
+        'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: corp/internal@v1\n      - uses: octo/setup@v2\n',
+    }).index;
+  const ROUTES: Record<string, string> = {
+    'ghes.example/repos/corp/internal/commits/v1': SHA('c'),
+    'ghes.example/repos/corp/internal/contents/action.yml': SETUP,
+    'api.github.com/repos/octo/setup/commits/v2': SHA('b'),
+    'api.github.com/repos/octo/setup/contents/action.yml': SETUP,
+  };
+  /** The enterprise server has corp/internal; github.com has octo/setup. Records every request with its host and token. */
+  function twoHosts() {
+    const seen: { host: string; auth: string | null }[] = [];
+    const fetch = (async (input: string | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      seen.push({ host: url.host, auth: new Headers(init?.headers).get('authorization') });
+      const path = decodeURIComponent(url.pathname).replace(/^\/api\/v3/, '');
+      const body = ROUTES[`${url.host}${path}`];
+      return body === undefined ? new Response('', { status: 404 }) : new Response(body);
+    }) as typeof globalThis.fetch;
+    return { fetch, seen };
+  }
+
+  it('asks only the enterprise server unless told to look on github.com', async () => {
+    const api = twoHosts();
+    const u = await updateRemotesLock(index(), undefined, { fetch: api.fetch, apiUrl: GHES, token: 'ghes' });
+    expect(Object.keys(u.lock.remotes)).toEqual(['corp/internal@v1']);
+    expect(Object.keys(u.lock.unreadable ?? {})).toEqual(['octo/setup@v2']);
+    expect(api.seen.every((r) => r.host === 'ghes.example')).toBe(true);
+  });
+
+  it('looks on github.com for what the enterprise server lacks, with its own token, never the enterprise one', async () => {
+    const api = twoHosts();
+    const u = await updateRemotesLock(index(), undefined, {
+      fetch: api.fetch,
+      apiUrl: GHES,
+      token: 'ghes',
+      fallback: { apiUrl: 'https://api.github.com', token: 'dotcom' },
+    });
+    expect(u.lock.remotes['corp/internal@v1']).not.toHaveProperty('host');
+    expect(u.lock.remotes['octo/setup@v2']).toMatchObject({ sha: SHA('b'), host: 'github.com' });
+    expect(u.lock.unreadable).toBeUndefined();
+    expect(api.seen.filter((r) => r.host === 'api.github.com').every((r) => r.auth === 'Bearer dotcom')).toBe(
+      true,
+    );
+    expect(api.seen.filter((r) => r.host === 'ghes.example').every((r) => r.auth === 'Bearer ghes')).toBe(
+      true,
+    );
+    // Without a github.com token, it asks github.com without one.
+    const anon = twoHosts();
+    await updateRemotesLock(index(), undefined, {
+      fetch: anon.fetch,
+      apiUrl: GHES,
+      token: 'ghes',
+      fallback: { apiUrl: 'https://api.github.com' },
+    });
+    expect(anon.seen.filter((r) => r.host === 'api.github.com').every((r) => r.auth === null)).toBe(true);
+  });
+
+  it('names the host an API serves', () => {
+    expect(hostOf('https://api.github.com')).toBe('github.com');
+    expect(hostOf('https://ghes.example/api/v3')).toBe('ghes.example');
+    expect(hostOf('https://api.acme.ghe.com')).toBe('acme.ghe.com');
   });
 });

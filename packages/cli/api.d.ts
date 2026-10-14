@@ -93,6 +93,12 @@ export interface LintOptions extends CommonOptions, PluginOptions, ImpactModeOpt
    * (`--fetch-remotes`), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. Default: false.
    */
   fetchRemotes?: boolean;
+  /**
+   * With `fetchRemotes` on GitHub Enterprise Server or GHE.com (`GITHUB_API_URL`), also look on github.com for the
+   * references the enterprise server lacks, as GitHub Connect does, with `GITHUB_COM_TOKEN` or none (`--github-com`).
+   * It sends their names to github.com. Default: false.
+   */
+  githubCom?: boolean;
 }
 
 export interface CheckOptions extends LintOptions {}

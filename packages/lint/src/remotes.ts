@@ -44,6 +44,8 @@ const entrySchema = z.strictObject({
   outputs: z.optional(z.array(z.string())),
   /** An action's `runs.using`: only a composite action's outputs are all declared. */
   using: z.optional(z.string()),
+  /** Where it was read when not from the API the run used: `github.com`, through GitHub Connect. */
+  host: z.optional(z.string()),
 });
 
 const remotesLockSchema = z.strictObject({
