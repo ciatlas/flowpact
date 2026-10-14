@@ -1,0 +1,47 @@
+---
+title: Remote interfaces
+description: Check what your workflows pass to, and read from, reusable workflows and actions in other repositories, from a lockfile of their interfaces.
+---
+
+flowpact analyzes one repository. A call to a reusable workflow or an action in another repository
+(`uses: octo/ship/.github/workflows/deploy.yml@v1`, `uses: octo/setup@v2`) is taken on trust: nothing checks that the
+inputs you pass exist, have the right type, or include the required ones ([`FP603`](/docs/rules/fp603) says so for
+remote workflows).
+
+A **remote interfaces lockfile** records the interface of each one: its inputs, secrets and outputs, at the commit a
+reference resolved to. With it, flowpact checks remote calls as it checks local ones:
+
+- [`FP101`](/docs/rules/fp101): a required input is not passed;
+- [`FP102`](/docs/rules/fp102): an input that the workflow or action does not declare is passed;
+- [`FP103`](/docs/rules/fp103): a literal of the wrong type is passed to a `boolean` or `number` input.
+
+Findings point at your call; the message names the remote reference, whose file is in another repository. Nothing is
+fetched during a run: flowpact reads only the committed lockfile, so results do not depend on the network.
+
+## The lockfile
+
+`.github/flowpact/remotes.lock.yaml` (or `remotes.lock.yml`), one entry per `uses:` reference:
+
+```yaml title=".github/flowpact/remotes.lock.yaml"
+version: 1
+remotes:
+  octo/ship/.github/workflows/deploy.yml@v1:
+    sha: 4e6c5f0b9a1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f   # the commit v1 resolved to
+    kind: workflow
+    inputs:
+      env: { type: string, required: true }
+      dry-run: { type: boolean, required: false, default: false }
+    secrets:
+      token: { required: true }
+    outputs: [url]
+  octo/setup@v2:
+    sha: 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432
+    kind: action
+    inputs:
+      version: { required: true }
+    outputs: [path]
+```
+
+The owner and repository of a reference match in any letter case, the path and the ref as written. A reference the
+lockfile does not have stays unchecked. A lockfile that does not parse or does not match this shape is reported by
+[`FP611`](/docs/rules/fp611), and then no remote call is checked.

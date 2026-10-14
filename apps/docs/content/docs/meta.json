@@ -13,6 +13,7 @@
     "api",
     "configuration",
     "contracts",
+    "remote-interfaces",
     "impact-mode",
     "---Reference---",
     "rules",

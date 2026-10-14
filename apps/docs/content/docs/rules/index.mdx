@@ -67,7 +67,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | --- | --- | --- | --- |
 | [`FP601`](/docs/rules/fp601) | `call-cycle` | 🔴 error | Reusable workflows call each other in a cycle. |
 | [`FP602`](/docs/rules/fp602) | `nesting-depth` | 🔴 error | A chain of reusable workflow calls is deeper than the configured limit (`limits.nestingDepth`). |
-| [`FP603`](/docs/rules/fp603) | `remote-unverified` | 🔵 info | A job calls a reusable workflow in another repository; its interface is not verified. |
+| [`FP603`](/docs/rules/fp603) | `remote-unverified` | 🔵 info | A job calls a reusable workflow in another repository whose interface is not in the remote interfaces lockfile. |
 | [`FP604`](/docs/rules/fp604) | `needs-without-data` | ⚪ off (opt-in) | A job lists another job under `needs:` but never reads its outputs or result (opt-in). |
 | [`FP605`](/docs/rules/fp605) | `large-interface` | 🔵 info | A reusable workflow declares more inputs than `limits.maxInputs`. |
 | [`FP606`](/docs/rules/fp606) | `missing-local-target` | 🔴 error | A local `uses: ./...` or `uses: $/...` points to a workflow or action that does not exist where GitHub looks for it, or is written in a form GitHub rejects. |
@@ -75,6 +75,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP608`](/docs/rules/fp608) | `undefined-needs-job` | 🔴 error | A job lists a job under `needs:` that does not exist. |
 | [`FP609`](/docs/rules/fp609) | `callee-not-reusable` | 🔴 error | A job calls a local workflow that has no `on.workflow_call` trigger. |
 | [`FP610`](/docs/rules/fp610) | `workspace-unverified` | 🔵 info | A step’s `uses: ./...` points to a place in the runner’s workspace that flowpact cannot read, so the action is not verified. |
+| [`FP611`](/docs/rules/fp611) | `remotes-lock-invalid` | 🔴 error | The remote interfaces lockfile does not parse, or does not match its schema. |
 
 ## Contracts (`FP8xx`)
 
