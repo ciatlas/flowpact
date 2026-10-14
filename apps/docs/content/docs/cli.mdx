@@ -11,6 +11,7 @@ description: Every flowpact command, flag, output format and environment variabl
 | [`flowpact generate`](#flowpact-generate) | Write (or preview) the contracts. |
 | [`flowpact remotes update`](#flowpact-remotes-update) | Fetch the interfaces of the remote workflows and actions this repository (or the given workflows and actions) uses into the [remote interfaces lockfile](/docs/remote-interfaces). |
 | [`flowpact remotes download`](#flowpact-remotes-download) | Download the sources of the commits the lockfile pins into the [sources cache](/docs/remote-interfaces#sources-for-the-editor), for the editor. |
+| [`flowpact remotes clean`](#flowpact-remotes-clean) | Empty the sources cache, or keep the most recently used commits of each repository. |
 | [`flowpact graph`](#flowpact-graph) | Show the call graph of workflows and actions. |
 | [`flowpact trace`](#flowpact-trace) | Follow a value down to where it is used, or up to where it comes from. |
 | [`flowpact explain`](#flowpact-explain) | Print the docs for a rule. |
@@ -239,7 +240,26 @@ flowpact remotes download [paths…] [--cache-dir <dir>] [--github-com]
 | `--github-com` | Download the sources of entries read on github.com (`host: github.com`), with `GITHUB_COM_TOKEN` or none; without it they are skipped. See [GitHub Enterprise Server](/docs/remote-interfaces#github-enterprise-server-and-ghecom). |
 
 It needs the lockfile (without one, or with one it cannot use, it exits `2`), and the same token and `GITHUB_API_URL`
-as `flowpact remotes update`. Unlike `remotes update`, it uses the cache in CI too: downloading is all it does. A source the cache has is not downloaded again. A reference the lockfile has no entry for is
+as `flowpact remotes update`. Unlike `remotes update`, it uses the cache in CI too: downloading is all it does.
+
+Both commands then keep the 3 most recently used commits of each repository they used, and never one they used; the
+output counts the older commits removed. See [`flowpact remotes clean`](#flowpact-remotes-clean) to clean more.
+
+## `flowpact remotes clean`
+
+Removes the commits kept in the [sources cache](/docs/remote-interfaces#sources-for-the-editor).
+
+```sh
+flowpact remotes clean [--keep <n>] [--cache-dir <dir>]
+```
+
+| Option | Description |
+| --- | --- |
+| `--keep <n>` | Keep the `n` most recently used commits of each repository (used by `remotes update` or `remotes download`); without it, nothing is kept. |
+| `--cache-dir <dir>` | flowpact's cache directory, as for `remotes update`. |
+
+It removes only the `<owner>/<repo>/<sha>` directories flowpact keeps there, then the directories they leave empty;
+anything else in the directory stays. A commit it cannot remove is named in the output and makes it exit `1`. A source the cache has is not downloaded again. A reference the lockfile has no entry for is
 listed as `unlocked` (`flowpact remotes update` adds it), one it records as not readable as `skipped`. A source that
 cannot be downloaded or kept is listed as `failed`, and makes the command exit `1`.
 

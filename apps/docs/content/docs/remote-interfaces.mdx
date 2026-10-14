@@ -101,6 +101,13 @@ the cache has, and needs the same [token](#which-token) as `remotes update`.
 `<dir>/remotes`; point your editor at the same place (see [Editors](/docs/editors)). Files are kept by repository and
 commit (`octo/ship/<sha>/.github/workflows/deploy.yml`), read-only. A file at a commit never changes, so nothing in
 the cache goes stale; one cache serves every repository on the machine, and you can delete any of it at any time.
+Two versions of one action (`octo/setup@v1` in one job, `@v2` in another) are two lockfile entries and two commits in
+the cache, each call checked against its own version.
+
+The cache stays small on its own: after `remotes update` and `remotes download`, each repository they used keeps its
+3 most recently used commits (never one the run used). `flowpact remotes clean` empties it, and
+`flowpact remotes clean --keep 2` keeps the 2 most recently used commits of each repository. Cleaning removes only the
+commits flowpact keeps there (`<owner>/<repo>/<sha>` directories), nothing else in the directory.
 Files of private and internal repositories land there too, readable by your user only: flowpact creates the cache's
 files and directories for you alone, wherever it is. A reference whose path could not be a file name on every platform
 (`..`, a character Windows rejects) is not cached.

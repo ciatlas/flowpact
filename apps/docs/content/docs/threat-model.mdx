@@ -332,7 +332,9 @@ outside its directory.
   each directory and the file name) must be a plain file name on every platform, or the file is not kept, and it is
   written to a temporary file, made read-only for your user alone, and renamed (`cachedSourcePath`, `cacheSource` in
   `packages/lint/src/remotes-cache.ts`). The action, `--fetch-remotes` and `--dry-run` write nothing there, and
-  `remotes update` nothing in CI unless asked. References and reasons from the lockfile are printed with control
+  `remotes update` nothing in CI unless asked. Cleaning (`remotes clean`, and the pruning after `update` and
+  `download`) removes only directories named by a commit at `<owner>/<repo>/<sha>`, never following a link
+  (`pruneCache`). References and reasons from the lockfile are printed with control
   characters escaped (`packages/cli/src/lib/text.ts`).
 - **Tests.** `packages/lint/test/remotes.test.ts` (FP611 for an invalid lockfile, then nothing checked;
   `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the token sent only to the API, a response
