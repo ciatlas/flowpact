@@ -26065,6 +26065,7 @@ function resultOf(opts, run2, r) {
     ...run2.contracts ? { contracts: run2.contracts } : {},
     ...r.unloaded.length ? { unloadedRules: r.unloaded } : {},
     ...impactFieldsOf(run2, r.removedPaths),
+    ...run2.remotes.file || run2.remotes.lock ? { remotes: run2.remotes } : {},
     ...opts.configFile && opts.configText !== void 0 ? { configSource: new SourceFile(opts.configFile, opts.configText) } : {},
     durationMs: r.durationMs
   };
