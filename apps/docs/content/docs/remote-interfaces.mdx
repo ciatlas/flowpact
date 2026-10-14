@@ -30,7 +30,8 @@ fetched during a run: flowpact reads only the committed lockfile, so results do 
 ## Writing it
 
 ```sh
-flowpact remotes update
+flowpact remotes update                                   # every remote reference
+flowpact remotes update .github/workflows/release.yml     # only what release.yml (and what it calls) uses
 ```
 
 [`flowpact remotes update`](/docs/cli#flowpact-remotes-update) resolves every remote reference the repository uses to

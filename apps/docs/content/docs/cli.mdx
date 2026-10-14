@@ -9,7 +9,7 @@ description: Every flowpact command, flag, output format and environment variabl
 | [`flowpact check`](#flowpact-check) | `lint` plus a comparison with the committed [contracts](/docs/contracts). |
 | [`flowpact impact`](#flowpact-impact) | Check that the release impact a pull request declares covers its changes to published workflows and actions. |
 | [`flowpact generate`](#flowpact-generate) | Write (or preview) the contracts. |
-| [`flowpact remotes update`](#flowpact-remotes-update) | Fetch the interfaces of the remote workflows and actions this repository uses into the [remote interfaces lockfile](/docs/remote-interfaces). |
+| [`flowpact remotes update`](#flowpact-remotes-update) | Fetch the interfaces of the remote workflows and actions this repository (or the given workflows and actions) uses into the [remote interfaces lockfile](/docs/remote-interfaces). |
 | [`flowpact graph`](#flowpact-graph) | Show the call graph of workflows and actions. |
 | [`flowpact trace`](#flowpact-trace) | Follow a value down to where it is used, or up to where it comes from. |
 | [`flowpact explain`](#flowpact-explain) | Print the docs for a rule. |
@@ -189,11 +189,12 @@ Fetches the interface of every remote reusable workflow and action the repositor
 `.github/flowpact/remotes.lock.yaml` (see [Remote interfaces](/docs/remote-interfaces)).
 
 ```sh
-flowpact remotes update [--dry-run]
+flowpact remotes update [paths…] [--dry-run]
 ```
 
 | Option | Description |
 | --- | --- |
+| `[paths…]` | Workflow or action files or directories: fetch only the remote references they use, and those of the local workflows and actions they call. Other entries of the lockfile are kept as they are; an entry nothing in the repository uses any more is still dropped. |
 | `--dry-run` | Fetch and say what would change; write nothing. |
 
 It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
