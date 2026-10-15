@@ -6,6 +6,7 @@
 import type { ProjectIndex as EngineIndex, Loc as EngineLoc } from '@ciatlas/core';
 import type {
   Finding as EngineFinding,
+  RemoteChangeGrade as EngineGrade,
   RuleContext as EngineRuleContext,
   RuleDefinition as EngineRuleDefinition,
   FetchProgress,
@@ -39,6 +40,7 @@ const analysis = (a: EngineAnalysis): Api.Analysis => a;
 
 // The remotes functions pass their options to the commands' code as they are, and report progress as it does.
 same<Api.RemoteProgress, FetchProgress>(true);
+same<Api.RemoteChangeGrade, EngineGrade>(true);
 const updateOptions = (o: Api.RemotesUpdateOptions): EngineUpdateOptions => o;
 const downloadOptions = (o: Api.RemotesDownloadOptions): EngineDownloadOptions => o;
 const cleanOptions = (o: Api.RemotesCleanOptions): EngineCleanOptions => o;

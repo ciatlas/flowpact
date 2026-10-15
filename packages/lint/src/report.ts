@@ -159,6 +159,8 @@ export const reportSchema = z.object({
 });
 
 export type JsonReport = z.infer<typeof reportSchema>;
+/** A finding as the JSON report has it: a plugin's rule may name any category. */
+export type JsonFinding = JsonReport['findings'][number];
 
 export function toJsonReport(result: AnalysisResult, opts: { includeGraph?: boolean } = {}): JsonReport {
   return {

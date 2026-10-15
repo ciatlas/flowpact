@@ -498,6 +498,51 @@ export interface RemotesUpdateResult {
   };
   /** Why no file was kept although that was not asked for: in CI, or without a home directory. */
   sourcesNotKept?: string;
+  /** Each changed entry graded against the repository's calls: what the new interface does to them. */
+  grades: RemoteChangeGrade[];
+}
+
+/**
+ * What a version change does to a call. `breaks`: a check fails with the new interface that passed with the old one.
+ * `unchecked`: none fails, but part of the change is out of the checks' reach for this call. `fits`: every check passes
+ * as before.
+ */
+export type RemoteVerdict = 'breaks' | 'unchecked' | 'fits';
+
+/** A call of a remote reference: a job that calls the reusable workflow, or a step that uses the action. */
+export interface RemoteCallSite {
+  /** The file of the workflow or action that makes the call. */
+  file: string;
+  job?: string;
+  /** The step's id, or `#<n>` (1-based) without one. */
+  step?: string;
+  /** Where the call's `uses:` is. */
+  loc: Loc;
+}
+
+export interface RemoteCallGrade {
+  call: RemoteCallSite;
+  verdict: RemoteVerdict;
+  /** Findings with the new interface the old one did not give: why it breaks. */
+  added: Finding[];
+  /** Findings the old interface gave that the new one does not. */
+  removed: Finding[];
+  /** What the checks cannot tell about this call after the change: why the verdict is `unchecked` (kept with `breaks`). */
+  unchecked: string[];
+  /** Changes in behaviour the call gets without a check failing: a default it relies on changed. */
+  notes: string[];
+}
+
+/** A changed lockfile entry, graded against every call of its reference in the repository. */
+export interface RemoteChangeGrade {
+  ref: string;
+  /** The commits the entries record: before (none without an entry) and after. */
+  commits: { before?: string; after: string };
+  /** The worst verdict of its calls; `fits` when nothing calls it. */
+  verdict: RemoteVerdict;
+  /** The interface diff, which explains the verdict (it never decides it); empty without an earlier entry. */
+  changes: ContractChange[];
+  calls: RemoteCallGrade[];
 }
 
 /** What `remotesDownload` put in the sources cache. */

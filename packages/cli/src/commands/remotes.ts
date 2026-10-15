@@ -1,7 +1,10 @@
+import { jsonSafe } from '@ciatlas/core';
 import { type ArgsDef, defineCommand } from 'citty';
 import {
+  failsOn,
   type RemotesAction,
   type RemotesDownloadOptions,
+  type RemotesFailOn,
   type RemotesUpdateOptions,
   remotesAction,
   remotesFlags,
@@ -20,7 +23,6 @@ import {
   guard,
   pathArgs,
   printBanner,
-  UsageError,
 } from '../shared';
 
 export const remotesCommand = defineCommand({
@@ -69,18 +71,31 @@ export const remotesCommand = defineCommand({
       description:
         '`clean` only: keep the n most recently used commits of each repository (update and download keep 3 of those they use)',
     },
+    'fail-on': {
+      type: 'string',
+      valueHint: 'breaks|unchecked|never',
+      description:
+        '`update` only: also exit 1 when a changed entry breaks a call of this repository (breaks), or breaks one or leaves part of one unchecked (unchecked). Default: never',
+    },
+    format: {
+      type: 'enum',
+      options: ['pretty', 'json'],
+      default: 'pretty',
+      description: 'Output format: pretty, or json (the result as the API returns it)',
+    },
   },
   run: ({ args, rawArgs, cmd }) =>
     guard(async () => {
       const action = remotesAction(args.action);
       const flags = remotesFlags(args, action);
       const ctx = createContext(args, rawArgs, cmd.args as ArgsDef);
-      if (action === 'clean') return clean(ctx, flags.keep, args['cache-dir']);
+      const out = output(ctx, args.format === 'json');
+      if (action === 'clean') return clean(out, flags.keep, args['cache-dir']);
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
       const counter = counterFor(ctx.level, action);
       const options = optionsOf(args, action, ctx.root, counter?.update);
       try {
-        return action === 'download' ? await download(ctx, options) : await update(ctx, options, flags);
+        return action === 'download' ? await download(out, options) : await update(out, options, flags);
       } finally {
         counter?.clear();
       }
@@ -102,29 +117,41 @@ function optionsOf(
   };
 }
 
-function clean(ctx: CliContext, keep: number, cacheDir: string | undefined): number {
+/** The context, and how to print a result: as JSON, or as its text. */
+interface Output {
+  ctx: CliContext;
+  print: <T>(result: T, text: (r: T, opts: CliContext['render']) => string) => void;
+}
+
+const output = (ctx: CliContext, json: boolean): Output => ({
+  ctx,
+  print: (result, text) =>
+    ctx.stdout(json ? jsonSafe(JSON.stringify(result, null, 2)) : text(result, ctx.render)),
+});
+
+function clean({ print }: Output, keep: number, cacheDir: string | undefined): number {
   const r = runRemotesClean({ keep, ...(cacheDir !== undefined ? { cacheDir } : {}) });
-  ctx.stdout(remotesCleanText(r, ctx.render));
+  print(r, remotesCleanText);
   return r.failed ? EXIT.findings : EXIT.ok;
 }
 
 async function update(
-  ctx: CliContext,
+  { ctx, print }: Output,
   options: RemotesUpdateOptions,
-  flags: { dryRun: boolean; noCache: boolean },
+  flags: { dryRun: boolean; noCache: boolean; failOn: RemotesFailOn },
 ): Promise<number> {
   const r = await runRemotesUpdate(ctx.session, {
     ...options,
     dryRun: flags.dryRun,
     ...(flags.noCache ? { cacheDir: false } : {}),
   });
-  ctx.stdout(remotesText(r, ctx.render));
-  return r.failed.length ? EXIT.findings : EXIT.ok;
+  print(r, remotesText);
+  return r.failed.length || failsOn(flags.failOn, r.grades) ? EXIT.findings : EXIT.ok;
 }
 
-async function download(ctx: CliContext, options: RemotesDownloadOptions): Promise<number> {
+async function download({ ctx, print }: Output, options: RemotesDownloadOptions): Promise<number> {
   const r = await runRemotesDownload(ctx.session, options);
-  ctx.stdout(remotesDownloadText(r, ctx.render));
+  print(r, remotesDownloadText);
   return r.failed.length ? EXIT.findings : EXIT.ok;
 }
 

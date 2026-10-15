@@ -197,7 +197,7 @@ Fetches the interface of every remote reusable workflow and action the repositor
 `.github/flowpact/remotes.lock.yaml` (see [Remote interfaces](/docs/remote-interfaces)).
 
 ```sh
-flowpact remotes update [paths…] [--cache-dir <dir> | --no-cache] [--dry-run]
+flowpact remotes update [paths…] [--cache-dir <dir> | --no-cache] [--dry-run] [--fail-on <verdict>] [--format json]
 ```
 
 | Option | Description |
@@ -207,6 +207,8 @@ flowpact remotes update [paths…] [--cache-dir <dir> | --no-cache] [--dry-run]
 | `--cache-dir <dir>` | flowpact's cache directory: keep the files read in its `remotes` directory (relative to where you run flowpact). Also in CI, where nothing is kept by default. |
 | `--no-cache` | Keep none of the files read; write only the lockfile. Not with `--cache-dir`. |
 | `--dry-run` | Fetch and say what would change; write nothing, not even to the cache. |
+| `--fail-on <verdict>` | Also exit `1` when a changed entry breaks a call of the repository (`breaks`), or breaks one or leaves part of one unchecked (`unchecked`). Default: `never`. See [When a version changes](/docs/remote-interfaces#when-a-version-changes). |
+| `--format <format>` | `pretty` (the default) or `json`: the result as [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean) returns it. `remotes download` and `remotes clean` take it too. |
 
 It also accepts `--root`, `--config` and the logging and color options. Each reference is resolved to a commit
 through the GitHub API, and its workflow file or `action.yml` is read at that commit. Entries of references nothing uses
@@ -214,6 +216,11 @@ any more are dropped. A reference that does not exist, or that the token cannot 
 a previous entry, recorded under the lockfile's `unreadable:`, so [`FP612`](/docs/rules/fp612) counts it as accounted
 for. Any other failure (the network, a timeout, an error from the API, a file over 1 MB) is listed as `failed`, keeps
 the reference's previous entry, and makes the command exit `1`.
+
+Each entry that changed (its reference moved to another commit, or its interface changed) is graded against every call
+of the reference in the repository, also with paths: under the reference, the output lists the interface changes and
+each call the change breaks or leaves partly unchecked, with why (see
+[When a version changes](/docs/remote-interfaces#when-a-version-changes)).
 
 The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`); the output names the source it
 used (`token: GH_TOKEN`), never the token, which is sent only to the GitHub API (`GITHUB_API_URL` on GitHub Enterprise
@@ -246,6 +253,9 @@ flowpact remotes download [paths…] [--cache-dir <dir>] [--github-com]
 
 It needs the lockfile (without one, or with one it cannot use, it exits `2`), and the same token and `GITHUB_API_URL`
 as `flowpact remotes update`. Unlike `remotes update`, it uses the cache in CI too: downloading is all it does.
+A source the cache has is not downloaded again. A reference the lockfile has no entry for is listed as `unlocked`
+(`flowpact remotes update` adds it), one it records as not readable as `skipped`. A source that cannot be downloaded or
+kept is listed as `failed`, and makes the command exit `1`.
 
 Both commands then keep the 3 most recently used commits of each repository they used, and never one they used; the
 output counts the older commits removed. See [`flowpact remotes clean`](#flowpact-remotes-clean) to clean more.
@@ -264,9 +274,7 @@ flowpact remotes clean [--keep <n>] [--cache-dir <dir>]
 | `--cache-dir <dir>` | flowpact's cache directory, as for `remotes update`. |
 
 It removes only the `<owner>/<repo>/<sha>` directories flowpact keeps there, then the directories they leave empty;
-anything else in the directory stays. A commit it cannot remove is named in the output and makes it exit `1`. A source the cache has is not downloaded again. A reference the lockfile has no entry for is
-listed as `unlocked` (`flowpact remotes update` adds it), one it records as not readable as `skipped`. A source that
-cannot be downloaded or kept is listed as `failed`, and makes the command exit `1`.
+anything else in the directory stays. A commit it cannot remove is named in the output and makes it exit `1`.
 
 ## `flowpact graph`
 

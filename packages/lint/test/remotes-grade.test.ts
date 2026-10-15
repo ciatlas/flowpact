@@ -1,7 +1,7 @@
 /** The grader of remote version changes (remotes-grade.ts): a verdict per call, explained by the interface diff. */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { memoryFileSystem } from '@ciatlas/core';
+import { createLogger, memoryFileSystem, memorySink } from '@ciatlas/core';
 import {
   gradeRemoteChanges,
   parseConfig,
@@ -487,6 +487,39 @@ describe('what is graded', () => {
     expect(gradeOne(files, { ref, before: action({ inputs: { cache: {} } }), after: action() }).verdict).toBe(
       'breaks',
     );
+  });
+
+  it('keeps the overrides of the grading rules, and warns about no setting of a rule it does not run', () => {
+    const files = ci(yaml`
+      build:
+        runs-on: x
+        steps:
+          - uses: ${SETUP}
+            with: { cache: 'true' }
+    `);
+    const change = { ref: SETUP, before: action({ inputs: { cache: {} } }), after: action() };
+    const accepted = {
+      overrides: [{ rule: 'unknown-input', file: `${WF}/ci.yml`, reason: 'cache is passed on purpose' }],
+    };
+    expect(gradeOne(files, change, accepted).verdict).toBe('fits');
+    const sink = memorySink();
+    const [g] = gradeRemoteChanges(
+      {
+        root: '/virtual/repo',
+        fs: memoryFileSystem(files),
+        config: parseConfig({
+          rules: { 'acme-rule': 'off' },
+          overrides: [
+            { rule: 'acme-rule', file: `${WF}/ci.yml`, reason: 'a plugin rule this run does not load' },
+          ],
+        }),
+        validateSchema: false,
+        logger: createLogger({ level: 'trace', sink }),
+      },
+      [change],
+    );
+    expect(g!.verdict).toBe('breaks');
+    expect(sink.records.filter((r) => r.level === 'warn')).toEqual([]);
   });
 
   it('grades several changes at once, each with its own calls', () => {

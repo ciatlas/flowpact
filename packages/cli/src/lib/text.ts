@@ -4,6 +4,7 @@
  * embeds names from the analyzed YAML), which is what the CLI's stdout also guarantees.
  */
 import { escapeControl, neutralizeWorkflowCommands } from '@ciatlas/core';
+import type { RemoteCallGrade, RemoteCallSite, RemoteChangeGrade, RemoteVerdict } from '@flowpact/lint';
 import {
   type CallGraph,
   finalize,
@@ -163,20 +164,95 @@ export function generationText(generation: ContractGeneration, opts: RenderOptio
  */
 const shown = (s: string) => escapeControl(s);
 
-/** `remotes update`: what the lockfile gained, lost or changed, and what could not be fetched. */
+/**
+ * `remotes update`: what the lockfile gained, lost or changed (with what each change does to the repository's calls),
+ * and what could not be fetched.
+ */
 export function remotesText(r: RemotesUpdateResult, opts: RenderOptions): string {
   const c = opts.color ? pc : { bold: (s: string) => s, red: (s: string) => s, dim: (s: string) => s };
-  const lines: string[] = [];
-  const list = (label: string, refs: string[]) => {
-    for (const ref of refs) lines.push(`  ${label} ${shown(ref)}`);
-  };
-  list('new    ', r.added);
-  list('changed', r.changed);
-  list('removed', r.removed);
-  for (const u of r.unreadable) lines.push(`  ${c.dim('unread ')} ${shown(u.ref)}: ${shown(u.error)}`);
-  for (const f of r.failed) lines.push(`  ${c.red('failed ')} ${shown(f.ref)}: ${shown(f.error)}`);
-  if ((r.failed.length || r.unreadable.length) && !r.tokenSource) lines.push(c.dim(NO_TOKEN));
+  const lines = [...entryLines(r, c, opts.ascii ? '->' : '→'), ...problemLines(r, c)];
   return safe(`${[...updateHead(r, c), ...lines].join('\n')}\n`);
+}
+
+/** The entries `remotes update` added, changed (each with its grade) and removed. */
+function entryLines(r: RemotesUpdateResult, c: Paint, arrow: string): string[] {
+  const list = (label: string, refs: string[]) => refs.map((ref) => `  ${label} ${shown(ref)}`);
+  const graded = new Map(r.grades.map((g) => [g.ref, g]));
+  const changed = r.changed.flatMap((ref) => {
+    const g = graded.get(ref);
+    return g ? gradeLines(g, c, arrow) : [`  changed ${shown(ref)}`];
+  });
+  return [...list('new    ', r.added), ...changed, ...list('removed', r.removed)];
+}
+
+/** The references `remotes update` could not read or fetch, with why, and what to do without a token. */
+function problemLines(r: RemotesUpdateResult, c: Paint): string[] {
+  return [
+    ...r.unreadable.map((u) => `  ${c.dim('unread ')} ${shown(u.ref)}: ${shown(u.error)}`),
+    ...r.failed.map((f) => `  ${c.red('failed ')} ${shown(f.ref)}: ${shown(f.error)}`),
+    ...((r.failed.length || r.unreadable.length) && !r.tokenSource ? [c.dim(NO_TOKEN)] : []),
+  ];
+}
+
+type Paint = { red: (s: string) => string; dim: (s: string) => string };
+
+const calls = (k: number) => `${k} call${k === 1 ? '' : 's'}`;
+
+/** A grade in a few words: how many of its calls the change breaks or leaves unchecked, or that it fits them. */
+function verdictLine(g: RemoteChangeGrade): string {
+  const total = g.calls.length;
+  if (!total) return 'nothing here calls it';
+  const n = g.calls.filter((k) => k.verdict === g.verdict).length;
+  if (g.verdict === 'breaks') return `breaks ${n} of ${calls(total)}`;
+  if (g.verdict === 'unchecked') return `not fully checked for ${n} of ${calls(total)}`;
+  return total === 1 ? 'fits its call' : `fits its ${total} calls`;
+}
+
+/** The commits an entry moved between, or the one it stays at (its interface as read changed). */
+function commitMove(g: RemoteChangeGrade, arrow: string): string {
+  const { before, after } = g.commits;
+  return before && before !== after
+    ? `${before.slice(0, 7)} ${arrow} ${after.slice(0, 7)}`
+    : `at ${after.slice(0, 7)}`;
+}
+
+const VERDICT_LABEL: Record<RemoteVerdict, string> = {
+  breaks: 'breaks',
+  unchecked: 'not fully checked',
+  fits: 'fits',
+};
+
+/** Where a call is: its file and line, then its job and step. */
+function callWhere(call: RemoteCallSite): string {
+  const parts = [call.job && `jobs.${call.job}`, call.step && `step ${call.step}`].filter(Boolean);
+  return `${call.loc.file}:${call.loc.line} ${parts.join(' ')}`;
+}
+
+/** A call: its verdict and where it is, then why (the findings, the parts not checked) and the notes. */
+function callLines(g: RemoteCallGrade, c: Paint): string[] {
+  const label = g.verdict === 'breaks' ? c.red(VERDICT_LABEL.breaks) : VERDICT_LABEL[g.verdict];
+  return [
+    `    ${label} ${shown(callWhere(g.call))}`,
+    ...g.added.map((f) => `      ${f.code} ${shown(f.message)}`),
+    ...g.unchecked.map((u) => `      ${shown(u)}`),
+    ...g.notes.map((n) => c.dim(`      note: ${shown(n)}`)),
+  ];
+}
+
+/**
+ * A changed entry: its commits and verdict, the interface diff (what breaks in red), then each call that does not
+ * simply fit, and how many others do.
+ */
+function gradeLines(g: RemoteChangeGrade, c: Paint, arrow: string): string[] {
+  const listed = g.calls.filter((k) => k.verdict !== 'fits' || k.notes.length);
+  const others = g.calls.length - listed.length;
+  const rest = others === 1 ? '1 other call fits' : `${others} other calls fit`;
+  return [
+    `  changed ${shown(g.ref)}: ${commitMove(g, arrow)}, ${verdictLine(g)}`,
+    ...g.changes.map((ch) => `    ${(ch.breaking ? c.red : c.dim)(shown(ch.message))}`),
+    ...listed.flatMap((k) => callLines(k, c)),
+    ...(others && listed.length ? [c.dim(`    ${rest}`)] : []),
+  ];
 }
 
 /** What `remotes update` wrote (or would), the token it used, and where it kept the files it read. */

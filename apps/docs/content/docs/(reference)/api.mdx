@@ -169,7 +169,11 @@ if (result.changes) {
   `onProgress(progress)` is called as each reference is done, with `done`, `total`, `ref`, `outcome` and `detail`.
   The result has `file` (the lockfile), `changes`, `added`, `changed` and `removed`, `failed` and `unreadable` (each
   `{ ref, error }`), `tokenSource` (where the token came from, never the token), and `sources` (the cache's `dir`, and
-  files `written`, older commits `removed`, files `notKept` with why) or `sourcesNotKept`.
+  files `written`, older commits `removed`, files `notKept` with why) or `sourcesNotKept`. `grades` has each changed
+  entry graded against the repository's calls: its `ref`, `commits`, `verdict` (`breaks`, `unchecked` or `fits`), the
+  interface `changes`, and its `calls`, each with `call` (where it is), `verdict`, the findings it `added` and
+  `removed`, why it is `unchecked`, and `notes` (see
+  [When a version changes](/docs/remote-interfaces#when-a-version-changes)).
 - `remotesDownload(options)`: the same options but `dryRun`, with `cacheDir` a directory. The result has `downloaded`,
   `cached`, `notLocked`, `skipped` (`{ ref, reason }`), `failed` (`{ ref, error }`, with `cache: true` when writing the
   cache failed), the cache's `dir` and the older commits `removed`. Without a lockfile, or with one it cannot use, it

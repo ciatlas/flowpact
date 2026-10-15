@@ -45,7 +45,8 @@ flowpact remotes update .github/workflows/release.yml     # only what release.ym
 
 [`flowpact remotes update`](/docs/cli#flowpact-remotes-update) resolves every remote reference the repository uses to
 a commit, reads its workflow file or `action.yml` there through the GitHub API, and writes the lockfile. Commit it, and
-run it again when you move a reference to another version, or on a schedule to notice a tag that moved. In a terminal
+run it again when you move a reference to another version, or on a schedule to notice a tag that moved: it says what
+each changed entry does to your calls ([When a version changes](#when-a-version-changes)). In a terminal
 it counts the references as it fetches them; `-v` or `-d` logs a line for each instead, with the commit it resolved to
 or why it could not be fetched. It also keeps the files it reads in your [sources cache](#sources-for-the-editor), so
 the editor can open them.
@@ -178,6 +179,78 @@ A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, w
 `flowpact remotes update` records that same commit for it; an entry that records another one was edited by hand, and
 describes other code than what runs. flowpact does not check calls against such an entry (they are unverified, as
 without one), and FP612 reports it.
+
+## When a version changes
+
+A tag moves, or you move a reference to another version, and the new interface may drop an input your calls pass, make
+one required, or stop declaring an output you read. `flowpact remotes update` grades each changed entry against every
+call of its reference in the repository, before you commit the new lockfile (with `--dry-run`, before it writes
+anything):
+
+```text
+would write .github/flowpact/remotes.lock.yaml
+token: GH_TOKEN
+  changed actions/setup-node@v6: 2028fbc → 395ad32, breaks 1 of 3 calls
+    input "always-auth" was removed — callers that pass it will fail
+    breaks .github/workflows/release.yml:21 jobs.publish step #2
+      FP102 actions/setup-node@v6 has no input "always-auth"
+    2 other calls fit
+```
+
+That one is real: setup-node 6.1.0 dropped `always-auth`, and `@v6` moved to it. Each call gets a verdict:
+
+| Verdict | Meaning |
+| --- | --- |
+| breaks | A check fails with the new interface that passed with the old one. The lines under it are what `flowpact check` reports once the lockfile is updated. |
+| not fully checked | No check fails, but part of the change is out of the checks' reach for this call; the line under it says which. |
+| fits | Every check passes as before. Only the calls that do not simply fit are listed. |
+
+The verdict comes from the rules this page starts with (FP101 to FP103, FP201, FP202, FP205 and FP301), run with the
+entry before and after; the interface diff under the reference explains it, and problems a call already had do not
+count. A call is **not fully checked**
+when:
+
+- it passes an expression to an input the new version declares as a `boolean` or `number`: only literal values are
+  checked ([`FP103`](/docs/rules/fp103));
+- it uses `secrets: inherit`, and the new version needs a secret the old one did not: whether your repository or
+  organization has it is not known;
+- it reads an output the new version no longer declares, of a JavaScript or Docker action, which can still set it.
+
+A note follows a call that leaves out an input whose default changed: it runs with the new default. A change of an
+action's runtime (`runs.using`, such as `node20` to `node24`) is listed under the reference. The grade is about the
+interface, not the behaviour: a release that keeps its inputs but changes what they do fits your calls, so read the
+release notes of a major version.
+
+### A scheduled drift check
+
+To hear about a moved tag before a run fails, check on a schedule. `--fail-on breaks` makes the job fail when a changed
+entry breaks a call; `--fail-on unchecked` also when it leaves part of one unchecked:
+
+```yaml title=".github/workflows/remotes-drift.yml"
+name: Remote interfaces drift
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7                       # pin to a commit SHA
+        with:
+          persist-credentials: false
+      - run: npx --yes flowpact@0.20 remotes update --dry-run --fail-on breaks
+        env:
+          GH_TOKEN: ${{ github.token }}
+```
+
+`github.token` reads public repositories; private and internal ones need a token that can read them
+([Which token](#which-token)). With `--format json`, the same comes as JSON for a script: `grades` has one entry per
+changed reference, with its `verdict`, the interface `changes`, and its `calls`, each with its `verdict`, the findings
+it `added`, why it is `unchecked`, and `notes`. [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean)
+returns the same.
 
 ## Renovate and Dependabot
 

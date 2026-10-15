@@ -25,6 +25,7 @@ import {
   type UnitDecl,
 } from '@ciatlas/core';
 import { type AnalysisResult, type AnalyzeOptions, analyze } from './analyze';
+import { defaultConfig, type FlowpactConfig } from './config';
 import { type Contract, type ContractChange, type ContractInput, diffContracts } from './contracts';
 import {
   commitOf,
@@ -37,6 +38,8 @@ import {
   readRemotesLock,
   serializeRemotesLock,
 } from './remotes';
+import type { JsonFinding } from './report';
+import { createRegistry } from './rules/index';
 import type { Finding } from './rules/types';
 import { isProperty } from './rules/util';
 import { SCHEMA_VERSIONS } from './version';
@@ -77,9 +80,9 @@ export interface RemoteCallGrade {
   call: RemoteCallSite;
   verdict: RemoteVerdict;
   /** Findings with the new interface the old one did not give: why it breaks. */
-  added: Finding[];
+  added: JsonFinding[];
   /** Findings the old interface gave that the new one does not. */
-  removed: Finding[];
+  removed: JsonFinding[];
   /** What the checks cannot tell about this call after the change: why the verdict is `unchecked` (kept with `breaks`). */
   unchecked: string[];
   /** Changes in behaviour the call gets without a check failing: a default it relies on changed. */
@@ -104,7 +107,7 @@ const worstVerdict = (verdicts: RemoteVerdict[]): RemoteVerdict =>
 /**
  * Grades version changes of remote references against every call in the repository. Two analyses whatever the number
  * of changes: each call's checks depend on its own reference's entry only. The config's severities do not switch the
- * grading rules off (a rule set to `off` would hide a break); its overrides still accept findings.
+ * grading rules off (a rule set to `off` would hide a break); its overrides of them still accept findings.
  */
 export function gradeRemoteChanges(opts: AnalyzeOptions, changes: RemoteChange[]): RemoteChangeGrade[] {
   if (!changes.length) return [];
@@ -127,17 +130,36 @@ function gradingRun(
     : { version: 1, remotes: {} };
   for (const change of changes) setEntry(lock, change.ref, pick(change));
   const file = read.file ?? REMOTES_LOCK_FILES[0];
-  const { paths: _paths, impact: _impact, checkContracts: _check, only: _only, ...rest } = opts;
-  const config = opts.config && {
-    ...opts.config,
-    rules: { ...opts.config.rules, ...Object.fromEntries(GRADE_CODES.map((c) => [c, 'error' as const])) },
-  };
+  // What only the full run uses goes: paths, modes, and where overrides are in the config (they are filtered here).
+  const {
+    paths: _paths,
+    impact: _impact,
+    checkContracts: _check,
+    only: _only,
+    overrideLocs: _locs,
+    ...rest
+  } = opts;
   return analyze({
     ...rest,
-    ...(config ? { config } : {}),
+    config: gradingConfig(opts),
     fs: overlayFileSystem(fs, new Map([[file, serializeRemotesLock(lock)]])),
     only: [...GRADE_CODES],
   });
+}
+
+/**
+ * The config of a grading run: the grading rules on, and of the overrides only theirs, so no setting for another rule
+ * (a plugin's, which a run of `flowpact remotes` does not load) is warned about.
+ */
+function gradingConfig(opts: AnalyzeOptions): FlowpactConfig {
+  const config = opts.config ?? defaultConfig();
+  const registry = opts.registry ?? createRegistry();
+  const grading = new Set<string>(GRADE_CODES);
+  return {
+    ...config,
+    rules: Object.fromEntries(GRADE_CODES.map((c) => [c, 'error' as const])),
+    overrides: config.overrides.filter((o) => grading.has(registry.get(o.rule)?.code ?? '')),
+  };
 }
 
 /**

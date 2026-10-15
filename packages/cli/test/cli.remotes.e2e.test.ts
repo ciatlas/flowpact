@@ -370,3 +370,66 @@ describe('the sources cache', () => {
     expect(dry.stderr).toContain('--dry-run is for `flowpact remotes update`');
   });
 });
+
+describe('what a changed entry does to the calls', () => {
+  /** A repository that locked octo/setup@v2 at an older commit, whose action took a `cache` input; v2 has since moved. */
+  function drifted(): string {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-remotes-drift-'));
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    mkdirSync(join(root, '.github/flowpact'), { recursive: true });
+    writeFileSync(
+      join(root, '.github/workflows/ci.yml'),
+      'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n        with: { version: 1, cache: x }\n      - uses: octo/setup@v2\n        with: { version: 2 }\n',
+    );
+    writeFileSync(
+      join(root, LOCK),
+      `version: 1\nremotes:\n  octo/setup@v2:\n    sha: ${'b'.repeat(40)}\n    kind: action\n    using: composite\n    inputs:\n      version: { required: true }\n      cache: {}\n`,
+    );
+    return root;
+  }
+
+  it('grades it against every call, on a dry run, without failing unless --fail-on asks', async () => {
+    const root = drifted();
+    const before = readFileSync(join(root, LOCK), 'utf8');
+    const r = await run(root, ['update', '--dry-run']);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain(
+      [
+        `  changed octo/setup@v2: bbbbbbb → aaaaaaa, breaks 1 of 2 calls`,
+        `    input "cache" was removed — callers that pass it will fail`,
+        `    breaks .github/workflows/ci.yml:6 jobs.b step #1`,
+        `      FP102 octo/setup@v2 has no input "cache"`,
+        `    1 other call fits`,
+      ].join('\n'),
+    );
+    expect(readFileSync(join(root, LOCK), 'utf8')).toBe(before);
+    expect((await run(root, ['update', '--dry-run', '--fail-on', 'breaks'])).exitCode).toBe(1);
+    expect((await run(root, ['update', '--dry-run', '--fail-on', 'never'])).exitCode).toBe(0);
+  });
+
+  it('prints the grades as JSON, and grades a real update too', async () => {
+    const root = drifted();
+    const r = await run(root, ['update', '--format', 'json', '--fail-on', 'unchecked']);
+    expect(r.exitCode).toBe(1);
+    const result = JSON.parse(r.stdout);
+    expect(result).toMatchObject({ changed: ['octo/setup@v2'], dryRun: false, changes: true });
+    expect(result.grades).toHaveLength(1);
+    expect(result.grades[0]).toMatchObject({
+      ref: 'octo/setup@v2',
+      commits: { before: 'b'.repeat(40), after: SHA },
+      verdict: 'breaks',
+    });
+    expect(result.grades[0].calls.map((c: { verdict: string }) => c.verdict)).toEqual(['breaks', 'fits']);
+    expect(result.grades[0].calls[0].added[0]).toMatchObject({ code: 'FP102', loc: { line: 7 } });
+    expect(readFileSync(join(root, LOCK), 'utf8')).toContain(`sha: ${SHA}`);
+  });
+
+  it('prints download and clean as JSON too, and takes --fail-on only for update', async () => {
+    const root = drifted();
+    const clean = await run(root, ['clean', '--format', 'json']);
+    expect(JSON.parse(clean.stdout)).toMatchObject({ dir: join(cache, 'remotes'), keep: 0 });
+    const refused = await run(root, ['download', '--fail-on', 'breaks']);
+    expect(refused.exitCode).toBe(2);
+    expect(refused.stderr).toContain('--fail-on is for `flowpact remotes update`');
+  });
+});

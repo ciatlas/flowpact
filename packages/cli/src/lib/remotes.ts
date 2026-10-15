@@ -1,6 +1,7 @@
 /**
- * `remotes update`: the remote interfaces lockfile, fetched and written (or previewed), and the files read kept in the
- * sources cache; `remotes download`: the sources of the locked commits, into the cache.
+ * `remotes update`: the remote interfaces lockfile, fetched and written (or previewed), each changed entry graded against
+ * the repository's calls, and the files read kept in the sources cache; `remotes download`: the sources of the locked
+ * commits, into the cache.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -14,14 +15,19 @@ import {
   envCacheDir,
   type FetchedSource,
   type FetchProgress,
+  gradeRemoteChanges,
   hostOf,
   inCi,
   KEEP_COMMITS,
+  lockedRemote,
   pruneCache,
   REMOTES_LOCK_FILES,
+  type RemoteChange,
+  type RemoteChangeGrade,
   type RemotesDownload,
   type RemotesLock,
   type RemotesUpdate,
+  type RemoteVerdict,
   readRemotesLock,
   remotesCacheDir,
   remotesCacheIn,
@@ -88,6 +94,8 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
   sources?: SourcesKept;
   /** Why no file was kept, when that was not asked for: in CI. */
   sourcesNotKept?: string;
+  /** Each changed entry graded against the repository's calls: what the new interface breaks, by call. */
+  grades: RemoteChangeGrade[];
 }
 
 export interface SourcesKept {
@@ -211,12 +219,40 @@ export async function runRemotesUpdate(
     updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch }),
   );
   keep.finish();
+  const grades = gradeChanged(session, read.lock, update);
   const text = serializeRemotesLock(update.lock);
   const changes = fs.read(file) !== text;
   if (changes && !dryRun) writeLock(root, file, text);
   const { lock: _, ...rest } = update;
   const extra = { ...(source ? { tokenSource: source } : {}), ...keep.result };
-  return { ...rest, file, changes, dryRun, ...extra };
+  return { ...rest, file, changes, dryRun, grades, ...extra };
+}
+
+/**
+ * The changed entries graded against every call in the repository (paths only narrow what is fetched): the rules that
+ * check a call against its interface, with the entry before and after (see `gradeRemoteChanges`). Without plugins, as
+ * the rest of `remotes`.
+ */
+function gradeChanged(
+  session: Session,
+  previous: RemotesLock | undefined,
+  update: RemotesUpdate,
+): RemoteChangeGrade[] {
+  const changes = update.changed.flatMap((ref): RemoteChange[] => {
+    const before = lockedRemote(previous, ref).entry;
+    const after = update.lock.remotes[ref];
+    return before && after ? [{ ref, before, after }] : [];
+  });
+  if (!changes.length) return [];
+  const { root, loaded, logger } = session;
+  return logger.time('grade changed entries', () =>
+    attempt(() =>
+      gradeRemoteChanges(
+        { root, config: loaded.config, logger: logger.child('grade'), validateSchema: false },
+        changes,
+      ),
+    ),
+  );
 }
 
 /** The sources cache in the `cacheDir` option, refusing anything but a directory's path. */
@@ -371,7 +407,21 @@ export interface RemotesArgs {
   cache?: boolean;
   'cache-dir'?: string;
   keep?: string;
+  'fail-on'?: string;
 }
+
+/** What makes `remotes update` exit 1, besides a reference it could not fetch: a call a changed entry breaks or leaves unchecked. */
+export type RemotesFailOn = 'breaks' | 'unchecked' | 'never';
+
+const FAIL_ON: Record<RemotesFailOn, RemoteVerdict[]> = {
+  breaks: ['breaks'],
+  unchecked: ['breaks', 'unchecked'],
+  never: [],
+};
+
+/** Whether a grade fails `remotes update` under `--fail-on`. */
+export const failsOn = (failOn: RemotesFailOn, grades: RemoteChangeGrade[]): boolean =>
+  grades.some((g) => FAIL_ON[failOn].includes(g.verdict));
 
 /** The action asked for; another one is refused. */
 export function remotesAction(action: string): RemotesAction {
@@ -392,6 +442,7 @@ const OPTION_ACTIONS: {
   { option: '--dry-run is', given: (a) => Boolean(a['dry-run']), for: ['update'] },
   { option: '--no-cache is', given: (a) => a.cache === false, for: ['update'] },
   { option: '--keep is', given: (a) => a.keep !== undefined, for: ['clean'] },
+  { option: '--fail-on is', given: (a) => a['fail-on'] !== undefined, for: ['update'] },
   {
     option: 'paths are',
     given: (a, action) => remotesPaths(a._, action).length > 0,
@@ -400,18 +451,26 @@ const OPTION_ACTIONS: {
 ];
 
 /**
- * The flags of `flowpact remotes`. An option the action does not take, `--no-cache` with `--cache-dir`, and a `--keep`
- * that is no whole number are refused.
+ * The flags of `flowpact remotes`. An option the action does not take, `--no-cache` with `--cache-dir`, a `--keep`
+ * that is no whole number and an unknown `--fail-on` are refused.
  */
 export function remotesFlags(
   args: RemotesArgs,
   action: RemotesAction,
-): { dryRun: boolean; noCache: boolean; keep: number } {
+): { dryRun: boolean; noCache: boolean; keep: number; failOn: RemotesFailOn } {
   const refused = OPTION_ACTIONS.find((o) => o.given(args, action) && !o.for.includes(action));
   if (refused)
     throw usage(`${refused.option} for ${refused.for.map((a) => `\`flowpact remotes ${a}\``).join(' and ')}`);
   if (args.cache === false && args['cache-dir'] !== undefined)
     throw usage('give --no-cache or --cache-dir, not both');
   if (!/^\d+$/.test(args.keep ?? '0')) throw usage(`--keep takes a whole number, not "${args.keep}"`);
-  return { dryRun: Boolean(args['dry-run']), noCache: args.cache === false, keep: Number(args.keep ?? 0) };
+  const failOn = args['fail-on'] ?? 'never';
+  if (!Object.hasOwn(FAIL_ON, failOn))
+    throw usage(`--fail-on takes breaks, unchecked or never, not "${failOn}"`);
+  return {
+    dryRun: Boolean(args['dry-run']),
+    noCache: args.cache === false,
+    keep: Number(args.keep ?? 0),
+    failOn: failOn as RemotesFailOn,
+  };
 }
