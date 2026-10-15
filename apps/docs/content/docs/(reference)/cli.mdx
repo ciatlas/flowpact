@@ -217,6 +217,10 @@ a previous entry, recorded under the lockfile's `unreadable:`, so [`FP612`](/doc
 for. Any other failure (the network, a timeout, an error from the API, a file over 1 MB) is listed as `failed`, keeps
 the reference's previous entry, and makes the command exit `1`.
 
+A reference GitHub's [`actions.lock`](/docs/remote-interfaces#githubs-actionslock) pins is read at the commit it pins,
+not at the one its tag points to now; the output says how many were (`.github/workflows/actions.lock: 2 references read
+at the commits it pins`), or why that file is not used.
+
 Each entry that changed (its reference moved to another commit, or its interface changed) is graded against every call
 of the reference in the repository, also with paths: under the reference, the output lists the interface changes and
 each call the change breaks or leaves partly unchecked, with why (see

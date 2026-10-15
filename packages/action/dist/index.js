@@ -16948,7 +16948,7 @@ function explain(unit, diagnostics) {
   if (!shape) return diagnostics;
   const schema3 = parserSchema(unit.kind);
   const root = SCHEMA_ROOT[unit.kind];
-  const keyOf = /* @__PURE__ */ new Map();
+  const keyOf2 = /* @__PURE__ */ new Map();
   const groups = /* @__PURE__ */ new Map();
   for (const d of diagnostics) {
     if (d.kind) continue;
@@ -16957,7 +16957,7 @@ function explain(unit, diagnostics) {
     const key = unexpected ? shape.keys.get(pos) : void 0;
     let map;
     if (key && key.name === unexpected[1]) {
-      keyOf.set(d, key);
+      keyOf2.set(d, key);
       map = key.map;
     } else if (d.message.startsWith("Required property is missing: ")) {
       map = shape.maps.get(pos);
@@ -16966,13 +16966,13 @@ function explain(unit, diagnostics) {
   }
   const replaced = /* @__PURE__ */ new Map();
   for (const [map, group2] of groups) {
-    const resolved = resolveAlternatives(map, group2, keyOf, schema3, root);
+    const resolved = resolveAlternatives(map, group2, keyOf2, schema3, root);
     if (!resolved) continue;
     for (const [i, d] of group2.entries()) replaced.set(d, i === 0 ? resolved : []);
   }
   const out = [];
   for (const d of diagnostics.flatMap((d2) => replaced.get(d2) ?? [d2])) {
-    const key = keyOf.get(d);
+    const key = keyOf2.get(d);
     if (!key || d.message !== unexpectedValue(key.name)) {
       out.push(d);
       continue;
@@ -16984,7 +16984,7 @@ function explain(unit, diagnostics) {
   }
   return out;
 }
-function resolveAlternatives(map, group2, keyOf, schema3, root) {
+function resolveAlternatives(map, group2, keyOf2, schema3, root) {
   const shapes = mappingsAt(schema3, root, map.path);
   if (shapes.length < 2) return void 0;
   const names = new Set(map.keys.map((k) => k.name));
@@ -16996,7 +16996,7 @@ function resolveAlternatives(map, group2, keyOf, schema3, root) {
   const [best, runnerUp] = scored;
   if (!best || !runnerUp || best.score === 0) return void 0;
   const agrees = (def) => group2.every((d) => {
-    const key = keyOf.get(d);
+    const key = keyOf2.get(d);
     if (key) return !def.looseKeyType && !propertyOf(def, key.name);
     return propertyOf(def, d.message.slice("Required property is missing: ".length))?.required === true;
   });
@@ -17007,7 +17007,7 @@ function resolveAlternatives(map, group2, keyOf, schema3, root) {
     return (key, d) => {
       if (!anchor2 || !others.some((o) => propertyOf(o, key.name))) return d;
       const e = { ...d, message: `${d.message} (not allowed together with \`${anchor2.name}\`)` };
-      keyOf.set(e, key);
+      keyOf2.set(e, key);
       return e;
     };
   };
@@ -17015,9 +17015,9 @@ function resolveAlternatives(map, group2, keyOf, schema3, root) {
     const explain3 = explained(best.def);
     return [
       ...best.unexpected.map((key) => {
-        const parsed = group2.find((d2) => keyOf.get(d2) === key);
+        const parsed = group2.find((d2) => keyOf2.get(d2) === key);
         const d = parsed ?? { message: unexpectedValue(key.name), loc: key.loc };
-        keyOf.set(d, key);
+        keyOf2.set(d, key);
         return explain3(key, d);
       }),
       ...best.missing.map((name) => {
@@ -17029,7 +17029,7 @@ function resolveAlternatives(map, group2, keyOf, schema3, root) {
   const guesses = scored.filter((s) => s.score === best.score && agrees(s.def));
   if (guesses.length !== 1) return void 0;
   const explain2 = explained(guesses[0].def);
-  return group2.map((d) => keyOf.has(d) ? explain2(keyOf.get(d), d) : d);
+  return group2.map((d) => keyOf2.has(d) ? explain2(keyOf2.get(d), d) : d);
 }
 function ignoredKey(kind, key, schema3, root) {
   const { path } = key.map;
@@ -17924,13 +17924,7 @@ function namesMember(ref) {
 }
 var namesKey = (segment) => !!segment && segment !== "*" && segment !== "?";
 
-// ../lint/src/analyze.ts
-import { createHash } from "crypto";
-import { relative as relative4, resolve as resolve4 } from "path";
-
-// ../lint/src/config.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
-import { isAbsolute as isAbsolute2, join as join3, relative as relative2, resolve as resolve2 } from "path";
+// ../lint/src/actions-lock.ts
 var import_yaml5 = __toESM(require_dist(), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.6/node_modules/zod/v4/core/util.js
@@ -20467,6 +20461,66 @@ function duration2(params) {
   return _isoDuration(ZodMiniISODuration, params);
 }
 
+// ../lint/src/zod.ts
+function useEnglishByDefault() {
+  if (!config().localeError) config(en_default());
+}
+useEnglishByDefault();
+function described(schema3, description) {
+  globalRegistry.add(schema3, { description });
+  return schema3;
+}
+
+// ../lint/src/actions-lock.ts
+var ACTIONS_LOCK_FILE = ".github/workflows/actions.lock";
+var actionsLockSchema = looseObject({
+  version: string2(),
+  /** Each covered workflow's file, with the pins (`owner/repo@ref`) it uses, its actions' own included. */
+  workflows: optional(record(string2(), array(string2()))),
+  dependencies: optional(record(string2(), looseObject({ commit: optional(string2()) })))
+});
+var KNOWN_VERSION = /^v0\.0\.\d+$/;
+var pinKey = (owner, repo, ref) => `${owner.toLowerCase()}/${repo.toLowerCase()}@${ref}`;
+function keyOf(pin) {
+  const m = /^([^/@:]+)\/([^/@:]+)@([^:]+)$/.exec(pin);
+  return m ? pinKey(m[1], m[2], m[3]) : void 0;
+}
+var commitOfPin = (commit) => /^sha1-([0-9a-f]{40})$/.exec(commit ?? "")?.[1];
+function readActionsLock(fs3) {
+  const text2 = fs3.read(ACTIONS_LOCK_FILE);
+  if (text2 === void 0) return {};
+  const file = ACTIONS_LOCK_FILE;
+  let data;
+  try {
+    data = (0, import_yaml5.parse)(text2);
+  } catch (e) {
+    return { file, error: `not valid YAML: ${e.message.split("\n")[0]}` };
+  }
+  const parsed = actionsLockSchema.safeParse(data);
+  if (!parsed.success) return { file, error: "not a workflow dependency lockfile flowpact can read" };
+  const { version: version2, workflows = {}, dependencies = {} } = parsed.data;
+  if (!KNOWN_VERSION.test(version2))
+    return { file, error: `version ${version2} is not one flowpact reads (v0.0.x)` };
+  const covered = new Set(Object.values(workflows).flatMap((pins) => pins.map(keyOf)));
+  const commits = /* @__PURE__ */ new Map();
+  for (const [pin, dep] of Object.entries(dependencies)) {
+    const key = keyOf(pin);
+    const commit = commitOfPin(dep.commit);
+    if (key && commit && covered.has(key)) commits.set(key, commit);
+  }
+  return { file, commits };
+}
+var lockedCommit = (read, r) => read?.commits?.get(pinKey(r.owner, r.repo, r.ref));
+
+// ../lint/src/analyze.ts
+import { createHash } from "crypto";
+import { relative as relative4, resolve as resolve4 } from "path";
+
+// ../lint/src/config.ts
+import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
+import { isAbsolute as isAbsolute2, join as join3, relative as relative2, resolve as resolve2 } from "path";
+var import_yaml6 = __toESM(require_dist(), 1);
+
 // ../lint/src/location.json
 var location_default = {
   repository: "ciatlas/flowpact",
@@ -20498,16 +20552,6 @@ function toolMeta() {
 function bannerText(meta2 = toolMeta()) {
   const s = meta2.schemas;
   return `${meta2.tool} v${meta2.version} \xB7 config schema v${s.config} \xB7 contract schema v${s.contract} \xB7 report schema v${s.report} \xB7 node ${meta2.node}`;
-}
-
-// ../lint/src/zod.ts
-function useEnglishByDefault() {
-  if (!config().localeError) config(en_default());
-}
-useEnglishByDefault();
-function described(schema3, description) {
-  globalRegistry.add(schema3, { description });
-  return schema3;
 }
 
 // ../lint/src/config.ts
@@ -20733,8 +20777,8 @@ function findConfigFile(root, explicit) {
   return void 0;
 }
 function readYaml(text2, file) {
-  const lineCounter = new import_yaml5.LineCounter();
-  const doc = (0, import_yaml5.parseDocument)(text2, { lineCounter, prettyErrors: false });
+  const lineCounter = new import_yaml6.LineCounter();
+  const doc = (0, import_yaml6.parseDocument)(text2, { lineCounter, prettyErrors: false });
   if (doc.errors.length) {
     throw new ConfigError(`Config file is not valid YAML: ${doc.errors[0].message.split("\n")[0]}`, file);
   }
@@ -20749,8 +20793,8 @@ function parseConfigText(text2, file = "flowpact.config.yml", base) {
   const { doc, lineCounter, data: raw } = readYaml(text2, file);
   const data = raw ?? {};
   const config2 = parseConfig(base ? mergeConfig(base, data) : data, file);
-  const overridesNode = (0, import_yaml5.isMap)(doc.contents) ? doc.contents.get("overrides", true) : void 0;
-  const overrideLocs = (0, import_yaml5.isSeq)(overridesNode) ? overridesNode.items.map((item) => {
+  const overridesNode = (0, import_yaml6.isMap)(doc.contents) ? doc.contents.get("overrides", true) : void 0;
+  const overrideLocs = (0, import_yaml6.isSeq)(overridesNode) ? overridesNode.items.map((item) => {
     const r = item.range ?? [0, 0, 0];
     const a = lineCounter.linePos(r[0]);
     return {
@@ -21266,7 +21310,7 @@ function splitLines(text2) {
 }
 
 // ../lint/src/contracts.ts
-var import_yaml6 = __toESM(require_dist(), 1);
+var import_yaml7 = __toESM(require_dist(), 1);
 var CONTRACTS_DIR = `${CONFIG_DIR}/contracts`;
 function normalizeContractText(text2) {
   return text2.replace(/\r\n/g, "\n");
@@ -21473,7 +21517,7 @@ function buildContract(index, unit) {
   };
 }
 function serializeContract(c) {
-  return `${CONTRACT_HEADER}${(0, import_yaml6.stringify)(c, { lineWidth: 0, indent: 2, defaultStringType: "PLAIN", singleQuote: true })}`;
+  return `${CONTRACT_HEADER}${(0, import_yaml7.stringify)(c, { lineWidth: 0, indent: 2, defaultStringType: "PLAIN", singleQuote: true })}`;
 }
 function contractFileFor(unit, taken = /* @__PURE__ */ new Set(), dir = CONTRACTS_DIR, extension = "yaml") {
   const fileOf = (base2) => `${dir}/${base2}.contract.${extension}`;
@@ -21663,7 +21707,7 @@ function readContracts(fs3) {
   for (const file of fs3.walk(CONTRACTS_DIR).filter((f) => CONTRACT_FILE.test(f)).sort()) {
     const text2 = fs3.read(file) ?? "";
     try {
-      const parsed = contractSchema.safeParse((0, import_yaml6.parse)(text2));
+      const parsed = contractSchema.safeParse((0, import_yaml7.parse)(text2));
       out.set(
         file,
         parsed.success ? { file, text: text2, contract: parsed.data } : {
@@ -21884,7 +21928,7 @@ function entryConsumers(e) {
   for (const text2 of [e.before, e.after]) {
     if (!text2) continue;
     try {
-      const data = (0, import_yaml6.parse)(text2);
+      const data = (0, import_yaml7.parse)(text2);
       for (const c of data?.consumers ?? []) if (typeof c?.from === "string") out.add(c.from);
     } catch {
     }
@@ -21911,7 +21955,7 @@ function scopePlan(plan, keep) {
 }
 
 // ../lint/src/impact.ts
-var import_yaml7 = __toESM(require_dist(), 1);
+var import_yaml8 = __toESM(require_dist(), 1);
 var IMPACT_LEVELS = ["none", "patch", "minor", "major"];
 var levelRank = (l) => IMPACT_LEVELS.indexOf(l);
 var maxLevel = (levels) => levels.reduce((a, b) => levelRank(b) > levelRank(a) ? b : a, "none");
@@ -22230,7 +22274,7 @@ function canonical(v) {
 }
 function implementationOf(unit) {
   try {
-    const doc = (0, import_yaml7.parse)(unit.source.text);
+    const doc = (0, import_yaml8.parse)(unit.source.text);
     return canonical(doc?.[unit.kind === "workflow" ? "jobs" : "runs"] ?? null);
   } catch {
     return unit.source.text;
@@ -22598,7 +22642,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
 }
 
 // ../lint/src/remotes.ts
-var import_yaml8 = __toESM(require_dist(), 1);
+var import_yaml9 = __toESM(require_dist(), 1);
 var REMOTES_LOCK_FILES = [
   `${CONFIG_DIR}/remotes.lock.yaml`,
   `${CONFIG_DIR}/remotes.lock.yml`
@@ -22642,7 +22686,7 @@ function readRemotesLock(fs3) {
   if (!file) return {};
   let data;
   try {
-    data = (0, import_yaml8.parse)(fs3.read(file));
+    data = (0, import_yaml9.parse)(fs3.read(file));
   } catch (e) {
     return { file, error: `not valid YAML: ${e.message.split("\n")[0]}` };
   }
@@ -22655,12 +22699,12 @@ function interfaceYaml(e) {
   const inputs = e.inputs ?? {};
   if (e.kind === "workflow") {
     const outputs2 = Object.fromEntries((e.outputs ?? []).map((o) => [o, { value: "" }]));
-    return (0, import_yaml8.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
+    return (0, import_yaml9.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
   }
   const outputs = Object.fromEntries((e.outputs ?? []).map((o) => [o, { description: "" }]));
   const using = e.using ?? "composite";
   const runs = using === "composite" ? { using, steps: [] } : { using, main: "" };
-  return (0, import_yaml8.stringify)({ name: "", inputs, outputs, runs });
+  return (0, import_yaml9.stringify)({ name: "", inputs, outputs, runs });
 }
 var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !pinMismatch(ref, e)).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
 function pinMismatch(ref, entry) {
@@ -22763,7 +22807,7 @@ function serializeRemotesLock(lock) {
   const sorted = (rec) => Object.fromEntries(Object.entries(rec).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0));
   const unreadable = Object.keys(lock.unreadable ?? {}).length ? { unreadable: sorted(lock.unreadable) } : {};
   const doc = { version: 1, remotes: sorted(lock.remotes), ...unreadable };
-  return `${LOCK_HEADER}${(0, import_yaml8.stringify)(doc, { lineWidth: 0, singleQuote: true })}`;
+  return `${LOCK_HEADER}${(0, import_yaml9.stringify)(doc, { lineWidth: 0, singleQuote: true })}`;
 }
 
 // ../lint/src/rules/types.ts
@@ -25374,18 +25418,28 @@ function lockDrift(ctx) {
   const lockedKeys = new Set(locked.map(remoteKey));
   const used = remoteRefsOf(ctx.index).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
-  const mismatched = Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !fetched.includes(ref) && pinMismatch(ref, e)).map(([ref, e]) => `${ref} (it records ${e.sha.slice(0, 7)})`);
+  const entries2 = Object.entries(lock?.remotes ?? {}).filter(([ref]) => !fetched.includes(ref));
+  const mismatched = entries2.filter(([ref, e]) => pinMismatch(ref, e)).map(([ref, e]) => `${ref} (it records ${e.sha.slice(0, 7)})`);
   return {
     missing: used.filter((r) => !lockedKeys.has(remoteKey(r))),
     unused: locked.filter((r) => !usedKeys.has(remoteKey(r))),
-    mismatched
+    mismatched,
+    relocked: relockedEntries(entries2, ctx.remotes?.actionsLock)
   };
+}
+function relockedEntries(entries2, actionsLock) {
+  return entries2.flatMap(([ref, e]) => {
+    const r = parseRemoteRef(ref, e.kind);
+    const runs = r && !pinMismatch(ref, e) ? lockedCommit(actionsLock, r) : void 0;
+    return runs && runs !== e.sha ? [`${ref} (it records ${e.sha.slice(0, 7)}, actions.lock ${runs.slice(0, 7)})`] : [];
+  });
 }
 function driftParts(drift) {
   const parts = [
     [drift.missing, "lacks"],
     [drift.unused, "no longer needs"],
-    [drift.mismatched, "records another commit than the one pinned for"]
+    [drift.mismatched, "records another commit than the one pinned for"],
+    [drift.relocked, "records another commit than GitHub\u2019s actions.lock runs for"]
   ];
   return parts.filter(([refs]) => refs.length).map(([refs, what]) => `${what} ${refs.join(", ")}`);
 }
@@ -25395,8 +25449,8 @@ var remotesLockOutdated = defineRule({
   category: "structure",
   defaultSeverity: "warning",
   docs: {
-    summary: "The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, or records another commit than the one a reference pins.",
-    why: "A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action\u2019s `remotes: fetch` fetches it for the run). It happens when a reference moves to another version, for example in a pull request from Renovate or Dependabot, until the lockfile is updated. A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, so an entry that records another one describes other code: it is not used, and the calls are not checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did.",
+    summary: "The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, or records another commit than the one a reference pins or GitHub\u2019s actions.lock runs.",
+    why: "A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action\u2019s `remotes: fetch` fetches it for the run). It happens when a reference moves to another version, for example in a pull request from Renovate or Dependabot, until the lockfile is updated. A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, so an entry that records another one describes other code: it is not used, and the calls are not checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did. A reference that GitHub\u2019s `.github/workflows/actions.lock` pins runs the commit it records, even after its tag moves: an entry that records another one (the bot that updated `actions.lock` left the lockfile as it was) is still used, though it may describe other inputs than run.",
     fix: "Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs)."
   },
   check(ctx) {
@@ -26177,7 +26231,12 @@ function analyze(opts) {
     repository: repository ?? "(unknown)",
     rules: Object.keys(config2.rules).length
   });
-  const remotes = withFetched(readRemotesLock(opts.fs ?? nodeFileSystem(opts.root)), opts.fetchedRemotes);
+  const fs3 = opts.fs ?? nodeFileSystem(opts.root);
+  const actionsLock = readActionsLock(fs3);
+  const remotes = {
+    ...withFetched(readRemotesLock(fs3), opts.fetchedRemotes),
+    ...actionsLock.file ? { actionsLock } : {}
+  };
   const project = loadUnits(opts, logger, publishPatterns, repository, remotes);
   const index = logger.time("build graph", () => new ProjectIndex(project));
   logger.info(
@@ -26961,6 +27020,8 @@ var tooLarge = () => new FetchError(`a response over ${MAX_FILE_BYTES} bytes`);
 var repoUrl = (r, opts) => `${trimChar(opts.apiUrl ?? "https://api.github.com", "/")}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
 var contentsPath = (path) => path.split("/").map(encodeURIComponent).join("/");
 async function shaOf(r, opts) {
+  const locked = opts.lockedCommit?.(r);
+  if (locked) return locked;
   const sha = await get2(
     `${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`,
     "application/vnd.github.sha",
@@ -27049,7 +27110,8 @@ async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
   });
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
   const missing = remoteRefsOf(new ProjectIndex(project)).filter((r) => !locked.has(remoteKey(r.raw)));
-  return fetchRemoteEntries(missing, opts);
+  const actionsLock = readActionsLock(fs3);
+  return fetchRemoteEntries(missing, { lockedCommit: (r) => lockedCommit(actionsLock, r), ...opts });
 }
 async function fetchRemoteEntries(refs, opts = {}) {
   const out = { remotes: {}, failed: [], unreadable: [] };
@@ -27336,27 +27398,31 @@ function refsIn(opts, fs3) {
   });
   return remoteRefsOf(new ProjectIndex(project));
 }
+var unique = (refs) => refs.filter((r, i) => refs.findIndex((o) => o.raw === r.raw) === i);
+function atLockedCommits(fs3, fetch2) {
+  const actionsLock = readActionsLock(fs3);
+  return { lockedCommit: (r) => lockedCommit(actionsLock, r), ...fetch2 };
+}
 async function gradeVersionChanges(opts, base, fetch2 = {}) {
-  const changes = versionChanges(refsIn(opts, base), refsIn(opts, opts.fs ?? nodeFileSystem(opts.root)));
+  const head = opts.fs ?? nodeFileSystem(opts.root);
+  const changes = versionChanges(refsIn(opts, base), refsIn(opts, head));
   if (!changes.length) return { changes, grades: [], failed: [] };
   const baseLock = readRemotesLock(base).lock;
   const locked = (r) => lockedRemote(baseLock, r.raw).entry;
-  const toFetch = [...changes.map((c) => c.ref), ...changes.map((c) => c.from).filter((r) => !locked(r))];
-  const fetched = await fetchRemoteEntries(
-    toFetch.filter((r, i) => toFetch.findIndex((o) => o.raw === r.raw) === i),
-    fetch2
-  );
-  const entry = (r) => fetched.remotes[r.raw];
+  const [after, before] = await Promise.all([
+    fetchRemoteEntries(unique(changes.map((c) => c.ref)), atLockedCommits(head, fetch2)),
+    fetchRemoteEntries(
+      unique(changes.map((c) => c.from).filter((r) => !locked(r))),
+      atLockedCommits(base, fetch2)
+    )
+  ]);
   const graded = changes.flatMap((c) => {
-    const before = locked(c.from) ?? entry(c.from);
-    const after = entry(c.ref);
-    return before && after ? [{ ref: c.ref.raw, before, after }] : [];
+    const was = locked(c.from) ?? before.remotes[c.from.raw];
+    const now = after.remotes[c.ref.raw];
+    return was && now ? [{ ref: c.ref.raw, before: was, after: now }] : [];
   });
-  return {
-    changes,
-    grades: graded.length ? gradeRemoteChanges(opts, graded) : [],
-    failed: [...fetched.failed, ...fetched.unreadable]
-  };
+  const failed = [after, before].flatMap((f) => [...f.failed, ...f.unreadable]);
+  return { changes, grades: graded.length ? gradeRemoteChanges(opts, graded) : [], failed };
 }
 
 // ../lint/src/report.ts
@@ -28289,7 +28355,7 @@ function renderVersionChanges(v, links = {}) {
 }
 
 // src/main.ts
-var import_yaml9 = __toESM(require_dist(), 1);
+var import_yaml10 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -28644,7 +28710,7 @@ var fromActionDir = (p) => isAbsolute8(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml9.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml10.parse)(readFileSync5(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {

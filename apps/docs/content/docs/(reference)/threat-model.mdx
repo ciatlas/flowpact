@@ -324,7 +324,8 @@ reference built with `..` can try to make the [sources cache](/docs/remote-inter
 outside its directory, and a lockfile can name a host, or a commit other than the one a reference pins, to make the
 editor link or open other code than what runs. A pull request that moves a reference to another version can update
 the lockfile to an interface that keeps what the new version dropped, so that a breaking bump passes a check that gates
-automerge. The opt-in look on github.com sends reference names to a second host.
+automerge. GitHub's `actions.lock`, which a pull request can edit too, chooses the commit a reference is read at. The
+opt-in look on github.com sends reference names to a second host.
 
 - **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
   [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a
@@ -338,7 +339,10 @@ automerge. The opt-in look on github.com sends reference names to a second host.
   `pull_request_target` or `workflow_run`, where an untrusted pull request would choose the references while the token
   may be privileged (`remotesToFetch` in `packages/action/src/main.ts`). The version changes of a pull request are
   graded against interfaces fetched for the run, never its own lockfile's, from the base commit's entries
-  (`gradeVersionChanges` in `packages/lint/src/remotes-changes.ts`). Only `flowpact remotes update` and
+  (`gradeVersionChanges` in `packages/lint/src/remotes-changes.ts`). `actions.lock` is parsed, never run or written,
+  and a version or form flowpact does not know is not used (`readActionsLock` in
+  `packages/lint/src/actions-lock.ts`); a commit it pins is the one the runner runs, after GitHub checks that it
+  belongs to the repository, so reading the interface there checks what runs. Only `flowpact remotes update` and
   `remotes download` keep the files they read, in a per-user cache: every part of the path (owner, repository, commit,
   each directory and the file name) must be a plain file name on every platform, or the file is not kept, and it is
   written to a temporary file, made read-only for your user alone, and renamed (`cachedSourcePath`, `cacheSource` in

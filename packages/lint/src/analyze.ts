@@ -22,6 +22,7 @@ import {
   typoDistance,
   type UnitDecl,
 } from '@ciatlas/core';
+import { readActionsLock } from './actions-lock';
 import { ConfigError, defaultConfig, type FlowpactConfig, type Override } from './config';
 import {
   type ContractPlan,
@@ -930,7 +931,12 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
     rules: Object.keys(config.rules).length,
   });
 
-  const remotes = withFetched(readRemotesLock(opts.fs ?? nodeFileSystem(opts.root)), opts.fetchedRemotes);
+  const fs = opts.fs ?? nodeFileSystem(opts.root);
+  const actionsLock = readActionsLock(fs);
+  const remotes = {
+    ...withFetched(readRemotesLock(fs), opts.fetchedRemotes),
+    ...(actionsLock.file ? { actionsLock } : {}),
+  };
   const project = loadUnits(opts, logger, publishPatterns, repository, remotes);
   const index = logger.time('build graph', () => new ProjectIndex(project));
   logger.info(

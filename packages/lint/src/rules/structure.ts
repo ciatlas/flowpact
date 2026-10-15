@@ -12,7 +12,8 @@ import {
   type UnverifiedUse,
   type WorkflowDecl,
 } from '@ciatlas/core';
-import { pinMismatch, remoteRefsOf } from '../remotes';
+import { type ActionsLockRead, lockedCommit } from '../actions-lock';
+import { parseRemoteRef, pinMismatch, type RemoteEntry, remoteRefsOf } from '../remotes';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote } from './util';
 
@@ -340,10 +341,16 @@ const remotesLockInvalid = defineRule({
 });
 
 /**
- * The remote references the lockfile file lacks, its entries nothing uses, and those that record another commit than
- * the one their reference pins (entries fetched for the run aside).
+ * The remote references the lockfile file lacks, its entries nothing uses, those that record another commit than the
+ * one their reference pins, and those that record another commit than GitHub's `actions.lock` runs (entries fetched for
+ * the run aside).
  */
-function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[]; mismatched: string[] } {
+function lockDrift(ctx: RuleContext): {
+  missing: string[];
+  unused: string[];
+  mismatched: string[];
+  relocked: string[];
+} {
   const { lock, fetched = [] } = ctx.remotes ?? {};
   // A reference the lockfile records as unreadable is accounted for, though not checked.
   const locked = [...Object.keys(lock?.remotes ?? {}), ...Object.keys(lock?.unreadable ?? {})].filter(
@@ -352,14 +359,30 @@ function lockDrift(ctx: RuleContext): { missing: string[]; unused: string[]; mis
   const lockedKeys = new Set(locked.map(remoteKey));
   const used = remoteRefsOf(ctx.index).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
-  const mismatched = Object.entries(lock?.remotes ?? {})
-    .filter(([ref, e]) => !fetched.includes(ref) && pinMismatch(ref, e))
+  const entries = Object.entries(lock?.remotes ?? {}).filter(([ref]) => !fetched.includes(ref));
+  const mismatched = entries
+    .filter(([ref, e]) => pinMismatch(ref, e))
     .map(([ref, e]) => `${ref} (it records ${e.sha.slice(0, 7)})`);
   return {
     missing: used.filter((r) => !lockedKeys.has(remoteKey(r))),
     unused: locked.filter((r) => !usedKeys.has(remoteKey(r))),
     mismatched,
+    relocked: relockedEntries(entries, ctx.remotes?.actionsLock),
   };
+}
+
+/** The entries that record another commit than GitHub's `actions.lock` runs for their reference, with both commits. */
+function relockedEntries(
+  entries: [string, RemoteEntry][],
+  actionsLock: ActionsLockRead | undefined,
+): string[] {
+  return entries.flatMap(([ref, e]) => {
+    const r = parseRemoteRef(ref, e.kind);
+    const runs = r && !pinMismatch(ref, e) ? lockedCommit(actionsLock, r) : undefined;
+    return runs && runs !== e.sha
+      ? [`${ref} (it records ${e.sha.slice(0, 7)}, actions.lock ${runs.slice(0, 7)})`]
+      : [];
+  });
 }
 
 /** What is out of date in the lockfile, in words: each kind of drift it has. */
@@ -368,6 +391,7 @@ function driftParts(drift: ReturnType<typeof lockDrift>): string[] {
     [drift.missing, 'lacks'],
     [drift.unused, 'no longer needs'],
     [drift.mismatched, 'records another commit than the one pinned for'],
+    [drift.relocked, 'records another commit than GitHub’s actions.lock runs for'],
   ];
   return parts.filter(([refs]) => refs.length).map(([refs, what]) => `${what} ${refs.join(', ')}`);
 }
@@ -380,13 +404,16 @@ const remotesLockOutdated = defineRule({
   docs: {
     summary:
       'The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, ' +
-      'or records another commit than the one a reference pins.',
+      'or records another commit than the one a reference pins or GitHub’s actions.lock runs.',
     why:
       'A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action’s `remotes: fetch` fetches it ' +
       'for the run). It happens when a reference moves to another version, for example in a pull request from Renovate ' +
       'or Dependabot, until the lockfile is updated. A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs ' +
       'that commit, so an entry that records another one describes other code: it is not used, and the calls are not ' +
-      'checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did.',
+      'checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did. A reference that ' +
+      'GitHub’s `.github/workflows/actions.lock` pins runs the commit it records, even after its tag moves: an entry ' +
+      'that records another one (the bot that updated `actions.lock` left the lockfile as it was) is still used, ' +
+      'though it may describe other inputs than run.',
     fix: 'Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs).',
   },
   check(ctx) {

@@ -171,6 +171,25 @@ describe('flowpact remotes update', () => {
     expect(existsSync(marker)).toBe(false);
   });
 
+  it("reads a reference at the commit GitHub's actions.lock pins, and says so", async () => {
+    const D = 'd'.repeat(40);
+    files[`/repos/octo/setup/contents/action.yml?ref=${D}`] =
+      'name: s\ndescription: d\ninputs:\n  version: { description: v }\nruns:\n  using: composite\n  steps: []\n';
+    const root = repo();
+    const pin = (version: string) =>
+      `version: '${version}'\nworkflows:\n  '.github/workflows/ci.yml':\n    - 'octo/setup@v2'\ndependencies:\n  'octo/setup@v2':\n    ref: 'v2'\n    commit: 'sha1-${D}'\n    owner_id: 1\n    repo_id: 2\n`;
+    writeFileSync(join(root, '.github/workflows/actions.lock'), pin('v0.0.3'));
+    const r = await run(root, ['update']);
+    expect(r.stdout).toContain('.github/workflows/actions.lock: 1 reference read at the commit it pins');
+    expect(readFileSync(join(root, LOCK), 'utf8')).toContain(`octo/setup@v2:\n    sha: ${D}`);
+    writeFileSync(join(root, '.github/workflows/actions.lock'), pin('v9'));
+    const unknown = await run(root, ['update', '--dry-run']);
+    expect(unknown.stdout).toContain(
+      '.github/workflows/actions.lock: not used, version v9 is not one flowpact reads (v0.0.x)',
+    );
+    expect(unknown.stdout).toContain(`changed octo/setup@v2: ddddddd → ${SHA.slice(0, 7)}`);
+  });
+
   it('refuses another action', async () => {
     const r = await run(repo(), ['check']);
     expect(r.exitCode).toBe(2);

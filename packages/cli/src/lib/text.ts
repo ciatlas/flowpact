@@ -234,7 +234,15 @@ function updateHead(r: RemotesUpdateResult, c: { bold: (s: string) => string; di
     c.dim(`token: ${describeToken(r.tokenSource)}`),
     ...(r.sources ? [c.dim(sourcesLine(r.sources))] : []),
     ...(r.sourcesNotKept ? [c.dim(`sources: ${r.sourcesNotKept}`)] : []),
+    ...(r.actionsLock ? [c.dim(actionsLockLine(r.actionsLock))] : []),
   ];
+}
+
+/** Whether `remotes update` read references at the commits GitHub's `actions.lock` pins, and how many; or why not. */
+function actionsLockLine(a: NonNullable<RemotesUpdateResult['actionsLock']>): string {
+  if (a.error) return `${a.file}: not used, ${shown(a.error)}`;
+  const n = `${a.pinned} reference${a.pinned === 1 ? '' : 's'}`;
+  return `${a.file}: ${n} read at the commit${a.pinned === 1 ? '' : 's'} it pins`;
 }
 
 const NO_TOKEN =

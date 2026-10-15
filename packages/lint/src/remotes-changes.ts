@@ -12,6 +12,7 @@ import {
   ProjectIndex,
   remoteKey,
 } from '@ciatlas/core';
+import { lockedCommit, readActionsLock } from './actions-lock';
 import type { AnalyzeOptions } from './analyze';
 import { lockedRemote, type RemoteEntry, type RemoteRef, readRemotesLock, remoteRefsOf } from './remotes';
 import { type FetchRemotesOptions, fetchRemoteEntries } from './remotes-fetch';
@@ -64,33 +65,42 @@ export interface VersionGrading {
   failed: { ref: string; error: string }[];
 }
 
+/** The references, once each. */
+const unique = (refs: RemoteRef[]) => refs.filter((r, i) => refs.findIndex((o) => o.raw === r.raw) === i);
+
+/** Fetching at the commits a side's GitHub `actions.lock` pins, when it pins one: what runs there. */
+function atLockedCommits(fs: FileSystem, fetch: FetchRemotesOptions): FetchRemotesOptions {
+  const actionsLock = readActionsLock(fs);
+  return { lockedCommit: (r) => lockedCommit(actionsLock, r), ...fetch };
+}
+
 /**
  * Grades the version changes from the base's files (`base`, such as a pull request's base commit read from git) to the
- * analyzed ones (`opts.fs`, else the working tree). `fetch` says how to reach the GitHub API.
+ * analyzed ones (`opts.fs`, else the working tree). `fetch` says how to reach the GitHub API. Each side is read at the
+ * commits its own `actions.lock` pins, if it has one: the head's is what runs once the pull request is merged.
  */
 export async function gradeVersionChanges(
   opts: AnalyzeOptions,
   base: FileSystem,
   fetch: FetchRemotesOptions = {},
 ): Promise<VersionGrading> {
-  const changes = versionChanges(refsIn(opts, base), refsIn(opts, opts.fs ?? nodeFileSystem(opts.root)));
+  const head = opts.fs ?? nodeFileSystem(opts.root);
+  const changes = versionChanges(refsIn(opts, base), refsIn(opts, head));
   if (!changes.length) return { changes, grades: [], failed: [] };
   const baseLock = readRemotesLock(base).lock;
   const locked = (r: RemoteRef) => lockedRemote(baseLock, r.raw).entry;
-  const toFetch = [...changes.map((c) => c.ref), ...changes.map((c) => c.from).filter((r) => !locked(r))];
-  const fetched = await fetchRemoteEntries(
-    toFetch.filter((r, i) => toFetch.findIndex((o) => o.raw === r.raw) === i),
-    fetch,
-  );
-  const entry = (r: RemoteRef): RemoteEntry | undefined => fetched.remotes[r.raw];
+  const [after, before] = await Promise.all([
+    fetchRemoteEntries(unique(changes.map((c) => c.ref)), atLockedCommits(head, fetch)),
+    fetchRemoteEntries(
+      unique(changes.map((c) => c.from).filter((r) => !locked(r))),
+      atLockedCommits(base, fetch),
+    ),
+  ]);
   const graded = changes.flatMap((c): RemoteChange[] => {
-    const before = locked(c.from) ?? entry(c.from);
-    const after = entry(c.ref);
-    return before && after ? [{ ref: c.ref.raw, before, after }] : [];
+    const was: RemoteEntry | undefined = locked(c.from) ?? before.remotes[c.from.raw];
+    const now = after.remotes[c.ref.raw];
+    return was && now ? [{ ref: c.ref.raw, before: was, after: now }] : [];
   });
-  return {
-    changes,
-    grades: graded.length ? gradeRemoteChanges(opts, graded) : [],
-    failed: [...fetched.failed, ...fetched.unreadable],
-  };
+  const failed = [after, before].flatMap((f) => [...f.failed, ...f.unreadable]);
+  return { changes, grades: graded.length ? gradeRemoteChanges(opts, graded) : [], failed };
 }

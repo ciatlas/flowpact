@@ -14,6 +14,7 @@ import {
   remoteKey,
   trimChar,
 } from '@ciatlas/core';
+import { lockedCommit, readActionsLock } from './actions-lock';
 import {
   commitOf,
   lockEntryOf,
@@ -53,6 +54,11 @@ export interface FetchRemotesOptions {
   fallback?: { apiUrl: string; token?: string };
   /** Called with each workflow file or `action.yml` fetched, for the sources cache (see `cacheSource`). */
   onSource?: (source: FetchedSource) => void;
+  /**
+   * The commit a reference runs when something pins it, such as GitHub's `actions.lock` (see `lockedCommit`): it is
+   * read at that commit, without asking what its ref points at now.
+   */
+  lockedCommit?: (r: RemoteRef) => string | undefined;
 }
 
 /** A file fetched to read a remote reference's interface: the reference, the commit, the file's path and its text. */
@@ -174,6 +180,8 @@ const contentsPath = (path: string) => path.split('/').map(encodeURIComponent).j
 
 /** The commit a reference's ref resolves to. */
 async function shaOf(r: RemoteRef, opts: FetchRemotesOptions): Promise<string> {
+  const locked = opts.lockedCommit?.(r);
+  if (locked) return locked;
   const sha = await get(
     `${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`,
     'application/vnd.github.sha',
@@ -391,7 +399,8 @@ export interface FetchedRemotes {
 
 /**
  * The interfaces of the remote references a repository uses that its lockfile lacks, fetched for one run (`--fetch-remotes`,
- * the action's `remotes: fetch`); nothing is written. Entries the lockfile has are not fetched, so its pins stand.
+ * the action's `remotes: fetch`); nothing is written. Entries the lockfile has are not fetched, so its pins stand. A
+ * reference GitHub's `actions.lock` pins is read at that commit.
  */
 export async function fetchMissingRemotes(
   root: string,
@@ -407,7 +416,8 @@ export async function fetchMissingRemotes(
   });
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
   const missing = remoteRefsOf(new Index(project)).filter((r) => !locked.has(remoteKey(r.raw)));
-  return fetchRemoteEntries(missing, opts);
+  const actionsLock = readActionsLock(fs);
+  return fetchRemoteEntries(missing, { lockedCommit: (r) => lockedCommit(actionsLock, r), ...opts });
 }
 
 /** The entries of these references, fetched, and those that could not be fetched (with why). */

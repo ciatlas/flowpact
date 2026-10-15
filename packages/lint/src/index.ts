@@ -1,3 +1,4 @@
+export * from './actions-lock';
 export * from './analyze';
 export * from './config';
 export * from './contracts';

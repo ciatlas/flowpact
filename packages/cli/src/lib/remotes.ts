@@ -8,6 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { escapeControl, type Logger, nodeFileSystem } from '@ciatlas/core';
 import {
+  type ActionsLockRead,
   assertSafeWritePath,
   cacheSource,
   commitKey,
@@ -15,19 +16,23 @@ import {
   envCacheDir,
   type FetchedSource,
   type FetchProgress,
+  type FetchRemotesOptions,
   gradeRemoteChanges,
   hostOf,
   inCi,
   KEEP_COMMITS,
+  lockedCommit,
   lockedRemote,
   pruneCache,
   REMOTES_LOCK_FILES,
   type RemoteChange,
   type RemoteChangeGrade,
+  type RemoteRef,
   type RemotesDownload,
   type RemotesLock,
   type RemotesUpdate,
   type RemoteVerdict,
+  readActionsLock,
   readRemotesLock,
   remotesCacheDir,
   remotesCacheIn,
@@ -96,6 +101,11 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
   sourcesNotKept?: string;
   /** Each changed entry graded against the repository's calls: what the new interface breaks, by call. */
   grades: RemoteChangeGrade[];
+  /**
+   * GitHub's `actions.lock`, when the repository has one: how many references were read at the commits it pins, or
+   * why it is not used.
+   */
+  actionsLock?: { file: string; pinned: number; error?: string };
 }
 
 export interface SourcesKept {
@@ -215,8 +225,9 @@ export async function runRemotesUpdate(
   const { fetch, source } = fetchOptions(logger, options);
   const dryRun = bool('dryRun', options.dryRun) ?? false;
   const keep = sourcesKeeper(dryRun ? {} : updateCacheDir(options.cacheDir), logger);
+  const pinned = pinnedBy(readActionsLock(fs));
   const update = await timed(logger, () =>
-    updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch }),
+    updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch, ...pinned.fetch }),
   );
   keep.finish();
   const grades = gradeChanged(session, read.lock, update);
@@ -224,7 +235,7 @@ export async function runRemotesUpdate(
   const changes = fs.read(file) !== text;
   if (changes && !dryRun) writeLock(root, file, text);
   const { lock: _, ...rest } = update;
-  const extra = { ...(source ? { tokenSource: source } : {}), ...keep.result };
+  const extra = { ...(source ? { tokenSource: source } : {}), ...keep.result, ...pinned.result() };
   return { ...rest, file, changes, dryRun, grades, ...extra };
 }
 
@@ -253,6 +264,26 @@ function gradeChanged(
       ),
     ),
   );
+}
+
+/**
+ * The commits GitHub's `actions.lock` pins, which `remotes update` resolves the references to (they run, whatever the tag
+ * points at now): the option to fetch with, and the result's `actionsLock` (how many it pinned, or why it is not used).
+ */
+function pinnedBy(read: ActionsLockRead): {
+  fetch: Pick<FetchRemotesOptions, 'lockedCommit'>;
+  result: () => Pick<RemotesUpdateResult, 'actionsLock'>;
+} {
+  const { file, error } = read;
+  if (!file) return { fetch: {}, result: () => ({}) };
+  const pinned = new Set<string>();
+  const lockedCommitOf = (r: RemoteRef) => {
+    const commit = lockedCommit(read, r);
+    if (commit) pinned.add(r.raw);
+    return commit;
+  };
+  const result = () => ({ actionsLock: { file, pinned: pinned.size, ...(error ? { error } : {}) } });
+  return { fetch: { lockedCommit: lockedCommitOf }, result };
 }
 
 /** The sources cache in the `cacheDir` option, refusing anything but a directory's path. */

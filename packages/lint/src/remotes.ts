@@ -18,6 +18,7 @@ import {
 } from '@ciatlas/core';
 import { parse as parseYaml, stringify } from 'yaml';
 import * as z from 'zod/mini';
+import type { ActionsLockRead } from './actions-lock';
 import { CONFIG_DIR } from './config';
 import './zod';
 
@@ -75,6 +76,8 @@ export interface RemotesLockRead {
   error?: string;
   /** References whose entries were fetched for this run, not read from the file (see `fetchMissingRemotes`). */
   fetched?: string[];
+  /** GitHub's `actions.lock`, when the repository has one: the commits it pins (see FP612). */
+  actionsLock?: ActionsLockRead;
 }
 
 export function readRemotesLock(fs: FileSystem): RemotesLockRead {

@@ -347,6 +347,32 @@ Three ways to keep the lockfile current:
   The job runs only for the bots' pull requests, checks out their branch (never a fork's: bots push to your
   repository), and runs `flowpact` from npm, not code from the pull request.
 
+## GitHub's actions.lock
+
+GitHub's [workflow dependency lockfile](https://docs.github.com/actions/concepts/security/workflow-dependency-lockfiles),
+`.github/workflows/actions.lock` (written by `gh actions-lock`, Dependabot and Renovate), pins the commit each
+`owner/repo@ref` runs in the workflows it covers: a tag such as `@v4` keeps running that commit after it moves. The two
+files do different jobs:
+
+| | `.github/workflows/actions.lock` | `.github/flowpact/remotes.lock.yaml` |
+| --- | --- | --- |
+| Written by | `gh actions-lock`, Dependabot, Renovate | `flowpact remotes update` |
+| Records | the commit each reference runs, and who owns it | each reference's inputs, secrets and outputs at a commit |
+| Used by | the runner, which runs that commit and checks it | flowpact, which checks your calls against the interface |
+
+flowpact reads `actions.lock`, never writes it, and checks each reference at the commit that runs: `remotes update`,
+`--fetch-remotes`, the action's `remotes: fetch` and the [pull request grading](#on-a-pull-request) read a reference it
+pins at its commit, not at the commit its tag points to now, and `remotes update` says how many it read that way. An
+entry of flowpact's lockfile that records another commit is reported by [`FP612`](/docs/rules/fp612): the bot that
+updated `actions.lock` left `remotes.lock.yaml` as it was, so run `flowpact remotes update`.
+
+- Only the workflows `actions.lock` lists are covered: a reference it pins for none of them resolves as usual. One
+  that a covered and an uncovered workflow both use is read at the pinned commit.
+- A reference with a path (`octo/ship/.github/workflows/deploy.yml@v1`, `actions/cache/restore@v4`) is pinned by its
+  repository's key (`octo/ship@v1`), as `gh actions-lock` writes it.
+- The schema is before 1.0: flowpact reads versions `v0.0.x`. Another version, or a file that does not parse, is not
+  used, and `remotes update` says why. Its `hostname` is not read: a reference is fetched as without `actions.lock`.
+
 ## The lockfile
 
 `.github/flowpact/remotes.lock.yaml` (or `remotes.lock.yml`), one entry per `uses:` reference:

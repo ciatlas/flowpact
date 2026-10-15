@@ -500,6 +500,11 @@ export interface RemotesUpdateResult {
   sourcesNotKept?: string;
   /** Each changed entry graded against the repository's calls: what the new interface does to them. */
   grades: RemoteChangeGrade[];
+  /**
+   * GitHub's `actions.lock`, when the repository has one: how many references were read at the commits it pins (they
+   * run whatever their tag points at now), or why it is not used.
+   */
+  actionsLock?: { file: string; pinned: number; error?: string };
 }
 
 /**

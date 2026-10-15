@@ -173,7 +173,9 @@ if (result.changes) {
   entry graded against the repository's calls: its `ref`, `commits`, `verdict` (`breaks`, `unchecked` or `fits`), the
   interface `changes`, and its `calls`, each with `call` (where it is), `verdict`, the findings it `added` and
   `removed`, why it is `unchecked`, and `notes` (see
-  [When a version changes](/docs/remote-interfaces#when-a-version-changes)).
+  [When a version changes](/docs/remote-interfaces#when-a-version-changes)). `actionsLock`, when the repository has
+  GitHub's `actions.lock`, has its `file`, how many references were read at the commits it `pinned`, or the `error`
+  that kept it from being used.
 - `remotesDownload(options)`: the same options but `dryRun`, with `cacheDir` a directory. The result has `downloaded`,
   `cached`, `notLocked`, `skipped` (`{ ref, reason }`), `failed` (`{ ref, error }`, with `cache: true` when writing the
   cache failed), the cache's `dir` and the older commits `removed`. Without a lockfile, or with one it cannot use, it
