@@ -4,7 +4,16 @@
  */
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CATEGORIES, createRegistry, type RuleDefinition } from '@flowpact/lint';
+import {
+  analyze,
+  CATEGORIES,
+  createRegistry,
+  IMPACT_CODES,
+  loadConfig,
+  REPOSITORY_URL,
+  type RuleDefinition,
+} from '@flowpact/lint';
+import { guidesOf, RELATED } from './rule-docs-meta';
 
 const OUT = join(import.meta.dirname, '../apps/docs/content/docs/rules');
 
@@ -50,8 +59,146 @@ const mdxCell = (s: string) =>
     },
   );
 
-export function rulePage(rule: RuleDefinition): string {
+/** A finding of a rule as flowpact reports it, from one of the repository's fixtures: what a page shows under "What you see". */
+export interface RuleSample {
+  fixture: string;
+  severity: string;
+  message: string;
+  file: string;
+  line: number;
+  column: number;
+  symbol?: string;
+}
+
+const FIXTURES = join(import.meta.dirname, '../fixtures');
+
+/**
+ * The first finding of each rule in the fixtures, with their configs, contracts checked. Fixed inputs (the repository's
+ * name, the date overrides expire against) keep the pages the same wherever and whenever they are generated.
+ */
+export function ruleSamples(): Map<string, RuleSample> {
+  const out = new Map<string, RuleSample>();
+  for (const fixture of readdirSync(FIXTURES).sort()) {
+    if (fixture === 'checknames-lab') continue; // real GitHub runs' check names, not a fixture of findings
+    for (const sample of fixtureFindings(fixture)) if (!out.has(sample.code)) out.set(sample.code, sample);
+  }
+  return out;
+}
+
+/** A fixture's findings, analyzed as the CLI's `check` would, with its own config. */
+function fixtureFindings(fixture: string): (RuleSample & { code: string })[] {
+  const root = join(FIXTURES, fixture);
+  const loaded = loadConfig(root);
+  const result = analyze({
+    root,
+    config: loaded.config,
+    ...(loaded.file ? { configFile: loaded.file } : {}),
+    ...(loaded.text !== undefined ? { configText: loaded.text } : {}),
+    ...(loaded.overrideLocs ? { overrideLocs: loaded.overrideLocs } : {}),
+    checkContracts: true,
+    repository: `flowpact-fixtures/${fixture}`,
+    now: new Date('2026-01-01T00:00:00Z'),
+  });
+  return result.findings.map((f) => ({
+    code: f.code,
+    fixture,
+    severity: f.severity,
+    message: f.message,
+    file: f.loc.file,
+    line: f.loc.line,
+    column: f.loc.column,
+    ...(f.symbol ? { symbol: f.symbol } : {}),
+  }));
+}
+
+/** Where a rule runs: impact mode's only there, the contracts' with them, the others everywhere flowpact lints. */
+function reportedBy(rule: RuleDefinition): string {
+  if (IMPACT_CODES.includes(rule.code)) return '[Impact mode](/docs/impact-mode)';
+  if (rule.category === 'contracts') return "`check`, the action's `mode: check`, the editor with contracts";
+  return '`lint`, `check`, the action, the editor';
+}
+
+/** The severity as the terminal report marks it. */
+const SEVERITY_MARK: Record<string, string> = { error: '✖  ERROR', warning: '▲  WARN', info: '●  INFO' };
+
+/** "What you see": the sample finding, as the terminal shows it, with the fixture it comes from. */
+function sampleLines(rule: RuleDefinition, sample: RuleSample): string[] {
+  return [
+    '## What you see',
+    '',
+    `In the [\`${sample.fixture}\`](${REPOSITORY_URL}/tree/main/fixtures/${sample.fixture}) fixture:`,
+    '',
+    '```text',
+    `${SEVERITY_MARK[sample.severity] ?? sample.severity}  ${rule.code} ${rule.name}`,
+    `  ${sample.message}`,
+    `  ▶ ${sample.file}:${sample.line}:${sample.column}`,
+    '```',
+    '',
+  ];
+}
+
+/**
+ * "Accept one finding": an override for it, by its symbol (else its file). Not for the rules about overrides, which
+ * run after them and which they cannot accept.
+ */
+function acceptLines(rule: RuleDefinition, sample: RuleSample | undefined): string[] {
+  if (rule.phase === 'post') return [];
+  const matcher = sample?.symbol
+    ? `target: ${JSON.stringify(sample.symbol)}`
+    : sample
+      ? `file: ${JSON.stringify(sample.file)}`
+      : "target: <the finding's symbol>";
+  return [
+    '## Accept one finding',
+    '',
+    'When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes',
+    'back when the date passes ([overrides](/docs/configuration#overrides)):',
+    '',
+    '```yaml title=".github/flowpact/flowpact.config.yml"',
+    'overrides:',
+    `  - rule: ${rule.code}`,
+    `    ${matcher}`,
+    '    reason: Why it is acceptable here, at least 10 characters.',
+    '    expires: YYYY-MM-DD   # optional',
+    '```',
+    '',
+    '`target` is the symbol the finding is about; to list them:',
+    '',
+    '```sh',
+    `flowpact lint --format json | jq -r '.findings[] | select(.code == "${rule.code}") | .symbol'`,
+    '```',
+    '',
+  ];
+}
+
+/** "Related": the rules that report a neighbouring problem, and the guides that explain the rule's feature. */
+function relatedLines(rule: RuleDefinition, rules: Map<string, RuleDefinition>): string[] {
+  const related = (RELATED[rule.code] ?? []).map((code) => rules.get(code)!);
+  const guides = guidesOf(rule.code);
+  if (!related.length && !guides.length) return [];
+  return [
+    '## Related',
+    '',
+    ...related.map(
+      (r) => `- [\`${r.code}\`](/docs/rules/${r.code.toLowerCase()}) ${r.name}: ${mdx(r.docs.summary)}`,
+    ),
+    ...guides.map(([title, href]) => `- [${title}](${href})`),
+    '',
+  ];
+}
+
+export function rulePage(
+  rule: RuleDefinition,
+  context: { sample?: RuleSample; rules?: Map<string, RuleDefinition> } = {},
+): string {
   const category = Object.values(CATEGORIES).find((c) => c.id === rule.category)!;
+  const rules =
+    context.rules ??
+    new Map(
+      createRegistry()
+        .all()
+        .map((r) => [r.code, r]),
+    );
   const lines = [
     '---',
     `title: '${rule.code} · ${rule.name}'`,
@@ -60,10 +207,11 @@ export function rulePage(rule: RuleDefinition): string {
     '',
     `{/* Generated by scripts/gen-rule-docs.ts from packages/lint/src/rules — edit the rule, not this file. */}`,
     '',
-    '| Code | Name | Category | Default severity |',
-    '| --- | --- | --- | --- |',
-    `| \`${rule.code}\` | \`${rule.name}\` | ${category.title} | ${SEVERITY_BADGE[rule.defaultSeverity]} |`,
+    '| Code | Name | Category | Default severity | Reported by |',
+    '| --- | --- | --- | --- | --- |',
+    `| \`${rule.code}\` | \`${rule.name}\` | ${category.title} | ${SEVERITY_BADGE[rule.defaultSeverity]} | ${reportedBy(rule)} |`,
     '',
+    ...(context.sample ? sampleLines(rule, context.sample) : []),
     '## Why it matters',
     '',
     mdx(rule.docs.why),
@@ -73,18 +221,6 @@ export function rulePage(rule: RuleDefinition): string {
     mdx(rule.docs.fix),
     '',
   ];
-  const generated =
-    rule.generatedFiles === 'skip'
-      ? 'Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.'
-      : undefined;
-  if (rule.docs.scope || generated) {
-    lines.push(
-      '## Scope',
-      '',
-      [rule.docs.scope && mdx(rule.docs.scope), generated].filter(Boolean).join(' '),
-      '',
-    );
-  }
   if (rule.docs.examples) {
     lines.push(
       '## Example',
@@ -108,8 +244,21 @@ export function rulePage(rule: RuleDefinition): string {
       '',
     );
   }
+  const generated =
+    rule.generatedFiles === 'skip'
+      ? 'Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.'
+      : undefined;
+  if (rule.docs.scope || generated) {
+    lines.push(
+      '## Scope',
+      '',
+      [rule.docs.scope && mdx(rule.docs.scope), generated].filter(Boolean).join(' '),
+      '',
+    );
+  }
   lines.push(
-    '## Configure',
+    ...acceptLines(rule, context.sample),
+    '## Change the severity',
     '',
     'Change the severity (or turn the rule off) in `.github/flowpact/flowpact.config.yml`, by code or by name:',
     '',
@@ -125,6 +274,7 @@ export function rulePage(rule: RuleDefinition): string {
     `flowpact explain ${rule.code}`,
     '```',
     '',
+    ...relatedLines(rule, rules),
   );
   return lines.join('\n');
 }
@@ -208,9 +358,17 @@ export function ruleGroups(rules: RuleDefinition[]): { title: string; rules: Rul
 
 if (import.meta.main ?? process.argv[1]?.endsWith('gen-rule-docs.ts')) {
   const rules = createRegistry().all();
+  const byCode = new Map(rules.map((r) => [r.code, r]));
+  const samples = ruleSamples();
   mkdirSync(OUT, { recursive: true });
   for (const f of readdirSync(OUT)) if (/^fp\d{3}\.mdx$/.test(f)) rmSync(join(OUT, f));
-  for (const rule of rules) writeFileSync(join(OUT, `${rule.code.toLowerCase()}.mdx`), rulePage(rule));
+  for (const rule of rules) {
+    const sample = samples.get(rule.code);
+    const page = rulePage(rule, { ...(sample ? { sample } : {}), rules: byCode });
+    writeFileSync(join(OUT, `${rule.code.toLowerCase()}.mdx`), page);
+  }
+  const without = rules.filter((r) => !samples.has(r.code)).map((r) => r.code);
+  console.log(`no fixture shows ${without.length} rules: ${without.join(', ')}`);
   writeFileSync(join(OUT, 'index.mdx'), indexPage(rules));
   writeFileSync(join(OUT, 'meta.json'), `${JSON.stringify(rulesMeta(rules), null, 2)}\n`);
   console.log(`wrote ${rules.length} rule pages to ${OUT}`);

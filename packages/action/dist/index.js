@@ -23732,7 +23732,8 @@ var optionalInputInCondition = defineRule({
   docs: {
     summary: "An optional input without a default decides an `if:` condition by its truthiness.",
     why: 'When a caller omits an optional input that has no default, GitHub substitutes an empty string. A condition such as `if: inputs.x` then takes the "false" branch silently, so jobs or steps are skipped and the run is still green.',
-    fix: "Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`). Not reported: comparisons with a constant, `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local caller passes \u2014 unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them.",
+    fix: "Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`).",
+    scope: "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local caller passes \u2014 unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them.",
     examples: {
       bad: `inputs:
   variant: { type: string, required: false }
@@ -24111,7 +24112,8 @@ var emptyBindingForMatrixCombo = defineRule({
   docs: {
     summary: "An input passed under `with:` is empty for some matrix combinations because a matrix key is missing there.",
     why: "GitHub evaluates a missing matrix key to an empty string \u2014 no error, no warning. The affected matrix leg runs with an empty input, so the callee may skip its real work (e.g. a test configuration) while the run stays green.",
-    fix: "Define the key in every combination (add it to the `include` entry or a matrix dimension), or add an explicit fallback: `${{ matrix.key || 'default' }}`. Reported as an error when the input is required (or the callee is not in the repository) or when its default is empty (none, or `default: ''`) and an `if:` in the callee reads it, and as a warning when the empty value replaces a non-empty `default`. Not reported for other optional inputs (an empty default that no condition reads, or reads only through a fallback such as `inputs.x || 'all'`): the callee handles the empty value like an omitted input.",
+    fix: "Define the key in every combination (add it to the `include` entry or a matrix dimension), or add an explicit fallback: `${{ matrix.key || 'default' }}`.",
+    scope: "Reported as an error when the input is required (or the callee is not in the repository) or when its default is empty (none, or `default: ''`) and an `if:` in the callee reads it, and as a warning when the empty value replaces a non-empty `default`. Not reported for other optional inputs (an empty default that no condition reads, or reads only through a fallback such as `inputs.x || 'all'`): the callee handles the empty value like an omitted input.",
     examples: {
       bad: `strategy:
   matrix:

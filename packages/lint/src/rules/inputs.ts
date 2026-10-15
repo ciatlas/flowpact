@@ -391,8 +391,8 @@ const optionalInputInCondition = defineRule({
     why:
       'When a caller omits an optional input that has no default, GitHub substitutes an empty string. A condition such ' +
       'as `if: inputs.x` then takes the "false" branch silently, so jobs or steps are skipped and the run is still green.',
-    fix:
-      "Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`). " +
+    fix: "Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`).",
+    scope:
       "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local caller passes — unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them.",
     examples: {
       bad: `inputs:

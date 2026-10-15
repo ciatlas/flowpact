@@ -272,13 +272,19 @@ describe('rules and explain', () => {
     expect(out).toContain('Graph structure');
   });
   it('explains a rule with examples and docs link', () => {
-    const rule = registry.get('FP401')!;
+    const rule = registry.get('FP102')!;
     const out = renderExplain(rule, registry.docsUrl(rule), 'warning', plain);
     expect(out).toContain('configured: warning');
     expect(out).toContain('✗ problem');
     expect(out).toContain('✓ fixed');
-    expect(out).toContain('https://ciatlas.github.io/flowpact/docs/rules/fp401');
+    expect(out).toContain('https://ciatlas.github.io/flowpact/docs/rules/fp102');
     expect(out).not.toContain('scope');
+  });
+  it('explains what a rule reports and leaves out under scope, not with every finding', () => {
+    const rule = registry.get('FP401')!;
+    const out = renderExplain(rule, registry.docsUrl(rule), 'error', plain).replace(/\s+/g, ' ');
+    expect(out).toContain('scope Reported as an error when the input is required');
+    expect(rule.docs.fix).not.toContain('Not reported');
   });
   it('explains what a rule leaves out', () => {
     const rule = registry.get('FP303')!;

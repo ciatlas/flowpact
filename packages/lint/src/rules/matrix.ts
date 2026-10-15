@@ -284,8 +284,8 @@ const emptyBindingForMatrixCombo = defineRule({
     why:
       'GitHub evaluates a missing matrix key to an empty string — no error, no warning. The affected matrix leg runs with ' +
       'an empty input, so the callee may skip its real work (e.g. a test configuration) while the run stays green.',
-    fix:
-      "Define the key in every combination (add it to the `include` entry or a matrix dimension), or add an explicit fallback: `${{ matrix.key || 'default' }}`. " +
+    fix: "Define the key in every combination (add it to the `include` entry or a matrix dimension), or add an explicit fallback: `${{ matrix.key || 'default' }}`.",
+    scope:
       "Reported as an error when the input is required (or the callee is not in the repository) or when its default is empty (none, or `default: ''`) and an `if:` in the callee reads it, and as a warning when the empty value replaces a non-empty `default`. " +
       "Not reported for other optional inputs (an empty default that no condition reads, or reads only through a fallback such as `inputs.x || 'all'`): the callee handles the empty value like an omitted input.",
     examples: {

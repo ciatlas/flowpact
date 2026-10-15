@@ -2,7 +2,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createRegistry, DOCS_BASE_URL } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
-import { indexPage, rulePage } from '../gen-rule-docs';
+import { indexPage, rulePage, ruleSamples } from '../gen-rule-docs';
+import { guidesOf, RELATED } from '../rule-docs-meta';
 
 const DOCS_DIR = join(import.meta.dirname, '../../apps/docs/content/docs');
 const RULES_DIR = join(DOCS_DIR, 'rules');
@@ -33,9 +34,13 @@ describe('rule docs', () => {
     );
   });
 
-  it('pages are up to date with the rule definitions (run `pnpm docs:gen`)', () => {
+  it('pages are up to date with the rule definitions and the fixtures (run `pnpm docs:gen`)', () => {
+    const samples = ruleSamples();
     for (const rule of registry.all()) {
-      expect(readFileSync(join(RULES_DIR, `${rule.code.toLowerCase()}.mdx`), 'utf8')).toBe(rulePage(rule));
+      const sample = samples.get(rule.code);
+      expect(readFileSync(join(RULES_DIR, `${rule.code.toLowerCase()}.mdx`), 'utf8')).toBe(
+        rulePage(rule, sample ? { sample } : {}),
+      );
     }
     expect(readFileSync(join(RULES_DIR, 'index.mdx'), 'utf8')).toBe(indexPage(registry.all()));
   });
@@ -54,6 +59,35 @@ describe('rule docs', () => {
         expect(span, `${rule.code}: ${span}`).not.toMatch(/[|\\]/);
         expect(index).toContain(span);
       }
+  });
+
+  it('relates only rules that exist, and never a rule to itself', () => {
+    for (const [code, related] of Object.entries(RELATED)) {
+      expect(registry.get(code), code).toBeDefined();
+      for (const r of related) {
+        expect(registry.get(r), `${code} → ${r}`).toBeDefined();
+        expect(r).not.toBe(code);
+      }
+    }
+    for (const rule of registry.all())
+      for (const [, href] of guidesOf(rule.code)) expect(href, rule.code).toMatch(/^\/docs\//);
+  });
+
+  it('shows a sample finding for the rules a fixture reports, and lets overrides accept all but their own', () => {
+    const samples = ruleSamples();
+    expect(samples.get('FP401')).toMatchObject({
+      fixture: 'incident-matrix',
+      file: '.github/workflows/tests.yml',
+    });
+    const page = (code: string) => {
+      const rule = registry.get(code)!;
+      const sample = samples.get(code);
+      return rulePage(rule, sample ? { sample } : {});
+    };
+    expect(page('FP401')).toContain('## What you see');
+    expect(page('FP401')).toContain('target: ".github/workflows/run-suite.yml#inputs.config"');
+    expect(page('FP903')).not.toContain('## Accept one finding');
+    expect(page('FP810')).toContain('[Impact mode](/docs/impact-mode) |');
   });
 
   it('gives impact mode its own group in the index, and reserves only FP7xx', () => {
