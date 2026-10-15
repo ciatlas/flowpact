@@ -11772,8 +11772,8 @@ function conditionUses(expr, whole = true) {
         }
         return;
       }
-      const passes = VALUE_FUNCTIONS.has(name) && use === "compared";
-      for (const arg of e.args) visit2(arg, passes ? "compared" : "value");
+      const passes2 = VALUE_FUNCTIONS.has(name) && use === "compared";
+      for (const arg of e.args) visit2(arg, passes2 ? "compared" : "value");
     }
   };
   visit2(expr.ast, whole ? "truthiness" : "value");
@@ -26966,9 +26966,14 @@ var FetchError = class extends Error {
   unreadable;
 };
 async function get2(url2, accept, opts) {
-  let res;
+  const res = await withRetries(url2, accept, opts);
+  if (res.status === 404 || res.status === 422) return void 0;
+  if (!res.ok) throw httpError(res, opts);
+  return bodyOf(res);
+}
+async function send(url2, accept, opts) {
   try {
-    res = await (opts.fetch ?? fetch)(url2, {
+    return await (opts.fetch ?? fetch)(url2, {
       headers: {
         accept,
         "user-agent": "flowpact",
@@ -26980,9 +26985,43 @@ async function get2(url2, accept, opts) {
   } catch (e) {
     throw networkError(url2, e);
   }
-  if (res.status === 404 || res.status === 422) return void 0;
-  if (!res.ok) throw httpError(res, opts);
-  return bodyOf(res);
+}
+var ATTEMPTS = 3;
+var MAX_RETRY_AFTER_S = 60;
+async function withRetries(url2, accept, opts) {
+  for (let attempt = 1; ; attempt++) {
+    let answer;
+    try {
+      answer = await send(url2, accept, opts);
+    } catch (e) {
+      answer = e;
+    }
+    const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, opts) : void 0;
+    if (wait === void 0) {
+      if (answer instanceof Response) return answer;
+      throw answer;
+    }
+    await pause(wait);
+  }
+}
+var pause = (ms) => new Promise((done) => setTimeout(done, ms));
+var retryAfterOf = (res) => {
+  const header = res.headers.get("retry-after");
+  const seconds = header === null ? Number.NaN : Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : void 0;
+};
+var rateLimitUsedUp = (res) => (res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0";
+function retryWait(answer, attempt, opts) {
+  if (answer instanceof Response && !passes(answer)) return void 0;
+  const after = answer instanceof Response ? retryAfterOf(answer) : void 0;
+  if (after === void 0) return backoffMs(attempt, opts);
+  return after <= MAX_RETRY_AFTER_S ? after * 1e3 : void 0;
+}
+var passes = (res) => res.status >= 500 || slowDown(res) && !rateLimitUsedUp(res);
+var slowDown = (res) => res.status === 429 || res.status === 403 && retryAfterOf(res) !== void 0;
+function backoffMs(attempt, opts) {
+  const base = opts.retryDelayMs ?? RETRY_DELAY_MS;
+  return base * 2 ** (attempt - 1) + Math.random() * base;
 }
 var TIMEOUT_MS = 3e4;
 function networkError(url2, e) {
@@ -27003,15 +27042,18 @@ function httpError(res, opts) {
     return new FetchError(
       `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\``
     );
-  if ((res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0")
-    return new FetchError(
-      `the GitHub API rate limit is used up (${status})${opts.token ? "; try again later" : ": without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`"}`
-    );
+  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts));
+  if (slowDown(res)) return new FetchError(slowDownMessage(res, status));
   if (res.status === 403)
     return new FetchError(
       `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`
     );
   return new FetchError(`${status} from the GitHub API`);
+}
+var usedUpMessage = (status, opts) => `the GitHub API rate limit is used up (${status})${opts.token ? "; try again later" : ": without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`"}`;
+function slowDownMessage(res, status) {
+  const after = retryAfterOf(res);
+  return `the GitHub API asks to slow down (${status}): try again${after === void 0 ? " later" : ` in ${after} s`}`;
 }
 async function bodyOf(res) {
   if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) throw tooLarge();
@@ -27027,7 +27069,7 @@ var RETRY_DELAY_MS = 300;
 async function onceMore(read, opts) {
   const first = await read();
   if (first !== void 0) return first;
-  await new Promise((done) => setTimeout(done, opts.retryDelayMs ?? RETRY_DELAY_MS));
+  await pause(opts.retryDelayMs ?? RETRY_DELAY_MS);
   return read();
 }
 async function shaOf(r, opts) {
@@ -28385,7 +28427,7 @@ var BLOB_VERSION = "2026-10-06";
 var BLOCK_SIZE = 8 * 1024 * 1024;
 var BAD_PATH = /[":<>|*?\r\n]/;
 var BAD_NAME = /[":<>|*?\r\n\\/]/;
-var retryWait = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
+var retryWait2 = { sleep: (ms) => new Promise((r) => setTimeout(r, ms)) };
 function isGhes() {
   const host = new URL(process.env.GITHUB_SERVER_URL || "https://github.com").hostname.trimEnd().toUpperCase();
   return host !== "GITHUB.COM" && !host.endsWith(".GHE.COM") && !host.endsWith(".LOCALHOST");
@@ -28477,7 +28519,7 @@ async function twirp(http2, base, method, body) {
     const delay = outcome.delay ?? backoff(attempt);
     if (waited + delay > 12e4) throw new Error(`Failed to ${method}: ${failure2}`);
     info(`${method} attempt ${attempt} of 5 failed: ${failure2}. Retrying in ${delay} ms`);
-    await retryWait.sleep(delay);
+    await retryWait2.sleep(delay);
     waited += delay;
   }
 }
@@ -28528,7 +28570,7 @@ async function blobRequest(http2, url2, body, headers, what, secrets) {
     if (!failed.retryable || attempt === 4) throw new Error(`${what} failed: ${failed.failure}`);
     const delay = (2 ** (attempt - 1) - 1) * 4e3;
     info(`${what} attempt ${attempt} of 4 failed: ${failed.failure}. Retrying in ${delay} ms`);
-    await retryWait.sleep(delay);
+    await retryWait2.sleep(delay);
   }
 }
 async function uploadBlob(signedUrl, zip2, secrets) {

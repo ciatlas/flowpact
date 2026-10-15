@@ -60,8 +60,8 @@ export interface FetchRemotesOptions {
    */
   lockedCommit?: (r: RemoteRef) => string | undefined;
   /**
-   * How long to wait before asking once more for a commit or file the API answered 404 for: GitHub's API now and then
-   * does for one it has. Default: 300 ms.
+   * The first wait before sending a request again (see `retryWait`): after a 404 for a commit or file, which GitHub's
+   * API now and then answers for one it has, and, growing exponentially, after a failure that passes. Default: 300 ms.
    */
   retryDelayMs?: number;
 }
@@ -110,11 +110,22 @@ class FetchError extends Error {
   }
 }
 
-/** A GET on the GitHub API, as text: `accept` picks the media type (a commit's SHA, a file's raw content). */
+/**
+ * A GET on the GitHub API, as text: `accept` picks the media type (a commit's SHA, a file's raw content). A failure
+ * that passes is retried (see `retryWait`).
+ */
 async function get(url: string, accept: string, opts: FetchRemotesOptions): Promise<string | undefined> {
-  let res: Response;
+  const res = await withRetries(url, accept, opts);
+  // 422: a SHA that is no commit of the repository.
+  if (res.status === 404 || res.status === 422) return undefined;
+  if (!res.ok) throw httpError(res, opts);
+  return bodyOf(res);
+}
+
+/** One request, or the network's error (a timeout included). */
+async function send(url: string, accept: string, opts: FetchRemotesOptions): Promise<Response> {
   try {
-    res = await (opts.fetch ?? fetch)(url, {
+    return await (opts.fetch ?? fetch)(url, {
       headers: {
         accept,
         'user-agent': 'flowpact',
@@ -126,10 +137,74 @@ async function get(url: string, accept: string, opts: FetchRemotesOptions): Prom
   } catch (e) {
     throw networkError(url, e);
   }
-  // 422: a SHA that is no commit of the repository.
-  if (res.status === 404 || res.status === 422) return undefined;
-  if (!res.ok) throw httpError(res, opts);
-  return bodyOf(res);
+}
+
+/** How many times a request is sent at most: once, and twice more after a failure that passes. */
+const ATTEMPTS = 3;
+
+/** The longest `Retry-After` flowpact waits for; after a longer one the reference fails, saying when to try again. */
+const MAX_RETRY_AFTER_S = 60;
+
+/** A request, sent again while it fails in a way that passes, at most `ATTEMPTS` times in all. */
+async function withRetries(url: string, accept: string, opts: FetchRemotesOptions): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    let answer: Response | FetchError;
+    try {
+      answer = await send(url, accept, opts);
+    } catch (e) {
+      answer = e as FetchError;
+    }
+    const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, opts) : undefined;
+    if (wait === undefined) {
+      if (answer instanceof Response) return answer;
+      throw answer;
+    }
+    await pause(wait);
+  }
+}
+
+const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+/** The secondary rate limit: GitHub asks to slow down, and says when to try again (`Retry-After`, in seconds). */
+const retryAfterOf = (res: Response): number | undefined => {
+  const header = res.headers.get('retry-after');
+  const seconds = header === null ? Number.NaN : Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined;
+};
+
+/** The primary rate limit is used up: it resets within the hour, too long to wait. */
+const rateLimitUsedUp = (res: Response) =>
+  (res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0';
+
+/**
+ * How long to wait before sending a request again, or undefined when another try would not help. Retried: no answer
+ * (the network, a timeout), a server error (5xx), and the secondary rate limit (429, or 403 with `Retry-After`) for as
+ * long as it asks, up to `MAX_RETRY_AFTER_S`. Not retried: what another try cannot change (401, 403 without
+ * `Retry-After`, 404 and 422, which the lookups ask once more for themselves) and a used-up primary rate limit.
+ * Waits grow exponentially, with jitter so that requests made together do not come back together.
+ */
+function retryWait(
+  answer: Response | FetchError,
+  attempt: number,
+  opts: FetchRemotesOptions,
+): number | undefined {
+  if (answer instanceof Response && !passes(answer)) return undefined;
+  const after = answer instanceof Response ? retryAfterOf(answer) : undefined;
+  if (after === undefined) return backoffMs(attempt, opts);
+  return after <= MAX_RETRY_AFTER_S ? after * 1000 : undefined;
+}
+
+/** Whether an answer reports a failure that passes: a server error, or the secondary rate limit. */
+const passes = (res: Response) => res.status >= 500 || (slowDown(res) && !rateLimitUsedUp(res));
+
+/** GitHub asks to slow down: 429, or 403 with `Retry-After` (its secondary rate limit). */
+const slowDown = (res: Response) =>
+  res.status === 429 || (res.status === 403 && retryAfterOf(res) !== undefined);
+
+/** The wait before the next attempt: doubling from `retryDelayMs`, with as much again at random at most. */
+function backoffMs(attempt: number, opts: FetchRemotesOptions): number {
+  const base = opts.retryDelayMs ?? RETRY_DELAY_MS;
+  return base * 2 ** (attempt - 1) + Math.random() * base;
 }
 
 const TIMEOUT_MS = 30_000;
@@ -155,15 +230,23 @@ function httpError(res: Response, opts: FetchRemotesOptions): FetchError {
     return new FetchError(
       `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\``,
     );
-  if ((res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0')
-    return new FetchError(
-      `the GitHub API rate limit is used up (${status})${opts.token ? '; try again later' : ': without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`'}`,
-    );
+  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts));
+  if (slowDown(res)) return new FetchError(slowDownMessage(res, status));
   if (res.status === 403)
     return new FetchError(
       `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`,
     );
   return new FetchError(`${status} from the GitHub API`);
+}
+
+/** The primary rate limit is used up: wait, or (without a token, at 60 requests an hour) set one. */
+const usedUpMessage = (status: string, opts: FetchRemotesOptions) =>
+  `the GitHub API rate limit is used up (${status})${opts.token ? '; try again later' : ': without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`'}`;
+
+/** The secondary rate limit, which said to wait longer than flowpact does (or did not say how long). */
+function slowDownMessage(res: Response, status: string): string {
+  const after = retryAfterOf(res);
+  return `the GitHub API asks to slow down (${status}): try again${after === undefined ? ' later' : ` in ${after} s`}`;
 }
 
 /** A response's text, refused over `MAX_FILE_BYTES` by its length header or by what it holds. */
@@ -196,7 +279,7 @@ async function onceMore<T>(
 ): Promise<T | undefined> {
   const first = await read();
   if (first !== undefined) return first;
-  await new Promise((done) => setTimeout(done, opts.retryDelayMs ?? RETRY_DELAY_MS));
+  await pause(opts.retryDelayMs ?? RETRY_DELAY_MS);
   return read();
 }
 

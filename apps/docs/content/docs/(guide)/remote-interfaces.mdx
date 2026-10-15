@@ -99,9 +99,15 @@ a classic token with `repo`, or a GitHub App installation token that includes th
 | `not found, or not readable with this token` | The reference does not exist, or the token cannot read it. It is recorded under `unreadable:`; give a token that can read it to check it. |
 | `the GitHub API rejected the token (401)` | The token is invalid or expired: check `GH_TOKEN` or `GITHUB_TOKEN`, or run `gh auth status`. |
 | `the GitHub API rate limit is used up` | Without a token GitHub allows 60 requests an hour: set a token, or wait. |
+| `the GitHub API asks to slow down` | GitHub's secondary rate limit, for many requests at once: try again when it says. |
 | `the GitHub API refused the request (403)` | The token lacks read access to that repository's contents. |
 | `could not reach https://api.github.com (…)` | Node's `fetch failed`: no network, DNS, TLS or a proxy. Check `GITHUB_API_URL`; behind a proxy, set `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` (Node 24 and later), as Node's fetch ignores proxy variables otherwise. |
 | `no answer from … within 30 s` | The network or the API is slow: try again. |
+
+Before it gives up on a reference, flowpact sends a request again after no answer, a server error (5xx) or the
+secondary rate limit, three times at most and waiting longer each time (as long as the rate limit asks, up to a
+minute), and asks once more for a commit or file the API says is not there, which it now and then says of one it has.
+An invalid token, missing access and a used-up rate limit are not tried again.
 
 ## Sources for the editor
 

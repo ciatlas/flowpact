@@ -266,6 +266,69 @@ describe('a 404 the GitHub API answers now and then', () => {
   });
 });
 
+describe('failures that pass', () => {
+  const index = () =>
+    lint({
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+    }).index;
+  const github = () =>
+    fakeApi({ 'octo/setup@v2': SHA('b') }, { [`octo/setup/action.yml@${SHA('b')}`]: SETUP });
+
+  /** The fake API, after these answers to the first requests (an Error is the network's). */
+  function first(answers: (Response | Error)[], api = github()) {
+    let n = 0;
+    const fetch = (async (input: string | URL, init?: RequestInit) => {
+      n++;
+      const answer = answers.shift();
+      if (answer instanceof Error) throw answer;
+      return answer ?? api.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    return { fetch, sent: () => n };
+  }
+  const update = (fetch: typeof globalThis.fetch) =>
+    updateRemotesLock(index(), undefined, { fetch, retryDelayMs: 0 });
+  const status = (code: number, headers: Record<string, string> = {}) =>
+    new Response('', { status: code, headers });
+
+  it('sends a request again after a server error or no answer, three times at most', async () => {
+    for (const failure of [status(502), status(503), new TypeError('fetch failed')]) {
+      const api = first([failure]);
+      const u = await update(api.fetch);
+      expect(u.lock.remotes['octo/setup@v2']?.sha).toBe(SHA('b'));
+      expect(api.sent()).toBe(3); // the failure, then the commit and the file
+    }
+    const down = first([status(503), status(503), status(503)]);
+    const u = await update(down.fetch);
+    expect(u.failed).toEqual([{ ref: 'octo/setup@v2', error: '503 from the GitHub API' }]);
+    expect(down.sent()).toBe(3);
+  });
+
+  it('waits as long as the secondary rate limit asks, up to a minute', async () => {
+    const soon = first([status(403, { 'retry-after': '0' }), status(429)]);
+    expect((await update(soon.fetch)).lock.remotes['octo/setup@v2']?.sha).toBe(SHA('b'));
+    expect(soon.sent()).toBe(4);
+    const later = first([status(429, { 'retry-after': '3600' })]);
+    expect((await update(later.fetch)).failed).toEqual([
+      { ref: 'octo/setup@v2', error: 'the GitHub API asks to slow down (429): try again in 3600 s' },
+    ]);
+    expect(later.sent()).toBe(1);
+  });
+
+  it('does not send again what another try cannot change', async () => {
+    const usedUp = status(403, { 'x-ratelimit-remaining': '0' });
+    for (const [answer, error] of [
+      [status(401), /rejected the token/],
+      [status(403), /needs read access/],
+      [usedUp, /rate limit is used up/],
+      [status(429, { 'x-ratelimit-remaining': '0' }), /rate limit is used up/],
+    ] as const) {
+      const api = first([answer]);
+      expect((await update(api.fetch)).failed[0]?.error).toMatch(error);
+      expect(api.sent()).toBe(1);
+    }
+  });
+});
+
 describe('updateRemotesLock with paths', () => {
   const files = {
     [`${WF}/a.yml`]: 'on: push\njobs:\n  c:\n    uses: ./.github/workflows/_inner.yml\n',
