@@ -617,6 +617,26 @@ describe('diffContracts', () => {
     ]);
   });
 
+  it('says a removed input fails a workflow call, and only warns in a step that uses an action', () => {
+    const removed = (c: Contract) => {
+      const cur = structuredClone(c);
+      delete cur.interface.inputs.a;
+      return diffContracts(c, cur).map((d) => [d.breaking, d.message]);
+    };
+    expect(removed(wf())).toEqual([[true, 'input "a" was removed — callers that pass it will fail']]);
+    const act: Contract = {
+      $schema: 'x',
+      version: 1,
+      kind: 'action',
+      path: '.github/actions/setup',
+      interface: wf().interface,
+      consumers: [],
+    };
+    expect(removed(act)).toEqual([
+      [true, 'input "a" was removed — steps that pass it get a warning, and their value is ignored'],
+    ]);
+  });
+
   it('separates dispatch inputs, detects renames and treats a newly reusable workflow as non-breaking', () => {
     const moved = wf();
     moved.interface.dispatchInputs = { a: moved.interface.inputs.a! };

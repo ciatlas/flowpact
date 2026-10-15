@@ -21562,7 +21562,7 @@ function diffInputs(add, key, label, before, after, opts) {
   for (const [name, old] of Object.entries(before)) {
     const path = `${key}.${name}`;
     const cur = after[name];
-    if (!cur) add(true, path, `${label} "${name}" was removed \u2014 callers that pass it will fail`);
+    if (!cur) add(true, path, `${label} "${name}" was removed \u2014 ${opts.whenRemoved}`);
     else
       diffInput(
         (breaking, what) => add(breaking, path, `${label} "${name}" ${what}`),
@@ -21685,11 +21685,15 @@ function diffContracts(before, after) {
   diffInputs(add, "inputs", "input", bi.inputs, ai.inputs, {
     // GitHub requires a `required` workflow_call input from every caller, even when it has a default.
     mustPass: (i) => isWorkflow ? i.required : i.required && i.default === void 0,
-    additionsBreak: wasCallable
+    additionsBreak: wasCallable,
+    // GitHub fails a call that passes an input the reusable workflow does not declare; for an action, it logs a warning
+    // and the step runs without the value.
+    whenRemoved: isWorkflow ? "callers that pass it will fail" : "steps that pass it get a warning, and their value is ignored"
   });
   diffInputs(add, "dispatchInputs", "dispatch input", bi.dispatchInputs ?? {}, ai.dispatchInputs ?? {}, {
     mustPass: (i) => i.required && i.default === void 0,
-    additionsBreak: true
+    additionsBreak: true,
+    whenRemoved: "callers that pass it will fail"
   });
   const bs = bi.secrets ?? {};
   const as = ai.secrets ?? {};

@@ -415,7 +415,7 @@ describe('what a changed entry does to the calls', () => {
     expect(r.stdout).toContain(
       [
         `  changed octo/setup@v2: bbbbbbb → aaaaaaa, breaks 1 of 2 calls`,
-        `    input "cache" was removed — callers that pass it will fail`,
+        `    input "cache" was removed — steps that pass it get a warning, and their value is ignored`,
         `    breaks .github/workflows/ci.yml:6 jobs.b step #1`,
         `      FP102 octo/setup@v2 has no input "cache"`,
         `    1 other call fits`,
