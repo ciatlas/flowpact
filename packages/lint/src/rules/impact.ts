@@ -82,6 +82,11 @@ const impactConflict = defineRule({
       'Release tools read one thing — usually the squashed commit title. A `semver:major` label on a `fix:` pull ' +
       'request looks right in review, but the release is cut as a patch.',
     fix: 'Make the authoritative source (`impact.declaredBy`, the title by default) declare the impact, for example `feat!: …`.',
+    examples: {
+      bad: `# PR title: "fix: rename the deploy output"   (the release tool reads this: a patch)
+# PR label: semver:major`,
+      good: `# PR title: "fix!: rename the deploy output"`,
+    },
   },
   check(ctx) {
     const v = ctx.impact?.verdict;
@@ -103,6 +108,11 @@ const impactOverDeclared = defineRule({
     summary: 'The pull request declares a bigger impact than its workflow and action changes require.',
     why: 'Not a problem: the release may contain changes flowpact does not grade. Reported so the declaration is visible.',
     fix: 'Nothing to fix if the release has other changes; otherwise declare the smaller impact.',
+    examples: {
+      bad: `# PR title: "feat!: tidy the deploy workflow"   (declares major)
+# the only change to a published workflow is a step's command: a patch`,
+      good: `# PR title: "fix: tidy the deploy workflow"`,
+    },
   },
   check(ctx) {
     const v = ctx.impact?.verdict;
@@ -124,6 +134,10 @@ const impactUndeclared = defineRule({
     summary: 'No release impact is declared; flowpact reports the impact the changes require.',
     why: 'Without a declaration there is nothing to check against. The required impact is still useful when cutting a release.',
     fix: 'Declare the impact: a Conventional Commits pull request title (`feat: …`, `fix!: …`), a `semver:*` label, or `--expect`.',
+    examples: {
+      bad: `# PR title: "Update the deploy workflow"   (no Conventional Commits type: nothing declared)`,
+      good: `# PR title: "fix: update the deploy workflow"`,
+    },
   },
   check(ctx) {
     const v = ctx.impact?.verdict;
@@ -154,6 +168,15 @@ const impactUncertain = defineRule({
       'Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and ' +
       '`inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as ' +
       "`${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.",
+    examples: {
+      bad: `# in a published reusable workflow
+jobs:
+  test:
+    runs-on: \${{ inputs.runner }}   # was ubuntu-latest: which runners callers need is known only at run time`,
+      good: `jobs:
+  test:
+    runs-on: ubuntu-latest   # or keep the change, and declare it major (feat!: …)`,
+    },
   },
   check(ctx) {
     for (const c of ctx.impact?.changes ?? []) {

@@ -65,6 +65,16 @@ const overrideUnused = defineRule({
     summary: 'An override matches no finding — the problem was fixed, or the target is misspelled.',
     why: 'Stale overrides hide future problems at the same target and make the exception list untrustworthy.',
     fix: 'Delete the override, or correct its `rule` / `target` / `file` (use the `symbol` shown in JSON output or `flowpact lint --format json`).',
+    examples: {
+      bad: `overrides:
+  - rule: unused-input
+    target: .github/workflows/deploy.yml#inputs.siute   # misspelled: matches no finding
+    reason: Read by the release dispatcher until the migration`,
+      good: `overrides:
+  - rule: unused-input
+    target: .github/workflows/deploy.yml#inputs.suite
+    reason: Read by the release dispatcher until the migration`,
+    },
   },
   check(ctx) {
     for (const u of ctx.overrides ?? []) {
@@ -100,6 +110,16 @@ const overrideExpiringSoon = defineRule({
     summary: `An override expires within ${EXPIRY_WARNING_DAYS} days.`,
     why: 'A heads-up so the owner can finish the follow-up before the build starts failing.',
     fix: 'Fix the underlying findings, or extend `expires` with an updated reason.',
+    examples: {
+      bad: `overrides:
+  - rule: unused-input
+    target: .github/workflows/pipeline.yml#inputs.legacy-flag
+    reason: Read by the release dispatcher until the migration (JIRA-123)
+    expires: 2026-01-31   # within 14 days`,
+      good: `# migration done: the input and the override deleted; or, when it slipped, a new date and why
+    reason: The release dispatcher reads it until the migration moves to Q2 (JIRA-123)
+    expires: 2026-04-30`,
+    },
   },
   check(ctx) {
     for (const u of ctx.overrides ?? []) {

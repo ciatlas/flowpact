@@ -27,6 +27,31 @@ Stale overrides hide future problems at the same target and make the exception l
 
 Delete the override, or correct its `rule` / `target` / `file` (use the `symbol` shown in JSON output or `flowpact lint --format json`).
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+overrides:
+  - rule: unused-input
+    target: .github/workflows/deploy.yml#inputs.siute   # misspelled: matches no finding
+    reason: Read by the release dispatcher until the migration
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+overrides:
+  - rule: unused-input
+    target: .github/workflows/deploy.yml#inputs.suite
+    reason: Read by the release dispatcher until the migration
+```
+
+</Tab>
+</Tabs>
+
 ## Change the severity
 
 Change the severity (or turn the rule off) in `.github/flowpact/flowpact.config.yml`, by code or by name:

@@ -63,6 +63,21 @@ const contractMissing = defineRule({
     summary: 'A workflow or local action has no contract in `.github/flowpact/` (check mode).',
     why: 'Without a locked contract, changes to its interface and wiring are not visible in review and cannot be checked.',
     fix: GENERATE,
+    examples: {
+      bad: `# .github/workflows/deploy.yml is new, and .github/flowpact/contracts/ has no contract for it
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }`,
+      good: `# \`flowpact generate\` writes .github/flowpact/contracts/workflows/deploy.contract.yaml: commit it
+kind: workflow
+path: .github/workflows/deploy.yml
+interface:
+  inputs:
+    environment:
+      type: string
+      required: true`,
+    },
   },
   check(ctx) {
     for (const { entry, unit } of entries(ctx, ['create'])) {
@@ -87,6 +102,20 @@ const contractOutdated = defineRule({
       'The contract is the reviewed record of what flows in and out. When it drifts silently, the next reviewer compares ' +
       'against stale information.',
     fix: GENERATE,
+    examples: {
+      bad: `# .github/actions/notify/action.yml gained an input that its contract does not list yet
+inputs:
+  emoji:
+    description: Emoji prefix for the message
+    default: ':rocket:'`,
+      good: `# \`flowpact generate\` updates .github/flowpact/contracts/actions/notify.contract.yaml
+interface:
+  inputs:
+    emoji:
+      required: false
+      default: ':rocket:'
+      description: Emoji prefix for the message`,
+    },
   },
   check(ctx) {
     for (const { entry, unit } of entries(ctx, ['update'])) {
@@ -172,6 +201,13 @@ const orphanContract = defineRule({
       'If the workflow was removed or renamed, anything still calling it (including other repositories) breaks — the stale ' +
       'contract is the last record of that interface.',
     fix: 'Confirm nothing depends on the removed workflow, then run `flowpact generate` to delete the contract.',
+    examples: {
+      bad: `# .github/workflows/nightly.yml was deleted; its contract is still there
+# .github/flowpact/contracts/workflows/nightly.contract.yaml
+kind: workflow
+path: .github/workflows/nightly.yml`,
+      good: `# nothing calls nightly.yml any more: \`flowpact generate\` deletes its contract`,
+    },
   },
   check(ctx) {
     for (const { entry } of entries(ctx, ['delete'])) {
@@ -195,6 +231,22 @@ const contractInvalid = defineRule({
       'A contract file cannot be read (invalid YAML or schema), usually because it was edited by hand or merged badly.',
     why: 'An unreadable contract cannot be compared, so drift and breaking changes go unnoticed.',
     fix: 'Contracts are generated: resolve the merge by running `flowpact generate` instead of editing the file.',
+    examples: {
+      bad: `# .github/flowpact/contracts/workflows/deploy.contract.yaml after a merge
+interface:
+  inputs:
+<<<<<<< HEAD
+    environment:
+=======
+    env:
+>>>>>>> main`,
+      good: `# resolve the conflict in deploy.yml, then \`flowpact generate\` writes the contract again
+interface:
+  inputs:
+    environment:
+      type: string
+      required: true`,
+    },
   },
   check(ctx) {
     for (const { entry } of entries(ctx, ['update', 'delete'])) {

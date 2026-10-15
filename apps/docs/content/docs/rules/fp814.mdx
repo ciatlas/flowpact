@@ -17,6 +17,30 @@ For example a check name built from the triggering event, `needs` outputs or `va
 
 Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# in a published reusable workflow
+jobs:
+  test:
+    runs-on: ${{ inputs.runner }}   # was ubuntu-latest: which runners callers need is known only at run time
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest   # or keep the change, and declare it major (feat!: …)
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

@@ -27,6 +27,28 @@ If the workflow was removed or renamed, anything still calling it (including oth
 
 Confirm nothing depends on the removed workflow, then run `flowpact generate` to delete the contract.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/workflows/nightly.yml was deleted; its contract is still there
+# .github/flowpact/contracts/workflows/nightly.contract.yaml
+kind: workflow
+path: .github/workflows/nightly.yml
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# nothing calls nightly.yml any more: `flowpact generate` deletes its contract
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

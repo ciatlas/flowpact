@@ -17,6 +17,26 @@ Not a problem: the release may contain changes flowpact does not grade. Reported
 
 Nothing to fix if the release has other changes; otherwise declare the smaller impact.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# PR title: "feat!: tidy the deploy workflow"   (declares major)
+# the only change to a published workflow is a step's command: a patch
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# PR title: "fix: tidy the deploy workflow"
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

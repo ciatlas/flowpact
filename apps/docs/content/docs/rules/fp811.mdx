@@ -17,6 +17,26 @@ Release tools read one thing — usually the squashed commit title. A `semver:ma
 
 Make the authoritative source (`impact.declaredBy`, the title by default) declare the impact, for example `feat!: …`.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# PR title: "fix: rename the deploy output"   (the release tool reads this: a patch)
+# PR label: semver:major
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# PR title: "fix!: rename the deploy output"
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

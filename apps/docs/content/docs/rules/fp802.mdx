@@ -27,6 +27,35 @@ The contract is the reviewed record of what flows in and out. When it drifts sil
 
 Run `flowpact generate` and commit the updated contracts. In CI, the flowpact action (check mode) attaches the regenerated contracts and a `git apply`-able patch to the run — see its job summary.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/actions/notify/action.yml gained an input that its contract does not list yet
+inputs:
+  emoji:
+    description: Emoji prefix for the message
+    default: ':rocket:'
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# `flowpact generate` updates .github/flowpact/contracts/actions/notify.contract.yaml
+interface:
+  inputs:
+    emoji:
+      required: false
+      default: ':rocket:'
+      description: Emoji prefix for the message
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

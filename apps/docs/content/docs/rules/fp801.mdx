@@ -27,6 +27,36 @@ Without a locked contract, changes to its interface and wiring are not visible i
 
 Run `flowpact generate` and commit the updated contracts. In CI, the flowpact action (check mode) attaches the regenerated contracts and a `git apply`-able patch to the run — see its job summary.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/workflows/deploy.yml is new, and .github/flowpact/contracts/ has no contract for it
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# `flowpact generate` writes .github/flowpact/contracts/workflows/deploy.contract.yaml: commit it
+kind: workflow
+path: .github/workflows/deploy.yml
+interface:
+  inputs:
+    environment:
+      type: string
+      required: true
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

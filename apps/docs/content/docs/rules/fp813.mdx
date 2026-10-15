@@ -17,6 +17,25 @@ Without a declaration there is nothing to check against. The required impact is 
 
 Declare the impact: a Conventional Commits pull request title (`feat: …`, `fix!: …`), a `semver:*` label, or `--expect`.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# PR title: "Update the deploy workflow"   (no Conventional Commits type: nothing declared)
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# PR title: "fix: update the deploy workflow"
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

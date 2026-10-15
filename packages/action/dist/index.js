@@ -22901,7 +22901,22 @@ var contractMissing = defineRule({
   docs: {
     summary: "A workflow or local action has no contract in `.github/flowpact/` (check mode).",
     why: "Without a locked contract, changes to its interface and wiring are not visible in review and cannot be checked.",
-    fix: GENERATE
+    fix: GENERATE,
+    examples: {
+      bad: `# .github/workflows/deploy.yml is new, and .github/flowpact/contracts/ has no contract for it
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }`,
+      good: `# \`flowpact generate\` writes .github/flowpact/contracts/workflows/deploy.contract.yaml: commit it
+kind: workflow
+path: .github/workflows/deploy.yml
+interface:
+  inputs:
+    environment:
+      type: string
+      required: true`
+    }
   },
   check(ctx) {
     for (const { entry, unit } of entries(ctx, ["create"])) {
@@ -22921,7 +22936,21 @@ var contractOutdated = defineRule({
   docs: {
     summary: "The locked contract no longer matches the workflow \u2014 non-breaking changes to its interface or wiring.",
     why: "The contract is the reviewed record of what flows in and out. When it drifts silently, the next reviewer compares against stale information.",
-    fix: GENERATE
+    fix: GENERATE,
+    examples: {
+      bad: `# .github/actions/notify/action.yml gained an input that its contract does not list yet
+inputs:
+  emoji:
+    description: Emoji prefix for the message
+    default: ':rocket:'`,
+      good: `# \`flowpact generate\` updates .github/flowpact/contracts/actions/notify.contract.yaml
+interface:
+  inputs:
+    emoji:
+      required: false
+      default: ':rocket:'
+      description: Emoji prefix for the message`
+    }
   },
   check(ctx) {
     for (const { entry, unit } of entries(ctx, ["update"])) {
@@ -22992,7 +23021,14 @@ var orphanContract = defineRule({
   docs: {
     summary: "A contract file exists for a workflow or action that no longer exists.",
     why: "If the workflow was removed or renamed, anything still calling it (including other repositories) breaks \u2014 the stale contract is the last record of that interface.",
-    fix: "Confirm nothing depends on the removed workflow, then run `flowpact generate` to delete the contract."
+    fix: "Confirm nothing depends on the removed workflow, then run `flowpact generate` to delete the contract.",
+    examples: {
+      bad: `# .github/workflows/nightly.yml was deleted; its contract is still there
+# .github/flowpact/contracts/workflows/nightly.contract.yaml
+kind: workflow
+path: .github/workflows/nightly.yml`,
+      good: `# nothing calls nightly.yml any more: \`flowpact generate\` deletes its contract`
+    }
   },
   check(ctx) {
     for (const { entry } of entries(ctx, ["delete"])) {
@@ -23013,7 +23049,23 @@ var contractInvalid = defineRule({
   docs: {
     summary: "A contract file cannot be read (invalid YAML or schema), usually because it was edited by hand or merged badly.",
     why: "An unreadable contract cannot be compared, so drift and breaking changes go unnoticed.",
-    fix: "Contracts are generated: resolve the merge by running `flowpact generate` instead of editing the file."
+    fix: "Contracts are generated: resolve the merge by running `flowpact generate` instead of editing the file.",
+    examples: {
+      bad: `# .github/flowpact/contracts/workflows/deploy.contract.yaml after a merge
+interface:
+  inputs:
+<<<<<<< HEAD
+    environment:
+=======
+    env:
+>>>>>>> main`,
+      good: `# resolve the conflict in deploy.yml, then \`flowpact generate\` writes the contract again
+interface:
+  inputs:
+    environment:
+      type: string
+      required: true`
+    }
   },
   check(ctx) {
     for (const { entry } of entries(ctx, ["update", "delete"])) {
@@ -23391,7 +23443,12 @@ var impactConflict = defineRule({
   docs: {
     summary: "Another source declares a bigger impact than the one the release tool reads.",
     why: "Release tools read one thing \u2014 usually the squashed commit title. A `semver:major` label on a `fix:` pull request looks right in review, but the release is cut as a patch.",
-    fix: "Make the authoritative source (`impact.declaredBy`, the title by default) declare the impact, for example `feat!: \u2026`."
+    fix: "Make the authoritative source (`impact.declaredBy`, the title by default) declare the impact, for example `feat!: \u2026`.",
+    examples: {
+      bad: `# PR title: "fix: rename the deploy output"   (the release tool reads this: a patch)
+# PR label: semver:major`,
+      good: `# PR title: "fix!: rename the deploy output"`
+    }
   },
   check(ctx) {
     const v = ctx.impact?.verdict;
@@ -23411,7 +23468,12 @@ var impactOverDeclared = defineRule({
   docs: {
     summary: "The pull request declares a bigger impact than its workflow and action changes require.",
     why: "Not a problem: the release may contain changes flowpact does not grade. Reported so the declaration is visible.",
-    fix: "Nothing to fix if the release has other changes; otherwise declare the smaller impact."
+    fix: "Nothing to fix if the release has other changes; otherwise declare the smaller impact.",
+    examples: {
+      bad: `# PR title: "feat!: tidy the deploy workflow"   (declares major)
+# the only change to a published workflow is a step's command: a patch`,
+      good: `# PR title: "fix: tidy the deploy workflow"`
+    }
   },
   check(ctx) {
     const v = ctx.impact?.verdict;
@@ -23431,7 +23493,11 @@ var impactUndeclared = defineRule({
   docs: {
     summary: "No release impact is declared; flowpact reports the impact the changes require.",
     why: "Without a declaration there is nothing to check against. The required impact is still useful when cutting a release.",
-    fix: "Declare the impact: a Conventional Commits pull request title (`feat: \u2026`, `fix!: \u2026`), a `semver:*` label, or `--expect`."
+    fix: "Declare the impact: a Conventional Commits pull request title (`feat: \u2026`, `fix!: \u2026`), a `semver:*` label, or `--expect`.",
+    examples: {
+      bad: `# PR title: "Update the deploy workflow"   (no Conventional Commits type: nothing declared)`,
+      good: `# PR title: "fix: update the deploy workflow"`
+    }
   },
   check(ctx) {
     const v = ctx.impact?.verdict;
@@ -23453,7 +23519,16 @@ var impactUncertain = defineRule({
   docs: {
     summary: "A change to a published unit depends on something flowpact cannot evaluate statically.",
     why: "For example a check name built from the triggering event, `needs` outputs or `vars`, a matrix computed at runtime, or an output that is now set only when an `if:` holds. flowpact cannot tell whether consumers see a different check name, or run where the output is `''`, so it does not count the change (`impact.uncertain: fail` counts it).",
-    fix: "Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major."
+    fix: "Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.",
+    examples: {
+      bad: `# in a published reusable workflow
+jobs:
+  test:
+    runs-on: \${{ inputs.runner }}   # was ubuntu-latest: which runners callers need is known only at run time`,
+      good: `jobs:
+  test:
+    runs-on: ubuntu-latest   # or keep the change, and declare it major (feat!: \u2026)`
+    }
   },
   check(ctx) {
     for (const c of ctx.impact?.changes ?? []) {
@@ -24873,7 +24948,17 @@ var overrideUnused = defineRule({
   docs: {
     summary: "An override matches no finding \u2014 the problem was fixed, or the target is misspelled.",
     why: "Stale overrides hide future problems at the same target and make the exception list untrustworthy.",
-    fix: "Delete the override, or correct its `rule` / `target` / `file` (use the `symbol` shown in JSON output or `flowpact lint --format json`)."
+    fix: "Delete the override, or correct its `rule` / `target` / `file` (use the `symbol` shown in JSON output or `flowpact lint --format json`).",
+    examples: {
+      bad: `overrides:
+  - rule: unused-input
+    target: .github/workflows/deploy.yml#inputs.siute   # misspelled: matches no finding
+    reason: Read by the release dispatcher until the migration`,
+      good: `overrides:
+  - rule: unused-input
+    target: .github/workflows/deploy.yml#inputs.suite
+    reason: Read by the release dispatcher until the migration`
+    }
   },
   check(ctx) {
     for (const u of ctx.overrides ?? []) {
@@ -24901,7 +24986,17 @@ var overrideExpiringSoon = defineRule({
   docs: {
     summary: `An override expires within ${EXPIRY_WARNING_DAYS} days.`,
     why: "A heads-up so the owner can finish the follow-up before the build starts failing.",
-    fix: "Fix the underlying findings, or extend `expires` with an updated reason."
+    fix: "Fix the underlying findings, or extend `expires` with an updated reason.",
+    examples: {
+      bad: `overrides:
+  - rule: unused-input
+    target: .github/workflows/pipeline.yml#inputs.legacy-flag
+    reason: Read by the release dispatcher until the migration (JIRA-123)
+    expires: 2026-01-31   # within 14 days`,
+      good: `# migration done: the input and the override deleted; or, when it slipped, a new date and why
+    reason: The release dispatcher reads it until the migration moves to Q2 (JIRA-123)
+    expires: 2026-04-30`
+    }
   },
   check(ctx) {
     for (const u of ctx.overrides ?? []) {

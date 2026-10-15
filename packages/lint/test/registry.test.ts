@@ -65,6 +65,9 @@ describe('built-in rules', () => {
       expect(r.docs.summary.length).toBeGreaterThan(20);
       expect(r.docs.why.length).toBeGreaterThan(30);
       expect(r.docs.fix.length).toBeGreaterThan(10);
+      // An example of the problem and its fix: on the rule's page and in `flowpact explain`.
+      expect(r.docs.examples?.bad.trim().length, 'docs.examples.bad').toBeGreaterThan(10);
+      expect(r.docs.examples?.good.trim().length, 'docs.examples.good').toBeGreaterThan(10);
       expect(registry.docsUrl(r)).toBe(
         `https://ciatlas.github.io/flowpact/docs/rules/${r.code.toLowerCase()}`,
       );

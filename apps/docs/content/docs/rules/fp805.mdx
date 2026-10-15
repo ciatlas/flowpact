@@ -17,6 +17,37 @@ An unreadable contract cannot be compared, so drift and breaking changes go unno
 
 Contracts are generated: resolve the merge by running `flowpact generate` instead of editing the file.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/flowpact/contracts/workflows/deploy.contract.yaml after a merge
+interface:
+  inputs:
+<<<<<<< HEAD
+    environment:
+=======
+    env:
+>>>>>>> main
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# resolve the conflict in deploy.yml, then `flowpact generate` writes the contract again
+interface:
+  inputs:
+    environment:
+      type: string
+      required: true
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes
