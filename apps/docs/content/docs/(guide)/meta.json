@@ -17,6 +17,7 @@
     "editors",
     "ci",
     "---[Building]Shared workflows---",
+    "shared-workflows",
     "contracts",
     "impact-mode",
     "remote-interfaces",

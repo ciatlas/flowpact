@@ -9,7 +9,31 @@ inputs you pass exist, have the right type, or include the required ones ([`FP60
 remote workflows).
 
 A **remote interfaces lockfile** records the interface of each one: its inputs, secrets and outputs, at the commit a
-reference resolved to. With it, flowpact checks remote calls as it checks local ones:
+reference resolved to.
+
+```mermaid
+flowchart TD
+  accTitle: From the remote interfaces lockfile to your calls
+  U["flowpact remotes update"]
+  L[("remotes.lock.yaml")]
+  W["Your workflows: uses: octo/setup@v2"]
+  LINT["flowpact lint, check, the editor: no network"]
+  F["FP101 · FP102 · FP103 · FP201 · FP202 · FP205 · FP301"]
+  B["A new version, or a tag that moved"]
+  U -->|"GitHub API"| L
+  L --> LINT
+  W --> LINT
+  LINT --> F
+  B -.->|"graded against your calls"| U
+```
+
+<Callout title="Interfaces, not pins">
+  The lockfile records what each reference accepts and returns, so flowpact can check your calls. It does not decide
+  which commit runs: pin references to commit SHAs, or use GitHub's [`actions.lock`](#githubs-actionslock), which
+  flowpact reads.
+</Callout>
+
+With it, flowpact checks remote calls as it checks local ones:
 
 - [`FP101`](/docs/rules/fp101): a required input is not passed;
 - [`FP102`](/docs/rules/fp102): an input that the workflow or action does not declare is passed;

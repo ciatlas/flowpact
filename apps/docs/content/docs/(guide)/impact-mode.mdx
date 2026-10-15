@@ -21,6 +21,24 @@ flowpact impact --base origin/main --title "fix: tidy the test job"
 
 <Screenshot name="impact" alt="flowpact impact failing with FP810: declared patch (the title “fix: tidy the test job”), but a removed output and a renamed check in test.yml require major" caption="A fix: title on a change that requires a major release." />
 
+```mermaid
+flowchart TD
+  accTitle: How impact mode decides
+  T["The title: fix: tidy the test job"]
+  D["Declared: patch"]
+  B["The changes to published units, base to head"]
+  Q["Required: major (a job renamed, an output removed)"]
+  CMP{"declared ≥ required?"}
+  P["Pass"]
+  F["FP810: retitle as feat!:"]
+  T --> D
+  B --> Q
+  D --> CMP
+  Q --> CMP
+  CMP -->|"yes"| P
+  CMP -->|"no"| F
+```
+
 ## What is graded
 
 Only **published** units:

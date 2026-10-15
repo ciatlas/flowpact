@@ -141,6 +141,20 @@ still that unit's.
 
 ## Workflow
 
+```mermaid
+sequenceDiagram
+  accTitle: A contract through a pull request
+  participant Dev as You
+  participant Repo as Repository
+  participant CI as flowpact check in CI
+  Dev->>Repo: generate, commit the contracts
+  Dev->>Repo: a pull request removes an output
+  Repo->>CI: pull_request
+  CI-->>Dev: FP803, and a patch
+  Dev->>Repo: generate again, commit
+  CI-->>Dev: the diff in review, check passes
+```
+
 <Steps>
 <Step>
 ### Generate
@@ -184,6 +198,19 @@ callers listed under `consumers` — including those in other repositories, whic
 </Steps>
 
 ## Breaking and non-breaking changes
+
+A change to an interface is a change to its contract, so reviewers see it as a diff. Removing an output of a reusable
+workflow:
+
+```diff title=".github/flowpact/contracts/workflows/deploy.contract.yml"
+   outputs:
+-    deployed-version:
+-      description: The version that was deployed
+-      value: ${{ jobs.deploy.outputs.version }}
+     url:
+       description: Where the release was deployed
+       value: ${{ jobs.deploy.outputs.url }}
+```
 
 `flowpact generate` and `flowpact check` compare the committed contract with the current one field by field:
 
