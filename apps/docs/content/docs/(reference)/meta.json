@@ -8,6 +8,7 @@
     "cli",
     "action",
     "api",
+    "stability",
     "[Settings][Configuration keys](/docs/configuration#reference)",
     "---[ShieldCheck]Security---",
     "security",

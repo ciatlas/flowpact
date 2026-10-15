@@ -1,0 +1,28 @@
+---
+title: Stability
+description: What semver covers in flowpact (the CLI, the reports and schemas, rule codes, the action's inputs and outputs, the API) and what it does not.
+---
+
+Build on these. Only a major release changes one in an incompatible way, and says so under **Breaking changes** in its
+release notes, with [upgrade notes](/docs/upgrading); minor and patch releases never do. This holds before 1.0 too: the
+next breaking change releases 1.0.0. Up to 0.14, a breaking change could come in a minor release (0.8 → 0.9).
+
+| Interface | Reference |
+| --- | --- |
+| CLI commands, flags and exit codes | [CLI](/docs/cli) |
+| JSON report | [`/schemas/report/v1.json`](/schemas/report/v1.json); an incompatible change makes it v2, and `meta.schemas.report` says which a report follows |
+| SARIF | SARIF 2.1.0, with stable fingerprints in `partialFingerprints["flowpact/v1"]` |
+| Annotations | `--format github`: GitHub workflow commands |
+| Config and contracts | [`/schemas/config/v1.json`](/schemas/config/v1.json), [`/schemas/contract/v1.json`](/schemas/contract/v1.json) |
+| Rule codes and names | [Rules](/docs/rules); configs, overrides and `--only` refer to them |
+| Plugin rules | The rule object in [Custom rules](/docs/custom-rules) |
+| GitHub Action inputs and outputs | [GitHub Action](/docs/action) |
+| API: the functions, their options, results and errors (`import { lint } from 'flowpact'`) | [API](/docs/api) |
+
+Not stable: the terminal output and the wording of messages and Markdown reports, which are written for people (parse
+JSON or SARIF instead); the types of the data-flow graph a plugin rule reads through `ctx.index`; the `@flowpact/*`
+packages inside the repository; and `@ciatlas/core`, the workflow model they are built on. None of them is published
+(use the [API](/docs/api)).
+
+The [API](/docs/api) follows the same policy as the CLI. Its one exception is `RuleContext.index`, the data-flow graph
+a [plugin rule](/docs/custom-rules) reads, and the types it leads to.

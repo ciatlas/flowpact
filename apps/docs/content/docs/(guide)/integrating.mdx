@@ -1,6 +1,6 @@
 ---
-title: Build on flowpact
-description: Run flowpact under your organization's policies — a copy of the action, a plain run step, your own action or a wrapper — with the interfaces that stay stable, organization defaults and rules, and keeping the version current.
+title: Roll it out across an organization
+description: Run flowpact under your organization's policies (a copy of the action, a plain run step, your own action or a wrapper) with organization defaults and rules, and keep the version current.
 ---
 
 Organizations that cannot use a third-party action, or that want their own defaults, rules and reports, can run
@@ -11,26 +11,9 @@ with a version bump.
 
 ## What is stable
 
-Build on these. Only a major release changes one in an incompatible way, and says so under **Breaking changes** in its
-release notes, with [upgrade notes](/docs/upgrading); minor and patch releases never do. This holds before 1.0 too: the
-next breaking change releases 1.0.0. Up to 0.14, a breaking change could come in a minor release (0.8 → 0.9).
-
-| Interface | Reference |
-| --- | --- |
-| CLI commands, flags and exit codes | [CLI](/docs/cli) |
-| JSON report | [`/schemas/report/v1.json`](/schemas/report/v1.json); an incompatible change makes it v2, and `meta.schemas.report` says which a report follows |
-| SARIF | SARIF 2.1.0, with stable fingerprints in `partialFingerprints["flowpact/v1"]` |
-| Annotations | `--format github`: GitHub workflow commands |
-| Config and contracts | [`/schemas/config/v1.json`](/schemas/config/v1.json), [`/schemas/contract/v1.json`](/schemas/contract/v1.json) |
-| Rule codes and names | [Rules](/docs/rules); configs, overrides and `--only` refer to them |
-| Plugin rules | The rule object in [Custom rules](/docs/custom-rules) |
-| GitHub Action inputs and outputs | [GitHub Action](/docs/action) |
-| API: the functions, their options, results and errors (`import { lint } from 'flowpact'`) | [API](/docs/api) |
-
-Not stable: the terminal output and the wording of messages and Markdown reports, which are written for people (parse
-JSON or SARIF instead); the types of the data-flow graph a plugin rule reads through `ctx.index`; the `@flowpact/*`
-packages inside the repository; and `@ciatlas/core`, the workflow model they are built on. None of them is published
-(use the [API](/docs/api)).
+The interfaces to build on (the CLI, the JSON report and SARIF, the config and contract schemas, rule codes, plugin
+rules, the action's inputs and outputs, and the API), and what is not covered, are listed in
+[Stability](/docs/stability).
 
 ## Copy the action
 

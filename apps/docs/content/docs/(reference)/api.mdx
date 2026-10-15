@@ -308,7 +308,7 @@ node build.mjs            # after every update; commit dist/index.mjs
 ```
 
 `acme.base.yml` and `rules/acme.mjs` are the [base config](/docs/integrating#organization-defaults) and the
-[plugin](/docs/custom-rules) of Build on flowpact.
+[plugin](/docs/custom-rules) of [Roll it out across an organization](/docs/integrating).
 
 ```yaml title="action.yml"
 name: Acme flowpact
@@ -429,6 +429,6 @@ path is the `sarif` output), a failed step at `fail-on`, the patch when contract
 
 ## Stability
 
-The API follows the same policy as the CLI (see [What is stable](/docs/integrating#what-is-stable)): only a major release
-changes it in an incompatible way, and says so under **Breaking changes** in its release notes; minor and patch releases
-never do. `RuleContext.index` and the types it leads to are the exception above.
+The API follows the same policy as the CLI: only a major release changes it in an incompatible way, and says so under
+**Breaking changes** in its release notes; minor and patch releases never do. `RuleContext.index` and the types it
+leads to are the exception above. See [Stability](/docs/stability) for every interface it covers.

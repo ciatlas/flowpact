@@ -72,6 +72,11 @@ reserves the `FP` prefix for built-in rules, and requires third-party rules to b
 
 ## What a rule can use
 
+<Callout type="warn" title="Not covered by semver">
+  `ctx.index` and the types it leads to are flowpact's own model of the workflows, and a minor release can change
+  them. The rule object a plugin exports is covered: see [Stability](/docs/stability).
+</Callout>
+
 `ctx.index` is the [data-flow graph](/docs/how-it-works):
 
 - `ctx.index.units()`, `project.workflows`, `project.actions` — the IR with exact locations;
