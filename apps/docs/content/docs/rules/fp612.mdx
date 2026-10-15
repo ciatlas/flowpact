@@ -17,6 +17,35 @@ A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the a
 
 Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs).
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# a workflow now uses octo/setup@v3; the lockfile still records @v2
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: action
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# after `flowpact remotes update`
+version: 1
+remotes:
+  octo/setup@v3:
+    sha: 89abcdef0123456789abcdef0123456789abcdef
+    kind: action
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

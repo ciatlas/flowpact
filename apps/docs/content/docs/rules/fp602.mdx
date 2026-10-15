@@ -17,6 +17,34 @@ GitHub limits how deeply reusable workflows can be nested and fails the run when
 
 Flatten the chain (call leaf workflows directly from a higher level). GitHub allows at most 10 levels; lower `limits.nestingDepth` to enforce a stricter internal limit.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/flowpact/flowpact.config.yml
+limits:
+  nestingDepth: 4
+# ci.yml → build.yml → package.yml → publish.yml → sign.yml: 5 workflows
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# .github/workflows/ci.yml calls the leaf workflows itself
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+  publish:
+    needs: build
+    uses: ./.github/workflows/publish.yml
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

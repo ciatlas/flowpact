@@ -25,7 +25,28 @@ Nothing in the file can run, and every analysis of it is incomplete.
 
 ## How to fix
 
-Fix the YAML syntax at the reported position (indentation, unclosed quotes, duplicate keys).
+Fix the YAML syntax at the reported position (indentation, a `: ` inside an unquoted value, duplicate keys).
+
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+steps:
+  - run: echo Deploying to: production   # a second ": " in an unquoted value
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+steps:
+  - run: 'echo Deploying to: production'
+```
+
+</Tab>
+</Tabs>
 
 ## Accept one finding
 

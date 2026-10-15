@@ -17,6 +17,30 @@ A mistyped workflow path or job id means the shape is silently ignored and the m
 
 Use `<workflow path>#<job id>` exactly as in the repository (e.g. `.github/workflows/test.yml#test`), or remove the entry.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/flowpact/flowpact.config.yml
+matrixShapes:
+  .github/workflows/tests.yml#test:   # the workflow is test.yml
+    keys: [os]
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+matrixShapes:
+  .github/workflows/test.yml#test:
+    keys: [os]
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

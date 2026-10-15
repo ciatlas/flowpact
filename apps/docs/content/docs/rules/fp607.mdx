@@ -17,6 +17,33 @@ It is either dead code or called from other repositories — worth knowing befor
 
 Delete it if unused; otherwise document its external callers.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/workflows/old-release.yml: nothing in this repository calls it
+on: workflow_call
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./release.sh
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# Deleted; or, when other repositories call it, kept with a note of who does:
+# .github/workflows/release.yml, called by acme/app and acme/site
+on: workflow_call
+```
+
+</Tab>
+</Tabs>
+
 ## Scope
 
 Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.

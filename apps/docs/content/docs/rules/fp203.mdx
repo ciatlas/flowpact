@@ -27,6 +27,40 @@ Every caller must still wire the secret, widening its exposure for nothing.
 
 Remove the declaration and the callers’ `secrets:` bindings, or use the secret where intended.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+on:
+  workflow_call:
+    secrets:
+      npm_token:
+        required: true   # nothing below reads it
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.npm_token }}
+```
+
+</Tab>
+</Tabs>
+
 ## Scope
 
 A secret counts as read when the workflow reads it by name or reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), or hands every secret through `secrets: inherit` to a callee that reads it by name or reads every secret it gets, itself or further down. An expression that does not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not reusable), may read any secret, so they count as reading every secret. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.

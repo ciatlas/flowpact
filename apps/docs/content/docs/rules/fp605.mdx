@@ -17,6 +17,38 @@ Interfaces with dozens of inputs are where forgotten bindings and dead knobs hid
 
 Group related inputs into one JSON input (`fromJSON(inputs.test-config)`), split the workflow, or move constants into the callee.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+on:
+  workflow_call:
+    inputs:
+      node-version: { type: string }
+      os: { type: string }
+      coverage: { type: boolean }
+      shard-count: { type: number }
+      # … 30 more
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+on:
+  workflow_call:
+    inputs:
+      test-config: { type: string, required: true }   # JSON: {"node": "22", "os": "ubuntu-latest", …}
+jobs:
+  test:
+    runs-on: ${{ fromJSON(inputs.test-config).os }}
+```
+
+</Tab>
+</Tabs>
+
 ## Scope
 
 Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.

@@ -17,6 +17,30 @@ GitHub rejects the call ("Invalid secret … is not defined in the referenced wo
 
 Declare the secret under `on.workflow_call.secrets` in the callee, fix the name, or remove it.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml   # declares the secret deploy-token
+    secrets:
+      deploy_token: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+    secrets:
+      deploy-token: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

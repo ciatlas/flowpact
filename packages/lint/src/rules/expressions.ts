@@ -384,7 +384,13 @@ const yamlSyntaxError = defineRule({
   docs: {
     summary: 'The file is not valid YAML.',
     why: 'Nothing in the file can run, and every analysis of it is incomplete.',
-    fix: 'Fix the YAML syntax at the reported position (indentation, unclosed quotes, duplicate keys).',
+    fix: 'Fix the YAML syntax at the reported position (indentation, a `: ` inside an unquoted value, duplicate keys).',
+    examples: {
+      bad: `steps:
+  - run: echo Deploying to: production   # a second ": " in an unquoted value`,
+      good: `steps:
+  - run: 'echo Deploying to: production'`,
+    },
   },
   check(ctx) {
     for (const unit of ctx.index.units()) {

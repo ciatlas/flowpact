@@ -413,7 +413,21 @@ const matrixKeyMissingInCombo = defineRule({
     why:
       'In combinations without the key the value is an empty string. Scripts, env vars and runner labels built from it ' +
       'silently degrade (e.g. `--config=` with no value).',
-    fix: 'Define the key for every combination, or add a fallback (`${{ matrix.key || \'default\' }}`). Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != \'\'`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}" = on ]`), and combinations where the job or step is skipped by its own `if:`.',
+    fix: "Define the key for every combination, or add a fallback (`${{ matrix.key || 'default' }}`).",
+    scope:
+      'Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != \'\'`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}" = on ]`), and combinations where the job or step is skipped by its own `if:`.',
+    examples: {
+      bad: `strategy:
+  matrix:
+    include:
+      - os: ubuntu-latest
+        config: ci/linux.json
+      - os: windows-latest   # no config
+steps:
+  - run: ./test.sh --config=\${{ matrix.config }}`,
+      good: `steps:
+  - run: ./test.sh --config=\${{ matrix.config || 'ci/default.json' }}`,
+    },
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
@@ -478,6 +492,18 @@ const dynamicMatrixUnverified = defineRule({
       'The matrix is computed at runtime, so flowpact cannot check that every combination defines the keys it reads.',
     why: 'Dynamic matrices (`fromJSON(...)`) hide the same empty-value failure mode as static ones, but no tool can see it.',
     fix: 'Declare the keys in the config (`matrixShapes: { "<workflow>#<job>": { keys: [os, config] } }`) so flowpact can verify reads, prefer a static matrix, or validate the generated JSON in the job that produces it.',
+    examples: {
+      bad: `jobs:
+  test:
+    needs: setup
+    strategy:
+      matrix: \${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: \${{ matrix.os }}`,
+      good: `# .github/flowpact/flowpact.config.yml: the keys the generated matrix has
+matrixShapes:
+  .github/workflows/test.yml#test:
+    keys: [os]`,
+    },
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
@@ -518,6 +544,14 @@ const undefinedMatrixKey = defineRule({
       "is not empty (`matrix.key || 'default'`) is info, since the fallback always applies, unless the key is close " +
       'to one the matrix defines.',
     fix: 'Fix the key name, add it to the matrix, or drop the read if the fallback is what you want.',
+    examples: {
+      bad: `strategy:
+  matrix:
+    suite: [unit, integration]
+steps:
+  - run: npm test -- --suite \${{ matrix.sute }}   # no combination defines "sute"`,
+      good: `  - run: npm test -- --suite \${{ matrix.suite }}`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -644,6 +678,15 @@ const unusedMatrixShape = defineRule({
     summary: 'A `matrixShapes` entry in the config does not match a job with a runtime-computed matrix.',
     why: 'A mistyped workflow path or job id means the shape is silently ignored and the matrix stays unverified.',
     fix: 'Use `<workflow path>#<job id>` exactly as in the repository (e.g. `.github/workflows/test.yml#test`), or remove the entry.',
+    examples: {
+      bad: `# .github/flowpact/flowpact.config.yml
+matrixShapes:
+  .github/workflows/tests.yml#test:   # the workflow is test.yml
+    keys: [os]`,
+      good: `matrixShapes:
+  .github/workflows/test.yml#test:
+    keys: [os]`,
+    },
   },
   check(ctx) {
     for (const key of Object.keys(ctx.config.matrixShapes)) {
@@ -682,6 +725,16 @@ const matrixTooLarge = defineRule({
     summary: `A job's matrix produces more than ${GITHUB_MATRIX_LIMIT} jobs, which GitHub rejects.`,
     why: `GitHub generates at most ${GITHUB_MATRIX_LIMIT} jobs per matrix (after \`exclude\` and \`include\`) and fails the workflow run otherwise.`,
     fix: 'Split the job, drop dimensions or values, or `exclude` combinations you do not need.',
+    examples: {
+      bad: `strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+    node: [18, 20, 22, 24]
+    shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+    # 3 × 4 × 22 = 264 jobs`,
+      good: `    node: [20, 22, 24]
+    # 3 × 3 × 22 = 198 jobs`,
+    },
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {

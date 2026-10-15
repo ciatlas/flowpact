@@ -27,6 +27,36 @@ flowpact analyzes this repository only, so inputs, secrets and outputs of the re
 
 Run `flowpact remotes update` to record its interface and have it checked, or nothing. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+jobs:
+  lint:
+    uses: octo-org/shared/.github/workflows/lint.yml@v2   # no entry in the lockfile
+    with:
+      strict: true
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# after `flowpact remotes update`: .github/flowpact/remotes.lock.yaml
+remotes:
+  octo-org/shared/.github/workflows/lint.yml@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: workflow
+    inputs:
+      strict:
+        type: boolean
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

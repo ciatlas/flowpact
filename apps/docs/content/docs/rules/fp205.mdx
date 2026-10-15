@@ -17,6 +17,37 @@ Inside a called workflow only declared (or inherited) secrets exist. Reading any
 
 Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`). For a remote reusable workflow, which you cannot change: call it with `secrets: inherit` (it passes secrets within one organization or enterprise), ask its maintainers to declare the secret, or add an override.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+on:
+  workflow_call: {}   # declares no secrets
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: ${{ secrets.DEPLOY_TOKEN }}   # empty unless the caller uses secrets: inherit
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+on:
+  workflow_call:
+    secrets:
+      DEPLOY_TOKEN:
+        required: true   # and every caller passes it
+```
+
+</Tab>
+</Tabs>
+
 ## Scope
 
 Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is left to FP202.

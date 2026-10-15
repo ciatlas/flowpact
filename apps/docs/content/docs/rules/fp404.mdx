@@ -27,6 +27,29 @@ The value is always empty — almost certainly a typo or a key that was renamed 
 
 Fix the key name, add it to the matrix, or drop the read if the fallback is what you want.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+strategy:
+  matrix:
+    suite: [unit, integration]
+steps:
+  - run: npm test -- --suite ${{ matrix.sute }}   # no combination defines "sute"
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+  - run: npm test -- --suite ${{ matrix.suite }}
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

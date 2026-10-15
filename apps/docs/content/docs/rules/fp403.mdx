@@ -27,6 +27,33 @@ Dynamic matrices (`fromJSON(...)`) hide the same empty-value failure mode as sta
 
 Declare the keys in the config (`matrixShapes: { "<workflow>#<job>": { keys: [os, config] } }`) so flowpact can verify reads, prefer a static matrix, or validate the generated JSON in the job that produces it.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+jobs:
+  test:
+    needs: setup
+    strategy:
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# .github/flowpact/flowpact.config.yml: the keys the generated matrix has
+matrixShapes:
+  .github/workflows/test.yml#test:
+    keys: [os]
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

@@ -27,6 +27,34 @@ In deep call chains values are often forwarded level by level. When one level st
 
 Stop passing the value here, or make the callee actually use (or forward) it.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: linux
+      verbose: true   # build.yml declares "verbose" but never reads it
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: linux
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

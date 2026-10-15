@@ -81,6 +81,15 @@ const unknownSecret = defineRule({
     summary: 'A caller passes a secret the reusable workflow does not declare.',
     why: 'GitHub rejects the call ("Invalid secret … is not defined in the referenced workflow").',
     fix: 'Declare the secret under `on.workflow_call.secrets` in the callee, fix the name, or remove it.',
+    examples: {
+      bad: `jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml   # declares the secret deploy-token
+    secrets:
+      deploy_token: \${{ secrets.DEPLOY_TOKEN }}`,
+      good: `    secrets:
+      deploy-token: \${{ secrets.DEPLOY_TOKEN }}`,
+    },
   },
   check(ctx) {
     for (const call of interfaceCalls(ctx.index)) {
@@ -124,6 +133,25 @@ const unusedSecret = defineRule({
       'callee that reads it by name or reads every secret it gets, itself or further down. An expression that does ' +
       'not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not ' +
       'reusable), may read any secret, so they count as reading every secret.',
+    examples: {
+      bad: `on:
+  workflow_call:
+    secrets:
+      npm_token:
+        required: true   # nothing below reads it
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+      good: `jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: \${{ secrets.npm_token }}`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -214,6 +242,22 @@ const undeclaredSecretRef = defineRule({
       'remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none ' +
       'under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is ' +
       'left to FP202.',
+    examples: {
+      bad: `on:
+  workflow_call: {}   # declares no secrets
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: \${{ secrets.DEPLOY_TOKEN }}   # empty unless the caller uses secrets: inherit`,
+      good: `on:
+  workflow_call:
+    secrets:
+      DEPLOY_TOKEN:
+        required: true   # and every caller passes it`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {

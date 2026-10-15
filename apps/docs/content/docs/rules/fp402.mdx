@@ -25,7 +25,38 @@ In combinations without the key the value is an empty string. Scripts, env vars 
 
 ## How to fix
 
-Define the key for every combination, or add a fallback (`${{ matrix.key || 'default' }}`). Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != ''`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}" = on ]`), and combinations where the job or step is skipped by its own `if:`.
+Define the key for every combination, or add a fallback (`${{ matrix.key || 'default' }}`).
+
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+strategy:
+  matrix:
+    include:
+      - os: ubuntu-latest
+        config: ci/linux.json
+      - os: windows-latest   # no config
+steps:
+  - run: ./test.sh --config=${{ matrix.config }}
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+steps:
+  - run: ./test.sh --config=${{ matrix.config || 'ci/default.json' }}
+```
+
+</Tab>
+</Tabs>
+
+## Scope
+
+Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != ''`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}" = on ]`), and combinations where the job or step is skipped by its own `if:`.
 
 ## Accept one finding
 

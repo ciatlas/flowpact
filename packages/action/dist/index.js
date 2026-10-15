@@ -23320,7 +23320,13 @@ var yamlSyntaxError = defineRule({
   docs: {
     summary: "The file is not valid YAML.",
     why: "Nothing in the file can run, and every analysis of it is incomplete.",
-    fix: "Fix the YAML syntax at the reported position (indentation, unclosed quotes, duplicate keys)."
+    fix: "Fix the YAML syntax at the reported position (indentation, a `: ` inside an unquoted value, duplicate keys).",
+    examples: {
+      bad: `steps:
+  - run: echo Deploying to: production   # a second ": " in an unquoted value`,
+      good: `steps:
+  - run: 'echo Deploying to: production'`
+    }
   },
   check(ctx) {
     for (const unit of ctx.index.units()) {
@@ -23819,7 +23825,20 @@ var passthroughDropped = defineRule({
   docs: {
     summary: "A caller passes a value to an input that the callee declares but never reads.",
     why: "In deep call chains values are often forwarded level by level. When one level stops using an input, every caller above it keeps passing data that is silently dropped.",
-    fix: "Stop passing the value here, or make the callee actually use (or forward) it."
+    fix: "Stop passing the value here, or make the callee actually use (or forward) it.",
+    examples: {
+      bad: `jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: linux
+      verbose: true   # build.yml declares "verbose" but never reads it`,
+      good: `jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: linux`
+    }
   },
   check(ctx) {
     for (const call of ctx.index.callSites) {
@@ -24204,7 +24223,20 @@ var matrixKeyMissingInCombo = defineRule({
   docs: {
     summary: "An expression reads a matrix key that is only defined in some combinations.",
     why: "In combinations without the key the value is an empty string. Scripts, env vars and runner labels built from it silently degrade (e.g. `--config=` with no value).",
-    fix: "Define the key for every combination, or add a fallback (`${{ matrix.key || 'default' }}`). Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != ''`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z \"${{ matrix.key }}\" ]]`, `[ \"${{ matrix.key }}\" = on ]`), and combinations where the job or step is skipped by its own `if:`."
+    fix: "Define the key for every combination, or add a fallback (`${{ matrix.key || 'default' }}`).",
+    scope: 'Not reported: conditions (`if:`) and `continue-on-error`, comparisons and negations (`matrix.key != \'\'`, `!matrix.key`), `matrix.key && ...` guards, quoted shell tests in `run:` scripts (`[[ -z "${{ matrix.key }}" ]]`, `[ "${{ matrix.key }}" = on ]`), and combinations where the job or step is skipped by its own `if:`.',
+    examples: {
+      bad: `strategy:
+  matrix:
+    include:
+      - os: ubuntu-latest
+        config: ci/linux.json
+      - os: windows-latest   # no config
+steps:
+  - run: ./test.sh --config=\${{ matrix.config }}`,
+      good: `steps:
+  - run: ./test.sh --config=\${{ matrix.config || 'ci/default.json' }}`
+    }
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
@@ -24253,7 +24285,19 @@ var dynamicMatrixUnverified = defineRule({
   docs: {
     summary: "The matrix is computed at runtime, so flowpact cannot check that every combination defines the keys it reads.",
     why: "Dynamic matrices (`fromJSON(...)`) hide the same empty-value failure mode as static ones, but no tool can see it.",
-    fix: 'Declare the keys in the config (`matrixShapes: { "<workflow>#<job>": { keys: [os, config] } }`) so flowpact can verify reads, prefer a static matrix, or validate the generated JSON in the job that produces it.'
+    fix: 'Declare the keys in the config (`matrixShapes: { "<workflow>#<job>": { keys: [os, config] } }`) so flowpact can verify reads, prefer a static matrix, or validate the generated JSON in the job that produces it.',
+    examples: {
+      bad: `jobs:
+  test:
+    needs: setup
+    strategy:
+      matrix: \${{ fromJSON(needs.setup.outputs.matrix) }}
+    runs-on: \${{ matrix.os }}`,
+      good: `# .github/flowpact/flowpact.config.yml: the keys the generated matrix has
+matrixShapes:
+  .github/workflows/test.yml#test:
+    keys: [os]`
+    }
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
@@ -24286,7 +24330,15 @@ var undefinedMatrixKey = defineRule({
   docs: {
     summary: "An expression reads a matrix key that no combination defines (or the job has no matrix).",
     why: "The value is always empty \u2014 almost certainly a typo or a key that was renamed in the matrix. A comparison or test on it always gives the same answer, and a condition on it never changes. Only a read with a fallback that is not empty (`matrix.key || 'default'`) is info, since the fallback always applies, unless the key is close to one the matrix defines.",
-    fix: "Fix the key name, add it to the matrix, or drop the read if the fallback is what you want."
+    fix: "Fix the key name, add it to the matrix, or drop the read if the fallback is what you want.",
+    examples: {
+      bad: `strategy:
+  matrix:
+    suite: [unit, integration]
+steps:
+  - run: npm test -- --suite \${{ matrix.sute }}   # no combination defines "sute"`,
+      good: `  - run: npm test -- --suite \${{ matrix.suite }}`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -24375,7 +24427,16 @@ var unusedMatrixShape = defineRule({
   docs: {
     summary: "A `matrixShapes` entry in the config does not match a job with a runtime-computed matrix.",
     why: "A mistyped workflow path or job id means the shape is silently ignored and the matrix stays unverified.",
-    fix: "Use `<workflow path>#<job id>` exactly as in the repository (e.g. `.github/workflows/test.yml#test`), or remove the entry."
+    fix: "Use `<workflow path>#<job id>` exactly as in the repository (e.g. `.github/workflows/test.yml#test`), or remove the entry.",
+    examples: {
+      bad: `# .github/flowpact/flowpact.config.yml
+matrixShapes:
+  .github/workflows/tests.yml#test:   # the workflow is test.yml
+    keys: [os]`,
+      good: `matrixShapes:
+  .github/workflows/test.yml#test:
+    keys: [os]`
+    }
   },
   check(ctx) {
     for (const key of Object.keys(ctx.config.matrixShapes)) {
@@ -24406,7 +24467,17 @@ var matrixTooLarge = defineRule({
   docs: {
     summary: `A job's matrix produces more than ${GITHUB_MATRIX_LIMIT} jobs, which GitHub rejects.`,
     why: `GitHub generates at most ${GITHUB_MATRIX_LIMIT} jobs per matrix (after \`exclude\` and \`include\`) and fails the workflow run otherwise.`,
-    fix: "Split the job, drop dimensions or values, or `exclude` combinations you do not need."
+    fix: "Split the job, drop dimensions or values, or `exclude` combinations you do not need.",
+    examples: {
+      bad: `strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+    node: [18, 20, 22, 24]
+    shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+    # 3 \xD7 4 \xD7 22 = 264 jobs`,
+      good: `    node: [20, 22, 24]
+    # 3 \xD7 3 \xD7 22 = 198 jobs`
+    }
   },
   check(ctx) {
     for (const { wf, job, exp } of matrixJobs(ctx)) {
@@ -24961,7 +25032,16 @@ var unknownSecret = defineRule({
   docs: {
     summary: "A caller passes a secret the reusable workflow does not declare.",
     why: 'GitHub rejects the call ("Invalid secret \u2026 is not defined in the referenced workflow").',
-    fix: "Declare the secret under `on.workflow_call.secrets` in the callee, fix the name, or remove it."
+    fix: "Declare the secret under `on.workflow_call.secrets` in the callee, fix the name, or remove it.",
+    examples: {
+      bad: `jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml   # declares the secret deploy-token
+    secrets:
+      deploy_token: \${{ secrets.DEPLOY_TOKEN }}`,
+      good: `    secrets:
+      deploy-token: \${{ secrets.DEPLOY_TOKEN }}`
+    }
   },
   check(ctx) {
     for (const call of interfaceCalls(ctx.index)) {
@@ -24994,7 +25074,26 @@ var unusedSecret = defineRule({
     summary: "A `workflow_call` secret is declared but never read.",
     why: "Every caller must still wire the secret, widening its exposure for nothing.",
     fix: "Remove the declaration and the callers\u2019 `secrets:` bindings, or use the secret where intended.",
-    scope: "A secret counts as read when the workflow reads it by name or reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), or hands every secret through `secrets: inherit` to a callee that reads it by name or reads every secret it gets, itself or further down. An expression that does not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not reusable), may read any secret, so they count as reading every secret."
+    scope: "A secret counts as read when the workflow reads it by name or reads the whole `secrets` context (`toJSON(secrets)`, `secrets.*`, `secrets[inputs.name]`), or hands every secret through `secrets: inherit` to a callee that reads it by name or reads every secret it gets, itself or further down. An expression that does not parse, and a callee flowpact cannot read (a remote workflow, or a local one that is missing or not reusable), may read any secret, so they count as reading every secret.",
+    examples: {
+      bad: `on:
+  workflow_call:
+    secrets:
+      npm_token:
+        required: true   # nothing below reads it
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+      good: `jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: \${{ secrets.npm_token }}`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25060,7 +25159,23 @@ var undeclaredSecretRef = defineRule({
     summary: "A reusable workflow reads a secret it does not declare, and some caller does not use `secrets: inherit`.",
     why: "Inside a called workflow only declared (or inherited) secrets exist. Reading anything else yields an empty string, so authentication steps fail late or, worse, fall back to anonymous access.",
     fix: "Declare the secret under `on.workflow_call.secrets` and pass it from every caller, or use `secrets: inherit`. Callers whose `with:` values make the reading job's or step's `if:` false (e.g. an omitted input in `if: contains(inputs.registries, 'docker.io')`) are not counted: the read never runs for them. Neither are reads under an `if:` that is always false (`if: false`). For a remote reusable workflow, which you cannot change: call it with `secrets: inherit` (it passes secrets within one organization or enterprise), ask its maintainers to declare the secret, or add an override.",
-    scope: "Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is left to FP202."
+    scope: "Reads where GitHub allows no `secrets` (an input default, a `workflow_call` output, `jobs.<id>.with`, `if` or `name`) are refused rather than empty, and not reported. For a remote reusable workflow, the secrets come from the remote interfaces lockfile, which `flowpact remotes update` fills only with reads that run on every call: none under an `if:` (on the step, the job, or a job it needs), none in a condition. A secret the call passes by name is left to FP202.",
+    examples: {
+      bad: `on:
+  workflow_call: {}   # declares no secrets
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+        env:
+          TOKEN: \${{ secrets.DEPLOY_TOKEN }}   # empty unless the caller uses secrets: inherit`,
+      good: `on:
+  workflow_call:
+    secrets:
+      DEPLOY_TOKEN:
+        required: true   # and every caller passes it`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25196,7 +25311,21 @@ var callCycle = defineRule({
   docs: {
     summary: "Reusable workflows call each other in a cycle.",
     why: "GitHub rejects recursive reusable workflow calls when the run starts.",
-    fix: "Break the cycle by extracting the shared jobs into a separate workflow that neither side calls back."
+    fix: "Break the cycle by extracting the shared jobs into a separate workflow that neither side calls back.",
+    examples: {
+      bad: `# .github/workflows/test.yml, which build.yml calls
+on: workflow_call
+jobs:
+  package:
+    uses: ./.github/workflows/build.yml   # build.yml calls test.yml: a cycle`,
+      good: `# .github/workflows/test.yml calls nothing back
+on: workflow_call
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`
+    }
   },
   check(ctx) {
     const byCaller = callsByCaller(ctx.index.callSites);
@@ -25293,7 +25422,20 @@ var nestingDepth = defineRule({
   docs: {
     summary: "A chain of reusable workflow calls is deeper than the configured limit (`limits.nestingDepth`).",
     why: "GitHub limits how deeply reusable workflows can be nested and fails the run when the limit is exceeded. Deep chains are also where values get lost between levels.",
-    fix: "Flatten the chain (call leaf workflows directly from a higher level). GitHub allows at most 10 levels; lower `limits.nestingDepth` to enforce a stricter internal limit."
+    fix: "Flatten the chain (call leaf workflows directly from a higher level). GitHub allows at most 10 levels; lower `limits.nestingDepth` to enforce a stricter internal limit.",
+    examples: {
+      bad: `# .github/flowpact/flowpact.config.yml
+limits:
+  nestingDepth: 4
+# ci.yml \u2192 build.yml \u2192 package.yml \u2192 publish.yml \u2192 sign.yml: 5 workflows`,
+      good: `# .github/workflows/ci.yml calls the leaf workflows itself
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+  publish:
+    needs: build
+    uses: ./.github/workflows/publish.yml`
+    }
   },
   check(ctx) {
     const limit = ctx.config.limits.nestingDepth;
@@ -25381,7 +25523,22 @@ var remoteUnverified = defineRule({
   docs: {
     summary: "A job calls a reusable workflow in another repository whose interface is not in the remote interfaces lockfile.",
     why: "flowpact analyzes this repository only, so inputs, secrets and outputs of the remote workflow are taken on trust, unless `.github/flowpact/remotes.lock.yaml` records its interface.",
-    fix: "Run `flowpact remotes update` to record its interface and have it checked, or nothing. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally."
+    fix: "Run `flowpact remotes update` to record its interface and have it checked, or nothing. If the workflow lives in this repository, set `repository: owner/repo` in the config so it resolves locally.",
+    examples: {
+      bad: `jobs:
+  lint:
+    uses: octo-org/shared/.github/workflows/lint.yml@v2   # no entry in the lockfile
+    with:
+      strict: true`,
+      good: `# after \`flowpact remotes update\`: .github/flowpact/remotes.lock.yaml
+remotes:
+  octo-org/shared/.github/workflows/lint.yml@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: workflow
+    inputs:
+      strict:
+        type: boolean`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25404,7 +25561,21 @@ var remotesLockInvalid = defineRule({
   docs: {
     summary: "The remote interfaces lockfile does not parse, or does not match its schema.",
     why: "flowpact then checks no remote call against an interface: every remote reusable workflow and action is taken on trust, as without a lockfile.",
-    fix: "Run `flowpact remotes update` to write it again, or fix the entry the message names."
+    fix: "Run `flowpact remotes update` to write it again, or fix the entry the message names.",
+    examples: {
+      bad: `# .github/flowpact/remotes.lock.yaml
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: v2   # not a commit SHA
+    kind: action`,
+      good: `# written again by \`flowpact remotes update\`
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: action`
+    }
   },
   check(ctx) {
     const { file, error: error3 } = ctx.remotes ?? {};
@@ -25457,7 +25628,21 @@ var remotesLockOutdated = defineRule({
   docs: {
     summary: "The remote interfaces lockfile lacks a remote workflow or action the repository uses, has one it no longer uses, or records another commit than the one a reference pins or GitHub\u2019s actions.lock runs.",
     why: "A reference the lockfile lacks is not checked (unless `--fetch-remotes` or the action\u2019s `remotes: fetch` fetches it for the run). It happens when a reference moves to another version, for example in a pull request from Renovate or Dependabot, until the lockfile is updated. A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, so an entry that records another one describes other code: it is not used, and the calls are not checked. `flowpact remotes update` never writes such an entry; an edit to the lockfile did. A reference that GitHub\u2019s `.github/workflows/actions.lock` pins runs the commit it records, even after its tag moves: an entry that records another one (the bot that updated `actions.lock` left the lockfile as it was) is still used, though it may describe other inputs than run.",
-    fix: "Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs)."
+    fix: "Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs).",
+    examples: {
+      bad: `# a workflow now uses octo/setup@v3; the lockfile still records @v2
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: action`,
+      good: `# after \`flowpact remotes update\`
+version: 1
+remotes:
+  octo/setup@v3:
+    sha: 89abcdef0123456789abcdef0123456789abcdef
+    kind: action`
+    }
   },
   check(ctx) {
     const { file, error: error3 } = ctx.remotes ?? {};
@@ -25480,7 +25665,23 @@ var needsWithoutData = defineRule({
   docs: {
     summary: "A job lists another job under `needs:` but never reads its outputs or result (opt-in).",
     why: "Ordering-only dependencies are legitimate (deploy after test), but unexplained ones serialize the pipeline. This rule is off by default; enable it to audit the critical path.",
-    fix: "Remove the dependency if it is not needed for ordering, or keep it and disable the rule for that job."
+    fix: "Remove the dependency if it is not needed for ordering, or keep it and disable the rule for that job.",
+    examples: {
+      bad: `jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run lint
+  test:
+    needs: lint   # reads nothing from lint, and waits for it
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+      good: `  test:
+    runs-on: ubuntu-latest   # runs next to lint
+    steps:
+      - run: npm test`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25519,7 +25720,24 @@ var largeInterface = defineRule({
   docs: {
     summary: "A reusable workflow declares more inputs than `limits.maxInputs`.",
     why: "Interfaces with dozens of inputs are where forgotten bindings and dead knobs hide. Related values are easier to keep consistent when grouped.",
-    fix: "Group related inputs into one JSON input (`fromJSON(inputs.test-config)`), split the workflow, or move constants into the callee."
+    fix: "Group related inputs into one JSON input (`fromJSON(inputs.test-config)`), split the workflow, or move constants into the callee.",
+    examples: {
+      bad: `on:
+  workflow_call:
+    inputs:
+      node-version: { type: string }
+      os: { type: string }
+      coverage: { type: boolean }
+      shard-count: { type: number }
+      # \u2026 30 more`,
+      good: `on:
+  workflow_call:
+    inputs:
+      test-config: { type: string, required: true }   # JSON: {"node": "22", "os": "ubuntu-latest", \u2026}
+jobs:
+  test:
+    runs-on: \${{ fromJSON(inputs.test-config).os }}`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25682,7 +25900,19 @@ var unreferencedReusableWorkflow = defineRule({
   docs: {
     summary: "A workflow can only be triggered by `workflow_call`, but nothing in this repository calls it.",
     why: "It is either dead code or called from other repositories \u2014 worth knowing before changing its interface.",
-    fix: "Delete it if unused; otherwise document its external callers."
+    fix: "Delete it if unused; otherwise document its external callers.",
+    examples: {
+      bad: `# .github/workflows/old-release.yml: nothing in this repository calls it
+on: workflow_call
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./release.sh`,
+      good: `# Deleted; or, when other repositories call it, kept with a note of who does:
+# .github/workflows/release.yml, called by acme/app and acme/site
+on: workflow_call`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -25703,7 +25933,21 @@ var undefinedNeedsJob = defineRule({
   docs: {
     summary: "A job lists a job under `needs:` that does not exist.",
     why: "GitHub rejects the workflow when it is triggered.",
-    fix: "Fix the job id or remove the dependency."
+    fix: "Fix the job id or remove the dependency.",
+    examples: {
+      bad: `jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+  deploy:
+    needs: biuld   # no job "biuld"
+    runs-on: ubuntu-latest
+    steps:
+      - run: make deploy`,
+      good: `  deploy:
+    needs: build`
+    }
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {

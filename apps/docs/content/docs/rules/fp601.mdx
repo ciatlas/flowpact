@@ -27,6 +27,35 @@ GitHub rejects recursive reusable workflow calls when the run starts.
 
 Break the cycle by extracting the shared jobs into a separate workflow that neither side calls back.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/workflows/test.yml, which build.yml calls
+on: workflow_call
+jobs:
+  package:
+    uses: ./.github/workflows/build.yml   # build.yml calls test.yml: a cycle
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# .github/workflows/test.yml calls nothing back
+on: workflow_call
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

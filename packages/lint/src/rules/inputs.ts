@@ -537,6 +537,19 @@ const passthroughDropped = defineRule({
       'In deep call chains values are often forwarded level by level. When one level stops using an input, every caller ' +
       'above it keeps passing data that is silently dropped.',
     fix: 'Stop passing the value here, or make the callee actually use (or forward) it.',
+    examples: {
+      bad: `jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: linux
+      verbose: true   # build.yml declares "verbose" but never reads it`,
+      good: `jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      target: linux`,
+    },
   },
   check(ctx) {
     for (const call of ctx.index.callSites) {

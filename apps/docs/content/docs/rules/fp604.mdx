@@ -17,6 +17,37 @@ Ordering-only dependencies are legitimate (deploy after test), but unexplained o
 
 Remove the dependency if it is not needed for ordering, or keep it and disable the rule for that job.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run lint
+  test:
+    needs: lint   # reads nothing from lint, and waits for it
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+  test:
+    runs-on: ubuntu-latest   # runs next to lint
+    steps:
+      - run: npm test
+```
+
+</Tab>
+</Tabs>
+
 ## Scope
 
 Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.

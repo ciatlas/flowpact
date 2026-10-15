@@ -29,6 +29,20 @@ const callCycle = defineRule({
     summary: 'Reusable workflows call each other in a cycle.',
     why: 'GitHub rejects recursive reusable workflow calls when the run starts.',
     fix: 'Break the cycle by extracting the shared jobs into a separate workflow that neither side calls back.',
+    examples: {
+      bad: `# .github/workflows/test.yml, which build.yml calls
+on: workflow_call
+jobs:
+  package:
+    uses: ./.github/workflows/build.yml   # build.yml calls test.yml: a cycle`,
+      good: `# .github/workflows/test.yml calls nothing back
+on: workflow_call
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+    },
   },
   check(ctx) {
     const byCaller = callsByCaller(ctx.index.callSites);
@@ -162,6 +176,19 @@ const nestingDepth = defineRule({
       'GitHub limits how deeply reusable workflows can be nested and fails the run when the limit is exceeded. Deep chains ' +
       'are also where values get lost between levels.',
     fix: 'Flatten the chain (call leaf workflows directly from a higher level). GitHub allows at most 10 levels; lower `limits.nestingDepth` to enforce a stricter internal limit.',
+    examples: {
+      bad: `# .github/flowpact/flowpact.config.yml
+limits:
+  nestingDepth: 4
+# ci.yml → build.yml → package.yml → publish.yml → sign.yml: 5 workflows`,
+      good: `# .github/workflows/ci.yml calls the leaf workflows itself
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+  publish:
+    needs: build
+    uses: ./.github/workflows/publish.yml`,
+    },
   },
   check(ctx) {
     const limit = ctx.config.limits.nestingDepth;
@@ -302,6 +329,21 @@ const remoteUnverified = defineRule({
     fix:
       'Run `flowpact remotes update` to record its interface and have it checked, or nothing. If the workflow lives ' +
       'in this repository, set `repository: owner/repo` in the config so it resolves locally.',
+    examples: {
+      bad: `jobs:
+  lint:
+    uses: octo-org/shared/.github/workflows/lint.yml@v2   # no entry in the lockfile
+    with:
+      strict: true`,
+      good: `# after \`flowpact remotes update\`: .github/flowpact/remotes.lock.yaml
+remotes:
+  octo-org/shared/.github/workflows/lint.yml@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: workflow
+    inputs:
+      strict:
+        type: boolean`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -328,6 +370,20 @@ const remotesLockInvalid = defineRule({
       'flowpact then checks no remote call against an interface: every remote reusable workflow and action is taken ' +
       'on trust, as without a lockfile.',
     fix: 'Run `flowpact remotes update` to write it again, or fix the entry the message names.',
+    examples: {
+      bad: `# .github/flowpact/remotes.lock.yaml
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: v2   # not a commit SHA
+    kind: action`,
+      good: `# written again by \`flowpact remotes update\`
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: action`,
+    },
   },
   check(ctx) {
     const { file, error } = ctx.remotes ?? {};
@@ -415,6 +471,20 @@ const remotesLockOutdated = defineRule({
       'that records another one (the bot that updated `actions.lock` left the lockfile as it was) is still used, ' +
       'though it may describe other inputs than run.',
     fix: 'Run `flowpact remotes update` and commit the lockfile (see the Renovate and Dependabot recipes in the docs).',
+    examples: {
+      bad: `# a workflow now uses octo/setup@v3; the lockfile still records @v2
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: action`,
+      good: `# after \`flowpact remotes update\`
+version: 1
+remotes:
+  octo/setup@v3:
+    sha: 89abcdef0123456789abcdef0123456789abcdef
+    kind: action`,
+    },
   },
   check(ctx) {
     const { file, error } = ctx.remotes ?? {};
@@ -441,6 +511,22 @@ const needsWithoutData = defineRule({
       'Ordering-only dependencies are legitimate (deploy after test), but unexplained ones serialize the pipeline. ' +
       'This rule is off by default; enable it to audit the critical path.',
     fix: 'Remove the dependency if it is not needed for ordering, or keep it and disable the rule for that job.',
+    examples: {
+      bad: `jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm run lint
+  test:
+    needs: lint   # reads nothing from lint, and waits for it
+    runs-on: ubuntu-latest
+    steps:
+      - run: npm test`,
+      good: `  test:
+    runs-on: ubuntu-latest   # runs next to lint
+    steps:
+      - run: npm test`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -486,6 +572,23 @@ const largeInterface = defineRule({
       'Interfaces with dozens of inputs are where forgotten bindings and dead knobs hide. Related values are easier to keep ' +
       'consistent when grouped.',
     fix: 'Group related inputs into one JSON input (`fromJSON(inputs.test-config)`), split the workflow, or move constants into the callee.',
+    examples: {
+      bad: `on:
+  workflow_call:
+    inputs:
+      node-version: { type: string }
+      os: { type: string }
+      coverage: { type: boolean }
+      shard-count: { type: number }
+      # … 30 more`,
+      good: `on:
+  workflow_call:
+    inputs:
+      test-config: { type: string, required: true }   # JSON: {"node": "22", "os": "ubuntu-latest", …}
+jobs:
+  test:
+    runs-on: \${{ fromJSON(inputs.test-config).os }}`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -709,6 +812,18 @@ const unreferencedReusableWorkflow = defineRule({
     summary: 'A workflow can only be triggered by `workflow_call`, but nothing in this repository calls it.',
     why: 'It is either dead code or called from other repositories — worth knowing before changing its interface.',
     fix: 'Delete it if unused; otherwise document its external callers.',
+    examples: {
+      bad: `# .github/workflows/old-release.yml: nothing in this repository calls it
+on: workflow_call
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./release.sh`,
+      good: `# Deleted; or, when other repositories call it, kept with a note of who does:
+# .github/workflows/release.yml, called by acme/app and acme/site
+on: workflow_call`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {
@@ -731,6 +846,20 @@ const undefinedNeedsJob = defineRule({
     summary: 'A job lists a job under `needs:` that does not exist.',
     why: 'GitHub rejects the workflow when it is triggered.',
     fix: 'Fix the job id or remove the dependency.',
+    examples: {
+      bad: `jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+  deploy:
+    needs: biuld   # no job "biuld"
+    runs-on: ubuntu-latest
+    steps:
+      - run: make deploy`,
+      good: `  deploy:
+    needs: build`,
+    },
   },
   check(ctx) {
     for (const wf of ctx.index.project.workflows.values()) {

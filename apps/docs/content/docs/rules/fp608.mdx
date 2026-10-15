@@ -27,6 +27,35 @@ GitHub rejects the workflow when it is triggered.
 
 Fix the job id or remove the dependency.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: make
+  deploy:
+    needs: biuld   # no job "biuld"
+    runs-on: ubuntu-latest
+    steps:
+      - run: make deploy
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+  deploy:
+    needs: build
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes

@@ -17,6 +17,35 @@ flowpact then checks no remote call against an interface: every remote reusable 
 
 Run `flowpact remotes update` to write it again, or fix the entry the message names.
 
+## Example
+
+<Tabs items={["Problem", "Fixed"]}>
+<Tab value="Problem">
+
+```yaml
+# .github/flowpact/remotes.lock.yaml
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: v2   # not a commit SHA
+    kind: action
+```
+
+</Tab>
+<Tab value="Fixed">
+
+```yaml
+# written again by `flowpact remotes update`
+version: 1
+remotes:
+  octo/setup@v2:
+    sha: 0123456789abcdef0123456789abcdef01234567
+    kind: action
+```
+
+</Tab>
+</Tabs>
+
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes
