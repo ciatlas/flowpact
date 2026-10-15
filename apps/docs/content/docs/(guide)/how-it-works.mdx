@@ -79,7 +79,10 @@ References become edges between **symbols** with stable ids, for example
 - `needs`, `calls` and `uses` edges describe the structure.
 
 `flowpact trace` is a walk over this graph, `flowpact graph` draws its call structure, and `flowpact lint --dump-graph graph.json`
-writes it out.
+writes it out. The call structure of the [`deep-nesting`](https://github.com/ciatlas/flowpact/tree/main/fixtures/deep-nesting)
+fixture, as `flowpact graph --format mermaid` draws it:
+
+<include lang="mermaid">../../generated/deep-nesting.mmd</include>
 </Step>
 <Step>
 ### 4. Expand matrices — the part that catches silent empties

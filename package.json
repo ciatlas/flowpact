@@ -17,7 +17,7 @@
     "format": "biome format --write .",
     "flowpact": "node packages/cli/dist/index.js",
     "docs:gen": "tsx --conditions=source scripts/gen-rule-docs.ts && tsx --conditions=source scripts/gen-schemas.ts",
-    "docs:screenshots": "pnpm build && tsx scripts/gen-screenshots.ts",
+    "docs:screenshots": "pnpm build && tsx --conditions=source scripts/gen-screenshots.ts",
     "docs:dev": "pnpm docs:gen && pnpm --filter docs dev",
     "docs:build": "pnpm docs:gen && pnpm --filter docs build",
     "docs:check": "tsx --conditions=source scripts/check-links.ts"

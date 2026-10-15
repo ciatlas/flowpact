@@ -1,16 +1,23 @@
 /**
  * Renders documentation screenshots from real `flowpact` runs against the fixture repositories, so the docs always show
- * the current output. Requires a built CLI (`pnpm build`).
+ * the current output, and the docs' generated partials: the call graph of a fixture and the action's job summary.
+ * Requires a built CLI (`pnpm build`).
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { devNull, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { analyze, loadConfig } from '@flowpact/lint';
+import { renderMarkdown } from '@flowpact/reporters';
 import { ansiToSvg } from './ansi-svg';
 
 const ROOT = join(import.meta.dirname, '..');
 const BIN = join(ROOT, 'packages/cli/dist/index.js');
 const OUT = join(ROOT, 'apps/docs/public/screenshots');
+/** Partials the docs pages include, outside the page tree. */
+const GENERATED = join(ROOT, 'apps/docs/content/generated');
 
 /** Git without the user's or the system's settings (signing, hooks, line endings), so commits are reproducible. */
 const GIT_CONFIG = { GIT_CONFIG_GLOBAL: devNull, GIT_CONFIG_NOSYSTEM: '1' };
@@ -29,7 +36,31 @@ interface Shot {
    * `origin/main`, then these edits are committed on a branch.
    */
   change?: (edit: Edit) => void;
+  /** What a stand-in for the GitHub API answers, by request path; the run reads it through `GITHUB_API_URL`. */
+  api?: Record<string, string>;
 }
+
+/**
+ * fixtures/remote-calls' lockfile records octo/setup@v2 at e3b1c7a. Here the tag has moved to a commit whose action no
+ * longer declares `registry-auth`, which release.yml passes; octo/ship@v1 has not moved.
+ */
+const SETUP_MOVED = '9d4e2f17c8a6b3e05f1d7c2a8e4b6f9031c5d7a2';
+const MOVED_TAG: Record<string, string> = {
+  '/repos/octo/setup/commits/v2': SETUP_MOVED,
+  [`/repos/octo/setup/contents/action.yml?ref=${SETUP_MOVED}`]: `name: Set up the toolchain
+description: Installs Node.js and restores the dependency cache.
+inputs:
+  node-version:
+    description: The Node.js version to install.
+    required: true
+  cache-dependency-path:
+    description: The lockfile whose hash keys the cache.
+runs:
+  using: node24
+  main: dist/index.js
+`,
+  '/repos/octo/ship/commits/v1': '4a7c9e1b3d5f7092e4c6a8b0d2f4e6a8c0b2d4f6',
+};
 
 const shots: Shot[] = [
   {
@@ -89,6 +120,19 @@ const shots: Shot[] = [
     title: 'flowpact impact — a renamed check declared as a patch',
   },
   { name: 'graph-tree', fixture: 'deep-nesting', args: ['graph'], title: 'flowpact graph — who calls whom' },
+  {
+    name: 'lint-remote',
+    fixture: 'remote-calls',
+    args: ['lint'],
+    title: 'flowpact lint — calls into other repositories, checked against the lockfile',
+  },
+  {
+    name: 'remotes-update',
+    fixture: 'remote-calls',
+    args: ['remotes', 'update', '--dry-run', '--fail-on', 'breaks'],
+    title: 'flowpact remotes update — a tag that moved, graded against your calls',
+    api: MOVED_TAG,
+  },
   { name: 'explain', fixture: 'clean', args: ['explain', 'FP401'], title: 'flowpact explain FP401' },
   { name: 'rules', fixture: 'clean', args: ['rules'], title: 'flowpact rules', head: 24 },
   {
@@ -148,25 +192,72 @@ function changedRepository(fixture: string, change: (edit: Edit) => void): strin
   }
 }
 
+/** Answers `files` by request path, and 404 for anything else, on a free local port. */
+async function apiStandIn(files: Record<string, string>) {
+  const server = createServer((req, res) => {
+    const body = files[req.url ?? ''];
+    res.writeHead(body === undefined ? 404 : 200).end(body ?? '');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  return { url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, close: () => server.close() };
+}
+
+/**
+ * The environment a shot runs in. With a stand-in for the GitHub API, the run reads it with a placeholder token (the
+ * output names its source, not its value) and keeps the sources it would cache in a directory of its own.
+ */
+function shotEnv(shot: Shot, standIn?: { url: string; cache: string }): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    FORCE_COLOR: '1',
+    NO_COLOR: undefined,
+    COLUMNS: '104',
+    FLOWPACT_DEBUG: undefined,
+    GITHUB_REPOSITORY: 'acme/app',
+    // In GitHub Actions, impact mode reads the run's event: here the docs workflow's, not a pull request's.
+    ...(shot.change ? { ...GIT_CONFIG, GITHUB_ACTIONS: undefined } : {}),
+    ...(standIn
+      ? {
+          GITHUB_API_URL: standIn.url,
+          GH_TOKEN: 'placeholder',
+          GITHUB_TOKEN: undefined,
+          FLOWPACT_CACHE_DIR: standIn.cache,
+        }
+      : {}),
+  };
+}
+
+/** Runs node with `args` and collects what it prints. */
+function runNode(args: string[], cwd: string, env: NodeJS.ProcessEnv) {
+  const child = spawn('node', args, { cwd, env });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk: string) => (stdout += chunk));
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => (stderr += chunk));
+  return new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
+    child.on('close', (status) => resolve({ status, stdout, stderr })),
+  );
+}
+
+/** Runs the CLI for a shot, with its stand-in for the GitHub API when it has one. */
+async function runShot(shot: Shot, cwd: string) {
+  if (!shot.api) return runNode([BIN, ...shot.args], cwd, shotEnv(shot));
+  const api = await apiStandIn(shot.api);
+  const cache = mkdtempSync(join(tmpdir(), 'flowpact-shot-cache-'));
+  try {
+    return await runNode([BIN, ...shot.args], cwd, shotEnv(shot, { url: api.url, cache }));
+  } finally {
+    api.close();
+    rmSync(cache, { recursive: true, force: true });
+  }
+}
+
 mkdirSync(OUT, { recursive: true });
 for (const shot of shots) {
   const cwd = shot.change
     ? changedRepository(shot.fixture, shot.change)
     : join(ROOT, 'fixtures', shot.fixture);
-  const res = spawnSync('node', [BIN, ...shot.args], {
-    cwd,
-    env: {
-      ...process.env,
-      FORCE_COLOR: '1',
-      NO_COLOR: undefined,
-      COLUMNS: '104',
-      FLOWPACT_DEBUG: undefined,
-      GITHUB_REPOSITORY: 'acme/app',
-      // In GitHub Actions, impact mode reads the run's event: here the docs workflow's, not a pull request's.
-      ...(shot.change ? { ...GIT_CONFIG, GITHUB_ACTIONS: undefined } : {}),
-    },
-    encoding: 'utf8',
-  });
+  const res = await runShot(shot, cwd);
   if (shot.change) rmSync(cwd, { recursive: true, force: true });
   // Banner and logs go to stderr, the report to stdout; show them in reading order. Debug logs print absolute paths:
   // show a runner's checkout, not the machine that generated the screenshots.
@@ -196,3 +287,33 @@ for (const shot of shots) {
   writeFileSync(join(OUT, `${shot.name}.svg`), ansiToSvg(text, { title: shot.title, prompt }));
   console.log(`${shot.name}.svg (exit ${res.status})`);
 }
+
+/**
+ * The call graph of a fixture as `flowpact graph` writes it in Mermaid, with the title every docs chart needs, and drawn
+ * top-down: a chain of workflows drawn left to right is too small to read in a docs column.
+ */
+function graphChart(fixture: string, title: string): string {
+  const res = spawnSync('node', [BIN, 'graph', '--format', 'mermaid'], {
+    cwd: join(ROOT, 'fixtures', fixture),
+    env: { ...process.env, NO_COLOR: '1', FLOWPACT_DEBUG: undefined },
+    encoding: 'utf8',
+  });
+  if (res.status !== 0) throw new Error(`flowpact graph on ${fixture} exited ${res.status}: ${res.stderr}`);
+  return res.stdout.replace(/^flowchart \w+$/m, `flowchart TD\n  accTitle: ${title}`);
+}
+
+/** The job summary the action writes in lint mode for a fixture, without links to a repository and with a fixed time. */
+function jobSummary(fixture: string): string {
+  const root = join(ROOT, 'fixtures', fixture);
+  const loaded = loadConfig(root);
+  const result = analyze({ root, config: loaded.config, repository: 'acme/app' });
+  return renderMarkdown(result, { title: 'flowpact lint' }).replace(/ · \d+ ms<\/sub>/, ' · 12 ms</sub>');
+}
+
+mkdirSync(GENERATED, { recursive: true });
+writeFileSync(
+  join(GENERATED, 'deep-nesting.mmd'),
+  graphChart('deep-nesting', 'The deep-nesting fixture, from flowpact graph --format mermaid'),
+);
+writeFileSync(join(GENERATED, 'summary-incident.md'), jobSummary('incident-matrix'));
+console.log('deep-nesting.mmd, summary-incident.md');

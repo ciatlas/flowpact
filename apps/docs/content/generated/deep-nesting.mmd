@@ -1,0 +1,14 @@
+flowchart TD
+  accTitle: The deep-nesting fixture, from flowpact graph --format mermaid
+  wf_build_yml("Build<br/>.github/workflows/build.yml"):::workflow
+  wf_package_yml("Package<br/>.github/workflows/package.yml"):::workflow
+  wf_pipeline_yml("Pipeline<br/>.github/workflows/pipeline.yml"):::workflow
+  wf_publish_yml("Publish<br/>.github/workflows/publish.yml"):::workflow
+  wf_build_yml -->|"jobs.package"| wf_package_yml
+  wf_package_yml -->|"jobs.publish"| wf_publish_yml
+  wf_pipeline_yml -->|"jobs.build (inherit)"| wf_build_yml
+  classDef workflow fill:#e8f1ff,stroke:#3b82f6,color:#0f172a
+  classDef action fill:#f3e8ff,stroke:#8b5cf6,color:#0f172a
+  classDef remote fill:#f8fafc,stroke:#64748b,stroke-dasharray:5 5,color:#334155
+  classDef missing fill:#fee2e2,stroke:#dc2626,color:#991b1b
+  classDef invalid fill:#fee2e2,stroke:#dc2626,stroke-dasharray:5 5,color:#991b1b

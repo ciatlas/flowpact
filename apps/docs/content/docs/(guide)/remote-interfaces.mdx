@@ -57,6 +57,8 @@ stay quiet about it.
 Findings point at your call; the message names the remote reference, whose file is in another repository. Nothing is
 fetched during a run: flowpact reads only the committed lockfile, so results do not depend on the network.
 
+<Screenshot name="lint-remote" alt="flowpact lint reporting FP102, octo/setup@v2 has no input cache-dependency (did you mean cache-dependency-path), and FP101, jobs.deploy calls octo/ship's deploy workflow without required input environment" caption="Two calls into other repositories, checked against the lockfile: a misspelled input and a missing required one." />
+
 In the editor, [hovering](/docs/editors#hover) a remote `uses:` value, or a key a remote call passes, shows the
 interface the lockfile records.
 
@@ -275,6 +277,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 ```
+
+When a tag the lockfile records has moved to a commit that drops an input your workflow passes, the job fails with:
+
+<Screenshot name="remotes-update" alt="flowpact remotes update --dry-run --fail-on breaks: octo/setup@v2 changed from e3b1c7a to 9d4e2f1 and breaks 1 of 1 call, because input registry-auth was removed and release.yml passes it" caption="The tag octo/setup@v2 moved: the new commit no longer has the input release.yml passes." />
 
 `github.token` reads public repositories; private and internal ones need a token that can read them
 ([Which token](#which-token)). With `--format json`, the same comes as JSON for a script: `grades` has one entry per

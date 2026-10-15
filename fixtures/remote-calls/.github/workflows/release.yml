@@ -1,0 +1,29 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: octo/setup@v2
+        with:
+          node-version: 24
+          cache-dependency: package-lock.json
+          registry-auth: true
+      - run: npm ci && npm run build
+
+  deploy:
+    needs: build
+    uses: octo/ship/.github/workflows/deploy.yml@v1
+    with:
+      target: ${{ github.ref_name }}
+    secrets:
+      deploy-token: ${{ secrets.DEPLOY_TOKEN }}
+
+  announce:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deployed to ${{ needs.deploy.outputs.url }}"

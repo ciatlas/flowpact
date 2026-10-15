@@ -7,6 +7,7 @@ import { TypeTable } from 'fumadocs-ui/components/type-table';
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { MDXComponents } from 'mdx/types';
 import { Mermaid } from './mermaid';
+import { RenderedMarkdown } from './rendered-markdown';
 import { Screenshot } from './screenshot';
 
 export function getMDXComponents(components?: MDXComponents) {
@@ -19,6 +20,7 @@ export function getMDXComponents(components?: MDXComponents) {
     Folder,
     InlineTOC,
     Mermaid,
+    RenderedMarkdown,
     Screenshot,
     Step,
     Steps,

@@ -129,8 +129,11 @@ Pipeline (.github/workflows/pipeline.yml) · on: workflow_dispatch
 ```
 
 `(inherit)` marks a call with `secrets: inherit`, and `×N` one that fans out over `N` matrix combinations.
-`--format mermaid` draws the same graph as a diagram GitHub renders in Markdown, issues and pull requests; `dot` and
-`json` are for other tools ([`flowpact graph`](/docs/cli#flowpact-graph)).
+`--format mermaid` draws the same graph as a diagram GitHub renders in Markdown, issues and pull requests:
+
+<include lang="mermaid">../../generated/deep-nesting.mmd</include>
+
+`dot` and `json` are for other tools ([`flowpact graph`](/docs/cli#flowpact-graph)).
 
 ## In scripts
 

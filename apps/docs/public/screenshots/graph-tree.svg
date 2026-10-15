@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="796" height="201" viewBox="0 0 796 201" role="img" aria-label="flowpact graph — who calls whom">
+<svg xmlns="http://www.w3.org/2000/svg" width="805" height="201" viewBox="0 0 805 201" role="img" aria-label="flowpact graph — who calls whom">
 <rect width="100%" height="100%" rx="10" fill="#1e2128"/>
 <circle cx="20" cy="18" r="6" fill="#ff5f57"/><circle cx="40" cy="18" r="6" fill="#febc2e"/><circle cx="60" cy="18" r="6" fill="#28c840"/>
-<text x="398" y="22" fill="#868e96" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" text-anchor="middle">flowpact graph — who calls whom</text>
+<text x="402.5" y="22" fill="#868e96" font-family="ui-sans-serif,system-ui,sans-serif" font-size="12" text-anchor="middle">flowpact graph — who calls whom</text>
 <g font-family="ui-monospace,SFMono-Regular,Menlo,Consolas,monospace" font-size="14" xml:space="preserve">
 <text y="48"><tspan x="20.0" textLength="8.4" lengthAdjust="spacingAndGlyphs" fill="#69db7c">$</tspan><tspan x="36.8" textLength="67.2" lengthAdjust="spacingAndGlyphs" fill="#d8dee9">flowpact</tspan><tspan x="112.4" textLength="42.0" lengthAdjust="spacingAndGlyphs" fill="#d8dee9">graph</tspan></text>
 <rect x="20" y="53" width="84" height="19" fill="#66d9e8"/>

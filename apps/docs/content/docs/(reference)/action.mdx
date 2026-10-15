@@ -190,42 +190,21 @@ The summary has:
 - with `summary-graph: true`, the call graph between workflows and local actions as a Mermaid diagram.
 
 After `max-findings` findings, the rest are only counted. This is the summary for a repository where one matrix leg
-passes an empty input to a reusable workflow (the `incident-matrix` fixture in the flowpact repository). In a run, the
-locations are links:
+passes an empty input to a reusable workflow (the `incident-matrix` fixture in the flowpact repository), regenerated
+each time these docs are published. In a run, the locations are links to the files at the commit:
 
-````markdown
-## flowpact lint
+<Tabs items={['Rendered', 'Markdown']}>
+<Tab value="Rendered">
 
-<sub>flowpact v0.21.0 · config schema v1 · contract schema v1 · report schema v1 · 24 ms</sub>
+<RenderedMarkdown file="summary-incident.md" title="Job summary" />
 
-❌ **1 error**
+</Tab>
+<Tab value="Markdown">
 
-| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |
-| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 0 | 0 | 0 | 3 | 0 | 3 | 3 |
+<include lang="markdown">../../generated/summary-incident.md</include>
 
-### ❌ Errors (1)
-
-**[`FP401`](https://ciatlas.github.io/flowpact/docs/rules/fp401) empty-binding-for-matrix-combo** · `.github/workflows/tests.yml:23:19`
-
-Input "config" for .github/workflows/run-suite.yml is empty in 1 of 3 matrix combinations — matrix.config is not defined there
-
-Matrix: `{ name: windows }`
-
-<details><summary>Why / fix</summary>
-
-**Why:** GitHub evaluates a missing matrix key to an empty string — no error, no warning. The affected matrix leg runs with an empty input, so the callee may skip its real work (e.g. a test configuration) while the run stays green.
-
-**Fix:** Set `config` in every combination, or use a fallback: `${{ matrix.config || '<default>' }}`.
-
-**Related locations:**
-
-- `.github/workflows/pipeline.yml:9:11` — jobs.tests calls .github/workflows/tests.yml
-- `.github/workflows/tests.yml:18:13` — this include entry has no `config`
-- `.github/workflows/run-suite.yml:11:7` — receives the empty value: input "config"
-
-</details>
-````
+</Tab>
+</Tabs>
 
 `report-markdown` writes the same Markdown to a file, for example to post it as a pull request comment with another
 action.
