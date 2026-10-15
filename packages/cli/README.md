@@ -2,16 +2,21 @@
 
 # flowpact (`flowpact`)
 
-**Data-flow linter for GitHub Actions:** find the inputs, secrets and matrix values that arrive empty while the run
-stays green, across reusable workflows, local actions and calls into other repositories.
+**Data-flow linter for GitHub Actions:** change shared workflows and actions without breaking the repositories that
+use them.
 
-GitHub Actions evaluates a missing matrix key, an undeclared secret or an optional input without a default to an empty
-value: no error, no warning, a green run. When workflows call reusable workflows and local actions, that is how a test variant
-or an upload stops running without anyone noticing. flowpact follows every input, secret, env var, matrix key and
-output across those calls, evaluates every combination of the matrices written in your workflows, and reports where a
-value goes missing. Use it next to actionlint, which checks each file in depth.
+flowpact checks both sides of every interface between GitHub Actions workflows:
 
-![flowpact lint reporting a matrix combination that passes an empty input](https://ciatlas.github.io/flowpact/screenshots/lint-incident.svg)
+- **When you publish a reusable workflow or action,** it grades every pull request major, minor, patch or none against
+  what callers can see, check names included, and fails it when its title declares less.
+- **When you call one,** it checks every call against the interface of the version it targets, recorded in a lockfile,
+  and grades a version bump or a tag that moved against your calls before you take it.
+- **Inside a repository,** it follows every input, secret, env var, matrix key and output across workflows, actions and
+  matrix combinations, and reports where a value arrives empty while the run stays green.
+
+Use it next to actionlint, which checks each file in depth.
+
+![flowpact impact failing a pull request titled "fix: tidy the test job": a removed output and a renamed job require a major release](https://ciatlas.github.io/flowpact/screenshots/impact.svg)
 
 ```sh
 npx flowpact lint                         # lint .github/workflows and local actions

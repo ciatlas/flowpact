@@ -1,6 +1,6 @@
 {
   "name": "flowpact",
-  "description": "Data-flow linter for GitHub Actions: finds the inputs, secrets, env vars and matrix values that arrive empty while the run stays green, across reusable workflows, composite actions and matrix combinations.",
+  "description": "Data-flow linter for GitHub Actions: change shared workflows and actions without breaking the repositories that use them. It grades releases against what callers use, checks calls into other repositories against their interfaces, and finds the inputs, secrets, env vars and matrix values that arrive empty while the run stays green.",
   "homepage_url": "https://ciatlas.github.io/flowpact",
   "repo_url": "https://github.com/ciatlas/flowpact",
   "license": "MIT",

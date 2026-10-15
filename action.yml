@@ -1,5 +1,5 @@
 name: 'flowpact'
-description: 'Find inputs, secrets and matrix values that arrive empty across reusable workflows and local actions; flag breaking changes.'
+description: 'Grade releases of shared workflows and actions, check calls into other repositories, and find values that arrive empty.'
 author: 'Ruman Kazi'
 branding:
   icon: git-merge

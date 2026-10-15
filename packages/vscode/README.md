@@ -1,10 +1,10 @@
 # flowpact for VS Code
 
-GitHub Actions turns a missing matrix value, an undeclared secret or an optional input without a default into an empty value,
-and the run stays green. [flowpact](https://ciatlas.github.io/flowpact) finds these across reusable workflows, local
-actions, calls into other repositories and every combination of the matrices written in your workflows, and shows them
-as you type. It helps most when
-your workflows call reusable workflows or local actions, or use `include` matrices.
+[flowpact](https://ciatlas.github.io/flowpact) checks the calls between your GitHub Actions workflows as you type: what
+you pass to reusable workflows and actions, in this repository and in others, and where a value arrives empty while the
+run stays green, such as a missing matrix value, an undeclared secret or an optional input without a default. When you
+publish workflows or actions, it shows the changes to their contracts too. It helps most when your workflows call
+reusable workflows or actions, or other repositories call yours.
 
 ![A finding as you type: the windows matrix entry passes an empty config to a reusable workflow, with the call chain and flowpact's hover card](../../apps/docs/public/screenshots/editor-diagnostics.png)
 
