@@ -252,11 +252,43 @@ changed reference, with its `verdict`, the interface `changes`, and its `calls`,
 it `added`, why it is `unchecked`, and `notes`. [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean)
 returns the same.
 
+### On a pull request
+
+With `remotes: fetch`, the [action](/docs/action) also grades the references a pull request moves to another version
+(`octo/setup@v2` → `@v3`, the same workflow or action at another ref), and adds a **Version changes** section to the
+job summary. The interface before is the base commit's (its lockfile's entry for `@v2`, else `@v2` fetched); the one
+after is always fetched, never read from the pull request's own lockfile, which could record one that hides a break. A
+version change that breaks a call fails the step (unless `fail-on` is `never`), and the `version-verdict` output says
+`breaks`, `unchecked` or `fits`.
+
 ## Renovate and Dependabot
 
 When Renovate or Dependabot moves a reference to another version (`octo/setup@v2` → `@v3`), the lockfile still has
 `@v2` and lacks `@v3`. Until it is updated, `@v3` is checked only by a run that fetches it, and [`FP612`](/docs/rules/fp612)
-says the lockfile is out of date. Three ways to keep it current:
+says the lockfile is out of date.
+
+**Gate the bump.** With `remotes: fetch` in your flowpact job on pull requests, the bot's pull request is
+[graded](#on-a-pull-request): the step fails when `@v3` breaks one of your calls, even when the pull request updates
+the lockfile too. Make that job a required status check, and Renovate's `automerge` and GitHub's auto-merge for
+Dependabot wait for it:
+
+```yaml title=".github/workflows/flowpact.yml"
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  flowpact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7                       # pin to a commit SHA
+        with:
+          persist-credentials: false
+      - uses: ciatlas/flowpact@v0.20                    # pin to a commit SHA
+        with:
+          remotes: fetch
+```
+
+Three ways to keep the lockfile current:
 
 - **Check the pull request anyway.** With `remotes: fetch` in your flowpact job, the bot's pull request is checked
   against `@v3`'s interface, and FP612 reminds you to update the lockfile before merging.

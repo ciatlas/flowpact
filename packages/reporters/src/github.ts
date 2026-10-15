@@ -15,8 +15,14 @@ const LEVEL: Record<Severity, GithubAnnotation['level']> = {
   info: 'notice',
 };
 
+/** What an annotation shows of a finding: a finding of the analysis, or one of its JSON report (as a grade has). */
+export type AnnotatedFinding = Pick<
+  Finding,
+  'code' | 'name' | 'severity' | 'message' | 'fix' | 'docsUrl' | 'loc'
+>;
+
 /** A finding as a GitHub annotation: what the action passes to `@actions/core`, and `--format github` prints. */
-export function githubAnnotation(f: Finding, opts: GithubOptions = {}): GithubAnnotation {
+export function githubAnnotation(f: AnnotatedFinding, opts: GithubOptions = {}): GithubAnnotation {
   const loc = f.loc;
   return {
     level: LEVEL[f.severity],

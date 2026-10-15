@@ -322,7 +322,9 @@ optional), a remote repository can serve a file built to waste memory, a pull re
 references can try to make a privileged token read repositories it should not, and show what it read in findings, a
 reference built with `..` can try to make the [sources cache](/docs/remote-interfaces#sources-for-the-editor) write
 outside its directory, and a lockfile can name a host, or a commit other than the one a reference pins, to make the
-editor link or open other code than what runs. The opt-in look on github.com sends reference names to a second host.
+editor link or open other code than what runs. A pull request that moves a reference to another version can update
+the lockfile to an interface that keeps what the new version dropped, so that a breaking bump passes a check that gates
+automerge. The opt-in look on github.com sends reference names to a second host.
 
 - **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
   [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a
@@ -334,7 +336,9 @@ editor link or open other code than what runs. The opt-in look on github.com sen
   it (core `ProjectIndex.interfaceOf`, `actionInterfaceOf`). Fetching is opt-in; the token goes only to the GitHub API
   (`GITHUB_API_URL`) as an authorization header and is never printed; the action does not fetch on
   `pull_request_target` or `workflow_run`, where an untrusted pull request would choose the references while the token
-  may be privileged (`remotesToFetch` in `packages/action/src/main.ts`). Only `flowpact remotes update` and
+  may be privileged (`remotesToFetch` in `packages/action/src/main.ts`). The version changes of a pull request are
+  graded against interfaces fetched for the run, never its own lockfile's, from the base commit's entries
+  (`gradeVersionChanges` in `packages/lint/src/remotes-changes.ts`). Only `flowpact remotes update` and
   `remotes download` keep the files they read, in a per-user cache: every part of the path (owner, repository, commit,
   each directory and the file name) must be a plain file name on every platform, or the file is not kept, and it is
   written to a temporary file, made read-only for your user alone, and renamed (`cachedSourcePath`, `cacheSource` in
@@ -355,7 +359,9 @@ editor link or open other code than what runs. The opt-in look on github.com sen
   that leave the cache, or are no file name on Windows, refused; files for your user alone);
   `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output, control characters from the lockfile
   shown rather than sent, nothing cached by a dry run, `lint --fetch-remotes` or in CI unless asked);
-  `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`); `test/external.test.ts`
+  `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`; a version change that breaks a
+  call fails the step although the pull request's lockfile hides it); `packages/lint/test/remotes-changes.test.ts`
+  (the head's interface fetched whatever the pull request's lockfile says); `test/external.test.ts`
   (core; external units out of everything that follows a call); `packages/language-server/test/hover-remotes.test.ts`
   (no link to a host a lockfile names, the pinned commit opened rather than the one a lockfile claims);
   `packages/language-server/test/server.test.ts` (a cached file and a workspace folder in the cache not analyzed).

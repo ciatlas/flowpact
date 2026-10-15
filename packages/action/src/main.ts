@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import * as core from '@actions/core';
 import {
   createLogger,
+  gitFileSystem,
   type Logger,
   type LogLevel,
   type LogRecord,
@@ -29,11 +30,11 @@ import {
   createRegistry,
   exitCodeFor,
   type FetchRemotesOptions,
-  type Finding,
   type FlowpactConfig,
   fetchMissingRemotes,
   followsPullRequest,
   githubEvent,
+  gradeVersionChanges,
   hostOf,
   type ImpactLevel,
   type ImpactRequest,
@@ -47,15 +48,18 @@ import {
   prepareImpact,
   readRemotesLock,
   UnsafePathError,
+  type VersionGrading,
   writeContracts,
 } from '@flowpact/lint';
 import {
+  type AnnotatedFinding,
   githubAnnotation,
   inRepository,
   type MarkdownOptions,
   renderJson,
   renderMarkdown,
   renderSarif,
+  renderVersionChanges,
 } from '@flowpact/reporters';
 import { parse as parseYaml } from 'yaml';
 import { uploadArtifact } from './upload';
@@ -459,7 +463,15 @@ function initOutputs(): void {
   for (const k of ['errors', 'warnings', 'infos', 'suppressed', 'findings', 'breaking']) core.setOutput(k, 0);
   core.setOutput('drift', 'false');
   core.setOutput('exit-code', 2);
-  for (const k of ['report-json', 'report-sarif', 'patch', 'artifact-id']) core.setOutput(k, '');
+  for (const k of [
+    'report-json',
+    'report-sarif',
+    'patch',
+    'artifact-id',
+    'version-changes',
+    'version-verdict',
+  ])
+    core.setOutput(k, '');
 }
 
 function formatRecord(r: LogRecord, withScope: boolean): string {
@@ -520,7 +532,7 @@ function actionsSink(runnerDebug: boolean, groups: Groups): LogSink {
 const toPosix = (p: string) => p.split(sep).join('/');
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function annotate(f: Finding, prefix: string): void {
+function annotate(f: AnnotatedFinding, prefix: string): void {
   const { level, message, ...props } = githubAnnotation(f, { pathPrefix: prefix });
   if (level === 'error') core.error(message, props);
   else if (level === 'warning') core.warning(message, props);
@@ -757,6 +769,20 @@ function githubComFallback(inputs: Inputs): Pick<FetchRemotesOptions, 'fallback'
   return { fallback: { apiUrl: 'https://api.github.com', ...(token ? { token } : {}) } };
 }
 
+/** How the action reaches the GitHub API: with `token`, at `GITHUB_API_URL`, with the github.com fallback. */
+function apiOptions(inputs: Inputs, logger: Logger): FetchRemotesOptions {
+  const token = core.getInput('token');
+  return {
+    ...(token && !token.startsWith('${{') ? { token } : {}),
+    ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
+    ...githubComFallback(inputs),
+    onProgress: (p) =>
+      logger.debug(
+        `remote interface ${p.done}/${p.total}: ${p.ref} ${p.outcome === 'fetched' ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`}`,
+      ),
+  };
+}
+
 /**
  * With `remotes: fetch`, the interfaces of the remote references the lockfile lacks, fetched with `token` for this run.
  * Not on events whose checkout may be untrusted while the token is privileged: the pull request would choose which
@@ -775,21 +801,62 @@ async function remotesToFetch(
     );
     return undefined;
   }
-  const token = core.getInput('token');
   const fs = nodeFileSystem(root);
-  const r = await fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, {
-    ...(token && !token.startsWith('${{') ? { token } : {}),
-    ...(process.env.GITHUB_API_URL ? { apiUrl: process.env.GITHUB_API_URL } : {}),
-    ...githubComFallback(inputs),
-    onProgress: (p) =>
-      logger.debug(
-        `remote interface ${p.done}/${p.total}: ${p.ref} ${p.outcome === 'fetched' ? `at ${p.detail.slice(0, 7)}` : `${p.outcome}: ${p.detail}`}`,
-      ),
-  });
+  const r = await fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, apiOptions(inputs, logger));
   for (const f of [...r.failed, ...r.unreadable])
     core.warning(`remote interface not fetched: ${f.ref}: ${f.error}`);
   logger.debug('fetched remote interfaces', { refs: Object.keys(r.remotes) });
   return r.remotes;
+}
+
+/**
+ * The commit to grade version changes from: the `base-ref` input's, else the pull request's base commit (fetched when
+ * the checkout is shallow); undefined without one, or when it cannot be read.
+ */
+function versionBase(root: string, inputs: Inputs, logger: Logger): string | undefined {
+  const ref = inputs.baseRef
+    ? baselineRef(root, inputs.baseRef)
+    : githubEvent()?.payload?.pull_request?.base?.sha;
+  if (!ref) return undefined;
+  const commit = () => resolveCommit(root, ref);
+  try {
+    return commit();
+  } catch {
+    fetchRefs(root, [ref], core.getInput('token'), logger);
+  }
+  try {
+    return commit();
+  } catch (err) {
+    core.warning(`Version changes not graded: the base ${ref} cannot be read (${(err as Error).message}).`);
+    return undefined;
+  }
+}
+
+/**
+ * With `remotes: fetch` on a pull request (or with `base-ref`): the remote references it moved to another version,
+ * graded against the repository's calls with interfaces fetched for the run, never the pull request's lockfile's (see
+ * `gradeVersionChanges`). Not on the events `remotes: fetch` skips.
+ */
+async function versionChangesOf(
+  inputs: Inputs,
+  root: string,
+  loaded: LoadedConfig,
+  log: Logging,
+): Promise<VersionGrading | undefined> {
+  if (inputs.remotes !== 'fetch' || UNTRUSTED_EVENTS.has(process.env.GITHUB_EVENT_NAME ?? ''))
+    return undefined;
+  const base = versionBase(root, inputs, log.logger);
+  if (!base) return undefined;
+  return log.group('flowpact: version changes', async () => {
+    const r = await gradeVersionChanges(
+      { root, config: loaded.config, logger: log.logger, validateSchema: false },
+      gitFileSystem(root, base),
+      apiOptions(inputs, log.logger),
+    );
+    for (const f of r.failed) core.warning(`Version change not graded: ${f.ref}: ${f.error}`);
+    core.info(`version changes: ${plural(r.grades.length, 'reference')} graded`);
+    return r;
+  });
 }
 
 /** Impact mode's baseline (in a group of its own), then the analysis with the plugins that may run. */
@@ -908,10 +975,19 @@ function markdownOptionsOf(
   };
 }
 
-/** Writes the job summary; a summary that cannot be written is a warning, not a failure. */
-async function writeSummary(result: AnalysisResult, markdownOptions: MarkdownOptions): Promise<void> {
+/** Writes the job summary, with the version changes; a summary that cannot be written is a warning, not a failure. */
+async function writeSummary(
+  result: AnalysisResult,
+  markdownOptions: MarkdownOptions,
+  versions: VersionGrading | undefined,
+): Promise<void> {
   try {
-    await core.summary.addRaw(summaryWithinLimit(result, markdownOptions)).write();
+    core.summary.addRaw(summaryWithinLimit(result, markdownOptions));
+    if (versions?.grades.length || versions?.failed.length) {
+      const from = Object.fromEntries(versions.changes.map((c) => [c.ref.raw, c.from.raw]));
+      core.summary.addRaw(`\n${renderVersionChanges({ ...versions, from }, markdownOptions)}`);
+    }
+    await core.summary.write();
   } catch (err) {
     core.warning(`Could not write the job summary: ${(err as Error).message}`);
   }
@@ -960,6 +1036,28 @@ function setFileOutputs(exitCode: number, reports: Reports, drift: DriftArtifact
   core.setOutput('artifact-id', drift?.uploaded?.id ?? '');
 }
 
+/** The version changes graded, and their worst verdict; empty when none were graded. */
+function setVersionOutputs(versions: VersionGrading | undefined): void {
+  const grades = versions?.grades ?? [];
+  const worst = (['breaks', 'unchecked', 'fits'] as const).find((v) => grades.some((g) => g.verdict === v));
+  core.setOutput('version-changes', versions ? grades.length : '');
+  core.setOutput('version-verdict', worst ?? '');
+}
+
+/** How many calls the version changes break. */
+const brokenCalls = (versions: VersionGrading | undefined): number =>
+  (versions?.grades ?? []).reduce((n, g) => n + g.calls.filter((c) => c.verdict === 'breaks').length, 0);
+
+/**
+ * The findings of the version changes that the analysis did not report: those an interface from the pull request's own
+ * lockfile hid. Annotated with the others.
+ */
+function versionFindings(result: AnalysisResult, versions: VersionGrading | undefined): AnnotatedFinding[] {
+  const seen = new Set(result.findings.map((f) => f.fingerprint));
+  const added = (versions?.grades ?? []).flatMap((g) => g.calls.flatMap((c) => c.added));
+  return added.filter((f) => !seen.has(f.fingerprint) && seen.add(f.fingerprint));
+}
+
 /** Impact mode's verdict; empty when it did not run. */
 function setImpactOutputs(impact: AnalysisResult['impact']): void {
   core.setOutput('required-impact', impact?.verdict.required ?? '');
@@ -967,11 +1065,21 @@ function setImpactOutputs(impact: AnalysisResult['impact']): void {
   core.setOutput('impact-ok', impact ? String(impact.verdict.ok) : '');
 }
 
-/** Reports the result: annotations, the drift artifact, the job summary, the report files, the outputs and the verdict. */
-async function report(result: AnalysisResult, inputs: Inputs, place: Place, log: Logging): Promise<void> {
+/**
+ * Reports the result: annotations, the drift artifact, the job summary, the report files, the outputs and the verdict;
+ * with the version changes, when they were graded.
+ */
+async function report(
+  result: AnalysisResult,
+  inputs: Inputs,
+  place: Place,
+  log: Logging,
+  versions?: VersionGrading,
+): Promise<void> {
   const { prefix } = place;
   const s = result.summary;
-  if (inputs.annotations) for (const f of result.findings) annotate(f, prefix);
+  if (inputs.annotations)
+    for (const f of [...result.findings, ...versionFindings(result, versions)]) annotate(f, prefix);
 
   const runId = process.env.GITHUB_RUN_ID || undefined;
   const plan = result.contracts;
@@ -980,17 +1088,37 @@ async function report(result: AnalysisResult, inputs: Inputs, place: Place, log:
     : undefined;
 
   const markdownOptions = markdownOptionsOf(inputs, prefix, drift, runId);
-  if (inputs.summary) await writeSummary(result, markdownOptions);
+  if (inputs.summary) await writeSummary(result, markdownOptions, versions);
   const reports = await writeReports(result, inputs, place, markdownOptions, log);
 
-  const exitCode = exitCodeFor(s, inputs.failOn);
+  const { exitCode, failure } = verdictOf(result, inputs, drift, versions);
   setResultOutputs(s, plan);
   setFileOutputs(exitCode, reports, drift);
   setImpactOutputs(result.impact);
+  setVersionOutputs(versions);
   core.info(
     `flowpact ${inputs.mode}: ${plural(s.errors, 'error')}, ${plural(s.warnings, 'warning')}, ${s.infos} info, ${s.suppressed} suppressed · ${plural(s.workflows, 'workflow')} · ${result.durationMs} ms`,
   );
-  if (exitCode !== 0) core.setFailed(failureMessage(result, inputs, drift));
+  if (failure) core.setFailed(failure);
+}
+
+/**
+ * The step's verdict: it fails on findings at `fail-on`, and, unless that is `never`, on a version change that breaks
+ * a call; with why.
+ */
+function verdictOf(
+  result: AnalysisResult,
+  inputs: Inputs,
+  drift: DriftArtifact | undefined,
+  versions: VersionGrading | undefined,
+): { exitCode: number; failure?: string } {
+  const findingsFail = exitCodeFor(result.summary, inputs.failOn) !== 0;
+  const broken = inputs.failOn === 'never' ? 0 : brokenCalls(versions);
+  if (!findingsFail && !broken) return { exitCode: 0 };
+  const breaks = broken ? `a version change breaks ${plural(broken, 'call')} (see the job summary)` : '';
+  if (!findingsFail) return { exitCode: 1, failure: `flowpact: ${breaks}.` };
+  const findings = failureMessage(result, inputs, drift).replace(/\.$/, '');
+  return { exitCode: 1, failure: `${findings}${breaks ? `; ${breaks}` : ''}.` };
 }
 
 /** Fails the step with what went wrong: the config's issues, a bad input or path, or an unexpected error. */
@@ -1037,7 +1165,8 @@ export async function run(): Promise<void> {
       core.setFailed(failure);
       return;
     }
-    await report(result, inputs, place, log);
+    const versions = await versionChangesOf(inputs, place.root, loaded, log);
+    await report(result, inputs, place, log, versions);
   } catch (err) {
     failWith(err, debug);
   }

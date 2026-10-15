@@ -407,9 +407,17 @@ export async function fetchMissingRemotes(
   });
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
   const missing = remoteRefsOf(new Index(project)).filter((r) => !locked.has(remoteKey(r.raw)));
+  return fetchRemoteEntries(missing, opts);
+}
+
+/** The entries of these references, fetched, and those that could not be fetched (with why). */
+export async function fetchRemoteEntries(
+  refs: RemoteRef[],
+  opts: FetchRemotesOptions = {},
+): Promise<FetchedRemotes> {
   const out: FetchedRemotes = { remotes: {}, failed: [], unreadable: [] };
-  const count = { done: 0, total: missing.length };
-  await eachLimited(missing, opts.concurrency ?? 8, async (r) => {
+  const count = { done: 0, total: refs.length };
+  await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const entry = await fetchCounted(r, opts, out, count);
     if (entry) out.remotes[r.raw] = entry;
   });

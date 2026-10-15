@@ -103,6 +103,8 @@ const FIXTURES = join(REPO, 'fixtures');
 const ENV_KEYS = [
   'GITHUB_WORKSPACE',
   'GITHUB_EVENT_NAME',
+  'GITHUB_EVENT_PATH',
+  'GITHUB_API_URL',
   'GITHUB_ACTION',
   'GITHUB_SERVER_URL',
   'GITHUB_REPOSITORY',
@@ -1364,5 +1366,128 @@ describe('remotes-github-com on GitHub Enterprise Server', () => {
       delete process.env.GITHUB_API_URL;
       vi.unstubAllGlobals();
     }
+  });
+});
+
+describe('version changes', () => {
+  const OLD = 'a'.repeat(40);
+  const NEW = 'c'.repeat(40);
+  let server: import('node:http').Server;
+  const hits: string[] = [];
+
+  beforeAll(async () => {
+    const { createServer } = await import('node:http');
+    server = createServer((req, res) => {
+      hits.push(req.url ?? '');
+      const body =
+        req.url === '/repos/octo/setup/commits/v2'
+          ? NEW
+          : req.url === `/repos/octo/setup/contents/action.yml?ref=${NEW}`
+            ? 'name: s\ndescription: d\ninputs:\n  version: { description: v }\nruns:\n  using: composite\n  steps: []\n'
+            : undefined;
+      res.writeHead(body === undefined ? 404 : 200).end(body ?? '');
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  });
+  afterAll(() => new Promise<void>((r) => server.close(() => r())));
+  beforeEach(() => {
+    hits.length = 0;
+    process.env.GITHUB_API_URL = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+  });
+
+  const steps = (ref: string) =>
+    `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: ${ref}\n        with: { version: 1, cache: x }\n      - uses: ${ref}\n        with: { version: 2 }\n`;
+  const lock = (ref: string, sha: string) =>
+    `version: 1\nremotes:\n  ${ref}:\n    sha: ${sha}\n    kind: action\n    using: composite\n    inputs: { version: {}, cache: {} }\n`;
+
+  /**
+   * A pull request that moves octo/setup from @v1 to @v2, which dropped `cache`: its base commit locked @v1, and its
+   * own lockfile says @v2 still takes `cache`, hiding the break from the analysis. Returns the base commit too.
+   */
+  function bump(): { root: string; base: string } {
+    const root = mkdtempSync(join(temp, 'versions-'));
+    const g = (...args: string[]) =>
+      execFileSync('git', args, { cwd: root, stdio: 'pipe' }).toString().trim();
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    mkdirSync(join(root, '.github/flowpact'), { recursive: true });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    g('config', 'commit.gpgsign', 'false');
+    writeFileSync(join(root, '.github/workflows/ci.yml'), steps('octo/setup@v1'));
+    writeFileSync(join(root, '.github/flowpact/remotes.lock.yaml'), lock('octo/setup@v1', OLD));
+    g('add', '-A');
+    g('commit', '-q', '-m', 'base');
+    const base = g('rev-parse', 'HEAD');
+    g('checkout', '-q', '-b', 'bump');
+    writeFileSync(join(root, '.github/workflows/ci.yml'), steps('octo/setup@v2'));
+    writeFileSync(join(root, '.github/flowpact/remotes.lock.yaml'), lock('octo/setup@v2', NEW));
+    g('commit', '-q', '-am', 'bump');
+    return { root, base };
+  }
+
+  /** The pull_request event, with the base commit in its payload. */
+  function pullRequest(base: string): void {
+    const event = join(temp, 'event.json');
+    writeFileSync(event, JSON.stringify({ pull_request: { base: { sha: base, ref: 'main' } } }));
+    process.env.GITHUB_EVENT_NAME = 'pull_request';
+    process.env.GITHUB_EVENT_PATH = event;
+  }
+
+  it("fails the step when a version change breaks a call, though the pull request's lockfile hides it", async () => {
+    const { root, base } = bump();
+    pullRequest(base);
+    const s = await action(root, { remotes: 'fetch', token: 'tkn' });
+    expect(s.outputs['version-changes']).toBe('1');
+    expect(s.outputs['version-verdict']).toBe('breaks');
+    expect(s.outputs.errors).toBe('0');
+    expect(s.failed).toEqual(['flowpact: a version change breaks 1 call (see the job summary).']);
+    expect(s.annotations.map((a) => a.message.split('\n')[0])).toContain(
+      'octo/setup@v2 has no input "cache"',
+    );
+    expect(s.summary).toContain('### Version changes');
+    expect(s.summary).toContain(
+      '**`octo/setup@v2`** (from `octo/setup@v1`, aaaaaaa → ccccccc): breaks 1 of 2 calls',
+    );
+    expect(s.summary).toContain('- **breaking:** input "cache" was removed');
+    expect(s.summary).toContain('- 1 other call fits');
+    // The base's entry stands for @v1, and @v2 is fetched although the pull request's lockfile has it.
+    expect(hits).toContain('/repos/octo/setup/commits/v2');
+    expect(hits.some((h) => h.includes('/commits/v1'))).toBe(false);
+  });
+
+  it('grades from base-ref, and does not fail with fail-on: never', async () => {
+    const { root } = bump();
+    const s = await action(root, { remotes: 'fetch', token: 'tkn', 'base-ref': 'main', 'fail-on': 'never' });
+    expect(s.outputs['version-verdict']).toBe('breaks');
+    expect(s.failed).toEqual([]);
+  });
+
+  it('grades nothing without remotes: fetch, on pull_request_target, or without a base', async () => {
+    const { root, base } = bump();
+    pullRequest(base);
+    const off = await action(root, { token: 'tkn' });
+    expect(off.outputs['version-changes']).toBe('');
+    expect(off.summary).not.toContain('Version changes');
+    process.env.GITHUB_EVENT_NAME = 'pull_request_target';
+    const untrusted = await action(root, { remotes: 'fetch', token: 'tkn' });
+    expect(untrusted.outputs['version-verdict']).toBe('');
+    delete process.env.GITHUB_EVENT_PATH;
+    process.env.GITHUB_EVENT_NAME = 'push';
+    const noBase = await action(root, { remotes: 'fetch', token: 'tkn' });
+    expect(noBase.outputs['version-changes']).toBe('');
+    // The lockfile has every reference, so nothing was fetched for the analysis, and nothing was graded.
+    expect(hits).toEqual([]);
+  });
+
+  it('warns about a version change it cannot fetch, and grades nothing for it', async () => {
+    const { root, base } = bump();
+    pullRequest(base);
+    process.env.GITHUB_API_URL = 'http://127.0.0.1:9';
+    const s = await action(root, { remotes: 'fetch', token: 'tkn' });
+    expect(s.outputs['version-changes']).toBe('0');
+    expect(s.annotations.some((a) => a.message.startsWith('Version change not graded: octo/setup@v2:'))).toBe(
+      true,
+    );
   });
 });

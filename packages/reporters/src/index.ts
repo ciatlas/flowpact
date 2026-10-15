@@ -5,3 +5,4 @@ export * from './kit';
 export * from './markdown';
 export * from './pretty';
 export * from './sarif';
+export * from './versions';

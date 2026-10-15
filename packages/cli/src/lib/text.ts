@@ -4,10 +4,13 @@
  * embeds names from the analyzed YAML), which is what the CLI's stdout also guarantees.
  */
 import { escapeControl, neutralizeWorkflowCommands } from '@ciatlas/core';
-import type { RemoteCallGrade, RemoteCallSite, RemoteChangeGrade, RemoteVerdict } from '@flowpact/lint';
+import type { RemoteCallGrade, RemoteChangeGrade } from '@flowpact/lint';
 import {
   type CallGraph,
+  callJobStep,
+  commitMove,
   finalize,
+  listedCalls,
   type RenderOptions,
   renderContractPlan,
   renderDot,
@@ -17,6 +20,8 @@ import {
   renderPatch,
   renderRules,
   renderTrace,
+  VERDICT_LABEL,
+  verdictLine,
 } from '@flowpact/reporters';
 import pc from 'picocolors';
 import { usage } from './errors';
@@ -196,43 +201,11 @@ function problemLines(r: RemotesUpdateResult, c: Paint): string[] {
 
 type Paint = { red: (s: string) => string; dim: (s: string) => string };
 
-const calls = (k: number) => `${k} call${k === 1 ? '' : 's'}`;
-
-/** A grade in a few words: how many of its calls the change breaks or leaves unchecked, or that it fits them. */
-function verdictLine(g: RemoteChangeGrade): string {
-  const total = g.calls.length;
-  if (!total) return 'nothing here calls it';
-  const n = g.calls.filter((k) => k.verdict === g.verdict).length;
-  if (g.verdict === 'breaks') return `breaks ${n} of ${calls(total)}`;
-  if (g.verdict === 'unchecked') return `not fully checked for ${n} of ${calls(total)}`;
-  return total === 1 ? 'fits its call' : `fits its ${total} calls`;
-}
-
-/** The commits an entry moved between, or the one it stays at (its interface as read changed). */
-function commitMove(g: RemoteChangeGrade, arrow: string): string {
-  const { before, after } = g.commits;
-  return before && before !== after
-    ? `${before.slice(0, 7)} ${arrow} ${after.slice(0, 7)}`
-    : `at ${after.slice(0, 7)}`;
-}
-
-const VERDICT_LABEL: Record<RemoteVerdict, string> = {
-  breaks: 'breaks',
-  unchecked: 'not fully checked',
-  fits: 'fits',
-};
-
-/** Where a call is: its file and line, then its job and step. */
-function callWhere(call: RemoteCallSite): string {
-  const parts = [call.job && `jobs.${call.job}`, call.step && `step ${call.step}`].filter(Boolean);
-  return `${call.loc.file}:${call.loc.line} ${parts.join(' ')}`;
-}
-
 /** A call: its verdict and where it is, then why (the findings, the parts not checked) and the notes. */
 function callLines(g: RemoteCallGrade, c: Paint): string[] {
   const label = g.verdict === 'breaks' ? c.red(VERDICT_LABEL.breaks) : VERDICT_LABEL[g.verdict];
   return [
-    `    ${label} ${shown(callWhere(g.call))}`,
+    `    ${label} ${shown(`${g.call.loc.file}:${g.call.loc.line} ${callJobStep(g.call)}`)}`,
     ...g.added.map((f) => `      ${f.code} ${shown(f.message)}`),
     ...g.unchecked.map((u) => `      ${shown(u)}`),
     ...g.notes.map((n) => c.dim(`      note: ${shown(n)}`)),
@@ -244,14 +217,12 @@ function callLines(g: RemoteCallGrade, c: Paint): string[] {
  * simply fit, and how many others do.
  */
 function gradeLines(g: RemoteChangeGrade, c: Paint, arrow: string): string[] {
-  const listed = g.calls.filter((k) => k.verdict !== 'fits' || k.notes.length);
-  const others = g.calls.length - listed.length;
-  const rest = others === 1 ? '1 other call fits' : `${others} other calls fit`;
+  const { listed, others } = listedCalls(g);
   return [
     `  changed ${shown(g.ref)}: ${commitMove(g, arrow)}, ${verdictLine(g)}`,
     ...g.changes.map((ch) => `    ${(ch.breaking ? c.red : c.dim)(shown(ch.message))}`),
     ...listed.flatMap((k) => callLines(k, c)),
-    ...(others && listed.length ? [c.dim(`    ${rest}`)] : []),
+    ...(others ? [c.dim(`    ${others}`)] : []),
   ];
 }
 

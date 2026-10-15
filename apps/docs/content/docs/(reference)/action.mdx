@@ -130,7 +130,7 @@ All inputs are optional.
 | `impact` | `off` | [Impact mode](/docs/impact-mode): `off`, `auto` (on pull requests, or on any event when `base-ref` is set, in repositories that publish workflows or actions that `ignore` does not leave out, and with `paths` when one is within them; never on `pull_request_target`) or `on`. |
 | `expected-impact` | `''` | The declared impact (`none`, `patch`, `minor`, `major`); overrides the pull request title and labels. |
 | `base-ref` | `''` | Baseline for impact mode: a commit, tag or branch (read from `origin/<branch>`, fetched when missing). Empty uses the pull request base, the commit before a push, or the last release tag for a release pull request. |
-| `remotes` | `lockfile` | Remote workflows and actions: `lockfile` checks them against the committed [remote interfaces lockfile](/docs/remote-interfaces) only; `fetch` also fetches, with `token`, the interfaces of the references it lacks, for this run (never on `pull_request_target` or `workflow_run`). |
+| `remotes` | `lockfile` | Remote workflows and actions: `lockfile` checks them against the committed [remote interfaces lockfile](/docs/remote-interfaces) only; `fetch` also fetches, with `token`, the interfaces of the references it lacks, for this run, and on a pull request (or with `base-ref`) grades the references it moves to another version ([version changes](/docs/remote-interfaces#on-a-pull-request)). Never on `pull_request_target` or `workflow_run`. |
 | `remotes-github-com` | `false` | With `remotes: fetch` on GitHub Enterprise Server or GHE.com: also look on github.com for the references the enterprise server lacks, as GitHub Connect does. It sends their names to github.com. |
 | `github-com-token` | `''` | The token for github.com with `remotes-github-com`; `token` is never sent there. Empty reads public repositories without one. |
 | `token` | `${{ github.token }}` | Used to fetch the baseline commit or release tags when the checkout is shallow, and with `remotes: fetch` to read the remote repositories (private and internal ones need a token that can read them). |
@@ -159,6 +159,8 @@ or action outside them is not graded.
 | `required-impact` | Impact mode: the impact the changes require (`none`, `patch`, `minor`, `major`). |
 | `declared-impact` | Impact mode: the impact the pull request declares; empty when nothing is declared. |
 | `impact-ok` | Impact mode: `true` when the declaration covers the changes (or nothing is declared), `false` otherwise; empty when impact mode did not run. |
+| `version-changes` | With `remotes: fetch` on a pull request: how many remote references it moves to another version were graded; empty when none were looked for. |
+| `version-verdict` | The worst verdict of those [version changes](/docs/remote-interfaces#on-a-pull-request): `breaks`, `unchecked` or `fits`; empty when none were graded. |
 
 ## Annotations
 
@@ -182,6 +184,8 @@ The summary has:
   ones in bold) and how to apply the regenerated contracts;
 - when [impact mode](/docs/impact-mode) ran, an **Impact** section: the impact the changes require, the declared
   impact and whether it covers them, with every graded change;
+- with `remotes: fetch` on a pull request that moves a remote reference to another version, a **Version changes**
+  section: each one's verdict, its interface changes, and the calls it breaks or leaves partly unchecked;
 - the findings accepted by overrides, in a collapsed table with each override's reason, expiry and owner;
 - with `summary-graph: true`, the call graph between workflows and local actions as a Mermaid diagram.
 

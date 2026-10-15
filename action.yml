@@ -91,7 +91,7 @@ inputs:
     required: false
     default: ''
   remotes:
-    description: 'Remote workflows and actions: lockfile (check them against the committed .github/flowpact/remotes.lock.yaml only) or fetch (also fetch, with token, the interfaces of the references the lockfile lacks, for this run; not on pull_request_target or workflow_run).'
+    description: 'Remote workflows and actions: lockfile (check them against the committed .github/flowpact/remotes.lock.yaml only) or fetch (also fetch, with token, the interfaces of the references the lockfile lacks, for this run; on a pull request, or with base-ref, also grade the references it moves to another version against freshly fetched interfaces; not on pull_request_target or workflow_run).'
     required: false
     default: 'lockfile'
   remotes-github-com:
@@ -142,6 +142,10 @@ outputs:
     description: 'Impact mode: the impact the pull request declares, empty when none is declared.'
   impact-ok:
     description: 'Impact mode: true when the declared impact covers the required one (or nothing is declared), false otherwise, empty when impact mode did not run.'
+  version-changes:
+    description: 'With remotes: fetch on a pull request: how many remote references it moves to another version were graded; empty when none were looked for.'
+  version-verdict:
+    description: 'The worst verdict of the version changes graded: breaks (a check fails on a call with the new interface; the step fails unless fail-on is never), unchecked, or fits; empty when none were graded.'
 
 runs:
   using: node24
