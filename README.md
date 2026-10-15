@@ -32,13 +32,34 @@
 GitHub Actions evaluates a missing matrix key, an undeclared secret or an optional input without a default to an empty
 value: no error, no warning, a green run. When workflows call reusable workflows and local actions, that is how a test variant
 or an upload stops running without anyone noticing. flowpact follows every input, secret, env var, matrix key and
-output across those calls, evaluates every combination of the matrices written in your workflows, and reports where a
-value goes missing. It runs as a CLI, a GitHub Action and a VS Code extension, and complements actionlint.
+output across those calls, and into workflows and actions of other repositories, evaluates every combination of the
+matrices written in your workflows, and reports where a value goes missing. It runs as a CLI, a GitHub Action and a
+VS Code extension, and complements actionlint.
 
 ![flowpact lint reporting a matrix combination that passes an empty input](apps/docs/public/screenshots/lint-incident.svg)
 
 *The incident that started flowpact: one matrix entry had no `config`, so that test variant never ran. actionlint
 reports nothing here.*
+
+```mermaid
+flowchart TD
+  accTitle: How a value goes missing
+  subgraph T["tests.yml · matrix.include"]
+    L["linux · config: ci-linux.json"]
+    M["macos · config: ci-macos.json"]
+    W["windows · no config"]
+  end
+  R["run-suite.yml · inputs.config"]
+  J["job test · if: inputs.config != ''"]
+  S["skipped · run stays green"]
+  L -->|"with: config"| R
+  M -->|"with: config"| R
+  W -.->|"config = ''"| R
+  R --> J
+  J -.->|"windows leg"| S
+  linkStyle 2 stroke:#e5484d,stroke-width:2px
+  linkStyle 4 stroke:#e5484d,stroke-width:2px
+```
 
 ## Is this for me?
 
@@ -50,33 +71,44 @@ reports nothing here.*
   ([how](#for-publishers-of-actions-and-reusable-workflows)).
 - **You call workflows or actions from other repositories:** record their interfaces once with
   `flowpact remotes update` and commit the lockfile. flowpact then checks the inputs and secrets you pass and the
-  outputs you read, and says when Renovate or Dependabot moves a reference past the lockfile
-  ([remote interfaces](https://ciatlas.github.io/flowpact/docs/remote-interfaces)).
+  outputs you read, and catches a version bump or a moved tag that drops an input you pass: `remotes update` says what
+  each changed reference does to your calls, and the action grades the references a Renovate or Dependabot pull
+  request moves ([remote interfaces](https://ciatlas.github.io/flowpact/docs/remote-interfaces)).
 - **You edit workflows in VS Code:** the same findings as you type, with the
   [extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact).
 
-It adds little to a few standalone workflows.
+A few standalone workflows with no calls between them? actionlint alone may be enough: flowpact earns its place once
+workflows call each other.
 
 ## Get started
+
+**In a terminal**, at the root of a repository (Node.js 22 or newer), with nothing to configure:
 
 ```sh
 npx flowpact lint                       # lint .github/workflows and local actions
 npx flowpact explain FP401              # why does this matter, how do I fix it?
 npx flowpact trace pipeline.yml:config  # where does this input go?
+npx flowpact remotes update             # record the interfaces of the remote workflows and actions you call
 ```
 
-In CI, add the action; it lints by default and annotates the pull request:
+**On pull requests**, add the action; it lints by default and annotates the pull request:
 
 ```yaml
 - uses: actions/checkout@v7
 - uses: ciatlas/flowpact@v0.20
 ```
 
+**In the editor**, install the extension from the
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) or
+[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact); other editors run `flowpact lsp`.
+
 Findings you accept go into `.github/flowpact/flowpact.config.yml` as **overrides** with a reason, an owner and an
 expiry date; expired overrides bring the findings back.
 
-📖 **Docs:** https://ciatlas.github.io/flowpact — getting started, how it works, the CLI (`generate`, `check`,
-`graph`, `lsp`), CI and action usage, contracts, impact mode, configuration, and a page for every rule.
+📖 **Docs:** https://ciatlas.github.io/flowpact: [install](https://ciatlas.github.io/flowpact/docs/installation), a
+[quickstart](https://ciatlas.github.io/flowpact/docs/getting-started),
+[adopting it in an existing repository](https://ciatlas.github.io/flowpact/docs/adopting), how it works, CI and action
+usage, remote interfaces, contracts, impact mode, configuration, the CLI and API, and a page for every rule.
 
 ## What it finds that other tools miss
 
@@ -88,6 +120,7 @@ expiry date; expired overrides bring the findings back.
 | A step runs `./.github/actions/...` after checking the repository out into a subdirectory | — | `FP606` |
 | A published workflow removes an output or renames a job, which can break consumers in other repositories | — | `FP803` (against the committed contracts), `FP810` (impact mode, against the base commit) |
 | A call to a reusable workflow or action in another repository passes an unknown input or leaves out a required one | popular actions only | `FP102`, `FP101`, against the [remote interfaces lockfile](https://ciatlas.github.io/flowpact/docs/remote-interfaces) |
+| A version bump, or a tag that moved, drops an input a call passes | — | `flowpact remotes update` grades each changed reference against your calls; the action grades a pull request's version changes |
 
 In a large public repository, flowpact found the third case: a reusable workflow that reads `secrets.CODECOV_TOKEN`
 while declaring no secrets, called from 31 places and none with `secrets: inherit`, so the token is always empty.
@@ -160,11 +193,13 @@ use the language server, `flowpact lsp` ([editors](https://ciatlas.github.io/flo
 ## Status
 
 Shipped: the engine, 53 rules, contracts (`flowpact generate` / `flowpact check`), impact mode, the remote interfaces
-lockfile (`flowpact remotes update`), overrides with reason and expiry, plugins, the CLI (pretty, JSON, Markdown and
-SARIF output; `flowpact graph`, `trace`), the GitHub Action, a language server and the
+lockfile (`flowpact remotes update`, read at the commits GitHub's `actions.lock` pins) with a grade of every version
+change against your calls (a drift check, and a verdict on pull requests in the action), overrides with reason and
+expiry, plugins, the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`, `trace`), a JavaScript API, the
+GitHub Action, a language server and the
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (diagnostics as you
-type, hover traces, go to definition across workflow calls; also on
-[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor — see the
+type, hover traces, go to definition across workflow calls and into the sources of remote workflows and actions; also
+on [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor — see the
 [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
 
 ## Security
