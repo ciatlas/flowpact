@@ -1,4 +1,5 @@
 import {
+  type Binding,
   BUILTIN_SECRETS,
   type CallSite,
   type ContextResolver,
@@ -84,27 +85,28 @@ const unknownSecret = defineRule({
   check(ctx) {
     for (const call of interfaceCalls(ctx.index)) {
       const declared = call.callee.call?.secrets ?? {};
-      for (const b of Object.values(call.job.secrets)) {
-        if (lookup(declared, b.name)) continue;
-        const guess = didYouMean(b.name, Object.keys(declared));
-        ctx.report({
-          message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
-          loc: b.loc,
-          symbol: sym.secret(call.callee.path, b.name),
-          related:
-            call.callee.call && !isExternal(call.callee)
-              ? [
-                  {
-                    loc: call.callee.call.loc,
-                    message: `declared secrets: ${listNames(Object.keys(declared))}`,
-                  },
-                ]
-              : [],
-        });
-      }
+      for (const b of Object.values(call.job.secrets))
+        if (!lookup(declared, b.name)) reportUnknownSecret(ctx, call, b, Object.keys(declared));
     }
   },
 });
+
+/** FP202 for a secret a call passes that its callee does not declare (`declared`). */
+function reportUnknownSecret(ctx: RuleContext, call: CallSite, b: Binding, declared: string[]): void {
+  const guess = didYouMean(b.name, declared);
+  const remote = isExternal(call.callee);
+  const where = call.callee.call && !remote ? call.callee.call.loc : undefined;
+  ctx.report({
+    message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
+    loc: b.loc,
+    symbol: sym.secret(call.callee.path, b.name),
+    // The rule's own fix says to declare the secret in the callee, which the caller of a remote one cannot do.
+    ...(remote && !guess
+      ? { fix: `Remove ${quote(b.name)} from \`secrets:\`: ${call.callee.path} does not declare it.` }
+      : {}),
+    related: where ? [{ loc: where, message: `declared secrets: ${listNames(declared)}` }] : [],
+  });
+}
 
 const unusedSecret = defineRule({
   code: 'FP203',

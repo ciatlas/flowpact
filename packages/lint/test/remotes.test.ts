@@ -63,6 +63,33 @@ describe('remote interfaces from the lockfile', () => {
     ]);
   });
 
+  it('tells the caller of a remote call to remove what the callee does not declare, not to declare it there', () => {
+    const remote = {
+      [LOCK]: lock,
+      [`${WF}/ci.yml`]: yaml`
+        on: push
+        jobs:
+          deploy:
+            uses: ${'octo/ship/.github/workflows/deploy.yml@v1'}
+            with: { env: prod, always-auth: true }
+            secrets: { token: x, npm-registry: y }
+          build:
+            runs-on: x
+            steps:
+              - uses: octo/setup@v2
+                with: { version: 1, always-auth: true }
+      `,
+    };
+    const fixes = (code: string) => byCode(lint(remote), code).map((f) => f.fix);
+    expect(fixes('FP102')).toEqual([
+      'Remove "always-auth" from `with:`: octo/ship/.github/workflows/deploy.yml@v1 does not declare it. If a new version dropped it, its release notes may say what replaced it.',
+      'Remove "always-auth" from `with:`: octo/setup@v2 does not declare it. If a new version dropped it, its release notes may say what replaced it.',
+    ]);
+    expect(fixes('FP202')).toEqual([
+      'Remove "npm-registry" from `secrets:`: octo/ship/.github/workflows/deploy.yml@v1 does not declare it.',
+    ]);
+  });
+
   it('points findings at the caller only: the declaration is in another repository', () => {
     for (const f of lint(files).findings.filter((x) => ['FP101', 'FP102', 'FP103'].includes(x.code))) {
       expect(f.loc.file).toBe(`${WF}/ci.yml`);

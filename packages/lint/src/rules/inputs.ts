@@ -218,9 +218,7 @@ const unknownInput = defineRule({
           loc: b.loc,
           symbol: sym.input(target, b.name),
           related: declLoc ? declaredAt(callee, declLoc, `declared inputs: ${listNames(names)}`) : [],
-          fix: guess
-            ? `Rename ${quote(b.name)} to ${quote(guess)}.`
-            : `Declare ${quote(b.name)} in ${target}, or remove it from \`with:\`.`,
+          fix: unknownInputFix(b.name, guess, callee),
         });
       }
     };
@@ -233,6 +231,17 @@ const unknownInput = defineRule({
     }
   },
 });
+
+/**
+ * FP102's fix: the input it most likely meant, else declaring it in the callee, or removing it; the callee of a remote
+ * call is in another repository, so only removing it is up to the caller.
+ */
+function unknownInputFix(name: string, guess: string | undefined, callee: UnitDecl): string {
+  if (guess) return `Rename ${quote(name)} to ${quote(guess)}.`;
+  return isExternal(callee)
+    ? `Remove ${quote(name)} from \`with:\`: ${callee.path} does not declare it. If a new version dropped it, its release notes may say what replaced it.`
+    : `Declare ${quote(name)} in ${callee.path}, or remove it from \`with:\`.`;
+}
 
 function jsonKind(v: Json): string {
   if (v === null) return 'null';

@@ -23601,7 +23601,7 @@ var unknownInput = defineRule({
           loc: b.loc,
           symbol: sym.input(target, b.name),
           related: declLoc ? declaredAt(callee, declLoc, `declared inputs: ${listNames(names)}`) : [],
-          fix: guess ? `Rename ${quote(b.name)} to ${quote(guess)}.` : `Declare ${quote(b.name)} in ${target}, or remove it from \`with:\`.`
+          fix: unknownInputFix(b.name, guess, callee)
         });
       }
     };
@@ -23614,6 +23614,10 @@ var unknownInput = defineRule({
     }
   }
 });
+function unknownInputFix(name, guess, callee) {
+  if (guess) return `Rename ${quote(name)} to ${quote(guess)}.`;
+  return isExternal(callee) ? `Remove ${quote(name)} from \`with:\`: ${callee.path} does not declare it. If a new version dropped it, its release notes may say what replaced it.` : `Declare ${quote(name)} in ${callee.path}, or remove it from \`with:\`.`;
+}
 function jsonKind(v) {
   if (v === null) return "null";
   if (Array.isArray(v)) return "array";
@@ -24960,24 +24964,24 @@ var unknownSecret = defineRule({
   check(ctx) {
     for (const call of interfaceCalls(ctx.index)) {
       const declared = call.callee.call?.secrets ?? {};
-      for (const b of Object.values(call.job.secrets)) {
-        if (lookup(declared, b.name)) continue;
-        const guess = didYouMean(b.name, Object.keys(declared));
-        ctx.report({
-          message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
-          loc: b.loc,
-          symbol: sym.secret(call.callee.path, b.name),
-          related: call.callee.call && !isExternal(call.callee) ? [
-            {
-              loc: call.callee.call.loc,
-              message: `declared secrets: ${listNames(Object.keys(declared))}`
-            }
-          ] : []
-        });
-      }
+      for (const b of Object.values(call.job.secrets))
+        if (!lookup(declared, b.name)) reportUnknownSecret(ctx, call, b, Object.keys(declared));
     }
   }
 });
+function reportUnknownSecret(ctx, call, b, declared) {
+  const guess = didYouMean(b.name, declared);
+  const remote = isExternal(call.callee);
+  const where = call.callee.call && !remote ? call.callee.call.loc : void 0;
+  ctx.report({
+    message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
+    loc: b.loc,
+    symbol: sym.secret(call.callee.path, b.name),
+    // The rule's own fix says to declare the secret in the callee, which the caller of a remote one cannot do.
+    ...remote && !guess ? { fix: `Remove ${quote(b.name)} from \`secrets:\`: ${call.callee.path} does not declare it.` } : {},
+    related: where ? [{ loc: where, message: `declared secrets: ${listNames(declared)}` }] : []
+  });
+}
 var unusedSecret = defineRule({
   code: "FP203",
   name: "unused-secret",
