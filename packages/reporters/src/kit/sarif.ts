@@ -28,6 +28,25 @@ export const sarifLocation = (loc: Loc, pathPrefix?: string) => ({
   region: region(loc),
 });
 
+/** What a SARIF fix needs of a suggestion: what it does, and its edits. */
+export interface SarifSuggestion {
+  title: string;
+  edits: { loc: Loc; newText: string }[];
+}
+
+/** SARIF `fixes`: each edit replaces the region its `loc` covers (an empty region inserts), grouped by file. */
+export function sarifFixes(suggestions: SarifSuggestion[], pathPrefix?: string) {
+  return suggestions.map((s) => ({
+    description: { text: s.title },
+    artifactChanges: [...new Set(s.edits.map((e) => e.loc.file))].map((file) => ({
+      artifactLocation: { uri: inRepository(file, pathPrefix), uriBaseId: '%SRCROOT%' },
+      replacements: s.edits
+        .filter((e) => e.loc.file === file)
+        .map((e) => ({ deletedRegion: region(e.loc), insertedContent: { text: e.newText } })),
+    })),
+  }));
+}
+
 /** The tool that produced a SARIF run. */
 export interface SarifDriver {
   name: string;

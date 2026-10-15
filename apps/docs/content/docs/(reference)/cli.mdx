@@ -133,6 +133,19 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
   status and one entry per contract file with its status and semantic changes.
 - `fingerprint` is stable across unrelated edits (line shifts, changed counts), so it can be used to track findings
   over time.
+- `suggestions`, on some findings, are fixes flowpact can apply: each has a `title` and the `edits` that make it, the
+  text at `loc` replaced by `newText`. A rule suggests one only when the change is certain, such as renaming a
+  misspelled input, secret, output or step id to the name its "did you mean" points at. The editor offers them as
+  quick fixes, and SARIF carries them as `fixes`.
+
+  ```json
+  "suggestions": [
+    {
+      "title": "Rename \"confg\" to \"config\"",
+      "edits": [{ "loc": { "file": ".github/workflows/ci.yml", "line": 6, "column": 7, "endLine": 6, "endColumn": 12 }, "newText": "config" }]
+    }
+  ]
+  ```
 - `rules` lists every rule with its code, name and effective severity (`off` included).
 - With `--impact` (or `flowpact impact`), `impact` holds the verdict: the `baseline`, the `required` and `declared`
   impact, `ok`, and every graded change. With paths, `impact.scope` lists the `paths` and the published `units`

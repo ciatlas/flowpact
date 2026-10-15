@@ -12,4 +12,5 @@ export * from './remotes-fetch';
 export * from './remotes-grade';
 export * from './report';
 export * from './rules/index';
+export * from './suggestions';
 export * from './version';

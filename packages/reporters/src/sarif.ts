@@ -8,7 +8,7 @@ import {
   type Severity,
   type SuppressedFinding,
 } from '@flowpact/lint';
-import { sarifLocation as physicalLocation, type SarifRule, sarifLog } from './kit';
+import { sarifLocation as physicalLocation, type SarifRule, sarifFixes, sarifLog } from './kit';
 
 const LEVEL: Record<Severity, 'error' | 'warning' | 'note'> = {
   error: 'error',
@@ -132,6 +132,7 @@ export function renderSarif(result: AnalysisResult, opts: SarifOptions = {}): st
         }
       : {}),
     partialFingerprints: { 'flowpact/v1': f.fingerprint },
+    ...(f.suggestions?.length ? { fixes: sarifFixes(f.suggestions, opts.pathPrefix) } : {}),
     ...('override' in f
       ? { suppressions: [{ kind: 'external', status: 'accepted', justification: f.override.reason }] }
       : {}),

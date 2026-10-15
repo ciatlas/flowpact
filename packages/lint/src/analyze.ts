@@ -998,7 +998,14 @@ function toFinding(
         : escapeControl(rule.docs.fix, true),
     docsUrl: registry.docsUrl(rule),
     fingerprint: fingerprint(rule.code, input.symbol, input.loc.file, input.message),
+    ...suggestionsOf(input),
   };
+}
+
+/** A finding's suggestions, the defined ones, when there are any. */
+function suggestionsOf(input: ReportInput): Pick<Finding, 'suggestions'> {
+  const suggestions = (input.suggestions ?? []).filter((x) => x !== undefined);
+  return suggestions.length ? { suggestions } : {};
 }
 
 function dedupe(findings: Finding[]): Finding[] {

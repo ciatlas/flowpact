@@ -237,6 +237,11 @@ export interface Finding {
   docsUrl: string;
   /** Stays the same across unrelated edits. */
   fingerprint: string;
+  /**
+   * Fixes flowpact can apply, such as renaming a misspelled name, each with the edits that make it: the text at `loc`
+   * replaced by `newText` (an empty range inserts it). Only when the change is certain.
+   */
+  suggestions?: { title: string; edits: { loc: Loc; newText: string }[] }[];
 }
 
 /** A finding an override accepted. */

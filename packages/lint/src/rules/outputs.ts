@@ -14,6 +14,7 @@ import {
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { isExternal } from '../remotes';
+import { renameSegment } from '../suggestions';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { didYouMeanNote, isProperty, listNames, namesKey, quote } from './util';
 
@@ -127,6 +128,8 @@ function checkJobOutputRef(
     loc: ref.loc,
     symbol: sym.jobOutput(wf.path, job.id, c),
     related: [jobOutputsDeclared(ctx, job, names)],
+    // `needs.<job>.outputs.<name>` or `jobs.<job>.outputs.<name>`
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : undefined],
   });
 }
 
@@ -150,6 +153,7 @@ function checkStepOutputRef(
       message: `No step with id ${quote(a)} in ${site.job ? `jobs.${site.job}` : unit.path}${didYouMeanNote(guess)}`,
       loc: ref.loc,
       symbol: stepOutputSymbol(unit, site, a, c),
+      suggestions: [guess ? renameSegment(ctx.index, ref.loc, 1, a, guess) : undefined],
     });
     return;
   }
@@ -179,6 +183,7 @@ function checkActionOutputRef(ctx: RuleContext, step: StepDecl, ref: LocatedRef)
     message: `${action.path} has no output ${quote(c)}${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: sym.output(action.path, c),
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : undefined],
     related: [{ loc: step.uses?.loc ?? step.loc, message: `declared outputs: ${listNames(names)}` }],
   });
 }
@@ -437,6 +442,7 @@ function checkStepOutputWritten(ctx: RuleContext, unit: UnitDecl, site: ExprSite
     message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: stepOutputSymbol(unit, site, a, c),
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : undefined],
     related: [{ loc: step.runLoc ?? step.loc, message: 'outputs are written here' }],
   });
 }

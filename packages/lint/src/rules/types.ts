@@ -3,6 +3,7 @@ import type { FlowpactConfig, Override } from '../config';
 import type { ContractPlan } from '../contracts';
 import type { ImpactResult } from '../impact';
 import type { RemotesLockRead } from '../remotes';
+import type { Suggestion } from '../suggestions';
 
 export type Severity = 'error' | 'warning' | 'info';
 export type SeveritySetting = Severity | 'off';
@@ -57,6 +58,8 @@ export interface Finding {
   docsUrl: string;
   /** Stable hash of code + symbol/location + message; survives unrelated edits. */
   fingerprint: string;
+  /** Fixes flowpact can apply, such as renaming a misspelled name; only when the change is certain. */
+  suggestions?: Suggestion[];
 }
 
 export interface ReportInput {
@@ -72,6 +75,8 @@ export interface ReportInput {
    * such as identifiers parsed from expressions; otherwise newlines are shown as `\n`.
    */
   fixMultiline?: boolean;
+  /** Fixes the editor can apply (see `Suggestion`); entries that are undefined are left out. */
+  suggestions?: (Suggestion | undefined)[];
   /**
    * Report this finding below the rule's severity (e.g. a key GitHub ignores, where the rule's other findings are keys
    * it rejects). It only ever lowers: the finding gets the less severe of this and the rule's configured severity.

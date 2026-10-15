@@ -152,4 +152,35 @@ describe('renderSarif', () => {
     expect(rule.help.text).toContain('Do the acme thing.');
     expect(run.results.find((x: Sarif) => x.ruleId === 'ACME601').level).toBe('warning');
   });
+
+  it("carries a finding's suggestions as fixes that replace a region of the file", () => {
+    const r = analyze({
+      root: '/virtual/repo',
+      fs: memoryFileSystem({
+        '.github/workflows/r.yml':
+          'on:\n  workflow_call:\n    inputs:\n      config: { type: string }\njobs:\n  t:\n    runs-on: x\n    steps:\n      - run: echo\n',
+        '.github/workflows/ci.yml':
+          'on: push\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n    with:\n      confg: release\n',
+      }),
+      config: parseConfig({}),
+      validateSchema: false,
+    });
+    const res = parse(r).runs[0].results.find((x: Sarif) => x.ruleId === 'FP102');
+    expect(res.fixes).toEqual([
+      {
+        description: { text: 'Rename "confg" to "config"' },
+        artifactChanges: [
+          {
+            artifactLocation: { uri: '.github/workflows/ci.yml', uriBaseId: '%SRCROOT%' },
+            replacements: [
+              {
+                deletedRegion: { startLine: 6, startColumn: 7, endLine: 6, endColumn: 12 },
+                insertedContent: { text: 'config' },
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+  });
 });

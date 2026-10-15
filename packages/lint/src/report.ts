@@ -31,6 +31,14 @@ export const findingSchema = z.object({
   fix: z.string(),
   docsUrl: z.url(),
   fingerprint: z.string().check(z.regex(/^[0-9a-f]{16}$/)),
+  suggestions: z.optional(
+    z.array(
+      z.object({
+        title: z.string(),
+        edits: z.array(z.object({ loc: locSchema, newText: z.string() })),
+      }),
+    ),
+  ),
 });
 
 export const reportSchema = z.object({

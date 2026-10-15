@@ -23,6 +23,7 @@ import {
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { interfaceCalls, interfaceUses, isExternal } from '../remotes';
+import { renameAt, renameSegment } from '../suggestions';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, didYouMeanNote, isProperty, listNames, namesKey, quote, useInCondition } from './util';
 
@@ -219,6 +220,7 @@ const unknownInput = defineRule({
           symbol: sym.input(target, b.name),
           related: declLoc ? declaredAt(callee, declLoc, `declared inputs: ${listNames(names)}`) : [],
           fix: unknownInputFix(b.name, guess, callee),
+          suggestions: [guess ? renameAt(ctx.index, b.loc, b.name, guess) : undefined],
         });
       }
     };
@@ -705,6 +707,8 @@ function checkInputRead(
     loc: ref.loc,
     symbol: sym.input(unit.path, name),
     ...(guess ? { fix: `Use \`inputs.${guess}\`.` } : {}),
+    // `inputs.<name>`, or `github.event.inputs.<name>`: the name is the reference's last segment.
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, ref.path.length, name, guess) : undefined],
   });
 }
 

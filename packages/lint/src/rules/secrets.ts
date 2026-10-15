@@ -26,6 +26,7 @@ import {
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { interfaceCalls, isExternal } from '../remotes';
+import { renameAt } from '../suggestions';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, namesKey, quote } from './util';
 
@@ -109,6 +110,7 @@ function reportUnknownSecret(ctx: RuleContext, call: CallSite, b: Binding, decla
     message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` — did you mean ${quote(guess)}?` : ''}`,
     loc: b.loc,
     symbol: sym.secret(call.callee.path, b.name),
+    suggestions: [guess ? renameAt(ctx.index, b.loc, b.name, guess) : undefined],
     // The rule's own fix says to declare the secret in the callee, which the caller of a remote one cannot do.
     ...(remote && !guess
       ? { fix: `Remove ${quote(b.name)} from \`secrets:\`: ${call.callee.path} does not declare it.` }

@@ -13405,7 +13405,7 @@ function buildSite(unit, node, text2, c, p, ownerPath, ctx) {
 function rawScalar(source, node) {
   const [start, end] = node.range ?? [0, 0];
   const raw = source.text.slice(start, end);
-  const quoted = node.type === "QUOTE_SINGLE" || node.type === "QUOTE_DOUBLE";
+  const quoted2 = node.type === "QUOTE_SINGLE" || node.type === "QUOTE_DOUBLE";
   return {
     source,
     start,
@@ -13413,7 +13413,7 @@ function rawScalar(source, node) {
     quote: node.type === "QUOTE_SINGLE" ? "''" : "'",
     escapes: node.type === "QUOTE_DOUBLE",
     open: valueStart(node.type, raw),
-    close: quoted ? raw.length - 1 : raw.length
+    close: quoted2 ? raw.length - 1 : raw.length
   };
 }
 function valueStart(type, raw) {
@@ -16913,10 +16913,10 @@ function shapeOf(unit) {
     return { file: unit.file, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
   };
   const mergeOf = (value) => {
-    const sources = (0, import_yaml4.isSeq)(value) ? value.items : [value];
-    const maps = sources.map((s) => (0, import_yaml4.isAlias)(s) ? s.resolve(doc) : s).filter(import_yaml4.isMap);
+    const sources2 = (0, import_yaml4.isSeq)(value) ? value.items : [value];
+    const maps = sources2.map((s) => (0, import_yaml4.isAlias)(s) ? s.resolve(doc) : s).filter(import_yaml4.isMap);
     const keys = maps.flatMap((m) => m.items.flatMap((p) => (0, import_yaml4.isScalar)(p.key) ? [String(p.key.value)] : []));
-    const aliases = sources.filter(import_yaml4.isAlias).map((a) => `*${a.source}`);
+    const aliases = sources2.filter(import_yaml4.isAlias).map((a) => `*${a.source}`);
     return { aliases: [...new Set(aliases)], keys };
   };
   const walk = (node, path) => {
@@ -17292,10 +17292,10 @@ function scriptWrites2(script) {
       cwd = dirs.pop();
     } else if (COPIES.has(name) || name === "robocopy") {
       const dest = target ?? (name === "robocopy" ? operands[1] : operands.length > 1 ? operands.at(-1) : void 0);
-      const sources = target !== void 0 ? operands : name === "robocopy" ? [] : operands.slice(0, -1);
+      const sources2 = target !== void 0 ? operands : name === "robocopy" ? [] : operands.slice(0, -1);
       if (dest === void 0) return;
       write(dest, name);
-      for (const s of sources) if (!/[$`*?[\]{}]/.test(basename(s))) write(`${dest}/${basename(s)}`, name);
+      for (const s of sources2) if (!/[$`*?[\]{}]/.test(basename(s))) write(`${dest}/${basename(s)}`, name);
     } else if (CREATES.has(name)) {
       for (const o of operands) write(o, name);
     }
@@ -22397,9 +22397,9 @@ function outputConditions(index, unit) {
   const out = /* @__PURE__ */ new Map();
   const outputs = unit.kind === "workflow" ? unit.call?.outputs : unit.outputs;
   for (const name of Object.keys(outputs ?? {})) {
-    const sources = unit.kind === "workflow" ? workflowOutputSources(index, unit, name) : sourcesIn(unit, "action.output", name, "steps").map((s) => stepConditions(unit.steps, s.owner, ""));
-    const always = !sources.length || sources.some((c) => !c.length);
-    out.set(name.toLowerCase(), always ? [] : sources.flat());
+    const sources2 = unit.kind === "workflow" ? workflowOutputSources(index, unit, name) : sourcesIn(unit, "action.output", name, "steps").map((s) => stepConditions(unit.steps, s.owner, ""));
+    const always = !sources2.length || sources2.some((c) => !c.length);
+    out.set(name.toLowerCase(), always ? [] : sources2.flat());
   }
   return out;
 }
@@ -22542,28 +22542,28 @@ function levelFromVersions(previous, next, bumps) {
 }
 var countedChanges = (changes, policy) => changes.filter((c) => c.certain || policy.uncertain === "fail");
 function declaredSources(input2, policy) {
-  const sources = [];
-  if (input2.explicit) sources.push({ kind: "explicit", value: input2.explicit, level: input2.explicit });
+  const sources2 = [];
+  if (input2.explicit) sources2.push({ kind: "explicit", value: input2.explicit, level: input2.explicit });
   if (input2.release) {
     const level = levelFromVersions(input2.release.previous, input2.release.version, input2.release);
-    sources.push({ kind: "version", value: `${input2.release.previous} \u2192 ${input2.release.version}`, level });
+    sources2.push({ kind: "version", value: `${input2.release.previous} \u2192 ${input2.release.version}`, level });
   } else if (input2.title !== void 0) {
     const level = levelFromTitle(input2.title, policy.types);
-    if (level) sources.push({ kind: "title", value: input2.title, level });
+    if (level) sources2.push({ kind: "title", value: input2.title, level });
   }
   if (input2.labels?.length) {
     const level = levelFromLabels(input2.labels, policy.labels);
-    if (level) sources.push({ kind: "labels", value: input2.labels.join(", "), level });
+    if (level) sources2.push({ kind: "labels", value: input2.labels.join(", "), level });
   }
-  return sources;
+  return sources2;
 }
 var authorityOf = (input2, policy) => input2.explicit ? "explicit" : input2.release ? "version" : policy.declaredBy ?? "title";
 function impactVerdict(changes, input2, policy) {
   const required2 = maxLevel(countedChanges(changes, policy).map((c) => c.level));
-  const sources = declaredSources(input2, policy);
+  const sources2 = declaredSources(input2, policy);
   const authority = authorityOf(input2, policy);
-  const declared = sources.find((s) => s.kind === authority);
-  const advisory = sources.filter((s) => s !== declared);
+  const declared = sources2.find((s) => s.kind === authority);
+  const advisory = sources2.filter((s) => s !== declared);
   const conflict = declared ? advisory.find((s) => levelRank(s.level) > levelRank(declared.level)) : void 0;
   const under = declared && levelRank(required2) > levelRank(declared.level) && levelRank(required2) >= levelRank("minor");
   return {
@@ -23550,6 +23550,45 @@ var impactRules = [
 ];
 var IMPACT_CODES = impactRules.map((r) => r.code);
 
+// ../lint/src/suggestions.ts
+var sources = /* @__PURE__ */ new WeakMap();
+function sourceOf(index, file) {
+  let byFile = sources.get(index);
+  if (!byFile) {
+    byFile = new Map(index.units().map((u) => [u.source.path, u.source]));
+    sources.set(index, byFile);
+  }
+  return byFile.get(file);
+}
+function textAt(source, loc) {
+  if (loc.line !== loc.endLine) return void 0;
+  return source.lines[loc.line - 1]?.slice(loc.column - 1, loc.endColumn - 1);
+}
+var quoted = (q) => q === "'" ? "'" : '"';
+function renameAt(index, loc, from, to) {
+  const source = sourceOf(index, loc.file);
+  const text2 = source && textAt(source, loc);
+  if (text2 === void 0) return void 0;
+  const q = /^(["'])(.*)\1$/.exec(text2);
+  const bare = q ? q[2] : text2;
+  if (bare?.toLowerCase() !== from.toLowerCase()) return void 0;
+  const newText = q ? `${quoted(q[1])}${to}${quoted(q[1])}` : to;
+  return { title: `Rename ${JSON.stringify(from)} to ${JSON.stringify(to)}`, edits: [{ loc, newText }] };
+}
+function renameSegment(index, loc, segment, from, to) {
+  const source = sourceOf(index, loc.file);
+  const text2 = source && textAt(source, loc);
+  if (text2 === void 0 || !/^[\w.-]+$/.test(text2)) return void 0;
+  const parts = text2.split(".");
+  if (parts[segment]?.toLowerCase() !== from.toLowerCase()) return void 0;
+  const column = loc.column + parts.slice(0, segment).reduce((n, p) => n + p.length + 1, 0);
+  const at = { ...loc, column, endColumn: column + parts[segment].length };
+  return {
+    title: `Rename ${JSON.stringify(from)} to ${JSON.stringify(to)}`,
+    edits: [{ loc: at, newText: to }]
+  };
+}
+
 // ../lint/src/rules/inputs.ts
 function eventInputReadsByRoot(index) {
   const out = /* @__PURE__ */ new Map();
@@ -23686,7 +23725,8 @@ var unknownInput = defineRule({
           loc: b.loc,
           symbol: sym.input(target, b.name),
           related: declLoc ? declaredAt(callee, declLoc, `declared inputs: ${listNames(names)}`) : [],
-          fix: unknownInputFix(b.name, guess, callee)
+          fix: unknownInputFix(b.name, guess, callee),
+          suggestions: [guess ? renameAt(ctx.index, b.loc, b.name, guess) : void 0]
         });
       }
     };
@@ -24031,7 +24071,9 @@ function checkInputRead(ctx, unit, inputs, names, ref) {
     message: `${unit.path} has no input ${quote(name)}${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: sym.input(unit.path, name),
-    ...guess ? { fix: `Use \`inputs.${guess}\`.` } : {}
+    ...guess ? { fix: `Use \`inputs.${guess}\`.` } : {},
+    // `inputs.<name>`, or `github.event.inputs.<name>`: the name is the reference's last segment.
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, ref.path.length, name, guess) : void 0]
   });
 }
 function inputReadName(unit, ref) {
@@ -24659,7 +24701,9 @@ function checkJobOutputRef(ctx, wf, site, ref, a) {
     message: `jobs.${job.id} has no output ${quote(c)}${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: sym.jobOutput(wf.path, job.id, c),
-    related: [jobOutputsDeclared(ctx, job, names)]
+    related: [jobOutputsDeclared(ctx, job, names)],
+    // `needs.<job>.outputs.<name>` or `jobs.<job>.outputs.<name>`
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : void 0]
   });
 }
 function checkStepOutputRef(ctx, unit, site, ref, a) {
@@ -24674,7 +24718,8 @@ function checkStepOutputRef(ctx, unit, site, ref, a) {
     ctx.report({
       message: `No step with id ${quote(a)} in ${site.job ? `jobs.${site.job}` : unit.path}${didYouMeanNote(guess)}`,
       loc: ref.loc,
-      symbol: stepOutputSymbol(unit, site, a, c)
+      symbol: stepOutputSymbol(unit, site, a, c),
+      suggestions: [guess ? renameSegment(ctx.index, ref.loc, 1, a, guess) : void 0]
     });
     return;
   }
@@ -24701,6 +24746,7 @@ function checkActionOutputRef(ctx, step2, ref) {
     message: `${action.path} has no output ${quote(c)}${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: sym.output(action.path, c),
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : void 0],
     related: [{ loc: step2.uses?.loc ?? step2.loc, message: `declared outputs: ${listNames(names)}` }]
   });
 }
@@ -24896,6 +24942,7 @@ function checkStepOutputWritten(ctx, unit, site, ref) {
     message: `Step ${quote(a)} never writes output ${quote(c)} (it writes ${listNames(w.names)})${didYouMeanNote(guess)}`,
     loc: ref.loc,
     symbol: stepOutputSymbol(unit, site, a, c),
+    suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : void 0],
     related: [{ loc: step2.runLoc ?? step2.loc, message: "outputs are written here" }]
   });
 }
@@ -25158,6 +25205,7 @@ function reportUnknownSecret(ctx, call, b, declared) {
     message: `${call.callee.path} has no secret ${quote(b.name)}${guess ? ` \u2014 did you mean ${quote(guess)}?` : ""}`,
     loc: b.loc,
     symbol: sym.secret(call.callee.path, b.name),
+    suggestions: [guess ? renameAt(ctx.index, b.loc, b.name, guess) : void 0],
     // The rule's own fix says to declare the secret in the callee, which the caller of a remote one cannot do.
     ...remote && !guess ? { fix: `Remove ${quote(b.name)} from \`secrets:\`: ${call.callee.path} does not declare it.` } : {},
     related: where ? [{ loc: where, message: `declared secrets: ${listNames(declared)}` }] : []
@@ -26629,8 +26677,13 @@ function toFinding(rule, severity, input2, registry2) {
     // Per-finding fixes embed names from the YAML, so newlines are escaped unless the rule vouches for the text.
     fix: input2.fix !== void 0 ? escapeControl(input2.fix, input2.fixMultiline === true) : escapeControl(rule.docs.fix, true),
     docsUrl: registry2.docsUrl(rule),
-    fingerprint: fingerprint(rule.code, input2.symbol, input2.loc.file, input2.message)
+    fingerprint: fingerprint(rule.code, input2.symbol, input2.loc.file, input2.message),
+    ...suggestionsOf(input2)
   };
+}
+function suggestionsOf(input2) {
+  const suggestions = (input2.suggestions ?? []).filter((x) => x !== void 0);
+  return suggestions.length ? { suggestions } : {};
 }
 function dedupe2(findings) {
   const seen = /* @__PURE__ */ new Set();
@@ -27852,7 +27905,15 @@ var findingSchema = object({
   why: string2(),
   fix: string2(),
   docsUrl: url(),
-  fingerprint: string2().check(_regex(/^[0-9a-f]{16}$/))
+  fingerprint: string2().check(_regex(/^[0-9a-f]{16}$/)),
+  suggestions: optional(
+    array(
+      object({
+        title: string2(),
+        edits: array(object({ loc: locSchema, newText: string2() }))
+      })
+    )
+  )
 });
 var reportSchema = object({
   $schema: string2(),
@@ -28299,6 +28360,15 @@ var sarifLocation = (loc, pathPrefix) => ({
   artifactLocation: { uri: inRepository(loc.file, pathPrefix), uriBaseId: "%SRCROOT%" },
   region: region(loc)
 });
+function sarifFixes(suggestions, pathPrefix) {
+  return suggestions.map((s) => ({
+    description: { text: s.title },
+    artifactChanges: [...new Set(s.edits.map((e) => e.loc.file))].map((file) => ({
+      artifactLocation: { uri: inRepository(file, pathPrefix), uriBaseId: "%SRCROOT%" },
+      replacements: s.edits.filter((e) => e.loc.file === file).map((e) => ({ deletedRegion: region(e.loc), insertedContent: { text: e.newText } }))
+    }))
+  }));
+}
 function sarifLog(driver, results) {
   const sarif = {
     $schema: SARIF_SCHEMA,
@@ -28686,6 +28756,7 @@ function renderSarif(result, opts = {}) {
       }))
     } : {},
     partialFingerprints: { "flowpact/v1": f.fingerprint },
+    ...f.suggestions?.length ? { fixes: sarifFixes(f.suggestions, opts.pathPrefix) } : {},
     ..."override" in f ? { suppressions: [{ kind: "external", status: "accepted", justification: f.override.reason }] } : {},
     properties: {
       ...f.combos?.length ? { combos: f.combos } : {},
