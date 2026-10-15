@@ -21,6 +21,8 @@ import {
   PublishDiagnosticsNotification,
   StreamMessageReader,
   StreamMessageWriter,
+  type TextEdit,
+  type WorkspaceEdit,
 } from 'vscode-languageserver/node';
 import { URI } from 'vscode-uri';
 
@@ -83,6 +85,8 @@ interface Client {
   conn: ProtocolConnection;
   diagnostics: Map<string, Diagnostic[]>;
   logs: string[];
+  /** The edits the server asked the client to apply (`workspace/applyEdit`). */
+  applied: WorkspaceEdit[];
   settled(): Promise<void>;
   /** The diagnostics of a file once the server has analyzed every pending edit. */
   diagnosticsOf(dir: string, rel: string): Promise<Diagnostic[]>;
@@ -90,7 +94,13 @@ interface Client {
   dispose(): void;
 }
 
-async function start(dir: string, settings: Record<string, unknown> = {}, folder = dir): Promise<Client> {
+/** `createFiles`: the client can create files in a workspace edit, as VS Code can. */
+async function start(
+  dir: string,
+  settings: Record<string, unknown> = {},
+  folder = dir,
+  createFiles = false,
+): Promise<Client> {
   const toServer = new PassThrough();
   const toClient = new PassThrough();
   // Readers and writers rather than raw streams: on a raw stream's end, the library exits the process.
@@ -104,6 +114,11 @@ async function start(dir: string, settings: Record<string, unknown> = {}, folder
   const conn = createProtocolConnection(new StreamMessageReader(toClient), new StreamMessageWriter(toServer));
   const diagnostics = new Map<string, Diagnostic[]>();
   const logs: string[] = [];
+  const applied: WorkspaceEdit[] = [];
+  conn.onRequest('workspace/applyEdit', (p: { edit: WorkspaceEdit }) => {
+    applied.push(p.edit);
+    return { applied: true };
+  });
   conn.onNotification(PublishDiagnosticsNotification.type, (p) => {
     diagnostics.set(p.uri, p.diagnostics);
   });
@@ -118,7 +133,11 @@ async function start(dir: string, settings: Record<string, unknown> = {}, folder
     workspaceFolders: [{ uri: URI.file(folder).toString(), name: 'repo' }],
     capabilities: {
       textDocument: { definition: { linkSupport: true } },
-      workspace: { workspaceFolders: true, didChangeWatchedFiles: { dynamicRegistration: true } },
+      workspace: {
+        workspaceFolders: true,
+        didChangeWatchedFiles: { dynamicRegistration: true },
+        ...(createFiles ? { workspaceEdit: { documentChanges: true, resourceOperations: ['create'] } } : {}),
+      },
     },
     initializationOptions: settings,
   });
@@ -130,6 +149,7 @@ async function start(dir: string, settings: Record<string, unknown> = {}, folder
     conn,
     diagnostics,
     logs,
+    applied,
     settled,
     async diagnosticsOf(d, rel) {
       // The server publishes before it answers, and messages arrive in order.
@@ -548,5 +568,98 @@ describe('readSettings', () => {
       hiddenRules: [],
       logLevel: 'info',
     });
+  });
+});
+
+/** A text with LSP edits made (from the last to the first). */
+function edited(text: string, edits: TextEdit[]): string {
+  const lines = text.split('\n');
+  const at = (p: { line: number; character: number }) =>
+    lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
+  return [...edits]
+    .sort((a, b) => at(b.range.start) - at(a.range.start))
+    .reduce((t, e) => t.slice(0, at(e.range.start)) + e.newText + t.slice(at(e.range.end)), text);
+}
+
+describe('code actions', () => {
+  const actionsFor = async (client: Client, dir: string) => {
+    const [d] = (await client.diagnosticsOf(dir, CALLER)).filter((x) => x.code === 'FP102');
+    return client.conn.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: uri(dir, CALLER) },
+      range: d!.range,
+      context: { diagnostics: [d] },
+    }) as Promise<
+      {
+        title: string;
+        isPreferred?: boolean;
+        edit?: WorkspaceEdit;
+        command?: { command: string; arguments: unknown[] };
+      }[]
+    >;
+  };
+
+  it("offers a finding's suggestion as the preferred quick fix", async () => {
+    const dir = repo();
+    const client = await start(dir);
+    const [rename] = await actionsFor(client, dir);
+    expect(rename).toMatchObject({ title: 'Rename "nmae" to "name"', isPreferred: true });
+    expect(edited(REPO[CALLER]!, rename!.edit!.changes![uri(dir, CALLER)]!)).toBe(FIXED);
+  });
+
+  it('accepts a finding with an override in a new config file, with a reason to replace', async () => {
+    const dir = repo();
+    const client = await start(dir, {}, dir, true);
+    const accept = (await actionsFor(client, dir)).find(
+      (a) => a.title === 'Accept this finding with an override',
+    );
+    const [create, change] = accept!.edit!.documentChanges as [
+      { kind: string; uri: string },
+      { textDocument: { uri: string }; edits: TextEdit[] },
+    ];
+    expect(create).toMatchObject({ kind: 'create', uri: uri(dir, CONFIG) });
+    expect(change.edits[0]!.newText).toBe(
+      'overrides:\n  - rule: FP102\n    target: ".github/workflows/callee.yml#inputs.nmae"\n    reason: "Explain why this finding is accepted"\n',
+    );
+  });
+
+  it('offers no accept for a client that cannot create the config file', async () => {
+    const dir = repo();
+    const client = await start(dir);
+    expect((await actionsFor(client, dir)).map((a) => a.title)).toEqual(['Rename "nmae" to "name"']);
+  });
+
+  it('adds the override to the config the repository has', async () => {
+    const dir = repo({ ...REPO, [CONFIG]: 'rules:\n  FP604: warning\n' });
+    const client = await start(dir);
+    const accept = (await actionsFor(client, dir)).find((a) => a.title.startsWith('Accept'));
+    expect(edited('rules:\n  FP604: warning\n', accept!.edit!.changes![uri(dir, CONFIG)]!)).toContain(
+      'rules:\n  FP604: warning\noverrides:\n  - rule: FP102\n',
+    );
+  });
+
+  it('lets a client that asks for the reason run its command, then adds the override with that reason', async () => {
+    const dir = repo();
+    const client = await start(dir, { acceptFindingPrompt: true }, dir, true);
+    const accept = (await actionsFor(client, dir)).find((a) => a.title.startsWith('Accept'));
+    expect(accept).toMatchObject({
+      title: 'Accept this finding with an override…',
+      command: { command: 'flowpact.acceptFindingWithReason', arguments: [{ uri: uri(dir, CALLER) }] },
+    });
+    expect(accept!.edit).toBeUndefined();
+    const [args] = accept!.command!.arguments as [{ uri: string; fingerprint: string }];
+    await client.conn.sendRequest('workspace/executeCommand', {
+      command: 'flowpact.acceptFinding',
+      arguments: [{ ...args, reason: 'The callee reads it under another name', expires: '2099-01-31' }],
+    });
+    const [edit] = client.applied;
+    const change = (edit!.documentChanges as { edits?: TextEdit[] }[])[1]!;
+    const config = edited('', change.edits!);
+    expect(config).toContain('reason: "The callee reads it under another name"\n    expires: 2099-01-31');
+    // With the config written, the finding is accepted.
+    write(dir, { [CONFIG]: config });
+    await client.conn.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: uri(dir, CONFIG), type: FileChangeType.Created }],
+    });
+    expect(codesOf(await client.diagnosticsOf(dir, CALLER))).not.toContain('FP102');
   });
 });

@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: "What flowpact does today, and what comes next: quick fixes in the editor."
+description: "What flowpact does today, and what comes next: the rest of the editor."
 ---
 
 What each release changed is in the [changelog](/docs/changelog).
@@ -27,6 +27,8 @@ What each release changed is in the [changelog](/docs/changelog).
 - **[Language server](/docs/editors)** (`flowpact lsp`): findings as you type across files, hover traces, go to
   definition across workflow calls, and references. Calls into other repositories are described from the remote
   interfaces lockfile, and go to definition opens their cached sources.
+  [Quick fixes](/docs/editors#quick-fixes) rename a misspelled name, add a missing input, secret or matrix key, remove
+  an unused input, and accept a finding with an override.
 - **[VS Code extension](/docs/editors#vs-code)** on the Visual Studio Marketplace and Open VSX, with the language server
   bundled.
 - **[API](/docs/api)**: every command as a function, for scripts and your own actions.
@@ -48,7 +50,11 @@ What each release changed is in the [changelog](/docs/changelog).
   moves to another version, each of your calls is graded as broken, unchecked or still fitting: in a scheduled drift
   check, and on the pull request that moves it.
 
-## Next: quick fixes in the editor
+## Next: the rest of the editor
 
-Add a missing input, remove an unused one, add the missing matrix key, regenerate the contracts, or **add an override**
-with a prompt for its reason, from the editor.
+- **Regenerate the contracts** from a contract finding, as `flowpact generate` does.
+- **Rename** an input, secret or output across its declaration, its callers and its reads.
+- **Contract files:** hover, and go to definition to what each entry records.
+- **Repositories without a `.github` folder**, such as one with only an action at its root.
+- **Navigation** for `env` set on a step or in a composite action, step outcomes and step ids.
+- **Completion** of the inputs and secrets of calls into other repositories, from the lockfile, without a network.

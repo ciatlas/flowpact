@@ -95,8 +95,21 @@
         "command": "flowpact.showOutput",
         "title": "Show Output",
         "category": "flowpact"
+      },
+      {
+        "command": "flowpact.acceptFindingWithReason",
+        "title": "Accept a Finding with an Override",
+        "category": "flowpact"
       }
     ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "flowpact.acceptFindingWithReason",
+          "when": "false"
+        }
+      ]
+    },
     "configuration": {
       "title": "flowpact",
       "properties": {

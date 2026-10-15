@@ -149,7 +149,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     initializationOptions: () => {
       const settings = current();
       sent = JSON.stringify(settings);
-      return settings;
+      // "Accept this finding" runs flowpact.acceptFindingWithReason, which asks for the reason.
+      return { ...settings, acceptFindingPrompt: true };
     },
     middleware: {
       handleDiagnostics: (uri, diagnostics, next) => {
@@ -223,6 +224,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.commands.registerCommand('flowpact.restartServer', restart),
     vscode.commands.registerCommand('flowpact.showOutput', () => output.show()),
+    vscode.commands.registerCommand('flowpact.acceptFindingWithReason', acceptFindingWithReason),
     vscode.window.onDidChangeActiveTextEditor(() => readOnlyIfSource()),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('flowpact')) push();
@@ -292,4 +294,35 @@ async function nested(): Promise<boolean> {
 
 export function deactivate(): Promise<void> | undefined {
   return client?.dispose().catch(() => undefined);
+}
+
+/**
+ * "Accept this finding": asks why (an override needs a reason of at least 10 characters) and, optionally, until when,
+ * then has the server add the override to the config.
+ */
+async function acceptFindingWithReason(args: { uri: string; fingerprint: string }): Promise<void> {
+  const title = 'Accept this finding with an override';
+  const reason = await vscode.window.showInputBox({
+    title,
+    prompt: 'Why is it accepted? The override keeps the reason next to it in the config.',
+    placeHolder: 'Read by the release dispatcher until the migration (JIRA-123)',
+    ignoreFocusOut: true,
+    validateInput: (v) =>
+      v.trim().length >= 10 ? undefined : 'At least 10 characters, as the config requires.',
+  });
+  if (reason === undefined) return;
+  const expires = await vscode.window.showInputBox({
+    title,
+    prompt: 'Until when? After that date the finding is reported again. Leave it empty for no expiry.',
+    placeHolder: 'YYYY-MM-DD',
+    ignoreFocusOut: true,
+    validateInput: (v) =>
+      !v.trim() || /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? undefined : 'A date, YYYY-MM-DD, or nothing.',
+  });
+  if (expires === undefined) return;
+  await vscode.commands.executeCommand('flowpact.acceptFinding', {
+    ...args,
+    reason: reason.trim(),
+    ...(expires.trim() ? { expires: expires.trim() } : {}),
+  });
 }

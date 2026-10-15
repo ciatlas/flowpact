@@ -134,6 +134,28 @@ rather than a wrong one.
 If you keep the cache elsewhere (`--cache-dir`), set `flowpact.cacheDir` (`cacheDir` in other editors) to the same
 directory.
 
+## Quick fixes
+
+A finding that flowpact knows how to fix offers it as a quick fix (**Ctrl+.** or **Cmd+.**, or the light bulb):
+
+| Quick fix | On |
+| --- | --- |
+| Rename to the name a "did you mean" points at | an input, secret, output or step id ([`FP102`](/docs/rules/fp102), [`FP108`](/docs/rules/fp108), [`FP202`](/docs/rules/fp202), [`FP301`](/docs/rules/fp301), [`FP304`](/docs/rules/fp304)) |
+| Add the missing required input or secret, under `with:` or `secrets:` | a call that leaves one out ([`FP101`](/docs/rules/fp101), [`FP201`](/docs/rules/fp201)) |
+| Add the missing key to the `include` entries that lack it | a matrix value that is empty in some combinations ([`FP401`](/docs/rules/fp401), [`FP402`](/docs/rules/fp402)) |
+| Remove the unused input, and what local callers pass for it | [`FP104`](/docs/rules/fp104), in a workflow or action no other repository uses |
+
+An added key gets an empty value for you to fill in. A quick fix is offered only when the change is certain: none in a
+flow mapping (`{ … }`) or a file with CRLF line endings, and no removal from a
+[published](/docs/concepts#published-unit) workflow or action, whose callers in other repositories would break.
+
+Every finding also offers **Accept this finding with an override**. It adds an [override](/docs/configuration#overrides)
+for it to the config, creating `.github/flowpact/flowpact.config.yml` when there is none. VS Code asks for the reason
+and, optionally, a date until which the finding is accepted. Other editors write a placeholder reason to replace
+(*Explain why this finding is accepted*).
+
+The same fixes are in the [JSON report](/docs/cli#json-report) as `suggestions`, and in SARIF as `fixes`.
+
 ## Settings
 
 In VS Code and the editors built on it, under **Settings → Extensions → flowpact**:
@@ -170,7 +192,8 @@ for a repository above the folder you opened.
 - `env` set on a step or in a composite action, `steps.<id>.outcome` / `conclusion` and step ids are not navigable
   yet.
 - Contract files (`.github/flowpact/contracts/`) show their findings but have no hover or go to definition.
-- There are no quick fixes, rename or completion yet.
+- There is no rename or completion yet.
+
 ## Other editors
 
 `flowpact lsp` starts the same server over stdin/stdout, for any editor with an LSP client. It needs flowpact

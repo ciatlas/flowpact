@@ -287,10 +287,10 @@ var require_identity = __commonJS({
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
     var isAlias4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
     var isDocument2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
+    var isMap7 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
     var isPair3 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR2;
-    var isSeq6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
+    var isScalar7 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR2;
+    var isSeq7 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
     function isCollection2(node) {
       if (node && typeof node === "object")
         switch (node[NODE_TYPE]) {
@@ -311,7 +311,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar6(node) || isCollection2(node)) && !!node.anchor;
+    var hasAnchor = (node) => (isScalar7(node) || isCollection2(node)) && !!node.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -323,11 +323,11 @@ var require_identity = __commonJS({
     exports.isAlias = isAlias4;
     exports.isCollection = isCollection2;
     exports.isDocument = isDocument2;
-    exports.isMap = isMap6;
+    exports.isMap = isMap7;
     exports.isNode = isNode;
     exports.isPair = isPair3;
-    exports.isScalar = isScalar6;
-    exports.isSeq = isSeq6;
+    exports.isScalar = isScalar7;
+    exports.isSeq = isSeq7;
   }
 });
 
@@ -4435,9 +4435,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap6 = fc.start.source === "{";
-      const fcName = isMap6 ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap6 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap7 = fc.start.source === "{";
+      const fcName = isMap7 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap7 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -4473,7 +4473,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap6 && ctx.options.strict && utilContainsNewline.containsNewline(key))
+          if (!isMap7 && ctx.options.strict && utilContainsNewline.containsNewline(key))
             onError(
               key,
               // checked by containsNewline()
@@ -4513,7 +4513,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap6 && !sep5 && !props.found) {
+        if (!isMap7 && !sep5 && !props.found) {
           const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep5, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -4536,7 +4536,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap6 && !props.found && ctx.options.strict) {
+            if (!isMap7 && !props.found && ctx.options.strict) {
               if (sep5)
                 for (const st of sep5) {
                   if (st === valueProps.found)
@@ -4568,7 +4568,7 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap6) {
+          if (isMap7) {
             const map = coll;
             if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
               onError(keyStart2, "DUPLICATE_KEY", "Map keys must be unique");
@@ -4584,7 +4584,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap6 ? "}" : "]";
+      const expectedEnd = isMap7 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -5871,7 +5871,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR2 = "";
     var isCollection2 = (token) => !!token && "items" in token;
-    var isScalar6 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar7 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -5955,7 +5955,7 @@ var require_cst = __commonJS({
     exports.FLOW_END = FLOW_END;
     exports.SCALAR = SCALAR2;
     exports.isCollection = isCollection2;
-    exports.isScalar = isScalar6;
+    exports.isScalar = isScalar7;
     exports.prettyToken = prettyToken;
     exports.tokenType = tokenType;
   }
@@ -7485,7 +7485,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument6(source, options = {}) {
+    function parseDocument7(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7511,7 +7511,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver2 && typeof reviver2 === "object") {
         options = reviver2;
       }
-      const doc = parseDocument6(src, options);
+      const doc = parseDocument7(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning2) => log.warn(doc.options.logLevel, warning2));
@@ -7547,7 +7547,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse3;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument6;
+    exports.parseDocument = parseDocument7;
     exports.stringify = stringify3;
   }
 });
@@ -27472,6 +27472,9 @@ function prepareImpact(root, headConfig, req, logger) {
   };
 }
 
+// ../lint/src/override-entry.ts
+var import_yaml11 = __toESM(require_dist(), 1);
+
 // ../lint/src/plugins.ts
 import { existsSync as existsSync6 } from "fs";
 import { isAbsolute as isAbsolute5, resolve as resolve5 } from "path";
@@ -28998,7 +29001,7 @@ function renderVersionChanges(v, links = {}) {
 }
 
 // src/main.ts
-var import_yaml11 = __toESM(require_dist(), 1);
+var import_yaml12 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -29353,7 +29356,7 @@ var fromActionDir = (p) => isAbsolute8(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml11.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml12.parse)(readFileSync5(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {

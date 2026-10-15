@@ -4,6 +4,7 @@ export * from './config';
 export * from './contracts';
 export * from './impact';
 export * from './impact-run';
+export * from './override-entry';
 export * from './plugins';
 export * from './remotes';
 export * from './remotes-cache';

@@ -1,12 +1,16 @@
 import { join } from 'node:path';
 import { createLogger, type Logger, type LogRecord } from '@ciatlas/core';
-import { remotesCacheDir, VERSION } from '@flowpact/lint';
+import { type Finding, overrideFor, remotesCacheDir, VERSION } from '@flowpact/lint';
 import {
+  type CodeAction,
+  CodeActionKind,
   type Connection,
   createConnection,
+  type Diagnostic,
   DidChangeWatchedFilesNotification,
   type DocumentHighlight,
   DocumentHighlightKind,
+  type InitializeParams,
   type Location,
   type LocationLink,
   type Position,
@@ -16,6 +20,7 @@ import {
   TextDocuments,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { ACCEPT_COMMAND, type AcceptArgs, acceptAction, acceptEdit, suggestionActions } from './actions';
 import { pathToUri, toRange, uriToPath } from './convert';
 import { hoverMarkdown, remoteBindingMarkdown } from './hover';
 import { readSettings, type Settings } from './settings';
@@ -30,6 +35,23 @@ const HIGHLIGHT = {
   uses: DocumentHighlightKind.Text,
 } as const;
 
+/** What the client can do: from its capabilities, and the options VS Code's extension sends. */
+function clientFeatures(params: InitializeParams) {
+  const { textDocument, workspace } = params.capabilities;
+  const edits = workspace?.workspaceEdit;
+  return {
+    linkSupport: textDocument?.definition?.linkSupport === true,
+    /** It can create a file in a workspace edit: a new config file for an override. */
+    canCreate: edits?.documentChanges === true && (edits.resourceOperations ?? []).includes('create'),
+    /** It asks for an override's reason itself, so "Accept" runs its command. */
+    promptForReason:
+      (params.initializationOptions as { acceptFindingPrompt?: unknown } | undefined)?.acceptFindingPrompt ===
+      true,
+    watchFiles: workspace?.didChangeWatchedFiles?.dynamicRegistration === true,
+    folderEvents: workspace?.workspaceFolders === true,
+  };
+}
+
 /** Wires flowpact's analysis to a language-server connection and starts listening. */
 export function startServer(connection: Connection): void {
   const documents = new TextDocuments(TextDocument);
@@ -42,6 +64,10 @@ export function startServer(connection: Connection): void {
     new RemoteSources(s.cacheDir ? join(s.cacheDir, 'remotes') : remotesCacheDir());
   let sources = sourcesFor(settings);
   let linkSupport = false;
+  /** The client can create a file in a workspace edit: a new config file for an override. */
+  let canCreate = false;
+  /** The client asks for an override's reason itself (VS Code's extension), so "Accept" runs its command. */
+  let promptForReason = false;
   let watchFiles = false;
   let folderEvents = false;
 
@@ -70,9 +96,7 @@ export function startServer(connection: Connection): void {
     settings = readSettings(params.initializationOptions);
     sources = sourcesFor(settings);
     setLevel(settings.logLevel);
-    linkSupport = params.capabilities.textDocument?.definition?.linkSupport === true;
-    watchFiles = params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
-    folderEvents = params.capabilities.workspace?.workspaceFolders === true;
+    ({ linkSupport, canCreate, promptForReason, watchFiles, folderEvents } = clientFeatures(params));
     const folders = params.workspaceFolders?.length
       ? params.workspaceFolders.map((f) => uriToPath(f.uri))
       : [params.rootUri ? uriToPath(params.rootUri) : undefined];
@@ -104,6 +128,8 @@ export function startServer(connection: Connection): void {
         definitionProvider: true,
         referencesProvider: true,
         documentHighlightProvider: true,
+        codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
+        executeCommandProvider: { commands: [ACCEPT_COMMAND] },
         workspace: { workspaceFolders: { supported: true, changeNotifications: true } },
       },
       serverInfo: { name: 'flowpact', version: VERSION },
@@ -218,6 +244,48 @@ export function startServer(connection: Connection): void {
     return occurrencesOf(found)
       .filter((o) => o.loc.file === found.at.loc.file)
       .map((o) => ({ range: toRange(o.loc), kind: HIGHLIGHT[o.role] }));
+  });
+
+  /** The finding a flowpact diagnostic was made from, by the fingerprint it carries. */
+  const findingOf = (findings: Finding[], d: Diagnostic) =>
+    d.source === 'flowpact'
+      ? findings.find((f) => f.fingerprint === (d.data as { fingerprint?: string } | undefined)?.fingerprint)
+      : undefined;
+
+  connection.onCodeAction(async ({ textDocument, context }) => {
+    const path = uriToPath(textDocument.uri);
+    const found = path ? await workspace?.findingsOf(path) : undefined;
+    if (!found || !workspace) return null;
+    const config = workspace.configOf(found.root);
+    const actions: CodeAction[] = [];
+    for (const d of context.diagnostics) {
+      const f = findingOf(found.findings, d);
+      if (!f) continue;
+      actions.push(...suggestionActions(found.root.dir, f, d));
+      const accept = acceptAction(f, d, textDocument.uri, { prompt: promptForReason, canCreate, config });
+      if (accept) actions.push(accept);
+    }
+    return actions;
+  });
+
+  /** Adds the override for a finding, with the reason (and the expiry) the client asked for. */
+  const acceptFinding = async ({ uri, fingerprint, reason, expires }: AcceptArgs): Promise<void> => {
+    const path = uriToPath(uri);
+    const found = path && reason ? await workspace?.findingsOf(path) : undefined;
+    const f = found?.findings.find((x) => x.fingerprint === fingerprint);
+    if (!workspace || !found || !f || !reason) return;
+    const config = workspace.configOf(found.root);
+    const edit = acceptEdit(config.path, config.text, overrideFor(f, reason, expires), canCreate);
+    if (edit) await connection.workspace.applyEdit({ label: `Accept ${f.code}`, edit });
+    else
+      connection.window.showWarningMessage(
+        `flowpact could not add the override to ${config.path}: add it under \`overrides:\` by hand.`,
+      );
+  };
+
+  connection.onExecuteCommand(async ({ command, arguments: args }) => {
+    if (command === ACCEPT_COMMAND) await acceptFinding((args?.[0] ?? {}) as AcceptArgs);
+    return null;
   });
 
   // The remote sources cache, so the client can open its files read-only.

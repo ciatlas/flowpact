@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
   type FileSystem,
@@ -67,6 +67,8 @@ export class Root {
   published = new Set<string>();
   /** The last config that parsed and analyzed cleanly, used while the config file is being edited. */
   goodConfig?: LoadedConfig;
+  /** The config file the last analysis read (repo-relative), when there is one. */
+  configFile?: string | undefined;
   timer?: ReturnType<typeof setTimeout>;
   running?: Promise<void>;
   dirty = false;
@@ -239,6 +241,29 @@ export class Workspace {
     return remote ? { root, at: remote.at, remote } : undefined;
   }
 
+  /** The findings of the repository a file belongs to, after pending edits are analyzed. */
+  async findingsOf(path: string): Promise<{ root: Root; findings: AnalysisResult['findings'] } | undefined> {
+    const root = this.rootOf(path);
+    if (!root?.rel(path)) return undefined;
+    await this.ready(root);
+    return root.result ? { root, findings: root.result.findings } : undefined;
+  }
+
+  /**
+   * A repository's config file (absolute), the one the analysis read or where a new one goes, and its text: the open
+   * document's, else the file's, else none.
+   */
+  configOf(root: Root): { path: string; text: string | undefined } {
+    const path = join(root.dir, root.configFile ?? `${CONFIG_DIR}/${CONFIG_FILES[0]}`);
+    const open = [...this.host.documents()].find((d) => d.path === path);
+    if (open) return { path, text: open.text };
+    try {
+      return { path, text: readFileSync(path, 'utf8') };
+    } catch {
+      return { path, text: undefined };
+    }
+  }
+
   /** Waits until every root's analysis reflects the latest edits. */
   async settled(): Promise<void> {
     await Promise.all([...this.roots.values()].map((r) => this.ready(r)));
@@ -363,6 +388,7 @@ export class Workspace {
     const problems: ConfigProblem[] = [];
     const configFile = CONFIG_FILES.map((f) => `${CONFIG_DIR}/${f}`).find((f) => fs.read(f) !== undefined);
     const problem = (err: Error) => problems.push(configProblem(configFile, err));
+    root.configFile = configFile;
     const loaded = readConfig(fs, configFile, root.goodConfig, problem);
     // Without plugins to load the analysis starts in the same turn, with no await in between.
     const registry = this.pluginsAllowed(root, loaded)
