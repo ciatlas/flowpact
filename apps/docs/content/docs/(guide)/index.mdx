@@ -1,42 +1,126 @@
 ---
 title: Introduction
-description: flowpact finds what gets lost between GitHub Actions workflows — missing inputs, dead outputs, inherited secrets and matrix legs that silently run with empty values.
+description: Find the GitHub Actions values that arrive empty while the run stays green.
 ---
 
-Large CI setups grow into a tree: one `pipeline.yml` with dozens (or hundreds) of `workflow_call` inputs fans out to
-reusable workflows, which call more reusable workflows and composite actions. Each level passes a different subset of
-values down and hands outputs back up. Eventually nobody can answer:
+flowpact is a data-flow linter for GitHub Actions. It follows every input, secret, env var, matrix key and output
+through reusable workflows, composite actions and calls into other repositories, evaluates every combination of the
+matrices in your YAML, and shows where a value goes missing: as you type, in your terminal and on every pull request.
 
-- *Where does this input actually go?*
-- *Is anything we pass ignored, or anything we read never passed?*
-- *Does every matrix leg get every value it needs?*
+GitHub does not fail a run when a value is missing. A matrix entry without a key, an optional input without a default,
+a secret the callee never declared: each evaluates to an empty string. There is no error and no warning, the run is
+green, and a job quietly did less than you think, or did not run at all.
 
-GitHub does not help: a missing matrix key, an undeclared secret or an optional input without a default all evaluate to
-an **empty string** — no error, no warning, a green run.
-
-<Screenshot name="lint-incident" alt="flowpact lint reporting FP401: input config is empty for the windows matrix combination" caption="The real incident that motivated flowpact: one matrix entry had no config, so that test variant never ran." />
-
-## What flowpact does
-
-flowpact parses your workflows and local actions into a **data-flow graph** — every input, secret, env var, matrix key and
-output, where it is defined and where it is read, across every level of nesting — and runs rules over it.
-
-<Cards>
-  <Card title="Lint" href="/docs/cli#flowpact-lint">53 rules with stable codes, exact locations, the call chain, why it matters, how to fix it and a docs link.</Card>
-  <Card title="Contracts" href="/docs/contracts">A generated lockfile per workflow and action. <code>flowpact check</code> fails on drift and marks breaking interface changes.</Card>
-  <Card title="Trace and graph" href="/docs/cli#flowpact-trace">Follow any input, secret or output down to where it is used or up to where it comes from; draw the call graph.</Card>
-  <Card title="Impact mode" href="/docs/impact-mode">For publishers of workflows and actions: with impact mode on, a pull request fails when its changes need a minor or major release and it declares less, such as a renamed check declared as a patch.</Card>
-  <Card title="GitHub Action" href="/docs/action">Job summary, pull request annotations and regenerated contracts as a downloadable patch.</Card>
-  <Card title="Configure" href="/docs/configuration">Severities, overrides with a reason and an expiry date, runtime matrix shapes and plugin rules.</Card>
-</Cards>
-
-## Quick start
-
-```sh
-npx flowpact lint       # find problems
-npx flowpact generate   # lock the interfaces in .github/flowpact/
-npx flowpact check      # lint + fail when the workflows no longer match the contracts
+```mermaid
+flowchart TD
+  accTitle: How a value goes missing
+  subgraph T["tests.yml · matrix.include"]
+    L["linux · config: ci-linux.json"]
+    M["macos · config: ci-macos.json"]
+    W["windows · no config"]
+  end
+  R["run-suite.yml · inputs.config"]
+  J["job test · if: inputs.config != ''"]
+  S["skipped · run stays green"]
+  L -->|"with: config"| R
+  M -->|"with: config"| R
+  W -.->|"config = ''"| R
+  R --> J
+  J -.->|"windows leg"| S
+  linkStyle 2 stroke:#e5484d,stroke-width:2px
+  linkStyle 4 stroke:#e5484d,stroke-width:2px
 ```
 
-Run it at the root of a repository. See [Getting started](/docs/getting-started) for installation options and how to
-read the output.
+<Screenshot name="lint-incident" alt="flowpact lint reporting FP401: input config is empty for the windows matrix combination" caption="The incident that started flowpact: one matrix entry had no config, so its tests never ran, and the run stayed green." />
+
+## Is this for me?
+
+flowpact earns its place once workflows call each other:
+
+- reusable workflows and composite actions pass values down through several levels, and outputs back up;
+- a matrix with `include` entries feeds a reusable workflow, and every leg must get every value;
+- you call workflows and actions in other repositories, and Renovate or Dependabot move them to new versions;
+- you publish reusable workflows or actions that other repositories call, and must not break them.
+
+A few standalone workflows with no calls between them? [actionlint](https://github.com/rhysd/actionlint) alone may be
+enough. flowpact checks what passes between files and matrix combinations: use it next to actionlint, which checks each
+file in depth, and [zizmor](https://github.com/zizmorcore/zizmor), which checks security. See
+[flowpact and other tools](/docs/comparison).
+
+## Try it
+
+<Tabs items={['Terminal', 'GitHub Action', 'Editor']} groupId="surface" persist>
+  <Tab value="Terminal">
+    Run it at the root of a repository; there is nothing to configure:
+
+    ```sh
+    npx flowpact lint
+    ```
+
+    When your workflows call workflows or actions in other repositories, record their interfaces once, and those calls
+    are checked too:
+
+    ```sh
+    npx flowpact remotes update   # writes .github/flowpact/remotes.lock.yaml: commit it
+    npx flowpact lint
+    ```
+
+    The [Quickstart](/docs/getting-started) explains the output.
+  </Tab>
+  <Tab value="GitHub Action">
+    ```yaml title=".github/workflows/flowpact.yml"
+    name: flowpact
+    on: pull_request
+    permissions:
+      contents: read
+    jobs:
+      flowpact:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v7       # pin to a commit SHA
+          - uses: ciatlas/flowpact@v0.20    # pin to a commit SHA
+    ```
+
+    Findings become annotations on the pull request and a job summary. See [Run on pull requests](/docs/ci).
+  </Tab>
+  <Tab value="Editor">
+    Install flowpact from the
+    [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) or
+    [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact). Findings appear as you type, for open and
+    closed files, and hovering an input, secret or output shows where it comes from. Neovim and other editors run
+    `flowpact lsp`: see [Editors](/docs/editors).
+  </Tab>
+</Tabs>
+
+## What it checks
+
+- **Within your repository.** 53 rules over the data-flow graph: an input a caller never passes, a secret a callee
+  never gets, an output nobody sets, a matrix leg that gets nothing, a local action that is not there, and call chains
+  GitHub rejects. Each [rule](/docs/rules) has a stable code, why it matters and how to fix it.
+- **Calls into other repositories.** Against a committed lockfile of their interfaces: a required input not passed, an
+  unknown input or secret, a literal of the wrong type, an output that is not declared. See
+  [Remote interfaces](/docs/remote-interfaces).
+- **Across versions.** A version bump or a moved tag that drops an input you pass: `flowpact remotes update` says what
+  each changed reference does to your calls, and the action grades the references a pull request moves to another
+  version. See [When a version changes](/docs/remote-interfaces#when-a-version-changes).
+- **For publishers.** [Contracts](/docs/contracts) record the interface of every workflow and local action, so a change
+  that breaks a caller shows in review, and [impact mode](/docs/impact-mode) fails a pull request that declares a patch
+  for a change that needs a major release.
+
+flowpact reads your YAML and runs nothing from it, works without a config file, and sends no telemetry.
+[How it works](/docs/how-it-works) walks through the analysis, and [Concepts](/docs/concepts) defines the terms these
+pages use.
+
+## I want to…
+
+<Cards>
+  <Card title="Find problems in my workflows" href="/docs/getting-started">Run it once and read a finding.</Card>
+  <Card title="See findings while I edit" href="/docs/editors">VS Code, VSCodium, Cursor, Neovim and other LSP editors.</Card>
+  <Card title="Run it on every pull request" href="/docs/ci">The GitHub Action, or the CLI in any CI.</Card>
+  <Card title="Check calls to other repositories" href="/docs/remote-interfaces">A lockfile of their interfaces, checked offline.</Card>
+  <Card title="Know what a version bump does to my calls" href="/docs/remote-interfaces#when-a-version-changes">A drift check on a schedule, and a verdict on each bot pull request.</Card>
+  <Card title="Stop breaking the repositories that use my workflows" href="/docs/contracts">Contracts and impact mode for what you publish.</Card>
+  <Card title="Look up a finding" href="/docs/rules">Every rule, from FP101 to FP903.</Card>
+  <Card title="Roll it out across my organization" href="/docs/integrating">Organization defaults and rules, in an action of your own.</Card>
+  <Card title="Review flowpact's security" href="/docs/security">What it reads and writes, signed releases, the threat model.</Card>
+</Cards>
