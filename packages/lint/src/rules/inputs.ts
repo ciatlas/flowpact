@@ -23,7 +23,16 @@ import {
 } from '@ciatlas/core';
 import { isPublished } from '../impact';
 import { interfaceCalls, interfaceUses, isExternal } from '../remotes';
-import { renameAt, renameSegment } from '../suggestions';
+import {
+  addKeys,
+  removeKey,
+  renameAt,
+  renameSegment,
+  type SuggestedEdit,
+  type Suggestion,
+  stepWithPath,
+  suggestion,
+} from '../suggestions';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, didYouMeanNote, isProperty, listNames, namesKey, quote, useInCondition } from './util';
 
@@ -166,6 +175,11 @@ function reportMissingCallInputs(ctx: RuleContext, call: CallSite): void {
         ...declaredAt(call.callee, input.loc, `${quote(input.name)} is declared required here`),
       ],
       fix: `Add \`${input.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`,
+      suggestions: [
+        suggestion(`Add input ${quote(input.name)} under with:`, [
+          addKeys(ctx.index, call.caller.source.path, ['jobs', call.job.id, 'with'], [input.name], ['uses']),
+        ]),
+      ],
     });
   }
 }
@@ -180,6 +194,17 @@ function reportMissingActionInputs(ctx: RuleContext, use: ActionUse): void {
       symbol: sym.input(use.action.path, input.name),
       related: declaredAt(use.action, input.loc, `${quote(input.name)} is declared required here`),
       fix: `Add \`${input.name}: <value>\` under the step's \`with:\`.`,
+      suggestions: [
+        suggestion(`Add input ${quote(input.name)} under with:`, [
+          addKeys(
+            ctx.index,
+            use.unit.source.path,
+            stepWithPath(use.job?.id, use.step.index),
+            [input.name],
+            ['uses'],
+          ),
+        ]),
+      ],
     });
   }
 }
@@ -358,7 +383,43 @@ function reportUnusedInput(ctx: RuleContext, unit: UnitDecl, input: InputDecl, s
     loc: input.loc,
     symbol,
     related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: 'passed here' })),
+    suggestions: [removeInputSuggestion(ctx, unit, input)],
   });
+}
+
+/**
+ * FP104's fix: remove the input, and what local callers pass for it. None for a published workflow or action, or a
+ * workflow's dispatch input: callers flowpact cannot see would then pass an input GitHub rejects.
+ */
+function removeInputSuggestion(ctx: RuleContext, unit: UnitDecl, input: InputDecl): Suggestion | undefined {
+  if (isPublished(unit, ctx.config.impact)) return undefined;
+  const declared = unit.kind === 'action' ? ['inputs'] : ['on', 'workflow_call', 'inputs'];
+  const callers = callerBindingRemovals(ctx, unit, input.name);
+  const n = callers.length;
+  const title = n
+    ? `Remove input ${quote(input.name)}, and what ${n} caller${n > 1 ? 's pass' : ' passes'} for it`
+    : `Remove the unused input ${quote(input.name)}`;
+  return suggestion(title, [
+    removeKey(ctx.index, unit.source.path, declared, input.name, input.loc.line),
+    ...callers,
+  ]);
+}
+
+/** Edits removing what the local callers of a workflow or action pass for its input `name`. */
+function callerBindingRemovals(
+  ctx: RuleContext,
+  unit: UnitDecl,
+  name: string,
+): (SuggestedEdit | undefined)[] {
+  if (unit.kind === 'workflow')
+    return ctx.index
+      .callersOf(unit.path)
+      .filter((c) => lookup(c.job.with, name))
+      .map((c) => removeKey(ctx.index, c.caller.source.path, ['jobs', c.job.id, 'with'], name));
+  return ctx.index
+    .usersOf(unit.path)
+    .filter((u) => lookup(u.step.with, name))
+    .map((u) => removeKey(ctx.index, u.unit.source.path, stepWithPath(u.job?.id, u.step.index), name));
 }
 
 /** A local caller of a reusable workflow or action: the bindings it passes and where it calls. */

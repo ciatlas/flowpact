@@ -26,7 +26,7 @@ import {
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { interfaceCalls, isExternal } from '../remotes';
-import { renameAt } from '../suggestions';
+import { addKeys, renameAt, suggestion } from '../suggestions';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, type Guard, guardOf, isWholeExpression, listNames, namesKey, quote } from './util';
 
@@ -69,6 +69,17 @@ function reportMissingSecret(ctx: RuleContext, call: CallSite, s: SecretDecl): v
     related: [
       ...chainRelated(chainTo(ctx.index, call.caller.path)),
       ...(isExternal(call.callee) ? [] : [{ loc: s.loc, message: 'declared required here' }]),
+    ],
+    suggestions: [
+      suggestion(`Add secret ${quote(s.name)} under secrets:`, [
+        addKeys(
+          ctx.index,
+          call.caller.source.path,
+          ['jobs', call.job.id, 'secrets'],
+          [s.name],
+          ['with', 'uses'],
+        ),
+      ]),
     ],
   });
 }

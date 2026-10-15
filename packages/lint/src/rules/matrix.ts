@@ -31,6 +31,7 @@ import {
   usageReadsCallerEvent,
   type WorkflowDecl,
 } from '@ciatlas/core';
+import { addKeys, type Suggestion, suggestion } from '../suggestions';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import {
   chainRelated,
@@ -177,6 +178,33 @@ function firstMatrixRefLoc(site: ExprSite, keys: string[], skip: Set<number> = n
       if (r.context === 'matrix' && lower.includes((r.path[0] ?? '').toLowerCase())) return r.loc;
   }
   return site.loc;
+}
+
+/**
+ * Adds the missing keys to the include entries that created the combinations, each with no value to fill in. None when
+ * a combination comes from the matrix's own axes: no single entry would give it the key.
+ */
+function includeKeysSuggestion(
+  ctx: RuleContext,
+  wf: WorkflowDecl,
+  job: JobDecl,
+  combos: Combination[],
+  keys: string[],
+): Suggestion | undefined {
+  const m = job.matrix;
+  if (!m || combos.some((c) => c.origin !== 'include')) return undefined;
+  const entries = [...new Set(combos.flatMap((c) => c.includes))].flatMap((idx) => {
+    const lacks = keys.filter((k) => !lookup(m.include[idx]?.values ?? {}, k));
+    return lacks.length ? [{ idx, lacks }] : [];
+  });
+  const edits = entries.map(({ idx, lacks }) =>
+    addKeys(ctx.index, wf.source.path, ['jobs', job.id, 'strategy', 'matrix', 'include', idx], lacks),
+  );
+  const what = keys.map((k) => `"${k}"`).join(', ');
+  return suggestion(
+    `Add ${what} to the include ${entries.length > 1 ? 'entries' : 'entry'} without it`,
+    edits,
+  );
 }
 
 function comboRelated(job: JobDecl, combos: Combination[], keys: string[]): RelatedLocation[] {
@@ -390,6 +418,7 @@ function checkWithTarget(ctx: RuleContext, { wf, job, exp }: MatrixJob, t: WithT
     ],
     fix: `Set ${keys.map((k) => `\`${k}\``).join(', ')} in every combination, or use a fallback: \`\${{ ${keyList.split(', ')[0]} || '<default>' }}\`.`,
     severity: impact.severity,
+    suggestions: [includeKeysSuggestion(ctx, wf, job, combos, keys)],
   });
 }
 
@@ -478,6 +507,7 @@ function checkMatrixKeys(ctx: RuleContext, { wf, job, exp }: MatrixJob, site: Ex
       combos: combos.map((c) => comboLabel(c, exp.keys)),
       symbol: sym.matrix(wf.path, job.id, key),
       related: comboRelated(job, combos, [key]),
+      suggestions: [includeKeysSuggestion(ctx, wf, job, combos, [key])],
     });
   }
 }

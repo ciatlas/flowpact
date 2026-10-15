@@ -287,10 +287,10 @@ var require_identity = __commonJS({
     var NODE_TYPE = /* @__PURE__ */ Symbol.for("yaml.node.type");
     var isAlias4 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === ALIAS;
     var isDocument2 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === DOC;
-    var isMap5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
+    var isMap6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === MAP;
     var isPair3 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === PAIR;
-    var isScalar5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR2;
-    var isSeq5 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
+    var isScalar6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SCALAR2;
+    var isSeq6 = (node) => !!node && typeof node === "object" && node[NODE_TYPE] === SEQ;
     function isCollection2(node) {
       if (node && typeof node === "object")
         switch (node[NODE_TYPE]) {
@@ -311,7 +311,7 @@ var require_identity = __commonJS({
         }
       return false;
     }
-    var hasAnchor = (node) => (isScalar5(node) || isCollection2(node)) && !!node.anchor;
+    var hasAnchor = (node) => (isScalar6(node) || isCollection2(node)) && !!node.anchor;
     exports.ALIAS = ALIAS;
     exports.DOC = DOC;
     exports.MAP = MAP;
@@ -323,11 +323,11 @@ var require_identity = __commonJS({
     exports.isAlias = isAlias4;
     exports.isCollection = isCollection2;
     exports.isDocument = isDocument2;
-    exports.isMap = isMap5;
+    exports.isMap = isMap6;
     exports.isNode = isNode;
     exports.isPair = isPair3;
-    exports.isScalar = isScalar5;
-    exports.isSeq = isSeq5;
+    exports.isScalar = isScalar6;
+    exports.isSeq = isSeq6;
   }
 });
 
@@ -4271,13 +4271,13 @@ var require_resolve_block_map = __commonJS({
           onError(offset, "BAD_INDENT", startColMsg);
         }
         ctx.atKey = true;
-        const keyStart = keyProps.end;
-        const keyNode = key ? composeNode(ctx, key, keyProps, onError) : composeEmptyNode(ctx, keyStart, start, null, keyProps, onError);
+        const keyStart2 = keyProps.end;
+        const keyNode = key ? composeNode(ctx, key, keyProps, onError) : composeEmptyNode(ctx, keyStart2, start, null, keyProps, onError);
         if (ctx.schema.compat)
           utilFlowIndentCheck.flowIndentCheck(bm.indent, key, onError);
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
-          onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
+          onError(keyStart2, "DUPLICATE_KEY", "Map keys must be unique");
         const valueProps = resolveProps.resolveProps(sep5 ?? [], {
           indicator: "map-value-ind",
           next: value,
@@ -4435,9 +4435,9 @@ var require_resolve_flow_collection = __commonJS({
     var blockMsg = "Block collections are not allowed within flow collections";
     var isBlock = (token) => token && (token.type === "block-map" || token.type === "block-seq");
     function resolveFlowCollection({ composeNode, composeEmptyNode }, ctx, fc, onError, tag) {
-      const isMap5 = fc.start.source === "{";
-      const fcName = isMap5 ? "flow map" : "flow sequence";
-      const NodeClass = tag?.nodeClass ?? (isMap5 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
+      const isMap6 = fc.start.source === "{";
+      const fcName = isMap6 ? "flow map" : "flow sequence";
+      const NodeClass = tag?.nodeClass ?? (isMap6 ? YAMLMap.YAMLMap : YAMLSeq.YAMLSeq);
       const coll = new NodeClass(ctx.schema);
       coll.flow = true;
       const atRoot = ctx.atRoot;
@@ -4473,7 +4473,7 @@ var require_resolve_flow_collection = __commonJS({
             offset = props.end;
             continue;
           }
-          if (!isMap5 && ctx.options.strict && utilContainsNewline.containsNewline(key))
+          if (!isMap6 && ctx.options.strict && utilContainsNewline.containsNewline(key))
             onError(
               key,
               // checked by containsNewline()
@@ -4513,7 +4513,7 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap5 && !sep5 && !props.found) {
+        if (!isMap6 && !sep5 && !props.found) {
           const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep5, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
@@ -4521,8 +4521,8 @@ var require_resolve_flow_collection = __commonJS({
             onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
         } else {
           ctx.atKey = true;
-          const keyStart = props.end;
-          const keyNode = key ? composeNode(ctx, key, props, onError) : composeEmptyNode(ctx, keyStart, start, null, props, onError);
+          const keyStart2 = props.end;
+          const keyNode = key ? composeNode(ctx, key, props, onError) : composeEmptyNode(ctx, keyStart2, start, null, props, onError);
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
@@ -4536,7 +4536,7 @@ var require_resolve_flow_collection = __commonJS({
             startOnNewline: false
           });
           if (valueProps.found) {
-            if (!isMap5 && !props.found && ctx.options.strict) {
+            if (!isMap6 && !props.found && ctx.options.strict) {
               if (sep5)
                 for (const st of sep5) {
                   if (st === valueProps.found)
@@ -4568,10 +4568,10 @@ var require_resolve_flow_collection = __commonJS({
           const pair = new Pair.Pair(keyNode, valueNode);
           if (ctx.options.keepSourceTokens)
             pair.srcToken = collItem;
-          if (isMap5) {
+          if (isMap6) {
             const map = coll;
             if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
-              onError(keyStart, "DUPLICATE_KEY", "Map keys must be unique");
+              onError(keyStart2, "DUPLICATE_KEY", "Map keys must be unique");
             map.items.push(pair);
           } else {
             const map = new YAMLMap.YAMLMap(ctx.schema);
@@ -4584,7 +4584,7 @@ var require_resolve_flow_collection = __commonJS({
           offset = valueNode ? valueNode.range[2] : valueProps.end;
         }
       }
-      const expectedEnd = isMap5 ? "}" : "]";
+      const expectedEnd = isMap6 ? "}" : "]";
       const [ce, ...ee] = fc.end;
       let cePos = offset;
       if (ce?.source === expectedEnd)
@@ -5871,7 +5871,7 @@ var require_cst = __commonJS({
     var FLOW_END = "";
     var SCALAR2 = "";
     var isCollection2 = (token) => !!token && "items" in token;
-    var isScalar5 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
+    var isScalar6 = (token) => !!token && (token.type === "scalar" || token.type === "single-quoted-scalar" || token.type === "double-quoted-scalar" || token.type === "block-scalar");
     function prettyToken(token) {
       switch (token) {
         case BOM:
@@ -5955,7 +5955,7 @@ var require_cst = __commonJS({
     exports.FLOW_END = FLOW_END;
     exports.SCALAR = SCALAR2;
     exports.isCollection = isCollection2;
-    exports.isScalar = isScalar5;
+    exports.isScalar = isScalar6;
     exports.prettyToken = prettyToken;
     exports.tokenType = tokenType;
   }
@@ -7485,7 +7485,7 @@ var require_public_api = __commonJS({
         return docs;
       return Object.assign([], { empty: true }, composer$1.streamInfo());
     }
-    function parseDocument5(source, options = {}) {
+    function parseDocument6(source, options = {}) {
       const { lineCounter: lineCounter2, prettyErrors } = parseOptions(options);
       const parser$1 = new parser.Parser(lineCounter2?.addNewLine);
       const composer$1 = new composer.Composer(options);
@@ -7511,7 +7511,7 @@ var require_public_api = __commonJS({
       } else if (options === void 0 && reviver2 && typeof reviver2 === "object") {
         options = reviver2;
       }
-      const doc = parseDocument5(src, options);
+      const doc = parseDocument6(src, options);
       if (!doc)
         return null;
       doc.warnings.forEach((warning2) => log.warn(doc.options.logLevel, warning2));
@@ -7547,7 +7547,7 @@ var require_public_api = __commonJS({
     }
     exports.parse = parse3;
     exports.parseAllDocuments = parseAllDocuments;
-    exports.parseDocument = parseDocument5;
+    exports.parseDocument = parseDocument6;
     exports.stringify = stringify3;
   }
 });
@@ -23551,6 +23551,7 @@ var impactRules = [
 var IMPACT_CODES = impactRules.map((r) => r.code);
 
 // ../lint/src/suggestions.ts
+var import_yaml10 = __toESM(require_dist(), 1);
 var sources = /* @__PURE__ */ new WeakMap();
 function sourceOf(index, file) {
   let byFile = sources.get(index);
@@ -23587,6 +23588,112 @@ function renameSegment(index, loc, segment, from, to) {
     title: `Rename ${JSON.stringify(from)} to ${JSON.stringify(to)}`,
     edits: [{ loc: at, newText: to }]
   };
+}
+var documents = /* @__PURE__ */ new WeakMap();
+function documentOf(source) {
+  let doc = documents.get(source);
+  if (!doc) {
+    doc = (0, import_yaml10.parseDocument)(source.text);
+    documents.set(source, doc);
+  }
+  return doc;
+}
+function pairOf(map, key) {
+  const pairs2 = map.items.filter((p) => (0, import_yaml10.isScalar)(p.key));
+  const name = (p) => String(p.key.value);
+  return pairs2.find((p) => name(p) === key) ?? pairs2.find((p) => name(p).toLowerCase() === key.toLowerCase());
+}
+function nodeAt(doc, path) {
+  let node = doc.contents;
+  for (const step2 of path) {
+    if (typeof step2 === "number") node = (0, import_yaml10.isSeq)(node) ? node.items[step2] : void 0;
+    else node = (0, import_yaml10.isMap)(node) ? pairOf(node, step2)?.value : void 0;
+    if (node === void 0) return void 0;
+  }
+  return node;
+}
+var isBlockMap = (node) => (0, import_yaml10.isMap)(node) && !node.flow && node.items.length > 0;
+var keyStart = (source, pair) => source.loc(pair.key.range[0]);
+function pairLines(source, pair) {
+  const first = keyStart(source, pair).line;
+  const end = pair.value?.range?.[1] ?? pair.key.range[1];
+  const at = source.loc(end);
+  return [first, at.column === 1 && at.line > first ? at.line - 1 : at.line];
+}
+function insertAfter(source, line, lines) {
+  const end = (source.lines[line - 1] ?? "").length + 1;
+  return {
+    loc: { file: source.path, line, column: end, endLine: line, endColumn: end },
+    newText: lines.map((l) => `
+${l}`).join("")
+  };
+}
+function removePair(source, pair) {
+  const [first, last] = pairLines(source, pair);
+  if (source.lines[first - 1].slice(0, keyStart(source, pair).column - 1).trim() !== "") return void 0;
+  if (last < source.lines.length)
+    return {
+      loc: { file: source.path, line: first, column: 1, endLine: last + 1, endColumn: 1 },
+      newText: ""
+    };
+  const before = first > 1 ? source.lines[first - 2].length + 1 : 1;
+  return {
+    loc: {
+      file: source.path,
+      line: Math.max(1, first - 1),
+      column: before,
+      endLine: last,
+      endColumn: source.lines[last - 1].length + 1
+    },
+    newText: ""
+  };
+}
+function editable(index, file) {
+  const source = sourceOf(index, file);
+  if (!source || source.text.includes("\r")) return void 0;
+  return { source, doc: documentOf(source) };
+}
+function addKeys(index, file, path, keys, after = []) {
+  const at = editable(index, file);
+  if (!at || keys.length === 0) return void 0;
+  const { source, doc } = at;
+  const map = nodeAt(doc, path);
+  if (map !== void 0) {
+    if (!isBlockMap(map)) return void 0;
+    const indent2 = " ".repeat(keyStart(source, map.items[0]).column - 1);
+    const [, last2] = pairLines(source, map.items.at(-1));
+    return insertAfter(
+      source,
+      last2,
+      keys.map((k) => `${indent2}${k}: `)
+    );
+  }
+  const own2 = path.at(-1);
+  const parent = nodeAt(doc, path.slice(0, -1));
+  if (typeof own2 !== "string" || !isBlockMap(parent)) return void 0;
+  const anchor2 = after.map((k) => pairOf(parent, k)).find((p) => p !== void 0) ?? parent.items.at(-1);
+  const indent = " ".repeat(keyStart(source, anchor2).column - 1);
+  const [, last] = pairLines(source, anchor2);
+  return insertAfter(source, last, [`${indent}${own2}:`, ...keys.map((k) => `${indent}  ${k}: `)]);
+}
+function removeKey(index, file, path, key, line) {
+  const at = editable(index, file);
+  if (!at) return void 0;
+  const { source, doc } = at;
+  const map = nodeAt(doc, path);
+  if (!isBlockMap(map)) return void 0;
+  const pair = pairOf(map, key);
+  if (!pair || line !== void 0 && keyStart(source, pair).line !== line) return void 0;
+  if (map.items.length > 1) return removePair(source, pair);
+  const own2 = path.at(-1);
+  const parent = nodeAt(doc, path.slice(0, -1));
+  const holder = typeof own2 === "string" && isBlockMap(parent) ? pairOf(parent, own2) : void 0;
+  return holder && removePair(source, holder);
+}
+var stepWithPath = (job, step2) => job === void 0 ? ["runs", "steps", step2, "with"] : ["jobs", job, "steps", step2, "with"];
+function suggestion(title, edits) {
+  if (edits.length === 0 || edits.some((e) => e === void 0)) return void 0;
+  return { title, edits };
 }
 
 // ../lint/src/rules/inputs.ts
@@ -23681,7 +23788,12 @@ function reportMissingCallInputs(ctx, call) {
         ...chainRelated(chainTo(ctx.index, call.caller.path)),
         ...declaredAt(call.callee, input2.loc, `${quote(input2.name)} is declared required here`)
       ],
-      fix: `Add \`${input2.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`
+      fix: `Add \`${input2.name}: <value>\` under \`with:\` of jobs.${call.job.id}.`,
+      suggestions: [
+        suggestion(`Add input ${quote(input2.name)} under with:`, [
+          addKeys(ctx.index, call.caller.source.path, ["jobs", call.job.id, "with"], [input2.name], ["uses"])
+        ])
+      ]
     });
   }
 }
@@ -23693,7 +23805,18 @@ function reportMissingActionInputs(ctx, use) {
       loc: use.step.uses?.loc ?? use.step.loc,
       symbol: sym.input(use.action.path, input2.name),
       related: declaredAt(use.action, input2.loc, `${quote(input2.name)} is declared required here`),
-      fix: `Add \`${input2.name}: <value>\` under the step's \`with:\`.`
+      fix: `Add \`${input2.name}: <value>\` under the step's \`with:\`.`,
+      suggestions: [
+        suggestion(`Add input ${quote(input2.name)} under with:`, [
+          addKeys(
+            ctx.index,
+            use.unit.source.path,
+            stepWithPath(use.job?.id, use.step.index),
+            [input2.name],
+            ["uses"]
+          )
+        ])
+      ]
     });
   }
 }
@@ -23832,8 +23955,25 @@ function reportUnusedInput(ctx, unit, input2, symbol) {
     message: `Input ${quote(input2.name)} of ${unit.path} is never read${n ? ` (yet ${n} caller${n > 1 ? "s pass" : " passes"} it)` : ""}`,
     loc: input2.loc,
     symbol,
-    related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: "passed here" }))
+    related: passed.slice(0, 5).map((b) => ({ loc: b.loc, message: "passed here" })),
+    suggestions: [removeInputSuggestion(ctx, unit, input2)]
   });
+}
+function removeInputSuggestion(ctx, unit, input2) {
+  if (isPublished(unit, ctx.config.impact)) return void 0;
+  const declared = unit.kind === "action" ? ["inputs"] : ["on", "workflow_call", "inputs"];
+  const callers = callerBindingRemovals(ctx, unit, input2.name);
+  const n = callers.length;
+  const title = n ? `Remove input ${quote(input2.name)}, and what ${n} caller${n > 1 ? "s pass" : " passes"} for it` : `Remove the unused input ${quote(input2.name)}`;
+  return suggestion(title, [
+    removeKey(ctx.index, unit.source.path, declared, input2.name, input2.loc.line),
+    ...callers
+  ]);
+}
+function callerBindingRemovals(ctx, unit, name) {
+  if (unit.kind === "workflow")
+    return ctx.index.callersOf(unit.path).filter((c) => lookup(c.job.with, name)).map((c) => removeKey(ctx.index, c.caller.source.path, ["jobs", c.job.id, "with"], name));
+  return ctx.index.usersOf(unit.path).filter((u) => lookup(u.step.with, name)).map((u) => removeKey(ctx.index, u.unit.source.path, stepWithPath(u.job?.id, u.step.index), name));
 }
 function callersOf(index, unit) {
   if (unit.kind === "workflow")
@@ -24180,6 +24320,22 @@ function firstMatrixRefLoc(site, keys, skip = /* @__PURE__ */ new Set()) {
   }
   return site.loc;
 }
+function includeKeysSuggestion(ctx, wf, job, combos, keys) {
+  const m = job.matrix;
+  if (!m || combos.some((c) => c.origin !== "include")) return void 0;
+  const entries2 = [...new Set(combos.flatMap((c) => c.includes))].flatMap((idx) => {
+    const lacks = keys.filter((k) => !lookup(m.include[idx]?.values ?? {}, k));
+    return lacks.length ? [{ idx, lacks }] : [];
+  });
+  const edits = entries2.map(
+    ({ idx, lacks }) => addKeys(ctx.index, wf.source.path, ["jobs", job.id, "strategy", "matrix", "include", idx], lacks)
+  );
+  const what = keys.map((k) => `"${k}"`).join(", ");
+  return suggestion(
+    `Add ${what} to the include ${entries2.length > 1 ? "entries" : "entry"} without it`,
+    edits
+  );
+}
 function comboRelated(job, combos, keys) {
   const out = [];
   const m = job.matrix;
@@ -24328,7 +24484,8 @@ function checkWithTarget(ctx, { wf, job, exp }, t) {
       ...impact.related
     ],
     fix: `Set ${keys.map((k) => `\`${k}\``).join(", ")} in every combination, or use a fallback: \`\${{ ${keyList.split(", ")[0]} || '<default>' }}\`.`,
-    severity: impact.severity
+    severity: impact.severity,
+    suggestions: [includeKeysSuggestion(ctx, wf, job, combos, keys)]
   });
 }
 function missingKeys(keys, perKey) {
@@ -24394,7 +24551,8 @@ function checkMatrixKeys(ctx, { wf, job, exp }, site) {
       loc: firstMatrixRefLoc(site, [key], unhandled.tested),
       combos: combos.map((c) => comboLabel(c, exp.keys)),
       symbol: sym.matrix(wf.path, job.id, key),
-      related: comboRelated(job, combos, [key])
+      related: comboRelated(job, combos, [key]),
+      suggestions: [includeKeysSuggestion(ctx, wf, job, combos, [key])]
     });
   }
 }
@@ -25167,6 +25325,17 @@ function reportMissingSecret(ctx, call, s) {
     related: [
       ...chainRelated(chainTo(ctx.index, call.caller.path)),
       ...isExternal(call.callee) ? [] : [{ loc: s.loc, message: "declared required here" }]
+    ],
+    suggestions: [
+      suggestion(`Add secret ${quote(s.name)} under secrets:`, [
+        addKeys(
+          ctx.index,
+          call.caller.source.path,
+          ["jobs", call.job.id, "secrets"],
+          [s.name],
+          ["with", "uses"]
+        )
+      ])
     ]
   });
 }
@@ -28829,7 +28998,7 @@ function renderVersionChanges(v, links = {}) {
 }
 
 // src/main.ts
-var import_yaml10 = __toESM(require_dist(), 1);
+var import_yaml11 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -29184,7 +29353,7 @@ var fromActionDir = (p) => isAbsolute8(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml10.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml11.parse)(readFileSync5(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
