@@ -227,6 +227,45 @@ describe('unreadable references', () => {
   });
 });
 
+describe('a 404 the GitHub API answers now and then', () => {
+  const index = () =>
+    lint({
+      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+    }).index;
+
+  /** The fake API, answering 404 the first time each URL whose path matches `flaky` is asked for. */
+  function flaky(api: ReturnType<typeof fakeApi>, matches: RegExp) {
+    const asked = new Set<string>();
+    return (async (input: string | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (matches.test(new URL(url).pathname) && !asked.has(url)) {
+        asked.add(url);
+        return new Response('', { status: 404 });
+      }
+      return api.fetch(input, init);
+    }) as typeof globalThis.fetch;
+  }
+
+  it('asks once more for a file or a commit, rather than recording the reference as unreadable', async () => {
+    const api = fakeApi({ 'octo/setup@v2': SHA('b') }, { [`octo/setup/action.yml@${SHA('b')}`]: SETUP });
+    for (const matches of [/\/contents\//, /\/commits\//]) {
+      const u = await updateRemotesLock(index(), undefined, { fetch: flaky(api, matches), retryDelayMs: 0 });
+      expect(u.unreadable).toEqual([]);
+      expect(u.lock.remotes['octo/setup@v2']?.sha).toBe(SHA('b'));
+    }
+  });
+
+  it('still records a reference that is not there as unreadable, after one more request', async () => {
+    const api = fakeApi({}, {});
+    const u = await updateRemotesLock(index(), undefined, { fetch: api.fetch, retryDelayMs: 0 });
+    expect(u.unreadable.map((p) => p.ref)).toEqual(['octo/setup@v2']);
+    expect(api.seen.map((s) => new URL(s.url).pathname)).toEqual([
+      '/repos/octo/setup/commits/v2',
+      '/repos/octo/setup/commits/v2',
+    ]);
+  });
+});
+
 describe('updateRemotesLock with paths', () => {
   const files = {
     [`${WF}/a.yml`]: 'on: push\njobs:\n  c:\n    uses: ./.github/workflows/_inner.yml\n',

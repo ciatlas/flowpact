@@ -59,6 +59,11 @@ export interface FetchRemotesOptions {
    * read at that commit, without asking what its ref points at now.
    */
   lockedCommit?: (r: RemoteRef) => string | undefined;
+  /**
+   * How long to wait before asking once more for a commit or file the API answered 404 for: GitHub's API now and then
+   * does for one it has. Default: 300 ms.
+   */
+  retryDelayMs?: number;
 }
 
 /** A file fetched to read a remote reference's interface: the reference, the commit, the file's path and its text. */
@@ -179,17 +184,45 @@ const repoUrl = (r: RemoteRef, opts: FetchRemotesOptions) =>
 const contentsPath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
 /** The commit a reference's ref resolves to. */
+const RETRY_DELAY_MS = 300;
+
+/**
+ * `read`, and once more after a pause when it finds nothing: GitHub's API answers 404 now and then for a commit or a
+ * file it has, and one such answer would record the reference as unreadable.
+ */
+async function onceMore<T>(
+  read: () => Promise<T | undefined>,
+  opts: FetchRemotesOptions,
+): Promise<T | undefined> {
+  const first = await read();
+  if (first !== undefined) return first;
+  await new Promise((done) => setTimeout(done, opts.retryDelayMs ?? RETRY_DELAY_MS));
+  return read();
+}
+
 async function shaOf(r: RemoteRef, opts: FetchRemotesOptions): Promise<string> {
   const locked = opts.lockedCommit?.(r);
   if (locked) return locked;
-  const sha = await get(
-    `${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`,
-    'application/vnd.github.sha',
+  const sha = await onceMore(
+    () => get(`${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`, 'application/vnd.github.sha', opts),
     opts,
   );
   if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
     throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`, true);
   return sha.trim();
+}
+
+/** The first of a reference's possible files (`sourceFiles`) the repository has at `sha`, with its text. */
+async function firstSource(
+  r: RemoteRef,
+  sha: string,
+  opts: FetchRemotesOptions,
+): Promise<{ file: string; text: string } | undefined> {
+  for (const file of sourceFiles(r)) {
+    const text = await fileAt(r, file, sha, opts);
+    if (text !== undefined) return { file, text };
+  }
+  return undefined;
 }
 
 /** A file of the repository at `sha`, or undefined when it has none there. */
@@ -205,11 +238,10 @@ async function sourceAt(
   sha: string,
   opts: FetchRemotesOptions,
 ): Promise<{ file: string; text: string }> {
-  for (const file of sourceFiles(r)) {
-    const text = await fileAt(r, file, sha, opts);
-    if (text === undefined) continue;
-    opts.onSource?.({ ref: r, sha, file, text });
-    return { file, text };
+  const found = await onceMore(() => firstSource(r, sha, opts), opts);
+  if (found) {
+    opts.onSource?.({ ref: r, sha, ...found });
+    return found;
   }
   const what =
     r.kind === 'workflow' ? `${r.path} not found` : `no action.yml in ${r.path || 'the repository root'}`;

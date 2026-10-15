@@ -27023,25 +27023,37 @@ var MAX_FILE_BYTES = 1e6;
 var tooLarge = () => new FetchError(`a response over ${MAX_FILE_BYTES} bytes`);
 var repoUrl = (r, opts) => `${trimChar(opts.apiUrl ?? "https://api.github.com", "/")}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
 var contentsPath = (path) => path.split("/").map(encodeURIComponent).join("/");
+var RETRY_DELAY_MS = 300;
+async function onceMore(read, opts) {
+  const first = await read();
+  if (first !== void 0) return first;
+  await new Promise((done) => setTimeout(done, opts.retryDelayMs ?? RETRY_DELAY_MS));
+  return read();
+}
 async function shaOf(r, opts) {
   const locked = opts.lockedCommit?.(r);
   if (locked) return locked;
-  const sha = await get2(
-    `${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`,
-    "application/vnd.github.sha",
+  const sha = await onceMore(
+    () => get2(`${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`, "application/vnd.github.sha", opts),
     opts
   );
   if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
     throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`, true);
   return sha.trim();
 }
-var fileAt2 = (r, path, sha, opts) => get2(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, "application/vnd.github.raw", opts);
-async function sourceAt(r, sha, opts) {
+async function firstSource(r, sha, opts) {
   for (const file of sourceFiles(r)) {
     const text2 = await fileAt2(r, file, sha, opts);
-    if (text2 === void 0) continue;
-    opts.onSource?.({ ref: r, sha, file, text: text2 });
-    return { file, text: text2 };
+    if (text2 !== void 0) return { file, text: text2 };
+  }
+  return void 0;
+}
+var fileAt2 = (r, path, sha, opts) => get2(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, "application/vnd.github.raw", opts);
+async function sourceAt(r, sha, opts) {
+  const found = await onceMore(() => firstSource(r, sha, opts), opts);
+  if (found) {
+    opts.onSource?.({ ref: r, sha, ...found });
+    return found;
   }
   const what = r.kind === "workflow" ? `${r.path} not found` : `no action.yml in ${r.path || "the repository root"}`;
   throw new FetchError(`${what} at ${sha.slice(0, 7)}`, true);
