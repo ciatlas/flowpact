@@ -72,3 +72,10 @@ exports[`fixture repositories > incident-matrix: findings snapshot 1`] = `
   "error FP401 .github/workflows/tests.yml:23:19 Input "config" for .github/workflows/run-suite.yml is empty in 1 of 3 matrix combinations — matrix.config is not defined there",
 ]
 `;
+
+exports[`fixture repositories > remote-calls: findings snapshot 1`] = `
+[
+  "error FP102 .github/workflows/release.yml:13:11 octo/setup@v2 has no input "cache-dependency" — did you mean "cache-dependency-path"?",
+  "error FP101 .github/workflows/release.yml:19:11 jobs.deploy calls octo/ship/.github/workflows/deploy.yml@v1 without required input "environment"",
+]
+`;
