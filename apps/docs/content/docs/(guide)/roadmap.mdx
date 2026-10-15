@@ -1,45 +1,54 @@
 ---
 title: Roadmap
-description: What is shipped and what comes next — quick fixes in the editor, then version changes of remote workflows and actions graded against your calls.
+description: "What flowpact does today, and what comes next: quick fixes in the editor."
 ---
+
+What each release changed is in the [changelog](/docs/changelog).
 
 ## Shipped
 
-- **Data-flow engine:** workflows and local composite actions, nested reusable workflows, same-repository references.
-- **Exact matrix expansion** and per-combination evaluation; declared shapes for runtime-computed matrices
-  (`matrixShapes`).
-- **53 rules** (`FP1xx`–`FP9xx`) with stable codes, docs pages and `flowpact explain`.
-- **[Contracts](/docs/contracts):** `flowpact generate` writes a deterministic lockfile per workflow and local action;
-  `flowpact check` reports missing, outdated, orphaned and invalid contracts and breaking interface changes
-  (`FP801`–`FP805`), with a `git apply`-able patch for anyone who cannot run the CLI.
-- **[Overrides](/docs/configuration#overrides)** with a mandatory reason, an optional expiry date and owner; expired,
+### Lint
+
+- **Data-flow engine:** workflows, local composite actions, nested reusable workflows and same-repository references,
+  followed across files.
+- **Exact matrix expansion**, with each combination evaluated on its own, and declared shapes for matrices computed at
+  run time ([`matrixShapes`](/docs/configuration#matrix-shapes)).
+- **53 [rules](/docs/rules)** (`FP1xx`–`FP9xx`) with stable codes, a page each and `flowpact explain`.
+- **[Overrides](/docs/configuration#overrides)** with a mandatory reason, an optional expiry date and owner. Expired,
   unused and soon-expiring overrides are reported (`FP901`–`FP903`).
-- **[GitHub Action](/docs/action):** job summary, pull request annotations, SARIF and the regenerated contracts as an
+- **[Plugins](/docs/custom-rules):** an organization's own rules, loaded from the config.
+
+### Where it runs
+
+- **CLI:** `lint`, `check`, `impact`, `generate`, `remotes`, `graph` (tree, Mermaid, DOT, JSON), `trace`, `explain`,
+  `rules` and `lsp`. Pretty, JSON, Markdown and SARIF output.
+- **[GitHub Action](/docs/action):** a job summary, pull request annotations, SARIF, and the regenerated contracts as an
   artifact.
-- **CLI:** `lint`, `check`, `impact`, `generate`, `remotes update`, `graph` (tree, Mermaid, DOT, JSON), `trace`,
-  `explain`, `rules`, `lsp`; pretty, JSON, Markdown and SARIF output; debug logging.
-- **[Plugins](/docs/custom-rules):** organization-specific rules loaded from the config.
-- **[Impact mode](/docs/impact-mode):** for publishers of reusable workflows and actions — the release impact a pull
-  request declares (Conventional Commits title, labels or release version) is checked against what its changes
-  require, including the check names consumers' branch protection depends on (`FP810`–`FP814`).
-- **[Remote interfaces](/docs/remote-interfaces):** `flowpact remotes update` records the interfaces of the reusable
-  workflows and actions you call from other repositories in a committed lockfile, and calls into them are checked like
-  local ones (`FP101`–`FP103`, `FP201`, `FP202`, `FP205`, `FP301`); `FP611` and `FP612` report an unusable or outdated
-  lockfile. On GitHub Enterprise Server and GHE.com, with an opt-in look on github.com as GitHub Connect does.
-- **[Language server](/docs/editors)** (`flowpact lsp`): diagnostics as you type across files, hover traces, go to
-  definition across workflow calls, and references.
+- **[Language server](/docs/editors)** (`flowpact lsp`): findings as you type across files, hover traces, go to
+  definition across workflow calls, and references. Calls into other repositories are described from the remote
+  interfaces lockfile, and go to definition opens their cached sources.
 - **[VS Code extension](/docs/editors#vs-code)** on the Visual Studio Marketplace and Open VSX, with the language server
   bundled.
-- Config file, contracts and reports with published JSON Schemas.
+- **[API](/docs/api)**: every command as a function, for scripts and your own actions.
+- Published JSON Schemas for the config file, the contracts and the reports.
+
+### Shared workflows
+
+- **[Contracts](/docs/contracts):** `flowpact generate` writes a lockfile per published workflow and action, and
+  `flowpact check` reports missing, outdated, orphaned and invalid contracts and breaking interface changes
+  (`FP801`–`FP805`), with a patch for anyone who cannot run the CLI.
+- **[Impact mode](/docs/impact-mode):** the release a pull request declares (its Conventional Commits title, labels or
+  release version) is checked against what its changes require, including the check names that branch protection
+  depends on (`FP810`–`FP814`).
+- **[Remote interfaces](/docs/remote-interfaces):** `flowpact remotes update` records the interfaces of the workflows
+  and actions you call in other repositories, and calls into them are checked like local ones. On GitHub Enterprise
+  Server and GHE.com too, with an opt-in look on github.com as GitHub Connect does. GitHub's own
+  [`actions.lock`](/docs/remote-interfaces#githubs-actionslock) decides which commit is read.
+- **[Version changes, graded against your calls](/docs/remote-interfaces#when-a-version-changes):** when a reference
+  moves to another version, each of your calls is graded as broken, unchecked or still fitting: in a scheduled drift
+  check, and on the pull request that moves it.
 
 ## Next: quick fixes in the editor
 
-Add a missing input, remove an unused one, add the missing matrix key, regenerate contracts, or **add an override**
-with a reason prompt, from the editor.
-
-## Then: version changes, graded against your calls
-
-When a remote reusable workflow or action moves to another version (a Renovate or Dependabot pull request, or a moving
-tag such as `@v4` that now points elsewhere), flowpact will compare the two interfaces and say, for each of your calls,
-whether it breaks, still fits, or cannot be fully checked: on a schedule, and on the pull request that changes the
-version.
+Add a missing input, remove an unused one, add the missing matrix key, regenerate the contracts, or **add an override**
+with a prompt for its reason, from the editor.

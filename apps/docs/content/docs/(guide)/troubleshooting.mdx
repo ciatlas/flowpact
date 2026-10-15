@@ -1,0 +1,193 @@
+---
+title: Troubleshooting
+description: What to do when flowpact finds nothing to analyze, reports more than you expected, or cannot read a remote workflow, in the terminal, the editor and GitHub Actions.
+---
+
+Find what you see below. Each answer has a link you can share (the icon beside its title). For anything not listed,
+[run with debug logging](#still-stuck).
+
+## Running flowpact
+
+<Accordions type="multiple">
+<Accordion title="No workflows found … Use --root to point at a repository" id="no-workflows-found">
+
+flowpact analyzes the repository in the current directory, and found neither a workflow under `.github/workflows` nor
+a local action there. It exits with code `2`. Run it at the root of the repository, or point at it:
+
+```sh
+npx flowpact lint --root path/to/repository
+```
+
+</Accordion>
+<Accordion title="The first run lists hundreds of findings" id="many-findings">
+
+That is common on a large repository, and it does not mean they are all urgent.
+[Adopt it in an existing repository](/docs/adopting) says where to start: fix the errors first, accept what can wait
+with a reason and a date, and keep new findings out from then on.
+
+</Accordion>
+<Accordion title="A finding is right, but you want to keep the code as it is" id="accept-a-finding">
+
+Accept that one finding with an [override](/docs/configuration#overrides): it names the rule and the symbol or file,
+and needs a reason, which stays next to it in the repository. Add `expires` to see it again on a date. A rule's page
+shows the override that accepts its finding, under **Accept one finding**. To change a rule everywhere, set its severity under
+`rules:` instead ([Change a rule that does not fit](/docs/adopting#change-a-rule-that-does-not-fit)).
+
+</Accordion>
+<Accordion title="A plugin's rules do not run" id="plugin-rules-not-loaded">
+
+Plugins run code from the repository, so they are skipped:
+
+- by the CLI with `--no-plugins`;
+- by the GitHub Action on `pull_request_target` and `workflow_run`, unless its `plugins` input is `true`;
+- by the editor in an untrusted workspace (Restricted Mode), or with `flowpact.plugins` off.
+
+The run warns about the `rules:` and `overrides:` entries of rules it did not load
+([Rules that are not loaded](/docs/configuration#rules-that-are-not-loaded)). In the editor, run **flowpact: Restart
+Language Server** after you edit a plugin: a loaded plugin stays loaded.
+
+</Accordion>
+</Accordions>
+
+## In the editor
+
+<Accordions type="multiple">
+<Accordion title="The editor shows no findings" id="editor-shows-nothing">
+
+- The extension starts its server when the workspace has workflows or an `action.yml`, or when you open one.
+- A repository needs a `.github` folder to be analyzed in the editor. One with only an `action.yml` gets no findings
+  there yet; `flowpact lint` checks it.
+- A rule may be hidden: by `flowpact.hiddenRules`, or, for `FP502`–`FP505`, by `flowpact.overlappingRules` while
+  GitHub's own Actions extension checks the file ([Settings](/docs/editors#settings)).
+
+The **flowpact** output channel (**flowpact: Show Output**) and the language status item next to the file type show
+the server's state. Set the log level to Debug (**Developer: Set Log Level…**) to see each stage of the analysis.
+
+</Accordion>
+</Accordions>
+
+## In GitHub Actions
+
+<Accordions type="multiple">
+<Accordion title="The required flowpact check stays pending" id="required-check-pending">
+
+The workflow has a `paths:` filter, and the pull request touches none of those paths: GitHub skips the workflow and
+leaves a required check pending, so the pull request cannot merge. Run a required check on every pull request
+([No paths filter on a required check](/docs/ci#the-flowpact-action)).
+
+When other repositories' pull requests wait on a check of a workflow you publish, a job was probably renamed:
+[impact mode](/docs/impact-mode) grades that change as major.
+
+</Accordion>
+<Accordion title="Some findings have no annotation" id="annotations-missing">
+
+GitHub limits how many annotations a step can show. The job summary lists the first `max-findings` findings (raise it
+if needed); the SARIF and JSON reports list every finding ([Annotations](/docs/action#annotations)).
+
+</Accordion>
+<Accordion title="The code scanning upload fails on pull requests from forks" id="sarif-from-forks">
+
+Pull requests from forks get a read-only token, so the SARIF upload only works for branches in the repository itself.
+The job that uploads needs `security-events: write`, and `actions: read` in a private repository
+([Permissions](/docs/action#permissions)).
+
+</Accordion>
+<Accordion title="Could not upload the flowpact-contracts artifact" id="artifact-upload">
+
+- **On GitHub Enterprise Server**, actions cannot upload artifacts this way. Set `upload-contracts: false`: the patch
+  is still written, and the `patch` output has its path on the runner.
+- **Already exists:** another step or matrix job in the run uploaded an artifact with the same name. Give each one its
+  own `artifact-name`.
+
+The run goes on either way: the failure is a warning.
+
+</Accordion>
+<Accordion title="Impact mode is skipped, or its baseline is not in the clone" id="impact-baseline">
+
+A message such as `origin/main is not available in this clone. Fetch it first` comes from the CLI on a shallow
+checkout: fetch the baseline (`git fetch origin main`), or check out with `fetch-depth: 0`. The action fetches the base
+commit itself.
+
+Impact mode is skipped, and says why, on `merge_group` runs (the pull request was graded), on a push that creates a
+branch or tag, and when the baseline is the checked-out commit. Without `base-ref`, it refuses `pull_request_target`,
+which checks out the default branch: run it on `pull_request` ([The baseline](/docs/impact-mode#the-baseline)).
+
+</Accordion>
+</Accordions>
+
+## Calls into other repositories
+
+<Accordions type="multiple">
+<Accordion title="FP603 on every call to another repository's workflow" id="fp603-every-call">
+
+flowpact does not know those workflows' interfaces yet. Record them, and commit the lockfile:
+
+```sh
+npx flowpact remotes update
+```
+
+From then on, those calls are checked like local ones. To check them in CI without a lockfile, set `remotes: fetch` on
+the action ([In CI](/docs/remote-interfaces#in-ci)).
+
+</Accordion>
+<Accordion title="FP612 on every Renovate or Dependabot pull request" id="fp612-bot-prs">
+
+The bot moved a reference to another version (`@v2` → `@v3`), and the lockfile still records the old one. Run
+`flowpact remotes update` in the bot's pull request, or let the action grade it: see
+[Renovate and Dependabot](/docs/remote-interfaces#renovate-and-dependabot) for both setups.
+
+</Accordion>
+<Accordion title="remotes update could not fetch a reference" id="reference-not-fetched">
+
+The message says why: a token that cannot read the repository, a used-up rate limit, the network.
+[When a reference is not fetched](/docs/remote-interfaces#when-a-reference-is-not-fetched) lists each message and what
+to do. flowpact already sends a request again after a timeout, a server error or GitHub's request to slow down. Run
+with `-v` for a line per reference, with the commit it resolved to or why it was not fetched.
+
+</Accordion>
+<Accordion title="A version change is “not fully checked”" id="not-fully-checked">
+
+No check fails with the new version, but part of the change is out of the checks' reach for that call: an expression
+passed to an input that is now a `boolean` or `number`, a new secret under `secrets: inherit`, or an output of a
+JavaScript or Docker action that is no longer declared. The line under the call says which; read the release notes for
+that part ([When a version changes](/docs/remote-interfaces#when-a-version-changes)).
+
+</Accordion>
+<Accordion title="GitHub's actions.lock is not used" id="actions-lock-not-used">
+
+`remotes update` says why when it cannot use the file: flowpact reads versions `v0.0.x` of its schema, and a file that
+does not parse is not used. It covers only the workflows it lists: a reference that only other workflows use resolves
+as usual ([GitHub's actions.lock](/docs/remote-interfaces#githubs-actionslock)).
+
+</Accordion>
+</Accordions>
+
+## Shared workflows
+
+<Accordions type="multiple">
+<Accordion title="Merge conflicts in contract files" id="contract-conflicts">
+
+Do not merge contract files by hand. Resolve the conflicts in the workflow files, then regenerate: `flowpact generate`
+overwrites the conflicted contracts, conflict markers and all ([Merge conflicts](/docs/contracts#merge-conflicts)).
+
+```sh
+npx flowpact generate
+git add .github/flowpact/
+```
+
+</Accordion>
+</Accordions>
+
+## Still stuck
+
+Run with debug logging. It logs every stage of the analysis to stderr: the config, the files, each job's matrix, and
+each rule with its findings ([Debug mode and logging](/docs/cli#debug-mode-and-logging)).
+
+| Where | How |
+| --- | --- |
+| Terminal | `npx flowpact lint --debug` |
+| GitHub Actions | Re-run the job with debug logging, or set `FLOWPACT_DEBUG: 1` in the step's `env` |
+| Editor | **Developer: Set Log Level…** → Debug, then **flowpact: Show Output** |
+
+Exit code `3` is an internal error: please [open an issue](https://github.com/ciatlas/flowpact/issues) with the debug
+output. To report a vulnerability, see [Security](/docs/security).

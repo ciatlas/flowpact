@@ -581,6 +581,7 @@ function Footer() {
   const links: [string, string][] = [
     ['Docs', '/docs'],
     ['Rules', '/docs/rules'],
+    ['Changelog', '/docs/changelog'],
     ['Roadmap', '/docs/roadmap'],
     ['Security', '/docs/security'],
     ['llms.txt', '/llms.txt'],

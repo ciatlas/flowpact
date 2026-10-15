@@ -4,6 +4,7 @@ import { lucideIconsPlugin } from 'fumadocs-core/source/plugins/lucide-icons';
 import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { applyMdxPreset } from 'fumadocs-mdx/config';
 import { defineDocs } from 'fumadocs-mdx/macro';
+import { remarkIncludedFile } from './included-file';
 import { docsRoute } from './shared';
 
 const docs = defineDocs({
@@ -12,8 +13,9 @@ const docs = defineDocs({
     schema: pageSchema,
     // A collection's own MDX options replace Fumadocs' defaults, so they are built from its preset: ```mermaid blocks
     // become <Mermaid>, ```files blocks file trees, and ```npm blocks the package managers' tabs, kept across pages.
+    // remarkIncludedFile runs first, before the headings are collected for the outline.
     mdxOptions: applyMdxPreset({
-      remarkPlugins: [remarkMdxMermaid, remarkMdxFiles],
+      remarkPlugins: (preset) => [remarkIncludedFile, ...preset, remarkMdxMermaid, remarkMdxFiles],
       remarkNpmOptions: { persist: { id: 'package-manager' } },
     }),
     postprocess: {
