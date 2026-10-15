@@ -227,6 +227,20 @@ const shots = [
       await win.waitForTimeout(1000);
     },
   },
+  {
+    name: 'editor-definition',
+    fixture: 'incident-matrix',
+    size: { width: 820, height: 600 },
+    async take(win) {
+      const file = '.github/workflows/tests.yml';
+      await ready(win, this.fixture, file);
+      // From the key a caller passes to the input it lands on, in the called workflow.
+      await cursorAt(win, this.fixture, file, '      config: ${{ matrix.config }}', 8);
+      await command(win, 'Peek Definition');
+      await win.waitForSelector('.peekview-widget', { timeout: 15_000 });
+      await win.waitForTimeout(1000);
+    },
+  },
 ];
 
 try {

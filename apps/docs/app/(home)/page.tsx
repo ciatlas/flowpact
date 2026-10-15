@@ -369,7 +369,7 @@ function Editor() {
       title="In your editor, before you push"
       lead="The same findings as you type, for closed files too: editing a reusable workflow updates its callers' findings at once. Hover any value to see where it comes from and where it goes."
     >
-      <Tabs items={['Findings', 'Hover', 'References']} className="mx-auto w-full max-w-4xl">
+      <Tabs items={['Findings', 'Hover', 'Definition', 'References']} className="mx-auto w-full max-w-4xl">
         <Tab value="Findings">
           <Screenshot
             name="editor-diagnostics"
@@ -382,6 +382,13 @@ function Editor() {
             name="editor-hover"
             format="png"
             alt="flowpact's hover card in VS Code: where an input comes from and where it goes"
+          />
+        </Tab>
+        <Tab value="Definition">
+          <Screenshot
+            name="editor-definition"
+            format="png"
+            alt="VS Code peeking the definition of a caller's config key: the input it lands on in run-suite.yml"
           />
         </Tab>
         <Tab value="References">
