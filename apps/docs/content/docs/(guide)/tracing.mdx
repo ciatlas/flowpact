@@ -113,7 +113,7 @@ variable or matrix key for where its value comes from and where it goes; **go to
 `with:` key to the callee's input, or from `needs.build.outputs.url` to the output; **Find All References** lists every
 read and every caller that passes it.
 
-<Screenshot name="editor-hover" format="png" alt="flowpact hover card on inputs.environment in build.yml: a required string input, from pipeline.yml's input, to package.yml's input" caption="The input comes from pipeline.yml and goes on to package.yml." />
+<Screenshot name="editor-definition" format="png" alt="VS Code peek definition on the config key tests.yml passes to run-suite.yml: the input it lands on, and the if: that reads it" caption="Go to definition from the key tests.yml passes: the input in run-suite.yml, and the if: that skips the tests when it is empty." />
 
 ## Which workflows call which
 
