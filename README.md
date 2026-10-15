@@ -5,7 +5,7 @@
   </picture>
 </h1>
 
-<p align="center">Find the GitHub Actions values that arrive empty while the run stays green.</p>
+<p align="center">Change shared workflows and actions without breaking the repositories that use them.</p>
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact"><b>VS Code extension</b></a> ·
@@ -29,42 +29,40 @@
 
 **Data-flow linter for GitHub Actions.**
 
-GitHub Actions evaluates a missing matrix key, an undeclared secret or an optional input without a default to an empty
-value: no error, no warning, a green run. When workflows call reusable workflows and local actions, that is how a test variant
-or an upload stops running without anyone noticing. flowpact follows every input, secret, env var, matrix key and
-output across those calls, and into workflows and actions of other repositories, evaluates every combination of the
-matrices written in your workflows, and reports where a value goes missing. It runs as a CLI, a GitHub Action and a
-VS Code extension, and complements actionlint.
+A reusable workflow or action is an interface: its inputs, secrets, outputs and the check names its jobs report. The
+repositories that call it pin a tag such as `@v1`, and a change that breaks them raises no error where it is made.
+flowpact checks both sides of that interface:
 
-![flowpact lint reporting a matrix combination that passes an empty input](apps/docs/public/screenshots/lint-incident.svg)
+- **When you publish one,** it grades every pull request major, minor, patch or none against what callers can see,
+  check names included, and fails it when its title declares less.
+- **When you call one,** it checks every call against the interface of the version it targets, recorded in a lockfile,
+  and grades a version bump or a tag that moved against your calls before you take it.
+- **Inside a repository,** it follows every input, secret, env var, matrix key and output across workflows and actions,
+  and reports where a value arrives empty while the run stays green.
 
-*The incident that started flowpact: one matrix entry had no `config`, so that test variant never ran. actionlint
-reports nothing here.*
+It runs as a CLI, a GitHub Action and a VS Code extension, and complements actionlint.
 
-```mermaid
-flowchart TD
-  accTitle: How a value goes missing
-  subgraph T["tests.yml · matrix.include"]
-    L["linux · config: ci-linux.json"]
-    M["macos · config: ci-macos.json"]
-    W["windows · no config"]
-  end
-  R["run-suite.yml · inputs.config"]
-  J["job test · if: inputs.config != ''"]
-  S["skipped · run stays green"]
-  L -->|"with: config"| R
-  M -->|"with: config"| R
-  W -.->|"config = ''"| R
-  R --> J
-  J -.->|"windows leg"| S
-  linkStyle 2 stroke:#e5484d,stroke-width:2px
-  linkStyle 4 stroke:#e5484d,stroke-width:2px
+**A job renamed in a `fix:` pull request.** Callers' branch protection requires the job's check by its name, so their
+pull requests wait forever on *Expected — Waiting for status to be reported*, and a release tool ships the change to
+everyone on `@v1` as a patch. Impact mode fails the pull request:
+
+![flowpact impact failing a pull request titled "fix: tidy the test job" with FP810: a removed output and a renamed job require a major release](apps/docs/public/screenshots/impact.svg)
+
+**A tag that moved.** `actions/setup-node@v6` moved to 6.1.0, which no longer has `always-auth`. A step that passes it
+runs without it, with a warning in a log. flowpact grades the move against your calls, on a schedule and on the pull
+request that changes the version:
+
+```text
+$ flowpact remotes update --dry-run --fail-on breaks
+  changed actions/setup-node@v6: 2028fbc → 2499707, breaks 1 of 2 calls
+    input "always-auth" was removed — steps that pass it get a warning, and their value is ignored
+    breaks .github/workflows/release.yml:7 jobs.publish step #2
+      FP102 actions/setup-node@v6 has no input "always-auth"
+    1 other call fits
 ```
 
 ## Is this for me?
 
-- **You call reusable workflows or local actions:** flowpact finds inputs callers do not pass, secrets that are never
-  declared, and matrix values that are empty in some combinations.
 - **You publish actions or reusable workflows that other repositories use,** in public or inside your organization:
   contracts show interface changes in review and mark the breaking ones, and impact mode fails a pull request whose
   title declares less than the minor or major release its changes need
@@ -74,11 +72,13 @@ flowchart TD
   outputs you read, and catches a version bump or a moved tag that drops an input you pass: `remotes update` says what
   each changed reference does to your calls, and the action grades the references a Renovate or Dependabot pull
   request moves ([remote interfaces](https://ciatlas.github.io/flowpact/docs/remote-interfaces)).
+- **You call reusable workflows or local actions:** flowpact finds inputs callers do not pass, secrets that are never
+  declared, and matrix values that are empty in some combinations.
 - **You edit workflows in VS Code:** the same findings as you type, with the
   [extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact).
 
 A few standalone workflows with no calls between them? actionlint alone may be enough: flowpact earns its place once
-workflows call each other.
+workflows call each other, or other repositories call yours.
 
 ## Get started
 
@@ -110,26 +110,6 @@ expiry date; expired overrides bring the findings back.
 [adopting it in an existing repository](https://ciatlas.github.io/flowpact/docs/adopting), how it works, CI and action
 usage, remote interfaces, contracts, impact mode, configuration, the CLI and API, and a page for every rule.
 
-## What it finds that other tools miss
-
-| Problem | actionlint | flowpact |
-| --- | --- | --- |
-| One matrix `include` entry lacks a key that is passed to a reusable workflow or action | — | `FP401`, naming the combination |
-| An optional input with no default is left out, so a step is skipped or a required input further down is empty | — | `FP105`, `FP107` |
-| A reusable workflow that declares no secrets reads one, and a caller does not use `secrets: inherit` | — | `FP205` |
-| A step runs `./.github/actions/...` after checking the repository out into a subdirectory | — | `FP606` |
-| A published workflow removes an output or renames a job, which can break consumers in other repositories | — | `FP803` (against the committed contracts), `FP810` (impact mode, against the base commit) |
-| A call to a reusable workflow or action in another repository passes an unknown input or leaves out a required one | popular actions only | `FP102`, `FP101`, against the [remote interfaces lockfile](https://ciatlas.github.io/flowpact/docs/remote-interfaces) |
-| A version bump, or a tag that moved, drops an input a call passes | — | `flowpact remotes update` grades each changed reference against your calls; the action grades a pull request's version changes |
-
-In a large public repository, flowpact found the third case: a reusable workflow that reads `secrets.CODECOV_TOKEN`
-while declaring no secrets, called from 31 places and none with `secrets: inherit`, so the token is always empty.
-
-Both tools report a missing or unknown input on a direct call to a local reusable workflow or action, and actionlint
-also checks shell scripts, runner labels, expression types, cron schedules and the inputs of popular actions such as
-`actions/checkout`. Use flowpact next to it, and zizmor for security. The
-[comparison](https://ciatlas.github.io/flowpact/docs/comparison) shows both tools' output side by side.
-
 ## For publishers of actions and reusable workflows
 
 Other repositories pin your action or reusable workflow to a tag such as `@v1`, and you cannot see their workflows or
@@ -157,8 +137,6 @@ GitHub's Actions extension reports either change. flowpact puts both in the pull
    so the release they cut is no smaller than the change needs. Labels can declare the impact instead, and release pull
    requests are compared with the last release tag.
 
-   ![flowpact impact failing a pull request titled "fix: tidy the test job" with FP810: a removed output and a renamed job require a major release](apps/docs/public/screenshots/impact.svg)
-
 ```yaml
 on:
   pull_request:
@@ -180,6 +158,51 @@ jobs:
 
 See [contracts](https://ciatlas.github.io/flowpact/docs/contracts) and
 [impact mode](https://ciatlas.github.io/flowpact/docs/impact-mode).
+
+## What it finds that other tools miss
+
+| Problem | actionlint | flowpact |
+| --- | --- | --- |
+| A published workflow removes an output or renames a job, which can break consumers in other repositories | — | `FP803` (against the committed contracts), `FP810` (impact mode, against the base commit) |
+| A call to a reusable workflow or action in another repository passes an unknown input or leaves out a required one | popular actions only | `FP102`, `FP101`, against the [remote interfaces lockfile](https://ciatlas.github.io/flowpact/docs/remote-interfaces) |
+| A version bump, or a tag that moved, drops an input a call passes | — | `flowpact remotes update` grades each changed reference against your calls; the action grades a pull request's version changes |
+| One matrix `include` entry lacks a key that is passed to a reusable workflow or action | — | `FP401`, naming the combination |
+| An optional input with no default is left out, so a step is skipped or a required input further down is empty | — | `FP105`, `FP107` |
+| A reusable workflow that declares no secrets reads one, and a caller does not use `secrets: inherit` | — | `FP205` |
+| A step runs `./.github/actions/...` after checking the repository out into a subdirectory | — | `FP606` |
+
+![flowpact lint reporting a matrix combination that passes an empty input](apps/docs/public/screenshots/lint-incident.svg)
+
+*The bug that started flowpact: one matrix entry had no `config`, so that test variant never ran. actionlint
+reports nothing here.*
+
+```mermaid
+flowchart TD
+  accTitle: How a value goes missing
+  subgraph T["tests.yml · matrix.include"]
+    L["linux · config: ci-linux.json"]
+    M["macos · config: ci-macos.json"]
+    W["windows · no config"]
+  end
+  R["run-suite.yml · inputs.config"]
+  J["job test · if: inputs.config != ''"]
+  S["skipped · run stays green"]
+  L -->|"with: config"| R
+  M -->|"with: config"| R
+  W -.->|"config = ''"| R
+  R --> J
+  J -.->|"windows leg"| S
+  linkStyle 2 stroke:#e5484d,stroke-width:2px
+  linkStyle 4 stroke:#e5484d,stroke-width:2px
+```
+
+In a large public repository, flowpact found the `FP205` case: a reusable workflow that reads `secrets.CODECOV_TOKEN`
+while declaring no secrets, called from 31 places and none with `secrets: inherit`, so the token is always empty.
+
+Both tools report a missing or unknown input on a direct call to a local reusable workflow or action, and actionlint
+also checks shell scripts, runner labels, expression types, cron schedules and the inputs of popular actions such as
+`actions/checkout`. Use flowpact next to it, and zizmor for security. The
+[comparison](https://ciatlas.github.io/flowpact/docs/comparison) shows both tools' output side by side.
 
 ## In your editor
 

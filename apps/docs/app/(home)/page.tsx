@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { Card, Cards } from 'fumadocs-ui/components/card';
 import { ServerCodeBlock } from 'fumadocs-ui/components/codeblock.rsc';
 import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
@@ -14,12 +12,6 @@ import docsPackage from '../../package.json';
 const version = docsPackage.version;
 const actionTag = `v${version.split('.').slice(0, 2).join('.')}`;
 const repoUrl = `https://github.com/${gitConfig.user}/${gitConfig.repo}`;
-
-/** The workflow of the incident that started flowpact, as the fixture has it: the proof shows the real file. */
-const incidentYaml = readFileSync(
-  join(process.cwd(), '../../fixtures/incident-matrix/.github/workflows/tests.yml'),
-  'utf8',
-);
 
 const actionYaml = `name: flowpact
 on: pull_request
@@ -39,7 +31,10 @@ const publisherYaml = `steps:
       mode: check    # compare with the contracts
       impact: auto   # grade the release`;
 
-/** A remote call's finding and a moved tag's grade, as flowpact prints them (from real runs). */
+/**
+ * A remote call's finding and a moved tag's grade, as flowpact prints them (from real runs: actions/setup-node 6.1.0
+ * dropped always-auth, and @v6 moved to it).
+ */
 const remoteFinding = `✖  ERROR  FP102 unknown-input
   actions/setup-node@v6 has no input "always-auth"
 
@@ -49,7 +44,7 @@ const remoteFinding = `✖  ERROR  FP102 unknown-input
 
 const driftCheck = `$ flowpact remotes update --dry-run --fail-on breaks
   changed actions/setup-node@v6: 2028fbc → 2499707, breaks 1 of 2 calls
-    input "always-auth" was removed — callers that pass it will fail
+    input "always-auth" was removed — steps that pass it get a warning, and their value is ignored
     breaks .github/workflows/release.yml:7 jobs.publish step #2
       FP102 actions/setup-node@v6 has no input "always-auth"
     1 other call fits`;
@@ -58,7 +53,7 @@ const hides: { icon: ReactNode; title: string; body: string; rules: string[] }[]
   {
     icon: <Grid3x3 />,
     title: 'One matrix leg gets nothing',
-    body: 'An include entry lacks a key, and that combination passes an empty value on.',
+    body: 'An include entry lacks a key, and that combination passes an empty value on. The bug that started flowpact: the windows tests never ran, and every run was green.',
     rules: ['FP401', 'FP402'],
   },
   {
@@ -103,16 +98,20 @@ const grading: [string, string][] = [
 ];
 
 const intents: [string, string, string][] = [
-  ['Find problems in my workflows', '/docs/getting-started', 'Run it once and read a finding.'],
-  ['See findings while I edit', '/docs/editors', 'VS Code, VSCodium, Cursor, Neovim.'],
-  ['Run it on every pull request', '/docs/ci', 'The GitHub Action, or the CLI in any CI.'],
-  ['Check calls to other repositories', '/docs/remote-interfaces', 'A lockfile of their interfaces.'],
+  [
+    'Stop breaking the repositories that use my workflows',
+    '/docs/shared-workflows',
+    'Contracts and impact mode.',
+  ],
   [
     'Know what a version bump does to my calls',
     '/docs/remote-interfaces#when-a-version-changes',
     'A drift check, and a verdict on bot pull requests.',
   ],
-  ['Stop breaking the repositories that use my workflows', '/docs/contracts', 'Contracts and impact mode.'],
+  ['Check calls to other repositories', '/docs/remote-interfaces', 'A lockfile of their interfaces.'],
+  ['Find problems in my workflows', '/docs/getting-started', 'Run it once and read a finding.'],
+  ['See findings while I edit', '/docs/editors', 'VS Code, VSCodium, Cursor, Neovim.'],
+  ['Run it on every pull request', '/docs/ci', 'The GitHub Action, or the CLI in any CI.'],
   ['Look up a finding', '/docs/rules', 'Every rule, with why and how to fix it.'],
   ['Roll it out across my organization', '/docs/integrating', 'Organization defaults and rules.'],
   ['Review flowpact’s security', '/docs/security', 'What it reads and writes, signed releases.'],
@@ -159,13 +158,13 @@ function Hero() {
         Data-flow linter for GitHub Actions · v{version}
       </span>
       <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
-        Find the GitHub Actions values that arrive empty while the run stays green.
+        Change shared workflows and actions without breaking the repositories that use them.
       </h1>
       <p className="max-w-2xl text-lg text-fd-muted-foreground">
-        flowpact follows every input, secret, env var, matrix key and output through reusable workflows,
-        composite actions and calls into other repositories, evaluates every combination of the matrices in
-        your YAML, and shows where a value goes missing: as you type, in your terminal and on every pull
-        request.
+        flowpact checks both sides of every interface between GitHub Actions workflows. It grades each release
+        of a reusable workflow or action against what its callers use, check names included, and checks each
+        call against the version it targets, a bot&apos;s version bump too. Inside a repository, it follows
+        every value across workflows, actions and matrix combinations.
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         <Link href="/docs/getting-started" className={buttonPrimary}>
@@ -208,52 +207,46 @@ function Hero() {
   );
 }
 
-function Proof() {
+function Breaks() {
   return (
     <Section
-      id="incident"
-      title="The bug that started flowpact"
+      id="breaks"
+      title="Two breaks that raise no error where they happen"
       lead={
         <>
-          One <code>include</code> entry had no <code>config</code>. The reusable workflow it calls skips its
-          tests when <code>config</code> is empty, so the windows tests never ran, and every run was green.
+          A reusable workflow or action is an interface: its inputs, secrets, outputs and the check names its
+          jobs report. The repositories that call it pin a tag such as <code>@v1</code>, and nothing fails in
+          the repository that changes it.
         </>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-2 [&_figure]:my-0">
-          <ServerCodeBlock
-            lang="yaml"
-            code={incidentYaml}
-            codeblock={{ title: '.github/workflows/tests.yml' }}
-          />
-        </div>
-        <div className="[&_figure]:my-0">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-12">
+        <div className="flex min-w-0 flex-col gap-3 [&_figure]:my-0">
+          <h3 className="font-semibold">You publish: a job renamed in a fix: pull request</h3>
+          <p className="text-sm text-fd-muted-foreground">
+            Callers&apos; branch protection requires the job&apos;s check by its name. After the rename, their
+            pull requests wait forever on <em>Expected — Waiting for status to be reported</em>, and a release
+            tool ships the change to everyone on <code>@v1</code> as a patch. Impact mode fails the pull
+            request: the change needs a major release.
+          </p>
           <Screenshot
-            name="lint-incident"
-            alt="flowpact lint reporting FP401: input config is empty for the windows matrix combination"
+            name="impact"
+            alt="flowpact impact failing with FP810: declared patch, but a removed output and a renamed job require major"
           />
         </div>
-      </div>
-      <div className="grid gap-3 text-sm sm:grid-cols-3">
-        <div className="rounded-xl border border-fd-border p-4">
-          <div className="font-semibold">GitHub Actions</div>
-          <div className="text-fd-muted-foreground">Green: the windows tests were skipped.</div>
-        </div>
-        <div className="rounded-xl border border-fd-border p-4">
-          <div className="font-semibold">actionlint 1.7.12</div>
-          <div className="text-fd-muted-foreground">0 findings.</div>
-        </div>
-        <div className="rounded-xl border border-fd-primary p-4">
-          <div className="font-semibold">flowpact</div>
-          <div className="text-fd-muted-foreground">
-            <RuleChip code="FP401" /> for <code>{'{ name: windows }'}</code>
-          </div>
+        <div className="flex min-w-0 flex-col gap-3 [&_figure]:my-0">
+          <h3 className="font-semibold">You call: a tag that moves to a release without an input you pass</h3>
+          <p className="text-sm text-fd-muted-foreground">
+            <code>actions/setup-node@v6</code> moved to 6.1.0, which no longer has <code>always-auth</code>. A
+            step that passes it runs without it, with a warning in a log. flowpact grades the move against
+            your calls, on a schedule and on the pull request that changes the version.
+          </p>
+          <ServerCodeBlock lang="text" code={driftCheck} />
         </div>
       </div>
       <p className="text-center text-sm">
-        <Link href="/docs/comparison" className="underline underline-offset-4">
-          More cases side by side with actionlint and GitHub’s extension →
+        <Link href="/docs/shared-workflows" className="underline underline-offset-4">
+          Shared workflows, from both sides →
         </Link>
       </p>
     </Section>
@@ -262,7 +255,11 @@ function Proof() {
 
 function Hides() {
   return (
-    <Section id="what-a-green-run-hides" title="What a green run hides">
+    <Section
+      id="what-a-green-run-hides"
+      title="Inside your repository: what a green run hides"
+      lead="GitHub Actions turns these into empty values, with no error and a green run. flowpact follows every input, secret, env var, matrix key and output across workflows and actions, and evaluates every combination of the matrices in your YAML."
+    >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {hides.map((h) => (
           <div key={h.title} className="flex flex-col gap-2 rounded-xl border border-fd-border p-5">
@@ -282,6 +279,10 @@ function Hides() {
       <p className="text-center text-sm">
         <Link href="/docs/rules" className="underline underline-offset-4">
           Every rule, with why it matters, how to fix it and an example →
+        </Link>
+        {' · '}
+        <Link href="/docs/comparison" className="underline underline-offset-4">
+          Side by side with actionlint and GitHub&apos;s extension →
         </Link>
       </p>
     </Section>
@@ -329,7 +330,7 @@ function Remotes() {
   return (
     <Section
       id="remote-calls"
-      title="Calls into other repositories, checked too"
+      title="When you call them: every call checked against its version"
       lead={
         <>
           Record the interfaces of the workflows and actions you call once, with{' '}
@@ -344,14 +345,11 @@ function Remotes() {
           <h3 className="font-semibold">A call that no longer fits</h3>
           <ServerCodeBlock lang="text" code={remoteFinding} />
         </div>
-        <div className="flex flex-col gap-3">
-          <h3 className="font-semibold">A version bump or a moved tag that drops an input you pass</h3>
-          <ServerCodeBlock lang="text" code={driftCheck} />
-          <p className="text-sm text-fd-muted-foreground">
-            Run it on a schedule, and the action grades the references a Renovate or Dependabot pull request
-            moves, against interfaces it fetches itself.
-          </p>
-        </div>
+        <p className="text-sm text-fd-muted-foreground">
+          <code>remotes update --fail-on breaks</code> on a schedule tells you when a tag you call has moved
+          under you, and the action grades the references a Renovate or Dependabot pull request moves, against
+          interfaces it fetches itself, so the bump waits until it fits.
+        </p>
       </div>
       <p className="text-center text-sm">
         <Link href="/docs/remote-interfaces" className="underline underline-offset-4">
@@ -415,43 +413,37 @@ function Publishers() {
   return (
     <Section
       id="publishers"
-      title="Publish workflows without breaking the repositories that use them"
-      lead="Other repositories pin what you publish to a tag such as @v1. A removed output or a renamed job breaks them without an error in your repository."
+      title="When you publish them: every release graded"
+      lead="Contracts record the interface of each workflow and action you publish, so every change to it is a diff in review. Impact mode grades each pull request major, minor, patch or none against what callers can see, and fails it when its title declares less."
     >
       <div className="grid items-start gap-6 lg:grid-cols-2">
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           <h3 className="font-semibold">Contracts make every interface change a diff in review</h3>
           <Screenshot
             name="generate-dry-run"
             alt="flowpact generate --dry-run listing new contract files and a unified diff of their contents"
           />
         </div>
-        <div className="flex flex-col gap-3">
-          <h3 className="font-semibold">Impact mode fails a patch that needs a major</h3>
-          <Screenshot
-            name="impact"
-            alt="flowpact impact failing with FP810: declared patch, but a removed output and a renamed job require major"
-          />
-        </div>
-      </div>
-      <div className="grid items-start gap-6 lg:grid-cols-2">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-fd-border text-left">
-              <th className="py-2 font-semibold">Change to a published workflow or action</th>
-              <th className="py-2 font-semibold">Release</th>
-            </tr>
-          </thead>
-          <tbody>
-            {grading.map(([change, level]) => (
-              <tr key={change} className="border-b border-fd-border">
-                <td className="py-2 text-fd-muted-foreground">{change}</td>
-                <td className="py-2 font-mono">{level}</td>
+        <div className="flex min-w-0 flex-col gap-3">
+          <h3 className="font-semibold">Impact mode grades what callers can see</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-fd-border text-left">
+                <th className="py-2 font-semibold">Change to a published workflow or action</th>
+                <th className="py-2 font-semibold">Release</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        <ServerCodeBlock lang="yaml" code={publisherYaml} />
+            </thead>
+            <tbody>
+              {grading.map(([change, level]) => (
+                <tr key={change} className="border-b border-fd-border">
+                  <td className="py-2 text-fd-muted-foreground">{change}</td>
+                  <td className="py-2 font-mono">{level}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ServerCodeBlock lang="yaml" code={publisherYaml} />
+        </div>
       </div>
       <p className="text-center text-sm">
         <Link href="/docs/contracts" className="underline underline-offset-4">
@@ -513,7 +505,10 @@ function Alongside() {
       'Each file in depth: syntax, shell scripts, expression types, runner labels, popular actions.',
     ],
     ['zizmor', 'Security: template injection, credentials left in the checkout, risky triggers.'],
-    ['flowpact', 'Between files and matrix combinations: where a value goes, and where it arrives empty.'],
+    [
+      'flowpact',
+      'Between workflows, actions and repositories: the interfaces they share, their versions, and where a value arrives empty.',
+    ],
   ];
   return (
     <Section id="alongside" title="Use it next to actionlint and zizmor">
@@ -589,7 +584,7 @@ function Closing() {
       <code className="rounded-lg bg-fd-muted px-4 py-2 font-mono text-sm">npx flowpact lint</code>
       <p className="max-w-2xl text-sm text-fd-muted-foreground">
         A few standalone workflows with no calls between them? actionlint alone may be enough. flowpact earns
-        its place once workflows call each other.
+        its place once workflows call each other, or other repositories call yours.
       </p>
     </section>
   );
@@ -629,12 +624,12 @@ export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-24 px-4 py-16">
       <Hero />
-      <Proof />
+      <Breaks />
+      <Publishers />
+      <Remotes />
       <Hides />
       <Flow />
-      <Remotes />
       <Editor />
-      <Publishers />
       <PullRequests />
       <Alongside />
       <Safety />

@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   // Absolute URLs for the Open Graph image (app/opengraph-image.png); Next.js adds the base path.
   metadataBase: new URL('https://ciatlas.github.io'),
   title: { template: '%s · flowpact', default: 'flowpact — data-flow linter for GitHub Actions' },
-  description: 'Find the GitHub Actions values that arrive empty while the run stays green.',
+  description: 'Change shared workflows and actions without breaking the repositories that use them.',
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {
