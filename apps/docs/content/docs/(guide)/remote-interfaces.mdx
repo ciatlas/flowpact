@@ -223,7 +223,7 @@ anything):
 would write .github/flowpact/remotes.lock.yaml
 token: GH_TOKEN
   changed actions/setup-node@v6: 2028fbc → 395ad32, breaks 1 of 3 calls
-    input "always-auth" was removed — callers that pass it will fail
+    input "always-auth" was removed — steps that pass it get a warning, and their value is ignored
     breaks .github/workflows/release.yml:21 jobs.publish step #2
       FP102 actions/setup-node@v6 has no input "always-auth"
     2 other calls fit
