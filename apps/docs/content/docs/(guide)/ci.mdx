@@ -36,7 +36,14 @@ jobs:
   repository root).
 </Callout>
 
-See [GitHub Action](/docs/action) for every input and output (`fail-on`, SARIF upload, the contracts artifact, …).
+Each finding is an annotation on the line it is about, in the pull request's **Files changed** tab:
+
+{/* Captured by hand, signed out, from https://github.com/ciatlas/flowpact-demo/pull/1/files (light and dark). */}
+<Screenshot name="pr-annotation" format="png" themed alt="A pull request's Files changed tab: the line passing matrix.config carries flowpact's FP401 annotation, with the message, the fix and the rule's docs link" caption="A pull request that adds a Windows leg without its config, in the flowpact-demo repository." />
+
+[The demo pull request](https://github.com/ciatlas/flowpact-demo/pull/1) shows the rest: the Windows leg is skipped and
+the pipeline stays green, while the flowpact check fails. See [GitHub Action](/docs/action) for every input and output
+(`fail-on`, SARIF upload, the contracts artifact, …).
 
 ## The CLI in GitHub Actions
 

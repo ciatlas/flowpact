@@ -471,6 +471,13 @@ function PullRequests() {
   ];
   return (
     <Section id="pull-requests" title="On every pull request">
+      {/* Captured by hand, signed out, from https://github.com/ciatlas/flowpact-demo/pull/1/files (light and dark). */}
+      <Screenshot
+        name="pr-annotation"
+        format="png"
+        themed
+        alt="A pull request's Files changed tab: the line passing matrix.config carries flowpact's FP401 annotation, with the message, the fix and the rule's docs link"
+      />
       <div className="grid gap-4 sm:grid-cols-2">
         {items.map(([title, body]) => (
           <div key={title} className="rounded-xl border border-fd-border p-5">
@@ -483,6 +490,10 @@ function PullRequests() {
         <Link href="/docs/action" className="underline underline-offset-4">
           The GitHub Action →
         </Link>
+        {' · '}
+        <a href="https://github.com/ciatlas/flowpact-demo/pull/1" className="underline underline-offset-4">
+          See it on a demo pull request →
+        </a>
       </p>
     </Section>
   );
