@@ -144,10 +144,13 @@ A finding that flowpact knows how to fix offers it as a quick fix (**Ctrl+.** or
 | Add the missing required input or secret, under `with:` or `secrets:` | a call that leaves one out ([`FP101`](/docs/rules/fp101), [`FP201`](/docs/rules/fp201)) |
 | Add the missing key to the `include` entries that lack it | a matrix value that is empty in some combinations ([`FP401`](/docs/rules/fp401), [`FP402`](/docs/rules/fp402)) |
 | Remove the unused input, and what local callers pass for it | [`FP104`](/docs/rules/fp104), in a workflow or action no other repository uses |
+| Regenerate the contracts, every file as `flowpact generate` writes it | a contract finding ([`FP801`](/docs/rules/fp801)–[`FP805`](/docs/rules/fp805)) |
 
 An added key gets an empty value for you to fill in. A quick fix is offered only when the change is certain: none in a
 flow mapping (`{ … }`) or a file with CRLF line endings, and no removal from a
 [published](/docs/concepts#published-unit) workflow or action, whose callers in other repositories would break.
+Regenerating the contracts needs an editor that can create and delete files in an edit when a contract is new or
+gone (VS Code can), and none is offered when a contract path is a symlink.
 
 Every finding also offers **Accept this finding with an override**. It adds an [override](/docs/configuration#overrides)
 for it to the config, creating `.github/flowpact/flowpact.config.yml` when there is none. VS Code asks for the reason

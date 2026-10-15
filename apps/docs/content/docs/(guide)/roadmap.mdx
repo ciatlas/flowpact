@@ -28,7 +28,7 @@ What each release changed is in the [changelog](/docs/changelog).
   definition across workflow calls, and references. Calls into other repositories are described from the remote
   interfaces lockfile, and go to definition opens their cached sources.
   [Quick fixes](/docs/editors#quick-fixes) rename a misspelled name, add a missing input, secret or matrix key, remove
-  an unused input, and accept a finding with an override.
+  an unused input, regenerate the contracts, and accept a finding with an override.
 - **[VS Code extension](/docs/editors#vs-code)** on the Visual Studio Marketplace and Open VSX, with the language server
   bundled.
 - **[API](/docs/api)**: every command as a function, for scripts and your own actions.
@@ -52,7 +52,6 @@ What each release changed is in the [changelog](/docs/changelog).
 
 ## Next: the rest of the editor
 
-- **Regenerate the contracts** from a contract finding, as `flowpact generate` does.
 - **Rename** an input, secret or output across its declaration, its callers and its reads.
 - **Contract files:** hover, and go to definition to what each entry records.
 - **Repositories without a `.github` folder**, such as one with only an action at its root.

@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { readSettings, startServer } from '@flowpact/language-server';
+import { analyze, writeContracts } from '@flowpact/lint';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   createConnection,
@@ -11,6 +12,7 @@ import {
   DidChangeConfigurationNotification,
   DidChangeTextDocumentNotification,
   DidChangeWatchedFilesNotification,
+  type DidChangeWatchedFilesParams,
   DidCloseTextDocumentNotification,
   DidOpenTextDocumentNotification,
   FileChangeType,
@@ -94,12 +96,12 @@ interface Client {
   dispose(): void;
 }
 
-/** `createFiles`: the client can create files in a workspace edit, as VS Code can. */
+/** `fileOps`: the files the client can create and delete in a workspace edit (VS Code can do both). */
 async function start(
   dir: string,
   settings: Record<string, unknown> = {},
   folder = dir,
-  createFiles = false,
+  fileOps: ('create' | 'delete')[] = [],
 ): Promise<Client> {
   const toServer = new PassThrough();
   const toClient = new PassThrough();
@@ -136,7 +138,7 @@ async function start(
       workspace: {
         workspaceFolders: true,
         didChangeWatchedFiles: { dynamicRegistration: true },
-        ...(createFiles ? { workspaceEdit: { documentChanges: true, resourceOperations: ['create'] } } : {}),
+        ...(fileOps.length ? { workspaceEdit: { documentChanges: true, resourceOperations: fileOps } } : {}),
       },
     },
     initializationOptions: settings,
@@ -608,7 +610,7 @@ describe('code actions', () => {
 
   it('accepts a finding with an override in a new config file, with a reason to replace', async () => {
     const dir = repo();
-    const client = await start(dir, {}, dir, true);
+    const client = await start(dir, {}, dir, ['create']);
     const accept = (await actionsFor(client, dir)).find(
       (a) => a.title === 'Accept this finding with an override',
     );
@@ -639,7 +641,7 @@ describe('code actions', () => {
 
   it('lets a client that asks for the reason run its command, then adds the override with that reason', async () => {
     const dir = repo();
-    const client = await start(dir, { acceptFindingPrompt: true }, dir, true);
+    const client = await start(dir, { acceptFindingPrompt: true }, dir, ['create']);
     const accept = (await actionsFor(client, dir)).find((a) => a.title.startsWith('Accept'));
     expect(accept).toMatchObject({
       title: 'Accept this finding with an override…',
@@ -661,5 +663,103 @@ describe('code actions', () => {
       changes: [{ uri: uri(dir, CONFIG), type: FileChangeType.Created }],
     });
     expect(codesOf(await client.diagnosticsOf(dir, CALLER))).not.toContain('FP102');
+  });
+});
+
+describe('regenerating the contracts', () => {
+  /** The repository with its contracts generated; then `change` is made to it. */
+  const withContracts = (change: Record<string, string | null>) => {
+    const dir = repo({ ...REPO, [CALLER]: FIXED });
+    writeContracts(dir, analyze({ root: dir, checkContracts: true }).contracts!);
+    for (const [rel, text] of Object.entries(change))
+      if (text === null) rmSync(join(dir, rel));
+      else write(dir, { [rel]: text });
+    return dir;
+  };
+  /** The callee with one more optional input: its contract is outdated (FP802). */
+  const OUTDATED = {
+    [CALLEE]: REPO[CALLEE]!.replace('    inputs:\n', '    inputs:\n      greeting:\n        type: string\n'),
+  };
+  const OTHER = '.github/workflows/other.yml';
+  const NEW = {
+    [OTHER]:
+      'on:\n  workflow_call:\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo\n',
+  };
+
+  type Action = { title: string; edit?: WorkspaceEdit };
+  const regenerate = async (client: Client, dir: string, rel: string, code: string) => {
+    const [d] = (await client.diagnosticsOf(dir, rel)).filter((x) => x.code === code);
+    expect(d, code).toBeDefined();
+    const actions = (await client.conn.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: uri(dir, rel) },
+      range: d!.range,
+      context: { diagnostics: [d] },
+    })) as Action[];
+    return actions.find((a) => a.title.startsWith('Regenerate the contracts'));
+  };
+
+  /** Makes one change of a workspace edit on disk, as a client would; the file it changes, if any. */
+  function change(c: NonNullable<WorkspaceEdit['documentChanges']>[number]): string | undefined {
+    if (!('kind' in c)) {
+      const path = URI.parse(c.textDocument.uri).fsPath;
+      writeFileSync(path, edited(readFileSync(path, 'utf8'), c.edits as TextEdit[]));
+      return c.textDocument.uri;
+    }
+    if (c.kind === 'delete') rmSync(URI.parse(c.uri).fsPath);
+    if (c.kind !== 'create') return c.kind === 'delete' ? c.uri : undefined;
+    mkdirSync(dirname(URI.parse(c.uri).fsPath), { recursive: true });
+    writeFileSync(URI.parse(c.uri).fsPath, '');
+    return undefined;
+  }
+
+  /** Makes a workspace edit on disk, as a client would, and tells the server which files changed. */
+  async function apply(client: Client, edit: WorkspaceEdit) {
+    const plain = Object.entries(edit.changes ?? {}).map(([u, edits]) =>
+      change({ textDocument: { uri: u, version: null }, edits }),
+    );
+    const changed = [...plain, ...(edit.documentChanges ?? []).map(change)].filter((u): u is string => !!u);
+    const params: DidChangeWatchedFilesParams = {
+      changes: changed.map((u) => ({ uri: u, type: FileChangeType.Changed })),
+    };
+    await client.conn.sendNotification(DidChangeWatchedFilesNotification.type, params);
+  }
+
+  const contractCodes = async (client: Client, dir: string, rels: string[]) =>
+    (await Promise.all(rels.map((r) => client.diagnosticsOf(dir, r))))
+      .flat()
+      .map((d) => String(d.code))
+      .filter((c) => /^FP80[1-5]$/.test(c));
+
+  it('replaces an outdated contract, also for a client that takes only plain text edits', async () => {
+    const dir = withContracts(OUTDATED);
+    const client = await start(dir);
+    const action = await regenerate(client, dir, CALLEE, 'FP802');
+    expect(action?.title).toBe('Regenerate the contracts (1 file)');
+    expect(action?.edit?.changes).toBeDefined();
+    await apply(client, action!.edit!);
+    expect(await contractCodes(client, dir, [CALLEE, CALLER])).toEqual([]);
+  });
+
+  it("creates a new workflow's contract, only for a client that can create files", async () => {
+    const dir = withContracts({ ...OUTDATED, ...NEW });
+    expect(await regenerate(await start(dir), dir, CALLEE, 'FP802')).toBeUndefined();
+    const client = await start(dir, {}, dir, ['create', 'delete']);
+    const action = await regenerate(client, dir, CALLEE, 'FP802');
+    expect(action?.title).toBe('Regenerate the contracts (2 files)');
+    await apply(client, action!.edit!);
+    expect(await contractCodes(client, dir, [CALLEE, CALLER, OTHER])).toEqual([]);
+  });
+
+  it("deletes a removed workflow's contract, only for a client that can delete files", async () => {
+    const dir = withContracts({ [CALLER]: FIXED.replace('callee.yml', 'gone.yml'), [CALLEE]: null });
+    const contract = '.github/flowpact/contracts/workflows/callee.contract.yaml';
+    expect(await regenerate(await start(dir, {}, dir, ['create']), dir, contract, 'FP804')).toBeUndefined();
+    const client = await start(dir, {}, dir, ['create', 'delete']);
+    const action = await regenerate(client, dir, contract, 'FP804');
+    expect(action?.edit?.documentChanges).toContainEqual(
+      expect.objectContaining({ kind: 'delete', uri: uri(dir, contract) }),
+    );
+    await apply(client, action!.edit!);
+    expect(await contractCodes(client, dir, [CALLER, contract])).toEqual([]);
   });
 });

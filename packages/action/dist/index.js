@@ -21896,10 +21896,13 @@ function assertSafeWritePath(abs, trees) {
       );
   }
 }
-function assertSafeContractPaths(root, plan) {
-  const unsafe = plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter(
+function unsafeContractPaths(root, plan) {
+  return plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter(
     (f) => isSymlink(join4(root, f)) || !insideRepository(root, join4(root, f)) || followsLinkIn(realpathNearest(root), join4(root, f))
   );
+}
+function assertSafeContractPaths(root, plan) {
+  const unsafe = unsafeContractPaths(root, plan);
   if (unsafe.length)
     throw new UnsafePathError(
       `Not writing contracts: ${unsafe.join(", ")} ${unsafe.length === 1 ? "is a symlink, goes through one, or links" : "are symlinks, go through one, or link"} outside the repository`

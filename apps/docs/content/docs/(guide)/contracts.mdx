@@ -192,8 +192,10 @@ findings are errors by default, so the job fails until the contracts are regener
 <Step>
 ### Regenerate on intentional changes
 
-When the change is intended, run `flowpact generate` again and commit the result. For a breaking change, first update the
-callers listed under `consumers` — including those in other repositories, which flowpact cannot see.
+When the change is intended, run `flowpact generate` again and commit the result. In the editor, the quick fix
+**Regenerate the contracts** on a contract finding does the same ([Quick fixes](/docs/editors#quick-fixes)). For a
+breaking change, first update the callers listed under `consumers` — including those in other repositories, which
+flowpact cannot see.
 </Step>
 </Steps>
 

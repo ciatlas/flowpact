@@ -250,17 +250,22 @@ export class Workspace {
   }
 
   /**
-   * A repository's config file (absolute), the one the analysis read or where a new one goes, and its text: the open
-   * document's, else the file's, else none.
+   * A repository's config file (absolute), the one the analysis read or where a new one goes, and its text as the
+   * editor has it (see `textOf`).
    */
   configOf(root: Root): { path: string; text: string | undefined } {
     const path = join(root.dir, root.configFile ?? `${CONFIG_DIR}/${CONFIG_FILES[0]}`);
+    return { path, text: this.textOf(path) };
+  }
+
+  /** A file's text as the editor has it: the open document's, else the file's, else none. */
+  textOf(path: string): string | undefined {
     const open = [...this.host.documents()].find((d) => d.path === path);
-    if (open) return { path, text: open.text };
+    if (open) return open.text;
     try {
-      return { path, text: readFileSync(path, 'utf8') };
+      return readFileSync(path, 'utf8');
     } catch {
-      return { path, text: undefined };
+      return undefined;
     }
   }
 

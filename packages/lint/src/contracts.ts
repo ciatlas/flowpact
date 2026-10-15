@@ -882,8 +882,12 @@ export function assertSafeWritePath(abs: string, trees: string[]): void {
  * Refuses to write contracts into the checkout through a symlink, which could redirect a write (or delete) elsewhere.
  * Every target is checked before anything is written, so a refusal leaves the directory as it was.
  */
-function assertSafeContractPaths(root: string, plan: ContractPlan): void {
-  const unsafe = plan.entries
+/**
+ * The contract files a plan would write or delete that are not safe to: a symlink, a path through one, or one outside
+ * the repository. `flowpact generate` refuses to write any then, and the editor offers no "Regenerate".
+ */
+export function unsafeContractPaths(root: string, plan: ContractPlan): string[] {
+  return plan.entries
     .filter((e) => e.status !== 'unchanged')
     .map((e) => e.file)
     .filter(
@@ -892,6 +896,10 @@ function assertSafeContractPaths(root: string, plan: ContractPlan): void {
         !insideRepository(root, join(root, f)) ||
         followsLinkIn(realpathNearest(root), join(root, f)),
     );
+}
+
+function assertSafeContractPaths(root: string, plan: ContractPlan): void {
+  const unsafe = unsafeContractPaths(root, plan);
   if (unsafe.length)
     throw new UnsafePathError(
       `Not writing contracts: ${unsafe.join(', ')} ${unsafe.length === 1 ? 'is a symlink, goes through one, or links' : 'are symlinks, go through one, or link'} outside the repository`,

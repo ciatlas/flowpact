@@ -20,7 +20,15 @@ import {
   TextDocuments,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { ACCEPT_COMMAND, type AcceptArgs, acceptAction, acceptEdit, suggestionActions } from './actions';
+import {
+  ACCEPT_COMMAND,
+  type AcceptArgs,
+  acceptAction,
+  acceptEdit,
+  type FileOps,
+  regenerateAction,
+  suggestionActions,
+} from './actions';
 import { pathToUri, toRange, uriToPath } from './convert';
 import { hoverMarkdown, remoteBindingMarkdown } from './hover';
 import { readSettings, type Settings } from './settings';
@@ -35,14 +43,23 @@ const HIGHLIGHT = {
   uses: DocumentHighlightKind.Text,
 } as const;
 
+/** What a client can do in a workspace edit, from the resource operations it lists (none without `documentChanges`). */
+function fileOpsOf(operations: string[] | undefined): FileOps {
+  return {
+    documentChanges: operations !== undefined,
+    create: operations?.includes('create') === true,
+    delete: operations?.includes('delete') === true,
+  };
+}
+
 /** What the client can do: from its capabilities, and the options VS Code's extension sends. */
 function clientFeatures(params: InitializeParams) {
   const { textDocument, workspace } = params.capabilities;
   const edits = workspace?.workspaceEdit;
   return {
     linkSupport: textDocument?.definition?.linkSupport === true,
-    /** It can create a file in a workspace edit: a new config file for an override. */
-    canCreate: edits?.documentChanges === true && (edits.resourceOperations ?? []).includes('create'),
+    /** The files it can create and delete in a workspace edit: a new config file, contract files. */
+    fileOps: fileOpsOf(edits?.documentChanges === true ? (edits.resourceOperations ?? []) : undefined),
     /** It asks for an override's reason itself, so "Accept" runs its command. */
     promptForReason:
       (params.initializationOptions as { acceptFindingPrompt?: unknown } | undefined)?.acceptFindingPrompt ===
@@ -64,8 +81,8 @@ export function startServer(connection: Connection): void {
     new RemoteSources(s.cacheDir ? join(s.cacheDir, 'remotes') : remotesCacheDir());
   let sources = sourcesFor(settings);
   let linkSupport = false;
-  /** The client can create a file in a workspace edit: a new config file for an override. */
-  let canCreate = false;
+  /** The files the client can create and delete in a workspace edit. */
+  let fileOps: FileOps = { documentChanges: false, create: false, delete: false };
   /** The client asks for an override's reason itself (VS Code's extension), so "Accept" runs its command. */
   let promptForReason = false;
   let watchFiles = false;
@@ -96,7 +113,7 @@ export function startServer(connection: Connection): void {
     settings = readSettings(params.initializationOptions);
     sources = sourcesFor(settings);
     setLevel(settings.logLevel);
-    ({ linkSupport, canCreate, promptForReason, watchFiles, folderEvents } = clientFeatures(params));
+    ({ linkSupport, fileOps, promptForReason, watchFiles, folderEvents } = clientFeatures(params));
     const folders = params.workspaceFolders?.length
       ? params.workspaceFolders.map((f) => uriToPath(f.uri))
       : [params.rootUri ? uriToPath(params.rootUri) : undefined];
@@ -262,8 +279,16 @@ export function startServer(connection: Connection): void {
       const f = findingOf(found.findings, d);
       if (!f) continue;
       actions.push(...suggestionActions(found.root.dir, f, d));
-      const accept = acceptAction(f, d, textDocument.uri, { prompt: promptForReason, canCreate, config });
+      const accept = acceptAction(f, d, textDocument.uri, {
+        prompt: promptForReason,
+        canCreate: fileOps.create,
+        config,
+      });
       if (accept) actions.push(accept);
+      const regenerate = regenerateAction(found.root.dir, found.root.result?.contracts, d, fileOps, (p) =>
+        workspace?.textOf(p),
+      );
+      if (regenerate) actions.push(regenerate);
     }
     return actions;
   });
@@ -275,7 +300,7 @@ export function startServer(connection: Connection): void {
     const f = found?.findings.find((x) => x.fingerprint === fingerprint);
     if (!workspace || !found || !f || !reason) return;
     const config = workspace.configOf(found.root);
-    const edit = acceptEdit(config.path, config.text, overrideFor(f, reason, expires), canCreate);
+    const edit = acceptEdit(config.path, config.text, overrideFor(f, reason, expires), fileOps.create);
     if (edit) await connection.workspace.applyEdit({ label: `Accept ${f.code}`, edit });
     else
       connection.window.showWarningMessage(

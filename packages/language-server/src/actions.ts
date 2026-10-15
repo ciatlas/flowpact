@@ -1,9 +1,18 @@
 import { join } from 'node:path';
-import { addOverride, type Finding, type OverrideEntry, overrideFor } from '@flowpact/lint';
+import {
+  addOverride,
+  type ContractPlan,
+  type ContractPlanEntry,
+  type Finding,
+  type OverrideEntry,
+  overrideFor,
+  unsafeContractPaths,
+} from '@flowpact/lint';
 import {
   type CodeAction,
   CodeActionKind,
   CreateFile,
+  DeleteFile,
   type Diagnostic,
   TextDocumentEdit,
   type TextEdit,
@@ -106,4 +115,82 @@ export function acceptAction(
     opts.canCreate,
   );
   return edit && { ...base, title, edit };
+}
+
+/** The contract findings, which regenerating the contracts fixes. */
+const CONTRACT_CODES = new Set(['FP801', 'FP802', 'FP803', 'FP804', 'FP805']);
+
+/** What a client can do in a workspace edit: `documentChanges`, and creating and deleting files with them. */
+export interface FileOps {
+  documentChanges: boolean;
+  create: boolean;
+  delete: boolean;
+}
+
+/** The range of a whole text. */
+function wholeRange(text: string) {
+  const lines = text.split('\n');
+  return {
+    start: { line: 0, character: 0 },
+    end: { line: lines.length - 1, character: lines.at(-1)!.length },
+  };
+}
+
+/** A contract file's change as `documentChanges`: created, replaced or deleted. */
+function contractChange(
+  e: ContractPlanEntry,
+  uri: string,
+  current: string,
+): (CreateFile | DeleteFile | TextDocumentEdit)[] {
+  const start = { line: 0, character: 0 };
+  if (e.status === 'delete') return [DeleteFile.create(uri, { ignoreIfNotExists: true })];
+  if (e.status === 'create')
+    return [
+      CreateFile.create(uri, { overwrite: true }),
+      TextDocumentEdit.create({ uri, version: null }, [
+        { range: { start, end: start }, newText: e.after ?? '' },
+      ]),
+    ];
+  return [
+    TextDocumentEdit.create({ uri, version: null }, [{ range: wholeRange(current), newText: e.after ?? '' }]),
+  ];
+}
+
+/**
+ * "Regenerate the contracts" on a contract finding: every contract file as `flowpact generate` writes it, created,
+ * replaced or deleted in one edit (`textOf` gives a file's current text, an open document's when it is open). None
+ * when nothing changes, when the client cannot create or delete a file it would have to, or when a contract path is a
+ * symlink or leads outside the repository.
+ */
+export function regenerateAction(
+  dir: string,
+  plan: ContractPlan | undefined,
+  diagnostic: Diagnostic,
+  ops: FileOps,
+  textOf: (path: string) => string | undefined,
+): CodeAction | undefined {
+  if (!plan?.drift || !CONTRACT_CODES.has(String(diagnostic.code))) return undefined;
+  const changed = plan.entries.filter((e) => e.status !== 'unchanged');
+  const needs = (status: string) => changed.some((e) => e.status === status);
+  if ((needs('create') && !ops.create) || (needs('delete') && !ops.delete)) return undefined;
+  if (changed.length === 0 || unsafeContractPaths(dir, plan).length) return undefined;
+  const files = changed.map((e) => {
+    const path = join(dir, e.file);
+    return { e, uri: pathToUri(path), current: textOf(path) ?? e.before ?? '' };
+  });
+  // Only updates: a client without `documentChanges` takes them as plain text edits.
+  const edit: WorkspaceEdit = ops.documentChanges
+    ? { documentChanges: files.flatMap(({ e, uri, current }) => contractChange(e, uri, current)) }
+    : {
+        changes: Object.fromEntries(
+          files.map(({ e, uri, current }) => [uri, [{ range: wholeRange(current), newText: e.after ?? '' }]]),
+        ),
+      };
+  const n = changed.length;
+  return {
+    title: `Regenerate the contracts (${n} file${n > 1 ? 's' : ''})`,
+    kind: CodeActionKind.QuickFix,
+    diagnostics: [diagnostic],
+    edit,
+  };
 }
