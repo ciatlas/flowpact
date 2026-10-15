@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createRegistry, DOCS_BASE_URL } from '@flowpact/lint';
+import { configJsonSchema, createRegistry, DOCS_BASE_URL } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { indexPage, rulePage, ruleSamples } from '../gen-rule-docs';
 import { guidesOf, RELATED } from '../rule-docs-meta';
@@ -129,6 +129,34 @@ describe('generated files', () => {
       .filter((r) => r.generatedFiles === 'skip')
       .map((r) => r.code);
     expect(listed).toEqual(skipping);
+  });
+});
+
+describe('the configuration reference', () => {
+  type SchemaNode = { properties?: Record<string, SchemaNode> };
+  const schema = configJsonSchema() as SchemaNode;
+  const page = readFileSync(docsPage('configuration'), 'utf8');
+  const listed = [...page.slice(page.indexOf('## Reference')).matchAll(/^\| `([^`]+)` \|/gm)].map(
+    (m) => m[1],
+  );
+
+  /** The keys the reference does not list: a key, or each key of an object it does not list as a whole. */
+  const unlisted = (key: string, node: SchemaNode): string[] => {
+    if (listed.includes(key)) return [];
+    const keys = Object.entries(node.properties ?? {});
+    return keys.length ? keys.flatMap(([k, child]) => unlisted(`${key}.${k}`, child)) : [key];
+  };
+
+  it('lists every key of the config schema', () => {
+    const keys = Object.entries(schema.properties ?? {});
+    expect(keys.flatMap(([key, node]) => unlisted(key, node))).toEqual([]);
+  });
+
+  it('lists only keys the config schema has', () => {
+    const at = (key: string) =>
+      key.split('.').reduce<SchemaNode | undefined>((node, k) => node?.properties?.[k], schema);
+    expect(listed.length).toBeGreaterThan(10);
+    expect(listed.filter((key) => !at(key))).toEqual([]);
   });
 });
 

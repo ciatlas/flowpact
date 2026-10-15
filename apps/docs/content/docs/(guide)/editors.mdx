@@ -28,7 +28,29 @@ without configuration: the workspace folders are analyzed when the editor starts
 once you open one of its files. Your [config](/docs/configuration) (severities, overrides, ignores) applies as in the
 CLI.
 
-## Install without a marketplace
+## VS Code
+
+Install **flowpact** from the
+[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact), or from
+[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact) in VSCodium, Cursor, Windsurf and other editors
+built on VS Code:
+
+```bash
+code --install-extension flowpact.vscode-flowpact
+```
+
+It bundles the language server, so nothing else needs to be installed, and works in VS Code 1.101 and later. The
+server starts when the workspace has workflows or an `action.yml`, at a folder's root or nested deeper, or when you open
+one; other workspaces only load the extension.
+
+It complements GitHub's [GitHub Actions](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-github-actions)
+extension, which completes and validates workflow syntax file by file: flowpact adds what crosses files (the data flow
+through reusable workflows and local actions, go to definition and references across them), and by default hides the
+four rules both would report (`flowpact.overlappingRules`).
+
+<Screenshot name="editor-references" format="png" alt="VS Code peek references on the config input of run-suite.yml: its declaration, two reads and the caller in tests.yml that passes it" caption="Peek References on an input: where it is read, and the caller that passes it." />
+
+### Install without a marketplace
 
 Each [GitHub release](https://github.com/ciatlas/flowpact/releases) attaches the extension as
 `flowpact-vscode-X.Y.Z.vsix`, the same file published to the Marketplace and Open VSX, with its signed provenance. Where
@@ -110,29 +132,9 @@ rather than a wrong one.
 If you keep the cache elsewhere (`--cache-dir`), set `flowpact.cacheDir` (`cacheDir` in other editors) to the same
 directory.
 
-## VS Code
+## Settings
 
-Install **flowpact** from the
-[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact), or from
-[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact) in VSCodium, Cursor, Windsurf and other editors
-built on VS Code:
-
-```bash
-code --install-extension flowpact.vscode-flowpact
-```
-
-It bundles the language server, so nothing else needs to be installed, and works in VS Code 1.101 and later. The
-server starts when the workspace has workflows or an `action.yml`, at a folder's root or nested deeper, or when you open
-one; other workspaces only load the extension.
-
-It complements GitHub's [GitHub Actions](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-github-actions)
-extension, which completes and validates workflow syntax file by file: flowpact adds what crosses files (the data flow
-through reusable workflows and local actions, go to definition and references across them), and by default hides the
-four rules both would report (`flowpact.overlappingRules`).
-
-<Screenshot name="editor-references" format="png" alt="VS Code peek references on the config input of run-suite.yml: its declaration, two reads and the caller in tests.yml that passes it" caption="Peek References on an input: where it is read, and the caller that passes it." />
-
-### Settings
+In VS Code and the editors built on it, under **Settings → Extensions → flowpact**:
 
 | Setting | Default | Description |
 | --- | --- | --- |
@@ -152,14 +154,14 @@ channel and the language status item show its real state.
 **Commands:** **flowpact: Restart Language Server** — also needed after you edit a plugin, since a loaded plugin stays
 loaded — and **flowpact: Show Output**.
 
-### Workspace trust
+## Workspace trust
 
 In an untrusted workspace (Restricted Mode), everything works except plugins, which run code from the repository.
 Trusting the workspace loads them without a restart; the language status item next to the file type says when they
 are off. Plugins load only for repositories inside the workspace folders: not for a file opened from elsewhere, nor
 for a repository above the folder you opened.
 
-### Limitations
+## Limitations
 
 - A repository needs a `.github` folder to be analyzed in the editor; one with only an `action.yml` gets no
   diagnostics there yet (`flowpact lint` checks it).
@@ -167,7 +169,6 @@ for a repository above the folder you opened.
   yet.
 - Contract files (`.github/flowpact/contracts/`) show their findings but have no hover or go to definition.
 - There are no quick fixes, rename or completion yet.
-
 ## Other editors
 
 `flowpact lsp` starts the same server over stdin/stdout, for any editor with an LSP client. It needs flowpact

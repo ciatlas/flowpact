@@ -6,9 +6,10 @@ description: What flowpact reports that actionlint and GitHub's VS Code extensio
 flowpact reports what happens between files and between matrix combinations: values that are present in the YAML but
 arrive empty, because one `include` entry lacks a key, an optional input is never set, or a called workflow reads a
 secret while declaring none. GitHub raises no error for these and the run carries on, and neither actionlint nor
-GitHub's VS Code extension reports them. Where the checks overlap, on direct calls to a local reusable workflow or local
-action, flowpact adds the chain of calls, why it matters, how to fix it and a link to the rule. actionlint checks each
-file in more depth (shell scripts, expression types, runner labels), so use both.
+GitHub's VS Code extension reports them. Where the checks overlap, on direct calls to a workflow or an action, flowpact
+adds the chain of calls, why it matters, how to fix it and a link to the rule, and it checks the calls into other
+repositories against a committed lockfile: in CI too, without network, and before you take a new version. actionlint
+checks each file in more depth (shell scripts, expression types, runner labels), so use both.
 
 What each tool reports, from small test repositories and the tools' own documentation:
 
@@ -30,7 +31,8 @@ What each tool reports, from small test repositories and the tools' own document
 | A matrix key that no combination defines | ✓ | ✓ | ✓ [`FP404`](/docs/rules/fp404) |
 | A `${{ }}` expression that does not parse, or calls a function with the wrong number of arguments | ✓ | ✓ | ✓ [`FP502`](/docs/rules/fp502) |
 | A context used where GitHub does not allow it, such as `secrets` in a job's `if:` | ✓ | ✓ | ✓ [`FP505`](/docs/rules/fp505) |
-| A call to an action or reusable workflow in another repository passes an unknown input | ✓ for popular actions such as `actions/checkout`; not for reusable workflows | not compared | ✓ against the [remote interfaces lockfile](/docs/remote-interfaces) ([`FP102`](/docs/rules/fp102), with [`FP101`](/docs/rules/fp101), [`FP103`](/docs/rules/fp103), [`FP201`](/docs/rules/fp201), [`FP202`](/docs/rules/fp202)); without an entry, a remote reusable workflow call is reported as unverified ([`FP603`](/docs/rules/fp603)) |
+| A call to an action or reusable workflow in another repository leaves out a required input, or passes an input or secret it does not declare | ✓ for popular actions such as `actions/checkout`, from data built into actionlint; not for reusable workflows | ✓ when signed in, against the version on GitHub while you edit; no type check | ✓ against the committed [remote interfaces lockfile](/docs/remote-interfaces), also in CI and without network, with the type of a literal ([`FP101`](/docs/rules/fp101)–[`FP103`](/docs/rules/fp103), [`FP201`](/docs/rules/fp201), [`FP202`](/docs/rules/fp202)); without an entry, a remote reusable workflow call is reported as unverified ([`FP603`](/docs/rules/fp603)) |
+| A new version of an action or reusable workflow in another repository breaks one of your calls: a tag moved, or a bot's pull request moves the reference | — | — (it checks the version on GitHub when you next edit the file) | ✓ graded before you take it, on the pull request that moves the reference and in a scheduled drift check ([When a version changes](/docs/remote-interfaces#when-a-version-changes)) |
 | A property that a built-in context does not have, such as `github.reff` or `runner.oss` | ✓ | ✓ as a warning | — |
 | An expression whose type does not fit, such as `${{ github.ref_name }}` (a string) in `timeout-minutes`, or an object in `${{ }}` | ✓ | — (only a literal such as `${{ 'abc' }}`) | — (only a literal, [`FP503`](/docs/rules/fp503)) |
 | A cron schedule that is invalid (hour 25) or runs more often than every 5 minutes | ✓ | ✓ | — |
@@ -38,15 +40,19 @@ What each tool reports, from small test repositories and the tools' own document
 | Bugs in `run:` scripts, such as an unquoted variable | ✓ runs shellcheck when it is installed | — | — |
 | Security: script injection, permissions, pinning ([zizmor](https://github.com/zizmorcore/zizmor) covers these) | script injection and hard-coded credentials | not compared | — |
 
-¹ GitHub Actions extension 0.31.5, run through its language server. It checks calls to local reusable workflows only
-when you are signed in to GitHub and GitHub returns the repository of the workspace's git remote; without that it misses
-them and can warn about outputs that do exist. It reports nothing for local composite actions.
+¹ GitHub Actions extension 0.31.5, run through its language server; the rows on calls into other repositories with its
+language server 0.3.60, the one extension 0.32.3 bundles (2026-10-15). It checks calls to reusable workflows and to
+actions in other repositories only when you are signed in to GitHub, and calls to local reusable workflows only when
+GitHub also returns the repository of the workspace's git remote. Without that it misses them, and can warn about
+outputs that do exist. It reports nothing for local composite actions.
+
+<InlineTOC items={toc} />
 
 ## Side by side
 
-Each case is a small repository of its own. actionlint 1.7.12 ran from the repository root and flowpact ran
-`flowpact lint` with `NO_COLOR=1`. The outputs are copied unchanged, without the version banner and `root` line that
-flowpact prints first and its closing summary. GitHub's Actions extension 0.31.5 ran through its language server, with
+Each case is a small repository of its own: its files are in the tabs after flowpact's output. actionlint 1.7.12 ran
+from the repository root and flowpact ran `flowpact lint` with `NO_COLOR=1`. The outputs are copied unchanged, without
+the version banner and `root` line that flowpact prints first and its closing summary. GitHub's Actions extension 0.31.5 ran through its language server, with
 the repository resolved as when you are signed in and without; what it reported is in the text.
 
 ### One matrix entry lacks a key that a reusable workflow requires
@@ -56,6 +62,38 @@ integration.yml with an empty `config` and runs `./scripts/integration.sh --conf
 under `with:`, so GitHub's required-input check passes and the run raises no error. actionlint makes the same check:
 delete the `config:` line and it reports the missing input, but an empty value in one combination passes. GitHub's
 extension reports nothing. It is the same mistake as the incident that started flowpact.
+
+**actionlint:** no output.
+
+<Tabs items={['flowpact', 'ci.yml', 'integration.yml']}>
+<Tab value="flowpact">
+
+```text
+── .github/workflows/ci.yml ─────────────────────────────────────────────────────────────── 1 error
+
+✖  ERROR  FP401 empty-binding-for-matrix-combo
+  Input "config" for .github/workflows/integration.yml is empty in 1 of 3 matrix combinations —
+  matrix.config is not defined there
+
+  ▶ .github/workflows/ci.yml:23:19
+    21 │     with:
+    22 │       runner: ${{ matrix.runner }}
+    23 │       config: ${{ matrix.config }}
+       │                   ━━━━━━━━━━━━━
+
+  matrix  { platform: windows, runner: windows-latest }
+  context ├─ .github/workflows/ci.yml:18:13         this include entry has no `config`
+          └─ .github/workflows/integration.yml:8:7  receives the empty value: input "config"
+  why     GitHub evaluates a missing matrix key to an empty string — no error, no warning. The
+          affected matrix leg runs with an empty input, so the callee may skip its real work
+          (e.g. a test configuration) while the run stays green.
+  fix     Set `config` in every combination, or use a fallback: `${{ matrix.config ||
+          '<default>' }}`.
+  docs    https://ciatlas.github.io/flowpact/docs/rules/fp401
+```
+
+</Tab>
+<Tab value="ci.yml">
 
 ```yaml title=".github/workflows/ci.yml"
 name: CI
@@ -83,6 +121,9 @@ jobs:
       config: ${{ matrix.config }}
 ```
 
+</Tab>
+<Tab value="integration.yml">
+
 ```yaml title=".github/workflows/integration.yml"
 name: Integration tests
 on:
@@ -103,33 +144,8 @@ jobs:
       - run: ./scripts/integration.sh --config "${{ inputs.config }}"
 ```
 
-**actionlint:** no output.
-
-**flowpact:**
-
-```text
-── .github/workflows/ci.yml ─────────────────────────────────────────────────────────────── 1 error
-
-✖  ERROR  FP401 empty-binding-for-matrix-combo
-  Input "config" for .github/workflows/integration.yml is empty in 1 of 3 matrix combinations —
-  matrix.config is not defined there
-
-  ▶ .github/workflows/ci.yml:23:19
-    21 │     with:
-    22 │       runner: ${{ matrix.runner }}
-    23 │       config: ${{ matrix.config }}
-       │                   ━━━━━━━━━━━━━
-
-  matrix  { platform: windows, runner: windows-latest }
-  context ├─ .github/workflows/ci.yml:18:13         this include entry has no `config`
-          └─ .github/workflows/integration.yml:8:7  receives the empty value: input "config"
-  why     GitHub evaluates a missing matrix key to an empty string — no error, no warning. The
-          affected matrix leg runs with an empty input, so the callee may skip its real work
-          (e.g. a test configuration) while the run stays green.
-  fix     Set `config` in every combination, or use a fallback: `${{ matrix.config ||
-          '<default>' }}`.
-  docs    https://ciatlas.github.io/flowpact/docs/rules/fp401
-```
+</Tab>
+</Tabs>
 
 ### An include entry left over after a runner upgrade starts a job of its own
 
@@ -139,34 +155,10 @@ and the windows-2025 job has no `archive`. That job runs `./scripts/package.sh -
 treats `archive` as defined because some entries set it, and GitHub's extension reports nothing. flowpact expands the
 matrix with GitHub's rules and names the one combination without the key.
 
-```yaml title=".github/workflows/package.yml"
-name: Package
-on:
-  push:
-    tags: ['v*']
-
-jobs:
-  package:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
-        include:
-          - os: ubuntu-24.04
-            archive: tar.gz
-          - os: macos-15
-            archive: tar.gz
-          - os: windows-2022
-            archive: zip
-    steps:
-      - uses: actions/checkout@v4
-      - run: ./scripts/package.sh --format ${{ matrix.archive }}
-        shell: bash
-```
-
 **actionlint:** no output.
 
-**flowpact:**
+<Tabs items={['flowpact', 'package.yml']}>
+<Tab value="flowpact">
 
 ```text
 ── .github/workflows/package.yml ──────────────────────────────────────────────────────── 1 warning
@@ -193,6 +185,37 @@ jobs:
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp402
 ```
 
+</Tab>
+<Tab value="package.yml">
+
+```yaml title=".github/workflows/package.yml"
+name: Package
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  package:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+        include:
+          - os: ubuntu-24.04
+            archive: tar.gz
+          - os: macos-15
+            archive: tar.gz
+          - os: windows-2022
+            archive: zip
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/package.sh --format ${{ matrix.archive }}
+        shell: bash
+```
+
+</Tab>
+</Tabs>
+
 ### An optional input decides an `if:`, and the caller leaves it out
 
 An optional string input without a default is an empty string when the caller omits it. ci.yml does not pass
@@ -200,45 +223,10 @@ An optional string input without a default is an empty string when the caller om
 built, never published, and the run is green. actionlint and GitHub's extension report nothing. With `type: boolean`
 flowpact reports nothing, because the default is then `false` and leaving the input out is a deliberate opt-in.
 
-```yaml title=".github/workflows/ci.yml"
-name: CI
-on:
-  push:
-    branches: [main]
-
-jobs:
-  release:
-    uses: ./.github/workflows/release.yml
-    with:
-      version: ${{ github.sha }}
-```
-
-```yaml title=".github/workflows/release.yml"
-name: Release
-on:
-  workflow_call:
-    inputs:
-      version:
-        type: string
-        required: true
-      push-image:
-        description: Push the image to the registry after building it
-        type: string
-        required: false
-
-jobs:
-  image:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t "ghcr.io/acme/app:${{ inputs.version }}" .
-      - if: inputs.push-image
-        run: docker push "ghcr.io/acme/app:${{ inputs.version }}"
-```
-
 **actionlint:** no output.
 
-**flowpact:**
+<Tabs items={['flowpact', 'ci.yml', 'release.yml']}>
+<Tab value="flowpact">
 
 ```text
 ── .github/workflows/release.yml ──────────────────────────────────────────────────────── 1 warning
@@ -268,6 +256,51 @@ jobs:
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp105
 ```
 
+</Tab>
+<Tab value="ci.yml">
+
+```yaml title=".github/workflows/ci.yml"
+name: CI
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ github.sha }}
+```
+
+</Tab>
+<Tab value="release.yml">
+
+```yaml title=".github/workflows/release.yml"
+name: Release
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      push-image:
+        description: Push the image to the registry after building it
+        type: string
+        required: false
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t "ghcr.io/acme/app:${{ inputs.version }}" .
+      - if: inputs.push-image
+        run: docker push "ghcr.io/acme/app:${{ inputs.version }}"
+```
+
+</Tab>
+</Tabs>
+
 ### A required input is fed from an optional input nobody sets
 
 release.yml passes `environment: ${{ inputs.environment }}`, so its call to deploy.yml looks complete and GitHub starts
@@ -276,44 +309,10 @@ the run. ci.yml never sets release.yml's optional `environment`, which has no de
 reads the interface of each direct callee, finds `environment:` present and reports nothing. GitHub's extension reports
 nothing either.
 
-```yaml title=".github/workflows/ci.yml"
-on: push
-jobs:
-  release:
-    uses: ./.github/workflows/release.yml
-```
-
-```yaml title=".github/workflows/release.yml"
-on:
-  workflow_call:
-    inputs:
-      environment:
-        type: string
-        required: false
-jobs:
-  deploy:
-    uses: ./.github/workflows/deploy.yml
-    with:
-      environment: ${{ inputs.environment }}
-```
-
-```yaml title=".github/workflows/deploy.yml"
-on:
-  workflow_call:
-    inputs:
-      environment:
-        type: string
-        required: true
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "deploying to ${{ inputs.environment }}"
-```
-
 **actionlint:** no output.
 
-**flowpact:**
+<Tabs items={['flowpact', 'ci.yml', 'release.yml', 'deploy.yml']}>
+<Tab value="flowpact">
 
 ```text
 ── .github/workflows/release.yml ──────────────────────────────────────────────────────── 1 warning
@@ -338,6 +337,53 @@ jobs:
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp107
 ```
 
+</Tab>
+<Tab value="ci.yml">
+
+```yaml title=".github/workflows/ci.yml"
+on: push
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+```
+
+</Tab>
+<Tab value="release.yml">
+
+```yaml title=".github/workflows/release.yml"
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: false
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: ${{ inputs.environment }}
+```
+
+</Tab>
+<Tab value="deploy.yml">
+
+```yaml title=".github/workflows/deploy.yml"
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "deploying to ${{ inputs.environment }}"
+```
+
+</Tab>
+</Tabs>
+
 ### A composite action reads a misspelled input
 
 `inputs.enviroment` is not declared, so it evaluates to an empty string, and the action runs
@@ -345,39 +391,10 @@ jobs:
 not `action.yml`, and reports nothing; GitHub's extension reports nothing for either file. flowpact reports the typo
 and suggests the declared name, and reports that the declared input is never read.
 
-```yaml title=".github/workflows/deploy.yml"
-name: Deploy
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/deploy
-        with:
-          environment: production
-```
-
-```yaml title=".github/actions/deploy/action.yml"
-name: Deploy
-description: Deploy the site to one environment
-inputs:
-  environment:
-    description: Target environment
-    required: true
-runs:
-  using: composite
-  steps:
-    - shell: bash
-      run: ./scripts/deploy.sh --env "${{ inputs.enviroment }}"
-```
-
 **actionlint:** no output.
 
-**flowpact:**
+<Tabs items={['flowpact', 'deploy.yml', 'deploy/action.yml']}>
+<Tab value="flowpact">
 
 ```text
 ── .github/actions/deploy/action.yml ─────────────────────────────────────────── 1 error, 1 warning
@@ -414,6 +431,45 @@ runs:
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp108
 ```
 
+</Tab>
+<Tab value="deploy.yml">
+
+```yaml title=".github/workflows/deploy.yml"
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/deploy
+        with:
+          environment: production
+```
+
+</Tab>
+<Tab value="deploy/action.yml">
+
+```yaml title=".github/actions/deploy/action.yml"
+name: Deploy
+description: Deploy the site to one environment
+inputs:
+  environment:
+    description: Target environment
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: ./scripts/deploy.sh --env "${{ inputs.enviroment }}"
+```
+
+</Tab>
+</Tabs>
+
 ### A local action after a checkout into a subdirectory
 
 A step's `./` path resolves against the runner's workspace, not the repository. The checkout writes this repository to
@@ -423,36 +479,10 @@ reports nothing; neither does GitHub's extension. flowpact maps the path through
 that work. A typo in a step's action path, such as `./.github/actions/setup-nod`, is the same rule, and the other two
 tools report nothing there either.
 
-```yaml title=".github/workflows/ci.yml"
-on: push
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: src
-      - uses: ./.github/actions/setup-node
-      - run: npm test
-        working-directory: src
-```
-
-```yaml title=".github/actions/setup-node/action.yml"
-name: Setup Node
-description: Install Node and dependencies
-runs:
-  using: composite
-  steps:
-    - uses: actions/setup-node@v4
-      with:
-        node-version: 22
-    - run: npm ci
-      shell: bash
-```
-
 **actionlint:** no output.
 
-**flowpact:**
+<Tabs items={['flowpact', 'ci.yml', 'setup-node/action.yml']}>
+<Tab value="flowpact">
 
 ```text
  warn flowpact:load  local reference outside the workspace ./.github/actions/setup-node {"from":".github/workflows/ci.yml"}
@@ -482,6 +512,42 @@ runs:
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp606
 ```
 
+</Tab>
+<Tab value="ci.yml">
+
+```yaml title=".github/workflows/ci.yml"
+on: push
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - uses: ./.github/actions/setup-node
+      - run: npm test
+        working-directory: src
+```
+
+</Tab>
+<Tab value="setup-node/action.yml">
+
+```yaml title=".github/actions/setup-node/action.yml"
+name: Setup Node
+description: Install Node and dependencies
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - run: npm ci
+      shell: bash
+```
+
+</Tab>
+</Tabs>
+
 ### A reusable workflow declares one secret and reads another
 
 Both tools report this one, at the same position. A called workflow sees only the secrets passed to it, so
@@ -489,41 +555,8 @@ Both tools report this one, at the same position. A called workflow sees only th
 `secrets` object and looks no further than publish.yml. flowpact says the value will be empty and counts the callers
 that do not use `secrets: inherit`. GitHub's extension reports nothing.
 
-```yaml title=".github/workflows/ci.yml"
-on: push
-jobs:
-  publish:
-    uses: ./.github/workflows/publish.yml
-    secrets:
-      REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
-```
-
-```yaml title=".github/workflows/publish.yml"
-on:
-  workflow_call:
-    secrets:
-      REGISTRY_URL:
-        required: true
-jobs:
-  run:
-    runs-on: ubuntu-latest
-    steps:
-      - run: ./publish.sh
-        env:
-          REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-**actionlint:**
-
-```text
-.github/workflows/publish.yml:13:26: property "npm_token" is not defined in object type {actions_runner_debug: string; actions_step_debug: string; github_token: string; registry_url: string} [expression]
-   |
-13 |           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-   |                          ^~~~~~~~~~~~~~~~~
-```
-
-**flowpact:**
+<Tabs items={['flowpact', 'actionlint', 'ci.yml', 'publish.yml']}>
+<Tab value="flowpact">
 
 ```text
 ── .github/workflows/publish.yml ────────────────────────────────────────────────────────── 1 error
@@ -548,6 +581,50 @@ jobs:
           are not counted: the read never runs for them.
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp205
 ```
+
+</Tab>
+<Tab value="actionlint">
+
+```text
+.github/workflows/publish.yml:13:26: property "npm_token" is not defined in object type {actions_runner_debug: string; actions_step_debug: string; github_token: string; registry_url: string} [expression]
+   |
+13 |           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+   |                          ^~~~~~~~~~~~~~~~~
+```
+
+</Tab>
+<Tab value="ci.yml">
+
+```yaml title=".github/workflows/ci.yml"
+on: push
+jobs:
+  publish:
+    uses: ./.github/workflows/publish.yml
+    secrets:
+      REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
+```
+
+</Tab>
+<Tab value="publish.yml">
+
+```yaml title=".github/workflows/publish.yml"
+on:
+  workflow_call:
+    secrets:
+      REGISTRY_URL:
+        required: true
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./publish.sh
+        env:
+          REGISTRY_URL: ${{ secrets.REGISTRY_URL }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+</Tab>
+</Tabs>
 
 The difference shows when the repository changes:
 
@@ -620,6 +697,10 @@ These are reported by more than one tool, and actionlint and flowpact report the
 - actionlint and flowpact also report a literal of the wrong type for a typed input, a missing or misspelled input and
   an undefined output of a local composite action, and a reusable workflow that reads `matrix.*` without a matrix of
   its own.
+- For calls into other repositories, GitHub's extension¹ (when signed in) and flowpact report a required input left out
+  and an input or secret the callee does not declare, and actionlint does for the inputs of popular actions. GitHub's
+  extension reads the callee from GitHub as you edit; flowpact reads the lockfile you commit, so the same check runs
+  in CI and grades a new version before you take it.
 
 A missing input deep in a chain belongs to the first group: actionlint lints every file, so it reports the call in
 whichever file makes it. What it does not do is follow a value from one level to the next, as in the `FP107` case
@@ -651,10 +732,12 @@ The repositories under [`fixtures/`](https://github.com/ciatlas/flowpact/tree/ma
 
 | Tool | Use it for | Overlap with flowpact |
 | --- | --- | --- |
-| [actionlint](https://github.com/rhysd/actionlint) | Each file in depth: expression types, shell scripts (shellcheck), runner labels, cron syntax, script injection, inputs of popular actions | Direct calls to local reusable workflows and local actions, `needs` outputs, matrix keys no combination defines, and undeclared secrets in a workflow that declares some |
-| [GitHub Actions extension](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-github-actions) (VS Code) | Writing workflows: completion, documentation on hover, validation (including cron schedules and properties of built-in contexts); runs and logs | Direct calls to local reusable workflows (when signed in), missing outputs, `env` variables nothing sets, matrix keys no combination defines; YAML, schema and expression errors (`FP502`–`FP505`) |
+| [actionlint](https://github.com/rhysd/actionlint) | Each file in depth: expression types, shell scripts (shellcheck), runner labels, cron syntax, script injection, inputs of popular actions | Direct calls to local reusable workflows and local actions, the inputs of popular actions, `needs` outputs, matrix keys no combination defines, and undeclared secrets in a workflow that declares some |
+| [GitHub Actions extension](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-github-actions) (VS Code) | Writing workflows: completion, documentation on hover, validation (including cron schedules and properties of built-in contexts); runs and logs | Direct calls to local reusable workflows and calls into other repositories (when signed in), missing outputs, `env` variables nothing sets, matrix keys no combination defines; YAML, schema and expression errors (`FP502`–`FP505`) |
 | [zizmor](https://github.com/zizmorcore/zizmor), ghalint | Security: injection, permissions, pinning | `secrets: inherit`, which zizmor's `secrets-inherit` audit and ghalint's `deny_inherit_secrets` policy flag; flowpact's `FP204` lists the secrets the callee reads |
 | gh-actions-lockfile, ghasum, actionspack, GitHub's `dependencies:` lock | Pin action and workflow **versions** (SHAs, hashes) | None — they lock *what code runs*, flowpact checks *what data flows* |
+| [CodeQL for GitHub Actions](https://github.blog/security/application-security/how-to-secure-your-github-actions-workflows-with-codeql/) | Security: untrusted data followed through steps, jobs, composite actions and reusable workflows to sinks such as code injection and cache poisoning | Both follow data across files: CodeQL to where it is unsafe, flowpact to where a value arrives empty |
+| [ravelact](https://github.com/wadackel/ravelact) | Exploring the graph: what an event runs, who calls a workflow, which entry points a change affects; permissions and required secrets down chains of local reusable workflows | Inputs and outputs nothing reads (`FP104`, `FP303`) and a required secret a caller leaves out (`FP201`); it leaves `with:` checks to actionlint and does not evaluate matrices |
 
 **Recommendation:** run actionlint and flowpact together, and zizmor for security. flowpact focuses on what crosses file
 boundaries and matrix combinations.
