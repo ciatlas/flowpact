@@ -4,6 +4,27 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.21.0](https://github.com/ciatlas/flowpact/compare/v0.20.0...v0.21.0) (2026-10-15)
+
+
+### Features
+
+* **action:** grade the remote references a pull request moves to another version ([#183](https://github.com/ciatlas/flowpact/issues/183)) ([0dc8ab5](https://github.com/ciatlas/flowpact/commit/0dc8ab5fe5105f9d2ed4f48fdbf58dec244fe55e))
+* **cli:** remotes download, and a per-user cache of the remote sources for the editor ([#171](https://github.com/ciatlas/flowpact/issues/171)) ([faaf945](https://github.com/ciatlas/flowpact/commit/faaf94517ff2be2f426b7a6c4182db91657c674d))
+* **cli:** remotes update says what each changed entry does to your calls ([#182](https://github.com/ciatlas/flowpact/issues/182)) ([82b1981](https://github.com/ciatlas/flowpact/commit/82b19813da0b41eeb3fb17cb61b911df563242e9))
+* **cli:** remotesUpdate, remotesDownload and remotesClean in the API ([#173](https://github.com/ciatlas/flowpact/issues/173)) ([5b5943b](https://github.com/ciatlas/flowpact/commit/5b5943bfe52a55c573169c84a216c6825d5a7ac8))
+* **language-server:** describe remote calls and their keys from the remotes lockfile ([#169](https://github.com/ciatlas/flowpact/issues/169)) ([93fd11a](https://github.com/ciatlas/flowpact/commit/93fd11a44f80f4656605c7722e5dba81701d3115))
+* **language-server:** go to the cached sources of remote workflows and actions ([#172](https://github.com/ciatlas/flowpact/issues/172)) ([86dd462](https://github.com/ciatlas/flowpact/commit/86dd462d9c414d630af96ce03d6a5bc49fd3d9ad))
+* **lint:** check remote references at the commits GitHub's actions.lock pins ([#184](https://github.com/ciatlas/flowpact/issues/184)) ([aa677dc](https://github.com/ciatlas/flowpact/commit/aa677dc71e10aa0be8cecf99fd0a7a9703a88951))
+* **lint:** FP205 for remote reusable workflows, from the secrets the lockfile records they read without declaring ([#168](https://github.com/ciatlas/flowpact/issues/168)) ([b030b55](https://github.com/ciatlas/flowpact/commit/b030b55f9b9fab70a2b41c9588bcf03579d4a0b1))
+* **lint:** grade a remote version change against the repository's calls ([#181](https://github.com/ciatlas/flowpact/issues/181)) ([1c5244c](https://github.com/ciatlas/flowpact/commit/1c5244c2b3457bb241b2e1fab6336aa93855cfc1))
+
+
+### Bug Fixes
+
+* **lint:** for a remote call, suggest removing what the callee does not declare ([#187](https://github.com/ciatlas/flowpact/issues/187)) ([653d929](https://github.com/ciatlas/flowpact/commit/653d929886b0042aafcdc25e67d06dbcab128741))
+* **rules:** FP612 reports, and the checks skip, a lockfile entry with another commit than its reference pins ([#174](https://github.com/ciatlas/flowpact/issues/174)) ([703030d](https://github.com/ciatlas/flowpact/commit/703030ded3707170e97c7ada4785ff5f1e4a2c63))
+
 ## [0.20.0](https://github.com/ciatlas/flowpact/compare/v0.19.1...v0.20.0) (2026-10-14)
 
 
