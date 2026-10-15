@@ -134,8 +134,14 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
 - `fingerprint` is stable across unrelated edits (line shifts, changed counts), so it can be used to track findings
   over time.
 - `suggestions`, on some findings, are fixes flowpact can apply: each has a `title` and the `edits` that make it, the
-  text at `loc` replaced by `newText`. A rule suggests one only when the change is certain, such as renaming a
-  misspelled input, secret, output or step id to the name its "did you mean" points at. The editor offers them as
+  text at `loc` replaced by `newText`. A rule suggests one only when the change is certain:
+  - rename a misspelled input, secret, output or step id to the name its "did you mean" points at;
+  - add a missing required input or secret to a call (`with:`, `secrets:`), or a missing key to the matrix `include`
+    entries that lack it, with an empty value for you to fill in;
+  - remove an unused input, and what local callers pass for it, from a workflow or action no other repository uses
+    (not a [published](/docs/concepts#published-unit) one, nor a dispatch input, whose callers flowpact cannot see).
+
+  Nothing is suggested in a flow mapping (`{ … }`) or a file with CRLF line endings. The editor offers suggestions as
   quick fixes, and SARIF carries them as `fixes`.
 
   ```json
