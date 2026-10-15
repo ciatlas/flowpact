@@ -1,0 +1,114 @@
+---
+title: Adopt it in an existing repository
+description: "A first run with many findings: fix what matters first, accept the rest with a reason and an expiry date, then turn flowpact on in CI."
+---
+
+A first run on a repository that has grown for years can list dozens of findings. Most are real: values that arrive
+empty, secrets that never reach the workflow that reads them. This is one order that works: see how many there are, fix
+the errors, accept the rest with a reason and a date, and keep new ones out with CI.
+
+<Steps>
+<Step>
+### See how many there are
+
+```sh
+npx flowpact lint --hide-info
+```
+
+The summary at the end counts the findings per severity and lists the most frequent codes. To count them per rule:
+
+```sh
+npx flowpact lint --format json | jq -r '.findings[].code' | sort | uniq -c | sort -rn
+```
+</Step>
+<Step>
+### Fix the errors first
+
+Errors are what breaks or silently skips work: a matrix leg that gets an empty value, a required input or secret a
+caller does not pass, a secret read without being declared, a call GitHub rejects. Warnings are what may, or what is
+left over: an optional input without a default that decides an `if:`, an input or output nothing reads. Take one rule
+at a time:
+
+```sh
+npx flowpact lint --only FP401       # one rule
+npx flowpact explain FP401           # why it matters, how to fix it, an example
+```
+
+Each [rule's page](/docs/rules) has the same.
+</Step>
+<Step>
+### Accept what can wait, with a reason and a date
+
+A finding you cannot fix now goes into the [config](/docs/configuration#overrides) as an override: the rule, what it is
+about, why it is acceptable, and until when.
+
+```yaml title=".github/flowpact/flowpact.config.yml"
+overrides:
+  - rule: FP105
+    target: .github/workflows/deploy.yml#inputs.region
+    reason: Every caller passes region; the default is added in the next deploy rework.
+    expires: 2026-12-31
+    owner: '@platform-team'
+```
+
+`target` is the finding's symbol, and `file` matches every finding in a file or under a path. To list the symbols:
+
+```sh
+npx flowpact lint --format json | jq -r '.findings[] | "\(.code)  \(.symbol // .loc.file)"'
+```
+
+Accepted findings move to a list of their own, with their reasons. When the date passes, the finding comes back with
+[`FP901`](/docs/rules/fp901); an override that no longer matches anything is [`FP902`](/docs/rules/fp902), and one that
+expires within two weeks [`FP903`](/docs/rules/fp903).
+</Step>
+<Step>
+### Change a rule that does not fit
+
+When a whole rule does not fit how your repository works, change its severity rather than accepting each finding:
+
+```yaml title=".github/flowpact/flowpact.config.yml"
+rules:
+  FP105: info         # listed, never fails a run
+  needs-without-data: warning   # an opt-in rule, named instead of numbered
+```
+
+Each rule can be `error`, `warning`, `info` or `off`, by code or name ([Configuration](/docs/configuration)).
+</Step>
+<Step>
+### Keep new findings out
+
+Run it on every pull request. With the [GitHub Action](/docs/action), findings become annotations on the lines a pull
+request changes, and the step fails on errors (`fail-on: warning` also fails on warnings, `never` on nothing):
+
+```yaml title=".github/workflows/flowpact.yml"
+name: flowpact
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  flowpact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7       # pin to a commit SHA
+      - uses: ciatlas/flowpact@v0.20    # pin to a commit SHA
+```
+
+Make the job a required status check once the errors are gone. See [Run on pull requests](/docs/ci).
+</Step>
+<Step>
+### Check the calls into other repositories
+
+When your workflows call workflows or actions in other repositories, record their interfaces and commit the lockfile,
+so those calls are checked too:
+
+```sh
+npx flowpact remotes update
+```
+
+Then run `flowpact remotes update --dry-run --fail-on breaks` on a schedule, to hear when a moved tag breaks one of your
+calls ([A scheduled drift check](/docs/remote-interfaces#a-scheduled-drift-check)).
+</Step>
+</Steps>
+
+If other repositories call your workflows or actions, [contracts](/docs/contracts) and [impact mode](/docs/impact-mode)
+come next: they keep a change that breaks those callers out of a patch release.

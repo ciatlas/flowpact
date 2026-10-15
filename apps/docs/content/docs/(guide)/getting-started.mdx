@@ -1,151 +1,152 @@
 ---
-title: Getting started
-description: Install flowpact, run your first lint and read the output.
+title: Quickstart
+description: Run flowpact on a repository, read a finding, and check the calls into other repositories.
 ---
 
-## Install
-
-flowpact needs Node.js 22 or newer. The npm package and the command are both `flowpact`.
-
-<Tabs items={["Global", "Project (npm)", "Project (pnpm)", "One-off", "mise"]}>
-<Tab value="Global">
-Install once and use `flowpact` anywhere:
-
-```sh
-npm install --global flowpact
-flowpact lint
-```
-</Tab>
-<Tab value="Project (npm)">
-Pin the version for everyone working on the repository (and its CI):
-
-```sh
-npm install --save-dev flowpact
-npx flowpact lint
-```
-</Tab>
-<Tab value="Project (pnpm)">
-```sh
-pnpm add -D flowpact
-pnpm flowpact lint
-```
-</Tab>
-<Tab value="One-off">
-```sh
-npx flowpact@0.20 lint
-```
-</Tab>
-<Tab value="mise">
-```sh
-mise use --global npm:flowpact
-flowpact lint
-```
-</Tab>
-</Tabs>
-
-In GitHub Actions, use the [action](/docs/action) instead: it needs neither Node.js nor an install.
-
-In VS Code, install the extension from the
-[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact), or from
-[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact) in VSCodium, Cursor, Windsurf and other editors built
-on VS Code. It bundles the language server, so it needs neither Node.js nor the npm package.
-
-## First run
+A few minutes, at the root of a repository with workflows, with Node.js 22 or newer. `npx` runs flowpact without
+installing it; to install it, or to start in the editor or in GitHub Actions instead, see [Install](/docs/installation).
 
 <Steps>
 <Step>
 ### Lint the repository
 
 ```sh
-flowpact lint
+npx flowpact lint
 ```
 
-flowpact reads `.github/workflows/*.yml` and every local action (`action.yml` under `.github/actions/`, the
-repository's own `action.yml` at the root, plus any other directory a `uses: ./path` or `uses: $/path` points to; a
-step's `./path` is mapped through the job's `actions/checkout` steps, since it is relative to the runner's workspace).
-It always loads the whole repository, because most problems span files.
+There is nothing to configure. flowpact reads every workflow and every local action it reaches, and its own files when
+they exist:
+
+<Files>
+  <Folder name=".github" defaultOpen>
+    <Folder name="workflows" defaultOpen>
+      <File name="ci.yml" />
+      <File name="release.yml" />
+      <File name="actions.lock" />
+    </Folder>
+    <Folder name="actions" defaultOpen>
+      <Folder name="setup" defaultOpen>
+        <File name="action.yml" />
+      </Folder>
+    </Folder>
+    <Folder name="flowpact" defaultOpen>
+      <File name="flowpact.config.yml" />
+      <File name="remotes.lock.yaml" />
+      <Folder name="contracts" />
+    </Folder>
+  </Folder>
+  <File name="action.yml" />
+</Files>
+
+| File | What it is |
+| --- | --- |
+| `.github/workflows/*.yml` | Your workflows. |
+| `action.yml` | Your local actions: under `.github/actions/`, the repository's own at the root, and any directory a `uses: ./path` points to. |
+| `.github/flowpact/flowpact.config.yml` | The [config](/docs/configuration), when you need one. |
+| `.github/flowpact/remotes.lock.yaml` | The interfaces of workflows and actions in other repositories (step 4). |
+| `.github/flowpact/contracts/` | [Contracts](/docs/contracts), when you publish workflows. |
+| `.github/workflows/actions.lock` | GitHub's own lockfile, when you have one ([what flowpact reads in it](/docs/remote-interfaces#githubs-actionslock)). |
+
+It always analyzes the whole repository, because most problems span files. A step's `./path` is resolved through the
+job's `actions/checkout` steps, since it is relative to the runner's workspace. flowpact writes nothing unless you ask
+it to.
 </Step>
 <Step>
 ### Read a finding
+
+<Screenshot name="lint-incident" alt="flowpact lint reporting FP401: input config is empty for the windows matrix combination" caption="One matrix entry has no config, so its tests never run." />
 
 Each finding shows, top to bottom:
 
 | Part | Meaning |
 | --- | --- |
-| `✖ ERROR FP401 empty-binding-for-matrix-combo` | severity, stable code and rule name |
-| message | what is wrong, in one sentence |
-| `▶ file:line:col` + code frame | exactly where, with the expression underlined |
-| `matrix` | the affected matrix combinations (matrix rules only) |
-| `context` | related locations — the call chain from the top-level workflow, the include entry, the receiving input |
-| `why` / `fix` | why it matters and what to change |
-| `docs` | a link to the rule page (clickable in terminals that support hyperlinks) |
+| `✖ ERROR FP401 empty-binding-for-matrix-combo` | The severity, the rule's stable code and its name. |
+| message | What is wrong, in one sentence. |
+| `▶ file:line:col` and the code | Where, with the expression underlined. |
+| `matrix` | The matrix combinations it affects (matrix rules only). |
+| `context` | Related places: the call chain from the top-level workflow, the `include` entry, the input that receives the value. |
+| `why` / `fix` | Why it matters, and what to change. |
+| `docs` | The rule's page (a link in terminals that support them). |
 
-The run ends with a summary card: counts per severity, files, jobs, matrix combinations, graph size and the most
-frequent codes.
+The run ends with a summary: counts per severity, the files, jobs and matrix combinations, and the most frequent codes.
+`npx flowpact explain FP401` prints a rule's page in the terminal.
 </Step>
 <Step>
-### Dig deeper
+### A clean run
+
+<Screenshot name="lint-clean" alt="flowpact lint on a repository with no findings: the summary says No problems found" caption="No findings: the summary alone, and exit code 0." />
+
+The exit code is `0` without errors and `1` with errors (or warnings, with `--fail-on warning`). See
+[exit codes](/docs/cli#exit-codes).
+</Step>
+<Step>
+### Check the calls into other repositories
+
+A call to a workflow or action in another repository (`uses: actions/setup-node@v6`) is checked once flowpact knows its
+interface. Record the interfaces once, and commit the file:
 
 ```sh
-flowpact explain FP401                      # why/fix/examples for a code
-flowpact trace pipeline.yml:config           # where does this input go?
-flowpact trace run-suite.yml:config --up     # where does this value come from?
+npx flowpact remotes update     # writes .github/flowpact/remotes.lock.yaml
+npx flowpact lint
 ```
+
+`remotes update` reads each reference's workflow file or `action.yml` through the GitHub API, with `GH_TOKEN`,
+`GITHUB_TOKEN` or your `gh` sign-in (public repositories need none). After it, a call that passes an input the action
+no longer has is a finding like any other:
+
+```text
+✖  ERROR  FP102 unknown-input
+  actions/setup-node@v6 has no input "always-auth"
+
+  ▶ .github/workflows/release.yml:10:11
+     8 │         with:
+     9 │           node-version: 24
+    10 │           always-auth: true
+       │           ━━━━━━━━━━━
+```
+
+Lint reads only the committed file, so it needs no network. Run `remotes update` again when you move a reference to
+another version, or on a schedule: it says what each change does to your calls
+([When a version changes](/docs/remote-interfaces#when-a-version-changes)).
+</Step>
+<Step>
+### Follow a value
+
+```sh
+npx flowpact trace pipeline.yml:config            # where does this input go?
+npx flowpact trace run-suite.yml:config --up      # where does this value come from?
+npx flowpact graph                                # which workflows call which
+```
+
+See [`flowpact trace`](/docs/cli#flowpact-trace) and [`flowpact graph`](/docs/cli#flowpact-graph).
 </Step>
 <Step>
 ### Narrow it down
 
 ```sh
-flowpact lint .github/workflows/release.yml  # only report on some files (everything is still analyzed)
-flowpact lint --only FP401,FP101           # only run some rules
-flowpact lint --hide-info                    # list errors and warnings only
+npx flowpact lint .github/workflows/release.yml   # report on one file (all is analyzed)
+npx flowpact lint --only FP401,FP101              # run some rules
+npx flowpact lint --hide-info                     # list errors and warnings only
 ```
+
+A first run on a large repository can list many findings: [Adopt it in an existing repository](/docs/adopting) says
+where to start.
 </Step>
 </Steps>
 
 ## Next steps
 
-<Steps>
-<Step>
-### See findings as you type
+<Cards>
+  <Card title="See findings as you type" href="/docs/editors">VS Code, VSCodium, Cursor, Neovim and other LSP editors.</Card>
+  <Card title="Run it on every pull request" href="/docs/ci">The GitHub Action, or the CLI in any CI.</Card>
+  <Card title="Adopt it in an existing repository" href="/docs/adopting">Fix what matters first, accept the rest with a reason.</Card>
+  <Card title="Publish workflows without breaking callers" href="/docs/contracts">Contracts and impact mode.</Card>
+</Cards>
 
-Install the extension from the
-[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) or
-[Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact). It reports the same findings while you edit,
-unsaved changes included, and shows on hover where a value comes from and where it goes. Other editors: see
-[editors](/docs/editors).
-</Step>
-<Step>
-### Lock the interfaces
+## Install
 
-```sh
-flowpact generate        # write .github/flowpact/**/*.contract.yaml
-git add .github/flowpact && git commit -m "Add workflow contracts"
-flowpact check           # lint + compare with the committed contracts
-```
-
-[Contracts](/docs/contracts) make every change to an input, secret, output or call visible in review, and `flowpact check`
-fails on breaking changes. If other repositories use your workflows or actions, [impact mode](/docs/impact-mode) also
-fails a pull request whose title declares less than the minor or major release its changes need.
-</Step>
-<Step>
-### Run it in CI
-
-Add the [GitHub Action](/docs/action) or the CLI to a workflow — see [CI usage](/docs/ci).
-</Step>
-<Step>
-### Tune it
-
-Change severities, accept specific findings with a reason and an expiry date, or add your own rules in the
-[configuration](/docs/configuration).
-</Step>
-</Steps>
+[Install](/docs/installation) has every way to install flowpact: npm, the GitHub Action, the editor extensions.
 
 ## Exit codes
 
-| Code | Meaning |
-| --- | --- |
-| `0` | No findings at or above `--fail-on` (default: `error`) |
-| `1` | Findings at or above `--fail-on` (in `flowpact check`, this includes contract drift) |
-| `2` | Usage or configuration error (unknown rule, invalid config, plugin that fails to load, nothing to analyze) |
-| `3` | Internal error — please [report it](https://github.com/ciatlas/flowpact/issues) with `--debug` output |
+The exit codes are listed with the [CLI reference](/docs/cli#exit-codes).
