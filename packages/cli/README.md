@@ -3,7 +3,7 @@
 # flowpact (`flowpact`)
 
 **Data-flow linter for GitHub Actions:** find the inputs, secrets and matrix values that arrive empty while the run
-stays green.
+stays green, across reusable workflows, local actions and calls into other repositories.
 
 GitHub Actions evaluates a missing matrix key, an undeclared secret or an optional input without a default to an empty
 value: no error, no warning, a green run. When workflows call reusable workflows and local actions, that is how a test variant
@@ -17,9 +17,14 @@ value goes missing. Use it next to actionlint, which checks each file in depth.
 npx flowpact lint                         # lint .github/workflows and local actions
 npx flowpact trace pipeline.yml:config    # where does this input go? (--up: where does it come from?)
 npx flowpact explain FP401               # why it matters, how to fix it
+npx flowpact remotes update               # record the interfaces of the remote workflows and actions you call
 npx flowpact generate                     # lock the interfaces in .github/flowpact/
 npx flowpact check                        # lint + compare with the locked contracts
 ```
+
+`flowpact remotes update` writes `.github/flowpact/remotes.lock.yaml`: commit it, and lint checks what you pass to
+workflows and actions in other repositories. Run it again on a schedule (`--dry-run --fail-on breaks`) to hear when a
+moved tag or a new version drops an input one of your calls passes.
 
 ## Install
 
@@ -37,7 +42,8 @@ downloadable patch when contracts drift).
 ## API
 
 The package is also a library with one function per command (`lint`, `check`, `impact`, `generate`, `graph`, `trace`,
-`rules`, `explain`), for programs that run flowpact themselves, such as your organization's own JavaScript action:
+`rules`, `explain`, `remotesUpdate`, `remotesDownload`, `remotesClean`), for programs that run flowpact themselves,
+such as your organization's own JavaScript action:
 
 ```js
 import { lint } from 'flowpact';
@@ -50,6 +56,7 @@ process.exitCode = analysis.exitCode(); // 1 when there are errors, as for `flow
 The results give the JSON report, GitHub annotations, SARIF, Markdown and the terminal report; the types are included.
 Reference and a complete action: https://ciatlas.github.io/flowpact/docs/api
 
-📖 **Docs:** https://ciatlas.github.io/flowpact — every rule has its own page.
+📖 **Docs:** https://ciatlas.github.io/flowpact: a [quickstart](https://ciatlas.github.io/flowpact/docs/getting-started),
+[remote interfaces](https://ciatlas.github.io/flowpact/docs/remote-interfaces), and a page for every rule.
 
 MIT licensed.

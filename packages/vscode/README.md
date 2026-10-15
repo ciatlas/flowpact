@@ -2,7 +2,8 @@
 
 GitHub Actions turns a missing matrix value, an undeclared secret or an optional input without a default into an empty value,
 and the run stays green. [flowpact](https://ciatlas.github.io/flowpact) finds these across reusable workflows, local
-actions and every combination of the matrices written in your workflows, and shows them as you type. It helps most when
+actions, calls into other repositories and every combination of the matrices written in your workflows, and shows them
+as you type. It helps most when
 your workflows call reusable workflows or local actions, or use `include` matrices.
 
 ![A finding as you type: the windows matrix entry passes an empty config to a reusable workflow, with the call chain and flowpact's hover card](../../apps/docs/public/screenshots/editor-diagnostics.png)
@@ -12,6 +13,9 @@ your workflows call reusable workflows or local actions, or use `include` matric
 - An input that is empty in some matrix combinations, because one `include` entry lacks the key it reads.
 - A secret that a reusable workflow reads but never declares, so it is empty unless the caller passes `secrets: inherit`.
 - Inputs that callers do not pass, outputs nothing reads, and `uses: ./` paths that do not exist where the step runs.
+- Calls to workflows and actions in other repositories that pass an input they do not have, or leave out a required
+  one, once their interfaces are recorded with `flowpact remotes update`
+  ([remote interfaces](https://ciatlas.github.io/flowpact/docs/remote-interfaces)).
 
 It works next to GitHub's GitHub Actions extension, which checks each file's syntax and expressions. By default, in
 the files you open, flowpact hides its four checks that repeat that extension's (`FP502`–`FP505`), so nothing is
@@ -25,7 +29,10 @@ reported twice.
 - **Hover** an input, secret, output, env variable or matrix key to see how it is declared, where its value comes from
   and where it flows, through every level of nesting.
 - **Go to definition** across workflow calls and local actions: from `with: config:` to the callee's input, from
-  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output.
+  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output. Into
+  workflows and actions of other repositories too, at the commit that runs, once `flowpact remotes update` or
+  `flowpact remotes download` has cached their sources; the hover on a remote `uses:` shows its inputs, secrets and
+  outputs.
 - **Find references** and **highlights** across files.
 - **Contract drift** as you edit, when the repository [locks its contracts](https://ciatlas.github.io/flowpact/docs/contracts).
 
@@ -54,6 +61,7 @@ VS Code 1.101 or later. The analysis is bundled; nothing else needs to be instal
 | `flowpact.contracts` | `auto` | Report contract drift: `auto` when `.github/flowpact/contracts/` exists, `on` or `off`. |
 | `flowpact.overlappingRules` | `auto` | `FP502`–`FP505` repeat checks the GitHub Actions extension makes. `auto` hides them in files you open in the editor while that extension runs; `show` or `hide` them everywhere. |
 | `flowpact.hiddenRules` | `[]` | Rule codes not to show in the editor. |
+| `flowpact.cacheDir` | `""` | flowpact's cache directory, when `flowpact remotes update --cache-dir` keeps the sources of remote workflows and actions elsewhere than `FLOWPACT_CACHE_DIR` or the per-user cache. |
 | `flowpact.trace.server` | `messages` | How much of each protocol message to show when the output's log level is Trace (`messages` or `verbose`). |
 
 Logs go to the **flowpact** output channel; its log level (**Developer: Set Log Level…**) also sets the server's.
