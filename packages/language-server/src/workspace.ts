@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import {
   type FileSystem,
@@ -47,13 +47,25 @@ const isDir = (p: string) => {
   }
 };
 
-/** The repository a file belongs to: the nearest directory above it with a `.github` folder. */
+/**
+ * The repository a file belongs to: the nearest directory above it with a `.github` folder; without one anywhere above
+ * (a repository of an action at its root), the root of the git repository it is in (`.git`: a folder, or a file in a
+ * worktree or submodule).
+ */
 function findRoot(path: string): string | undefined {
+  let gitRoot: string | undefined;
   for (let dir = dirname(path); ; dir = dirname(dir)) {
     if (isDir(join(dir, '.github'))) return dir;
-    if (dirname(dir) === dir) return undefined;
+    gitRoot ??= existsSync(join(dir, '.git')) ? dir : undefined;
+    if (dirname(dir) === dir) return gitRoot;
   }
 }
+
+/** A workspace folder to analyze at startup: one with a `.github` folder, or a git repository with an action at its root. */
+const isRepository = (folder: string) =>
+  isDir(join(folder, '.github')) ||
+  (existsSync(join(folder, '.git')) &&
+    ['action.yml', 'action.yaml'].some((f) => existsSync(join(folder, f))));
 
 /** One analyzed repository: the latest result and what was published for it. */
 export class Root {
@@ -201,8 +213,7 @@ export class Workspace {
 
   /** Analyzes a workspace folder that is a repository, unless it is in the remote sources cache. */
   private open(folder: string): void {
-    if (!this.sources()?.contains(folder) && isDir(join(folder, '.github')))
-      this.schedule(this.root(folder), 0);
+    if (!this.sources()?.contains(folder) && isRepository(folder)) this.schedule(this.root(folder), 0);
   }
 
   removeFolder(folder: string): void {

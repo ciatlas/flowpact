@@ -763,3 +763,71 @@ describe('regenerating the contracts', () => {
     expect(await contractCodes(client, dir, [CALLER, contract])).toEqual([]);
   });
 });
+
+describe('repositories without a .github folder', () => {
+  /** A composite action that reads an input it does not declare: FP108. */
+  const ACTION = [
+    'name: Build',
+    'description: Builds the project',
+    'inputs:',
+    '  version:',
+    '    description: The version to build',
+    'runs:',
+    '  using: composite',
+    '  steps:',
+    '    - run: echo "${{ inputs.verison }}"',
+    '      shell: bash',
+    '',
+  ].join('\n');
+  const GIT = { '.git/HEAD': 'ref: refs/heads/main\n' };
+
+  it('analyzes a git repository whose action is at its root, from the start and as it is edited', async () => {
+    const dir = repo({ ...GIT, 'action.yml': ACTION });
+    const client = await start(dir);
+    expect(codesOf(await client.diagnosticsOf(dir, 'action.yml'))).toContain('FP108');
+    await client.open(dir, 'action.yml', ACTION);
+    await client.conn.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: uri(dir, 'action.yml'), version: 2 },
+      contentChanges: [{ text: ACTION.replace('verison', 'version') }],
+    });
+    expect(codesOf(await client.diagnosticsOf(dir, 'action.yml'))).not.toContain('FP108');
+  });
+
+  it('takes the git root as the repository of an action in a subdirectory, once its file is opened', async () => {
+    // The root action uses ./build, so the analysis reaches it.
+    const root =
+      'name: Root\ndescription: d\nruns:\n  using: composite\n  steps:\n    - uses: ./build\n      with:\n        version: 1\n';
+    const dir = repo({ ...GIT, 'action.yml': root, 'build/action.yml': ACTION });
+    const client = await start(dir);
+    await client.open(dir, 'build/action.yml', ACTION);
+    expect(codesOf(await client.diagnosticsOf(dir, 'build/action.yml'))).toContain('FP108');
+  });
+
+  it('analyzes nothing outside a repository', async () => {
+    const dir = repo({ 'action.yml': ACTION });
+    const client = await start(dir);
+    await client.open(dir, 'action.yml', ACTION);
+    expect(await client.diagnosticsOf(dir, 'action.yml')).toEqual([]);
+  });
+
+  it('keeps a .github folder above a nested git repository as the repository', async () => {
+    // A vendored action with a .git of its own, used by a workflow: references to its input reach the workflow only
+    // when both are one repository.
+    const use =
+      'on: push\njobs:\n  b:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: ./vendor/tool\n        with:\n          version: 1\n';
+    const dir = repo({
+      '.github/workflows/use.yml': use,
+      'vendor/tool/.git': 'gitdir: ../../.git/modules/tool\n',
+      'vendor/tool/action.yml': ACTION,
+    });
+    const client = await start(dir);
+    await client.open(dir, 'vendor/tool/action.yml', ACTION);
+    await client.settled();
+    const refs = (await client.conn.sendRequest('textDocument/references', {
+      textDocument: { uri: uri(dir, 'vendor/tool/action.yml') },
+      position: position(ACTION, '  version:', 3),
+      context: { includeDeclaration: false },
+    })) as { uri: string }[];
+    expect(refs.map((r) => r.uri)).toContain(uri(dir, '.github/workflows/use.yml'));
+  });
+});

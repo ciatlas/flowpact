@@ -55,8 +55,8 @@ Language Server** after you edit a plugin: a loaded plugin stays loaded.
 <Accordion title="The editor shows no findings" id="editor-shows-nothing">
 
 - The extension starts its server when the workspace has workflows or an `action.yml`, or when you open one.
-- A repository needs a `.github` folder to be analyzed in the editor. One with only an `action.yml` gets no findings
-  there yet; `flowpact lint` checks it.
+- A file is analyzed with its repository: the nearest folder above it with a `.github` folder, else the root of its
+  git repository. A file in neither gets no findings.
 - A rule may be hidden: by `flowpact.hiddenRules`, or, for `FP502`–`FP505`, by `flowpact.overlappingRules` while
   GitHub's own Actions extension checks the file ([Settings](/docs/editors#settings)).
 

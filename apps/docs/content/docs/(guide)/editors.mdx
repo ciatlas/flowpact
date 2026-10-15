@@ -23,9 +23,10 @@ release: see [Install without a marketplace](#install-without-a-marketplace). Yo
 
 <Screenshot name="editor-diagnostics" format="png" alt="VS Code showing FP401 on matrix.config in tests.yml: the windows matrix entry has no config, with the call chain and flowpact's hover card" caption="A finding as you type: the windows matrix entry passes an empty config to run-suite.yml." />
 
-The server treats every directory with a `.github` folder as a repository, so monorepos and nested repositories work
-without configuration: the workspace folders are analyzed when the editor starts, and a repository nested inside one
-once you open one of its files. Your [config](/docs/configuration) (severities, overrides, ignores) applies as in the
+The server treats every directory with a `.github` folder as a repository, and, for a file with no `.github` folder
+above it, the root of its git repository: a repository of an action at its root works too. Monorepos and nested
+repositories need no configuration: the workspace folders are analyzed when the editor starts, and a repository nested
+inside one once you open one of its files. Your [config](/docs/configuration) (severities, overrides, ignores) applies as in the
 CLI.
 
 ## VS Code
@@ -190,8 +191,6 @@ for a repository above the folder you opened.
 
 ## Limitations
 
-- A repository needs a `.github` folder to be analyzed in the editor; one with only an `action.yml` gets no
-  diagnostics there yet (`flowpact lint` checks it).
 - `env` set on a step or in a composite action, `steps.<id>.outcome` / `conclusion` and step ids are not navigable
   yet.
 - Contract files (`.github/flowpact/contracts/`) show their findings but have no hover or go to definition.
