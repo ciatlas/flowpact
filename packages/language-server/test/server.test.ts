@@ -89,6 +89,8 @@ interface Client {
   logs: string[];
   /** The edits the server asked the client to apply (`workspace/applyEdit`). */
   applied: WorkspaceEdit[];
+  /** The messages the server showed (`window/showMessage`). */
+  shown: string[];
   settled(): Promise<void>;
   /** The diagnostics of a file once the server has analyzed every pending edit. */
   diagnosticsOf(dir: string, rel: string): Promise<Diagnostic[]>;
@@ -102,6 +104,7 @@ async function start(
   settings: Record<string, unknown> = {},
   folder = dir,
   fileOps: ('create' | 'delete')[] = [],
+  annotations = false,
 ): Promise<Client> {
   const toServer = new PassThrough();
   const toClient = new PassThrough();
@@ -117,6 +120,14 @@ async function start(
   const diagnostics = new Map<string, Diagnostic[]>();
   const logs: string[] = [];
   const applied: WorkspaceEdit[] = [];
+  const shown: string[] = [];
+  conn.onNotification('window/showMessage', (p: { message: string }) => {
+    shown.push(p.message);
+  });
+  conn.onRequest('window/showMessageRequest', (p: { message: string }) => {
+    shown.push(p.message);
+    return null;
+  });
   conn.onRequest('workspace/applyEdit', (p: { edit: WorkspaceEdit }) => {
     applied.push(p.edit);
     return { applied: true };
@@ -138,7 +149,15 @@ async function start(
       workspace: {
         workspaceFolders: true,
         didChangeWatchedFiles: { dynamicRegistration: true },
-        ...(fileOps.length ? { workspaceEdit: { documentChanges: true, resourceOperations: fileOps } } : {}),
+        ...(fileOps.length || annotations
+          ? {
+              workspaceEdit: {
+                documentChanges: true,
+                resourceOperations: fileOps,
+                ...(annotations ? { changeAnnotationSupport: { groupsOnLabel: true } } : {}),
+              },
+            }
+          : {}),
       },
     },
     initializationOptions: settings,
@@ -152,6 +171,7 @@ async function start(
     diagnostics,
     logs,
     applied,
+    shown,
     settled,
     async diagnosticsOf(d, rel) {
       // The server publishes before it answers, and messages arrive in order.
@@ -866,5 +886,241 @@ describe('contract files', () => {
     expect(input).toMatchObject({ targetUri: uri(dir, CALLEE), targetRange: { start: { line: 3 } } });
     const [unit] = (await definition(position(text, 'path: ', 8)))!;
     expect(unit?.targetUri).toBe(uri(dir, CALLEE));
+  });
+});
+
+describe('rename', () => {
+  const CALLER_RN = '.github/workflows/caller.yml';
+  const CALLEE_RN = '.github/workflows/_callee.yml';
+  /** A caller of a workflow no other repository calls (its name starts with _): it passes an input and reads an output. */
+  const RN: Record<string, string> = {
+    [CALLER_RN]: [
+      'on: push',
+      'jobs:',
+      '  call:',
+      '    uses: ./.github/workflows/_callee.yml',
+      '    with:',
+      '      name: x',
+      '  next:',
+      '    needs: call',
+      '    runs-on: ubuntu-latest',
+      '    steps:',
+      '      - run: echo "${{ needs.call.outputs.greeting }}"',
+      '',
+    ].join('\n'),
+    [CALLEE_RN]: [
+      'on:',
+      '  workflow_call:',
+      '    inputs:',
+      '      name:',
+      '        type: string',
+      '    outputs:',
+      '      greeting:',
+      '        value: ${{ jobs.greet.outputs.text }}',
+      'jobs:',
+      '  greet:',
+      '    runs-on: ubuntu-latest',
+      '    outputs:',
+      '      text: ${{ steps.s.outputs.text }}',
+      '    steps:',
+      '      - id: s',
+      '        run: echo "text=hi ${{ inputs.name }}" >> "$GITHUB_OUTPUT"',
+      '',
+    ].join('\n'),
+  };
+
+  type Edit = WorkspaceEdit & { changeAnnotations?: Record<string, { needsConfirmation?: boolean }> };
+  const rename = (
+    client: Client,
+    dir: string,
+    rel: string,
+    at: { line: number; character: number },
+    newName: string,
+  ) =>
+    client.conn.sendRequest('textDocument/rename', {
+      textDocument: { uri: uri(dir, rel) },
+      position: at,
+      newName,
+    }) as Promise<Edit | null>;
+
+  /** The files with a workspace edit made: its plain changes, or its document changes. */
+  function renamed(dir: string, files: Record<string, string>, edit: Edit): Record<string, string> {
+    const out = { ...files };
+    const byUri: [string, TextEdit[]][] = [
+      ...Object.entries(edit.changes ?? {}),
+      ...((edit.documentChanges ?? []) as { textDocument: { uri: string }; edits: TextEdit[] }[]).map(
+        (c) => [c.textDocument.uri, c.edits] as [string, TextEdit[]],
+      ),
+    ];
+    for (const [u, edits] of byUri) {
+      const rel = Object.keys(files).find((r) => uri(dir, r) === u)!;
+      out[rel] = edited(out[rel]!, edits);
+    }
+    return out;
+  }
+
+  /** Renames at a position, writes the result, and returns it with the errors flowpact then reports. */
+  async function renameAndCheck(rel: string, needle: string, offset: number, newName: string) {
+    const dir = repo(RN);
+    const client = await start(dir);
+    await client.settled();
+    const edit = await rename(client, dir, rel, position(RN[rel]!, needle, offset), newName);
+    const files = renamed(dir, RN, edit!);
+    write(dir, files);
+    const changed: DidChangeWatchedFilesParams = {
+      changes: Object.keys(files).map((r) => ({ uri: uri(dir, r), type: FileChangeType.Changed })),
+    };
+    await client.conn.sendNotification(DidChangeWatchedFilesNotification.type, changed);
+    const errors = [
+      ...(await client.diagnosticsOf(dir, CALLER_RN)),
+      ...(await client.diagnosticsOf(dir, CALLEE_RN)),
+    ].filter((d) => d.severity === 1);
+    return { files, errors };
+  }
+
+  it('renames an input where it is declared, passed and read', async () => {
+    const { files, errors } = await renameAndCheck(CALLEE_RN, '      name:', 6, 'who');
+    expect(files[CALLEE_RN]).toContain('    inputs:\n      who:\n');
+    expect(files[CALLEE_RN]).toContain('hi ${{ inputs.who }}');
+    expect(files[CALLER_RN]).toContain('    with:\n      who: x\n');
+    expect(errors).toEqual([]);
+  });
+
+  it("renames the callee's input from the key a caller passes", async () => {
+    const { files, errors } = await renameAndCheck(CALLER_RN, '      name: x', 7, 'who');
+    expect(files[CALLEE_RN]).toContain('${{ inputs.who }}');
+    expect(errors).toEqual([]);
+  });
+
+  it("renames a workflow's output from where a caller reads it, and a job's output", async () => {
+    const out = await renameAndCheck(CALLER_RN, 'outputs.greeting', 9, 'message');
+    expect(out.files[CALLEE_RN]).toContain('    outputs:\n      message:\n');
+    expect(out.files[CALLER_RN]).toContain('needs.call.outputs.message');
+    expect(out.errors).toEqual([]);
+    const job = await renameAndCheck(CALLEE_RN, '      text:', 7, 'body');
+    expect(job.files[CALLEE_RN]).toContain('jobs.greet.outputs.body');
+    expect(job.files[CALLEE_RN]).toContain('      body: ${{ steps.s.outputs.text }}');
+    expect(job.errors).toEqual([]);
+  });
+
+  it("renames an action's input and output where a step passes (quoted or not) and reads them", async () => {
+    const ACTION = '.github/actions/greet/action.yml';
+    const files = {
+      [ACTION]: [
+        'name: greet',
+        'inputs:',
+        '  name:',
+        '    required: true',
+        'outputs:',
+        '  greeting:',
+        '    value: ${{ steps.s.outputs.text }}',
+        'runs:',
+        '  using: composite',
+        '  steps:',
+        '    - id: s',
+        '      shell: bash',
+        '      run: echo "text=hi ${{ inputs.name }}" >> "$GITHUB_OUTPUT"',
+        '',
+      ].join('\n'),
+      [CALLER_RN]: [
+        'on: push',
+        'jobs:',
+        '  a:',
+        '    runs-on: ubuntu-latest',
+        '    steps:',
+        '      - id: g',
+        '        uses: ./.github/actions/greet',
+        '        with:',
+        "          'name': x",
+        '      - run: echo "${{ steps.g.outputs.greeting }}"',
+        '',
+      ].join('\n'),
+    };
+    const dir = repo(files);
+    const client = await start(dir);
+    await client.settled();
+    const input = await rename(client, dir, ACTION, position(files[ACTION]!, '  name:', 2), 'who');
+    expect(renamed(dir, files, input!)[CALLER_RN]).toContain("        with:\n          'who': x\n");
+    const output = await rename(
+      client,
+      dir,
+      CALLER_RN,
+      position(files[CALLER_RN]!, 'outputs.greeting', 9),
+      'message',
+    );
+    const after = renamed(dir, files, output!);
+    expect(after[ACTION]).toContain('outputs:\n  message:\n');
+    expect(after[CALLER_RN]).toContain('steps.g.outputs.message');
+  });
+
+  it('prepares a rename on the name at the cursor', async () => {
+    const dir = repo(RN);
+    const client = await start(dir);
+    await client.settled();
+    const text = RN[CALLER_RN]!;
+    const prepared = await client.conn.sendRequest('textDocument/prepareRename', {
+      textDocument: { uri: uri(dir, CALLER_RN) },
+      position: position(text, 'outputs.greeting', 9),
+    });
+    expect(prepared).toEqual({
+      range: { start: position(text, 'greeting'), end: position(text, 'greeting', 8) },
+      placeholder: 'greeting',
+    });
+  });
+
+  it('refuses a rename it cannot make whole, and says why', async () => {
+    const refused = async (
+      files: Record<string, string>,
+      rel: string,
+      needle: string,
+      offset: number,
+      newName = 'who',
+    ) => {
+      const dir = repo(files);
+      const client = await start(dir);
+      await client.settled();
+      return rename(client, dir, rel, position(files[rel]!, needle, offset), newName).then(
+        () => 'renamed',
+        (err: Error) => err.message,
+      );
+    };
+    expect(await refused(RN, CALLEE_RN, '      name:', 6, '1x')).toContain('is not a valid name');
+    const two = {
+      ...RN,
+      [CALLEE_RN]: RN[CALLEE_RN]!.replace('    inputs:\n', '    inputs:\n      who: { type: string }\n'),
+    };
+    expect(await refused(two, CALLEE_RN, '      name:', 6)).toContain('already has "who"');
+    const bracket = { ...RN, [CALLEE_RN]: RN[CALLEE_RN]!.replace('inputs.name', "inputs['name']") };
+    expect(await refused(bracket, CALLEE_RN, '      name:', 6)).toContain('rename it by hand');
+    const secret = {
+      [CALLER_RN]:
+        'on: push\njobs:\n  call:\n    uses: ./.github/workflows/_callee.yml\n    secrets: inherit\n',
+      [CALLEE_RN]:
+        'on:\n  workflow_call:\n    secrets:\n      token: { required: false }\njobs:\n  t:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo "${{ secrets.token }}"\n',
+    };
+    expect(await refused(secret, CALLEE_RN, '      token:', 6)).toContain('secrets: inherit');
+    expect(await refused(RN, CALLEE_RN, 'steps.s.outputs.text', 17)).toContain(
+      "The step's script writes this output",
+    );
+    const remote = {
+      [CALLER_RN]:
+        'on: push\njobs:\n  a:\n    uses: octo/ship/.github/workflows/deploy.yml@v1\n    with: { env: prod }\n',
+      '.github/flowpact/remotes.lock.yaml': `version: 1\nremotes:\n  octo/ship/.github/workflows/deploy.yml@v1:\n    sha: ${'a'.repeat(40)}\n    kind: workflow\n    inputs: { env: { type: string, required: true } }\n`,
+    };
+    expect(await refused(remote, CALLER_RN, 'env: prod', 1)).toContain('declared in another repository');
+  });
+
+  it('asks to confirm a rename in a published workflow, or warns where the editor cannot ask', async () => {
+    const dir = repo({ ...REPO, [CALLER]: FIXED });
+    const at = position(REPO[CALLEE]!, '      name:', 6);
+    const confirming = await start(dir, {}, dir, [], true);
+    await confirming.settled();
+    const edit = await rename(confirming, dir, CALLEE, at, 'who');
+    expect(Object.values(edit!.changeAnnotations!)[0]?.needsConfirmation).toBe(true);
+    const plain = await start(dir);
+    await plain.settled();
+    expect((await rename(plain, dir, CALLEE, at, 'who'))?.changes).toBeDefined();
+    await plain.settled();
+    expect(plain.shown.join('\n')).toContain('is published');
   });
 });

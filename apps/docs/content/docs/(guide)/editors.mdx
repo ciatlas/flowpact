@@ -19,7 +19,8 @@ release: see [Install without a marketplace](#install-without-a-marketplace). Yo
 - **Go to definition** across workflow calls and local actions: from `with: config:` to the callee's input, from
   `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output. Into
   [other repositories' workflows and actions](#remote-workflows-and-actions) too, once their sources are cached.
-- **Find references** and **highlights** across files.
+- **Find references** and **highlights** across files, and **rename** an input, secret or output in every file that
+  names it.
 
 <Screenshot name="editor-diagnostics" format="png" alt="VS Code showing FP401 on matrix.config in tests.yml: the windows matrix entry has no config, with the call chain and flowpact's hover card" caption="A finding as you type: the windows matrix entry passes an empty config to run-suite.yml." />
 
@@ -164,6 +165,24 @@ and, optionally, a date until which the finding is accepted. Other editors write
 
 The same fixes are in the [JSON report](/docs/cli#json-report) as `suggestions`, and in SARIF as `fixes`.
 
+## Rename
+
+**Rename Symbol** (**F2**) on an input, secret or output renames it everywhere in the repository: where it is
+declared, where callers pass it, and where it is read (`inputs.<name>`, `needs.<job>.outputs.<name>`,
+`steps.<id>.outputs.<name>`). Start from any of them. A job's outputs rename the same way.
+
+flowpact refuses a rename it cannot make whole, and says why:
+
+- the name is declared in another repository, or a step's script writes the output;
+- a read it cannot rewrite, such as `inputs['name']`;
+- the new name is taken or invalid;
+- a caller passes the secret with `secrets: inherit`.
+
+A [published](/docs/concepts#published-unit) workflow or action has callers in other repositories that the rename
+breaks: VS Code asks you to confirm, and other editors show a warning. Afterwards, regenerate the
+[contracts](/docs/contracts) (a quick fix offers it) and update any [override](/docs/configuration#overrides) that
+targets the old name.
+
 ## Settings
 
 In VS Code and the editors built on it, under **Settings → Extensions → flowpact**:
@@ -197,7 +216,7 @@ for a repository above the folder you opened.
 
 - `env` set on a step or in a composite action, `steps.<id>.outcome` / `conclusion` and step ids are not navigable
   yet.
-- There is no rename or completion yet.
+- There is no completion yet.
 
 ## Other editors
 
