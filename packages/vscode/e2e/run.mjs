@@ -15,7 +15,9 @@ try {
     extensionDevelopmentPath: extension,
     extensionTestsPath: join(here, 'smoke.cjs'),
     extensionTestsEnv: { FLOWPACT_EXTENSION_ID: `${publisher}.${name}` },
-    launchArgs: [join(here, '../../../fixtures/deep-nesting'), '--disable-extensions'],
+    // --disable-gpu: on CI's virtual display (xvfb), VS Code's window can hang at startup ("CodeWindow: detected
+    // unresponsive") before any test runs; it needs no GPU for these tests.
+    launchArgs: [join(here, '../../../fixtures/deep-nesting'), '--disable-extensions', '--disable-gpu'],
   });
 } catch (err) {
   console.error(err);
