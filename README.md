@@ -95,7 +95,7 @@ npx flowpact remotes update             # record the interfaces of the remote wo
 
 ```yaml
 - uses: actions/checkout@v7
-- uses: ciatlas/flowpact@v0.21
+- uses: ciatlas/flowpact@v0.22
 ```
 
 **In the editor**, install the extension from the
@@ -150,7 +150,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.21
+      - uses: ciatlas/flowpact@v0.22
         with:
           mode: check   # lint, and compare with the committed contracts
           impact: auto  # grade the change against the pull request title

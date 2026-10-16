@@ -13,9 +13,9 @@ engine as the [CLI](/docs/cli), bundled into the action itself, so the job does 
   artifact, so anyone can update them without running flowpact.
 
 <Callout title="Version tag">
-  `ciatlas/flowpact@v0.21` follows the patch releases of its minor line. Before 1.0 each minor line has its own tag
+  `ciatlas/flowpact@v0.22` follows the patch releases of its minor line. Before 1.0 each minor line has its own tag
   (`v0.<minor>`), because a minor release can change what is reported, so moving to the next one is your choice; a
-  breaking change is a major release (1.0.0 and `v1` next). Pin an exact release (`ciatlas/flowpact@v0.21.1`) or a commit SHA to control every update.
+  breaking change is a major release (1.0.0 and `v1` next). Pin an exact release (`ciatlas/flowpact@v0.22.0`) or a commit SHA to control every update.
 </Callout>
 
 ## Usage
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.21
+      - uses: ciatlas/flowpact@v0.22
 ```
 
 <Callout type="warn" title="No paths filter on a required check">
@@ -58,7 +58,7 @@ rule and also fails when the contracts no longer match the workflows:
 ```yaml
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.21
+      - uses: ciatlas/flowpact@v0.22
         with:
           mode: check
 ```
@@ -77,7 +77,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.21
+      - uses: ciatlas/flowpact@v0.22
         with:
           report-sarif: flowpact.sarif
       - if: always()
@@ -95,7 +95,7 @@ has no way to mark them as accepted and would open an alert for each. The JSON r
 
 ```yaml
       - id: flowpact
-        uses: ciatlas/flowpact@v0.21
+        uses: ciatlas/flowpact@v0.22
         with:
           mode: check
           fail-on: never

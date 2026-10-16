@@ -173,7 +173,7 @@ flowpact remotes update --github-com          # GITHUB_COM_TOKEN for github.com,
 ```
 
 ```yaml
-- uses: ciatlas/flowpact@v0.21
+- uses: ciatlas/flowpact@v0.22
   with:
     remotes: fetch
     remotes-github-com: true
@@ -190,7 +190,7 @@ The [action](/docs/action) and the CLI read the committed lockfile and nothing e
 lockfile lacks, opt in to fetching them for the run: nothing is written back, and the lockfile's own entries stand.
 
 ```yaml title=".github/workflows/flowpact.yml"
-- uses: ciatlas/flowpact@v0.21
+- uses: ciatlas/flowpact@v0.22
   with:
     remotes: fetch            # token defaults to github.token
 ```
@@ -273,7 +273,7 @@ jobs:
       - uses: actions/checkout@v7                       # pin to a commit SHA
         with:
           persist-credentials: false
-      - run: npx --yes flowpact@0.21 remotes update --dry-run --fail-on breaks
+      - run: npx --yes flowpact@0.22 remotes update --dry-run --fail-on breaks
         env:
           GH_TOKEN: ${{ github.token }}
 ```
@@ -319,7 +319,7 @@ jobs:
       - uses: actions/checkout@v7                       # pin to a commit SHA
         with:
           persist-credentials: false
-      - uses: ciatlas/flowpact@v0.21                    # pin to a commit SHA
+      - uses: ciatlas/flowpact@v0.22                    # pin to a commit SHA
         with:
           remotes: fetch
 ```
@@ -336,7 +336,7 @@ Three ways to keep the lockfile current:
   ```json title="renovate.json"
   {
     "postUpgradeTasks": {
-      "commands": ["npx --yes flowpact@0.21 remotes update"],
+      "commands": ["npx --yes flowpact@0.22 remotes update"],
       "fileFilters": [".github/flowpact/remotes.lock.yaml"],
       "executionMode": "branch"
     }
@@ -369,7 +369,7 @@ Three ways to keep the lockfile current:
             ref: ${{ github.head_ref }}
             token: ${{ steps.app.outputs.token }}
             persist-credentials: true
-        - run: npx --yes flowpact@0.21 remotes update
+        - run: npx --yes flowpact@0.22 remotes update
           env:
             GH_TOKEN: ${{ steps.app.outputs.token }}
         - run: |
