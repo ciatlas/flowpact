@@ -158,13 +158,11 @@ function Hero() {
         Data-flow linter for GitHub Actions · v{version}
       </span>
       <h1 className="max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
-        Change shared workflows and actions without breaking the repositories that use them.
+        Change shared workflows and actions without breaking their callers.
       </h1>
       <p className="max-w-2xl text-lg text-fd-muted-foreground">
-        flowpact checks both sides of every interface between GitHub Actions workflows. It grades each release
-        of a reusable workflow or action against what its callers use, check names included, and checks each
-        call against the version it targets, a bot&apos;s version bump too. Inside a repository, it follows
-        every value across workflows, actions and matrix combinations.
+        flowpact grades every release of a reusable workflow or action against what its callers use, and
+        checks every call against the version it targets.
       </p>
       <div className="flex flex-wrap justify-center gap-3">
         <Link href="/docs/getting-started" className={buttonPrimary}>
@@ -214,9 +212,8 @@ function Breaks() {
       title="Two breaks that raise no error where they happen"
       lead={
         <>
-          A reusable workflow or action is an interface: its inputs, secrets, outputs and the check names its
-          jobs report. The repositories that call it pin a tag such as <code>@v1</code>, and nothing fails in
-          the repository that changes it.
+          Callers pin a tag such as <code>@v1</code>, so a change that breaks them fails in their runs, not in
+          yours.
         </>
       }
     >
@@ -224,10 +221,9 @@ function Breaks() {
         <div className="flex min-w-0 flex-col gap-3 [&_figure]:my-0">
           <h3 className="font-semibold">You publish: a job renamed in a fix: pull request</h3>
           <p className="text-sm text-fd-muted-foreground">
-            Callers&apos; branch protection requires the job&apos;s check by its name. After the rename, their
-            pull requests wait forever on <em>Expected — Waiting for status to be reported</em>, and a release
-            tool ships the change to everyone on <code>@v1</code> as a patch. Impact mode fails the pull
-            request: the change needs a major release.
+            Callers&apos; branch protection now waits forever for the old check name, and a release tool ships
+            the rename to everyone on <code>@v1</code> as a patch. Impact mode fails the pull request: it
+            needs a major release.
           </p>
           <Screenshot
             name="impact"
@@ -237,9 +233,8 @@ function Breaks() {
         <div className="flex min-w-0 flex-col gap-3 [&_figure]:my-0">
           <h3 className="font-semibold">You call: a tag that moves to a release without an input you pass</h3>
           <p className="text-sm text-fd-muted-foreground">
-            <code>actions/setup-node@v6</code> moved to 6.1.0, which no longer has <code>always-auth</code>. A
-            step that passes it runs without it, with a warning in a log. flowpact grades the move against
-            your calls, on a schedule and on the pull request that changes the version.
+            <code>actions/setup-node@v6</code> moved to 6.1.0, which dropped <code>always-auth</code>: a step
+            that passes it only gets a warning in a log. flowpact grades the move against your calls.
           </p>
           <ServerCodeBlock lang="text" code={driftCheck} />
         </div>
@@ -258,7 +253,7 @@ function Hides() {
     <Section
       id="what-a-green-run-hides"
       title="Inside your repository: what a green run hides"
-      lead="GitHub Actions turns these into empty values, with no error and a green run. flowpact follows every input, secret, env var, matrix key and output across workflows and actions, and evaluates every combination of the matrices in your YAML."
+      lead="GitHub Actions turns these into empty values, with no error and a green run. flowpact follows every value across workflows, actions and matrix combinations."
     >
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {hides.map((h) => (
@@ -296,9 +291,8 @@ function Flow() {
       title="Know exactly what flows between your workflows"
       lead={
         <>
-          flowpact builds a graph of every value: what a caller binds under <code>with:</code>, outputs going
-          back up to a caller&apos;s <code>needs</code>, <code>secrets: inherit</code> expanded to what is
-          read. Follow any value down to where it is used, or up to where it comes from.
+          Follow any value down to where it is used, or up to where it comes from, across every workflow and
+          action.
         </>
       }
     >
@@ -333,10 +327,8 @@ function Remotes() {
       title="When you call them: every call checked against its version"
       lead={
         <>
-          Record the interfaces of the workflows and actions you call once, with{' '}
-          <code>flowpact remotes update</code>, and commit the lockfile. A missing required input, an unknown
-          input or secret, a literal of the wrong type or an output that is not declared is then a finding,
-          with no network during the run.
+          Record the interfaces you call once with <code>flowpact remotes update</code>, commit the lockfile,
+          and every call is checked against them, offline.
         </>
       }
     >
@@ -346,9 +338,8 @@ function Remotes() {
           <ServerCodeBlock lang="text" code={remoteFinding} />
         </div>
         <p className="text-sm text-fd-muted-foreground">
-          <code>remotes update --fail-on breaks</code> on a schedule tells you when a tag you call has moved
-          under you, and the action grades the references a Renovate or Dependabot pull request moves, against
-          interfaces it fetches itself, so the bump waits until it fits.
+          Run <code>remotes update --fail-on breaks</code> on a schedule to hear when a tag moves under you.
+          On a Renovate or Dependabot pull request, the action grades the bump before you merge it.
         </p>
       </div>
       <p className="text-center text-sm">
@@ -365,7 +356,7 @@ function Editor() {
     <Section
       id="editor"
       title="In your editor, before you push"
-      lead="The same findings as you type, for closed files too: editing a reusable workflow updates its callers' findings at once. Hover any value to see where it comes from and where it goes."
+      lead="The same findings as you type, closed files included. Hover any value to see where it comes from and where it goes."
     >
       <Tabs items={['Findings', 'Hover', 'Definition', 'References']} className="mx-auto w-full max-w-4xl">
         <Tab value="Findings">
@@ -414,7 +405,7 @@ function Publishers() {
     <Section
       id="publishers"
       title="When you publish them: every release graded"
-      lead="Contracts record the interface of each workflow and action you publish, so every change to it is a diff in review. Impact mode grades each pull request major, minor, patch or none against what callers can see, and fails it when its title declares less."
+      lead="Each pull request is graded major, minor, patch or none, and fails when its title declares less."
     >
       <div className="grid items-start gap-6 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-3">
@@ -537,7 +528,7 @@ function Safety() {
     <Section
       id="security"
       title="Safe to run on any repository"
-      lead="flowpact parses your YAML and runs nothing from it, sends nothing anywhere unless you ask it to fetch remote interfaces, and collects no telemetry. Releases are built only by GitHub Actions, attested with an SBOM, and published to npm with provenance."
+      lead="flowpact runs nothing from your YAML, sends nothing unless you ask it to fetch remote interfaces, and collects no telemetry. Releases are attested and published with provenance."
     >
       <p className="text-center text-sm">
         <Link href="/docs/security" className="underline underline-offset-4">

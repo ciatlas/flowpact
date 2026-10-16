@@ -49,9 +49,7 @@ describe('where flowpact lives (packages/lint/src/location.json)', () => {
     const shared = read('apps/docs/lib/shared.ts');
     expect(shared).toContain(`user: '${owner}',`);
     expect(shared).toContain(`repo: '${name}',`);
-    expect(read('apps/docs/app/layout.tsx')).toContain(
-      `metadataBase: new URL('${new URL(location.docsBaseUrl).origin}'),`,
-    );
+    expect(shared).toContain(`export const siteOrigin = '${new URL(location.docsBaseUrl).origin}';`);
   });
 
   it('leaves no previous location outside the history', () => {
