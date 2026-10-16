@@ -1,6 +1,7 @@
 export * from './actions-lock';
 export * from './analyze';
 export * from './config';
+export * from './contract-locate';
 export * from './contracts';
 export * from './impact';
 export * from './impact-run';

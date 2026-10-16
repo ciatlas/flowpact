@@ -831,3 +831,40 @@ describe('repositories without a .github folder', () => {
     expect(refs.map((r) => r.uri)).toContain(uri(dir, '.github/workflows/use.yml'));
   });
 });
+
+describe('contract files', () => {
+  const CONTRACT = '.github/flowpact/contracts/workflows/callee.contract.yaml';
+  /** The repository with its contracts generated. */
+  const withContracts = () => {
+    const dir = repo({ ...REPO, [CALLER]: FIXED });
+    writeContracts(dir, analyze({ root: dir, checkContracts: true }).contracts!);
+    return { dir, text: readFileSync(join(dir, CONTRACT), 'utf8') };
+  };
+  type Target = { targetUri: string; targetRange: { start: { line: number } } };
+
+  it('describes an input the contract records, as in the workflow', async () => {
+    const { dir, text } = withContracts();
+    const client = await start(dir);
+    await client.settled();
+    const hover = (await client.conn.sendRequest('textDocument/hover', {
+      textDocument: { uri: uri(dir, CONTRACT) },
+      position: position(text, '    name:', 5),
+    })) as { contents: { value: string } } | null;
+    expect(hover?.contents.value).toContain('Who to greet');
+  });
+
+  it('goes from an input, and from the path, to the workflow that declares them', async () => {
+    const { dir, text } = withContracts();
+    const client = await start(dir);
+    await client.settled();
+    const definition = (at: { line: number; character: number }) =>
+      client.conn.sendRequest('textDocument/definition', {
+        textDocument: { uri: uri(dir, CONTRACT) },
+        position: at,
+      }) as Promise<Target[] | null>;
+    const [input] = (await definition(position(text, '    name:', 5)))!;
+    expect(input).toMatchObject({ targetUri: uri(dir, CALLEE), targetRange: { start: { line: 3 } } });
+    const [unit] = (await definition(position(text, 'path: ', 8)))!;
+    expect(unit?.targetUri).toBe(uri(dir, CALLEE));
+  });
+});

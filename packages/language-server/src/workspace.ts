@@ -15,6 +15,7 @@ import {
   CONFIG_FILES,
   CONTRACTS_DIR,
   ConfigError,
+  contractOccurrences,
   createRegistry,
   defaultConfig,
   type LoadedConfig,
@@ -246,7 +247,7 @@ export class Workspace {
     const rel = root?.rel(path);
     if (!root || !rel) return undefined;
     await this.ready(root);
-    const at = root.locator?.at(rel, line, column);
+    const at = root.locator?.at(rel, line, column) ?? this.contractAt(path, rel, line, column);
     if (at) return { root, at };
     const remote = root.remotes?.at(rel, line, column);
     return remote ? { root, at: remote.at, remote } : undefined;
@@ -278,6 +279,18 @@ export class Workspace {
     } catch {
       return undefined;
     }
+  }
+
+  /** In a contract file, what the contract names at a position (1-based): a unit, a job, an input, secret or output. */
+  private contractAt(path: string, rel: string, line: number, column: number): Occurrence | undefined {
+    if (!rel.startsWith(`${CONTRACTS_DIR}/`)) return undefined;
+    const text = this.textOf(path);
+    if (text === undefined) return undefined;
+    return contractOccurrences(rel, text).find(
+      (o) =>
+        (o.loc.line < line || (o.loc.line === line && o.loc.column <= column)) &&
+        (o.loc.endLine > line || (o.loc.endLine === line && o.loc.endColumn >= column)),
+    );
   }
 
   /** Waits until every root's analysis reflects the latest edits. */

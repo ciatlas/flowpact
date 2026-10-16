@@ -108,6 +108,10 @@ Hovering an input, secret, output, env variable, matrix key, job or `uses:` valu
 Other extensions add their own sections below it; GitHub's GitHub Actions extension, for example, describes the
 key's syntax.
 
+In a [contract](/docs/contracts) file, hover and go to definition work on what the contract records: its `path`, the
+inputs, secrets and outputs of its interface, the jobs and workflows of its `calls`, and its `consumers` with the
+inputs they pass and the outputs they read. Each leads to the workflow or action that declares it.
+
 <Screenshot name="editor-hover" format="png" alt="flowpact hover card on inputs.environment in build.yml: a required string input, from pipeline.yml's input, to package.yml's input" caption="The input comes from pipeline.yml and goes on to package.yml." />
 
 ## Remote workflows and actions
@@ -193,7 +197,6 @@ for a repository above the folder you opened.
 
 - `env` set on a step or in a composite action, `steps.<id>.outcome` / `conclusion` and step ids are not navigable
   yet.
-- Contract files (`.github/flowpact/contracts/`) show their findings but have no hover or go to definition.
 - There is no rename or completion yet.
 
 ## Other editors
