@@ -4,6 +4,22 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.22.0](https://github.com/ciatlas/flowpact/compare/v0.21.1...v0.22.0) (2026-10-16)
+
+
+### Features
+
+* **language-server:** hover and go to definition in contract files ([#211](https://github.com/ciatlas/flowpact/issues/211)) ([26b6177](https://github.com/ciatlas/flowpact/commit/26b6177cf6ff278ced3a4a4741b0a60ee28aed0c))
+* **language-server:** quick fixes, and accepting a finding with an override ([#207](https://github.com/ciatlas/flowpact/issues/207)) ([951c9f3](https://github.com/ciatlas/flowpact/commit/951c9f3f8b6a1c4feb00946cb8a79478853e9d64))
+* **language-server:** regenerate the contracts from a contract finding ([#209](https://github.com/ciatlas/flowpact/issues/209)) ([ac8f4f3](https://github.com/ciatlas/flowpact/commit/ac8f4f33ad8e8bfd80cfd20e807de0b59ef5e9f4))
+* **lint:** findings suggest the fix when it is certain, starting with renames ([#205](https://github.com/ciatlas/flowpact/issues/205)) ([72005cb](https://github.com/ciatlas/flowpact/commit/72005cbe0e4e89a9d930bb0b989ef337c0fc275e))
+* **lint:** suggest adding a missing input, secret or matrix key, and removing an unused input ([#206](https://github.com/ciatlas/flowpact/issues/206)) ([72005cb](https://github.com/ciatlas/flowpact/commit/72005cbe0e4e89a9d930bb0b989ef337c0fc275e))
+
+
+### Bug Fixes
+
+* **language-server:** analyze a repository with no .github folder, such as an action's ([#210](https://github.com/ciatlas/flowpact/issues/210)) ([db60409](https://github.com/ciatlas/flowpact/commit/db60409a6a48ff63eb0f3c3844f334ea86f50aa1))
+
 ## [0.21.1](https://github.com/ciatlas/flowpact/compare/v0.21.0...v0.21.1) (2026-10-15)
 
 
