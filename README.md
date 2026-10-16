@@ -221,9 +221,9 @@ change against your calls (a drift check, and a verdict on pull requests in the 
 expiry, plugins, the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`, `trace`), a JavaScript API, the
 GitHub Action, a language server and the
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (diagnostics as you
-type, hover traces, go to definition across workflow calls and into the sources of remote workflows and actions; also
-on [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: quick fixes in the editor — see the
-[roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
+type, hover traces, go to definition across workflow calls and into the sources of remote workflows and actions,
+quick fixes and rename; also on [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: the rest of
+the editor — see the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
 
 ## Security
 

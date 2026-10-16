@@ -1,6 +1,13 @@
 import { join } from 'node:path';
 import { createLogger, type Logger, type LogRecord } from '@ciatlas/core';
-import { type Finding, overrideFor, remotesCacheDir, VERSION } from '@flowpact/lint';
+import {
+  defaultConfig,
+  type Finding,
+  isPublished,
+  overrideFor,
+  remotesCacheDir,
+  VERSION,
+} from '@flowpact/lint';
 import {
   type CodeAction,
   CodeActionKind,
@@ -13,11 +20,16 @@ import {
   type InitializeParams,
   type Location,
   type LocationLink,
+  LSPErrorCodes,
   type Position,
   ProposedFeatures,
   type Range,
+  ResponseError,
   TextDocumentSyncKind,
   TextDocuments,
+  type TextEdit,
+  type WorkspaceEdit,
+  type WorkspaceEditClientCapabilities,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import {
@@ -31,6 +43,7 @@ import {
 } from './actions';
 import { pathToUri, toRange, uriToPath } from './convert';
 import { hoverMarkdown, remoteBindingMarkdown } from './hover';
+import { RenameRefused, renameEdits, renameTarget } from './rename';
 import { readSettings, type Settings } from './settings';
 import { RemoteSources, remoteTarget, type SourceTarget } from './sources';
 import { type Root, Workspace } from './workspace';
@@ -52,14 +65,23 @@ function fileOpsOf(operations: string[] | undefined): FileOps {
   };
 }
 
+/** What the client can do in a workspace edit, which needs `documentChanges`. */
+function editFeatures(edits: WorkspaceEditClientCapabilities | undefined) {
+  const changes = edits?.documentChanges === true ? edits : undefined;
+  return {
+    /** The files it can create and delete: a new config file, contract files. */
+    fileOps: fileOpsOf(changes ? (changes.resourceOperations ?? []) : undefined),
+    /** It shows a change annotation that needs confirmation: a rename in a published workflow or action. */
+    annotations: changes?.changeAnnotationSupport !== undefined,
+  };
+}
+
 /** What the client can do: from its capabilities, and the options VS Code's extension sends. */
 function clientFeatures(params: InitializeParams) {
   const { textDocument, workspace } = params.capabilities;
-  const edits = workspace?.workspaceEdit;
   return {
     linkSupport: textDocument?.definition?.linkSupport === true,
-    /** The files it can create and delete in a workspace edit: a new config file, contract files. */
-    fileOps: fileOpsOf(edits?.documentChanges === true ? (edits.resourceOperations ?? []) : undefined),
+    ...editFeatures(workspace?.workspaceEdit),
     /** It asks for an override's reason itself, so "Accept" runs its command. */
     promptForReason:
       (params.initializationOptions as { acceptFindingPrompt?: unknown } | undefined)?.acceptFindingPrompt ===
@@ -85,6 +107,8 @@ export function startServer(connection: Connection): void {
   let fileOps: FileOps = { documentChanges: false, create: false, delete: false };
   /** The client asks for an override's reason itself (VS Code's extension), so "Accept" runs its command. */
   let promptForReason = false;
+  /** The client asks to confirm an annotated edit (see `clientFeatures`). */
+  let annotations = false;
   let watchFiles = false;
   let folderEvents = false;
 
@@ -113,7 +137,8 @@ export function startServer(connection: Connection): void {
     settings = readSettings(params.initializationOptions);
     sources = sourcesFor(settings);
     setLevel(settings.logLevel);
-    ({ linkSupport, fileOps, promptForReason, watchFiles, folderEvents } = clientFeatures(params));
+    ({ linkSupport, fileOps, promptForReason, annotations, watchFiles, folderEvents } =
+      clientFeatures(params));
     const folders = params.workspaceFolders?.length
       ? params.workspaceFolders.map((f) => uriToPath(f.uri))
       : [params.rootUri ? uriToPath(params.rootUri) : undefined];
@@ -147,6 +172,7 @@ export function startServer(connection: Connection): void {
         documentHighlightProvider: true,
         codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
         executeCommandProvider: { commands: [ACCEPT_COMMAND] },
+        renameProvider: { prepareProvider: true },
         workspace: { workspaceFolders: { supported: true, changeNotifications: true } },
       },
       serverInfo: { name: 'flowpact', version: VERSION },
@@ -311,6 +337,75 @@ export function startServer(connection: Connection): void {
   connection.onExecuteCommand(async ({ command, arguments: args }) => {
     if (command === ACCEPT_COMMAND) await acceptFinding((args?.[0] ?? {}) as AcceptArgs);
     return null;
+  });
+
+  /** What the rename at a position renames, and its edits for `name` (the current name for prepareRename). */
+  const planRename = async (uri: string, position: Position, name?: string) => {
+    const found = await locate(uri, position);
+    if (!found?.root.locator || !found.root.result) return undefined;
+    const { index } = found.root.result;
+    const target = renameTarget(index, found.root.locator, found.at);
+    const edits = renameEdits(index, found.root.locator, target, name ?? target.name);
+    const unit = index.unit(target.unit);
+    const published =
+      unit !== undefined && isPublished(unit, (found.root.goodConfig?.config ?? defaultConfig()).impact);
+    return { found, target, edits, published };
+  };
+  /** A refused rename as the error the client shows. */
+  const refuse = (err: unknown) => {
+    if (err instanceof RenameRefused) throw new ResponseError(LSPErrorCodes.RequestFailed, err.message);
+    throw err;
+  };
+
+  connection.onPrepareRename(async ({ textDocument, position }) => {
+    try {
+      const plan = await planRename(textDocument.uri, position);
+      if (!plan) return null;
+      // The name at the cursor: a key, or the segment of a reference that names it.
+      const here = plan.edits.find(
+        (e) =>
+          e.loc.file === plan.found.at.loc.file &&
+          e.loc.line === position.line + 1 &&
+          e.loc.column <= position.character + 1 &&
+          e.loc.endColumn >= position.character + 1,
+      );
+      return here ? { range: toRange(here.loc), placeholder: plan.target.name } : null;
+    } catch (err) {
+      return refuse(err);
+    }
+  });
+
+  connection.onRenameRequest(async ({ textDocument, position, newName }) => {
+    try {
+      const plan = await planRename(textDocument.uri, position, newName);
+      if (!plan) return null;
+      const byUri = new Map<string, TextEdit[]>();
+      for (const e of plan.edits) {
+        const uri = pathToUri(join(plan.found.root.dir, e.loc.file));
+        byUri.set(uri, [...(byUri.get(uri) ?? []), { range: toRange(e.loc), newText: e.newText }]);
+      }
+      const what = `${plan.target.unit} is published: callers in other repositories that use ${JSON.stringify(plan.target.name)} break until they rename it too.`;
+      if (plan.published && annotations) {
+        const annotationId = 'published';
+        return {
+          changeAnnotations: {
+            [annotationId]: {
+              label: 'Rename in a published workflow or action',
+              description: what,
+              needsConfirmation: true,
+            },
+          },
+          documentChanges: [...byUri].map(([uri, edits]) => ({
+            textDocument: { uri, version: null },
+            edits: edits.map((e) => ({ ...e, annotationId })),
+          })),
+        } satisfies WorkspaceEdit;
+      }
+      if (plan.published) connection.window.showWarningMessage(what);
+      return { changes: Object.fromEntries(byUri) } satisfies WorkspaceEdit;
+    } catch (err) {
+      return refuse(err);
+    }
   });
 
   // The remote sources cache, so the client can open its files read-only.
