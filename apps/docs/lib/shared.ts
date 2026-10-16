@@ -4,6 +4,10 @@ export const appName = 'flowpact';
 export const docsRoute = '/docs';
 const docsContentRoute = '/llms.mdx/docs';
 export const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
+/** Where GitHub Pages serves the site, without the base path. */
+export const siteOrigin = 'https://ciatlas.github.io';
+/** What the site's descriptions say. */
+export const tagline = 'Change shared workflows and actions without breaking the repositories that use them.';
 
 export const gitConfig = {
   user: 'ciatlas',
@@ -30,3 +34,6 @@ export const installLinks = {
 
 /** Prefixes a public asset path with the deployment base path. */
 export const asset = (path: string) => `${basePath}${path}`;
+
+/** A path of the site as an absolute URL, for Markdown read away from the site (llms.txt, a copied page). */
+export const absoluteUrl = (path: string) => `${siteOrigin}${basePath}${path}`;

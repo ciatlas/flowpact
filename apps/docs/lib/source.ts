@@ -5,7 +5,7 @@ import { metaSchema, pageSchema } from 'fumadocs-core/source/schema';
 import { applyMdxPreset } from 'fumadocs-mdx/config';
 import { defineDocs } from 'fumadocs-mdx/macro';
 import { remarkIncludedFile } from './included-file';
-import { docsRoute } from './shared';
+import { absoluteUrl, docsRoute, getPageMarkdownUrl, tagline } from './shared';
 
 const docs = defineDocs({
   dir: 'content/docs',
@@ -35,8 +35,26 @@ export const source = loader({
   plugins: [lucideIconsPlugin()],
 });
 
-export const docsLlms = llms(source, {
-  renderPage: async (page) => `# ${page.data.title} (${page.url})
+/** Markdown with its links into the site made absolute: the pages link to `/docs/…`, without the base path. */
+const absoluteLinks = (markdown: string) => markdown.replace(/\]\(\//g, `](${absoluteUrl('/')}`);
 
-${await page.data.getText('processed')}`,
+export const docsLlms = llms(source, {
+  renderPage: async (page) => `# ${page.data.title} (${absoluteUrl(page.url)})
+
+${absoluteLinks(await page.data.getText('processed'))}`,
 });
+
+/** llms.txt: what flowpact is, then every page as a link to its Markdown. */
+export async function llmsIndex(): Promise<string> {
+  const markdown = new Map(source.getPages().map((p) => [p.url, absoluteUrl(getPageMarkdownUrl(p).url)]));
+  const pages = (await docsLlms.index())
+    .replace(/^# .*\n+/, '')
+    .replace(/\]\(([^)]+)\)/g, (link, url: string) => (markdown.has(url) ? `](${markdown.get(url)})` : link));
+  return `# flowpact
+
+> ${tagline} A data-flow linter for GitHub Actions: it checks reusable workflows and actions against their callers, and every value across workflows, actions and matrix combinations.
+
+Each link is the page's Markdown. [llms-full.txt](${absoluteUrl('/llms-full.txt')}) holds every page in one file.
+
+${pages}`;
+}

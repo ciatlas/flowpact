@@ -10,7 +10,7 @@ import { createRelativeLink } from 'fumadocs-ui/mdx';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
-import { getPageMarkdownUrl, gitConfig } from '@/lib/shared';
+import { asset, getPageMarkdownUrl, gitConfig } from '@/lib/shared';
 import { source } from '@/lib/source';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
@@ -19,7 +19,8 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   if (!page) notFound();
 
   const MDX = page.data.body;
-  const markdownUrl = getPageMarkdownUrl(page).url;
+  // With the base path: the copy button fetches it as given (it adds one only under Vite).
+  const markdownUrl = asset(getPageMarkdownUrl(page).url);
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>

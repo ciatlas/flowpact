@@ -3,17 +3,14 @@ title: Introduction
 description: Change shared workflows and actions without breaking the repositories that use them.
 ---
 
-flowpact checks both sides of every interface between GitHub Actions workflows. A reusable workflow or action is an
-interface: its inputs, secrets, outputs and the check names its jobs report. The repositories that call it pin a tag
-such as `@v1`, and a change that breaks them raises no error where it is made.
+flowpact checks both sides of a reusable workflow or action: what it declares, and what its callers pass and read.
 
-- **When you publish one,** flowpact grades every pull request major, minor, patch or none against what callers can
-  see, check names included, and fails it when its title declares less.
-- **When you call one,** it checks every call against the interface of the version it targets, recorded in a lockfile,
-  and grades a version bump or a tag that moved against your calls before you take it.
-- **Inside a repository,** it follows every input, secret, env var, matrix key and output across reusable workflows,
-  composite actions and matrix combinations. GitHub turns a missing one into an empty string, with no error and a
-  green run, and flowpact reports where.
+- **You publish one:** each pull request is graded major, minor, patch or none against what callers use
+  ([contracts](/docs/contracts), [impact mode](/docs/impact-mode)).
+- **You call one:** each call is checked against the version it targets, and each version bump before you take it
+  ([remote interfaces](/docs/remote-interfaces)).
+- **Inside a repository:** every value is followed across workflows, actions and matrix combinations. GitHub turns a
+  missing one into an empty string and a green run; [53 rules](/docs/rules) report where.
 
 ```mermaid
 flowchart TD
@@ -29,7 +26,8 @@ flowchart TD
   T -->|"remotes update: graded against your calls"| L
 ```
 
-It runs as you type, in your terminal and on every pull request, from the same engine.
+It runs in your editor, your terminal and on every pull request. It reads your YAML and runs nothing from it, needs no
+config, and sends no telemetry.
 
 ## Is this for me?
 
@@ -41,8 +39,7 @@ flowpact earns its place once workflows call each other, or other repositories c
 - a matrix with `include` entries feeds a reusable workflow, and every leg must get every value.
 
 A few standalone workflows with no calls between them? [actionlint](https://github.com/rhysd/actionlint) alone may be
-enough. flowpact checks what passes between files and matrix combinations: use it next to actionlint, which checks each
-file in depth, and [zizmor](https://github.com/zizmorcore/zizmor), which checks security. See
+enough. Otherwise, use flowpact next to actionlint and [zizmor](https://github.com/zizmorcore/zizmor): see
 [flowpact and other tools](/docs/comparison).
 
 ## Try it
@@ -90,25 +87,6 @@ file in depth, and [zizmor](https://github.com/zizmorcore/zizmor), which checks 
   </Tab>
 </Tabs>
 
-## What it checks
-
-- **For publishers.** [Contracts](/docs/contracts) record the interface of every workflow and local action, so a change
-  that breaks a caller shows in review, and [impact mode](/docs/impact-mode) fails a pull request that declares a patch
-  for a change that needs a major release.
-- **Calls into other repositories.** Against a committed lockfile of their interfaces: a required input not passed, an
-  unknown input or secret, a literal of the wrong type, an output that is not declared. See
-  [Remote interfaces](/docs/remote-interfaces).
-- **Across versions.** A version bump or a moved tag that drops an input you pass: `flowpact remotes update` says what
-  each changed reference does to your calls, and the action grades the references a pull request moves to another
-  version. See [When a version changes](/docs/remote-interfaces#when-a-version-changes).
-- **Within your repository.** 53 rules over the data-flow graph: an input a caller never passes, a secret a callee
-  never gets, an output nobody sets, a matrix leg that gets nothing, a local action that is not there, and call chains
-  GitHub rejects. Each [rule](/docs/rules) has a stable code, why it matters and how to fix it.
-
-flowpact reads your YAML and runs nothing from it, works without a config file, and sends no telemetry.
-[How it works](/docs/how-it-works) walks through the analysis, and [Concepts](/docs/concepts) defines the terms these
-pages use.
-
 ## I want to…
 
 <Cards>
@@ -123,3 +101,6 @@ pages use.
   <Card title="Roll it out across my organization" href="/docs/integrating">Organization defaults and rules, in an action of your own.</Card>
   <Card title="Review flowpact's security" href="/docs/security">What it reads and writes, signed releases, the threat model.</Card>
 </Cards>
+
+**For AI assistants:** [llms.txt](/llms.txt) lists every page as Markdown, and [llms-full.txt](/llms-full.txt) holds
+them all in one file.
