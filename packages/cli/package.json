@@ -1,6 +1,6 @@
 {
   "name": "flowpact",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "description": "Data-flow linter for GitHub Actions: grades releases of shared workflows and actions against their callers, checks calls into other repositories, and finds values that arrive empty.",
   "keywords": [
     "github-actions",
