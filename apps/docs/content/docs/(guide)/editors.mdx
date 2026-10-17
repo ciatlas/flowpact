@@ -17,7 +17,8 @@ release: see [Install without a marketplace](#install-without-a-marketplace). Yo
 - **Hover** — how an input, secret, output, env variable or matrix key is declared, where its value comes from and
   where it flows, through every level of nesting.
 - **Go to definition** across workflow calls and local actions: from `with: config:` to the callee's input, from
-  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output. Into
+  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output, from
+  `steps.x.outcome` to the step, and from `env.X` to the step's own `env:`. Into
   [other repositories' workflows and actions](#remote-workflows-and-actions) too, once their sources are cached.
 - **Find references** and **highlights** across files, and **rename** an input, secret or output in every file that
   names it.

@@ -356,7 +356,7 @@ function Editor() {
     <Section
       id="editor"
       title="In your editor, before you push"
-      lead="The same findings as you type, closed files included. Hover any value to see where it comes from and where it goes."
+      lead="The same findings as you type, closed files included. Hover any value to see where it comes from and where it goes; quick fixes, rename and completion work across files."
     >
       <Tabs items={['Findings', 'Hover', 'Definition', 'References']} className="mx-auto w-full max-w-4xl">
         <Tab value="Findings">

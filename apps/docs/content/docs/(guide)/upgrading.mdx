@@ -15,13 +15,15 @@ reports or the API is a major release (the next one is 1.0.0); up to 0.14, a min
 
 Then read the sections below from your version up.
 
-## 0.21 → 0.23
+## 0.21 → 0.24
 
 Nothing to change. What is new:
 
 - **Editor:** [quick fixes](/docs/editors#quick-fixes), **Accept this finding with an override**,
-  [rename](/docs/editors#rename), and hover and go to definition in contract files. A repository with no `.github`
-  folder, such as an action's, is now analyzed, so its findings appear.
+  [rename](/docs/editors#rename), [completion](/docs/editors#completion) of the inputs and secrets a call does not
+  pass yet, and hover and go to definition in contract files, for a step's own `env`, and from
+  `steps.<id>.outcome` to the step. A repository with no `.github` folder, such as an action's, is now analyzed, so its
+  findings appear.
 - **Reports:** a finding flowpact can fix with certainty carries `suggestions` in the
   [JSON report](/docs/cli#json-report) and `fixes` in SARIF. Both are additions to the existing schemas.
 

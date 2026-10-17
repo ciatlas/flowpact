@@ -29,8 +29,8 @@ reported twice.
 - **Hover** an input, secret, output, env variable or matrix key to see how it is declared, where its value comes from
   and where it flows, through every level of nesting.
 - **Go to definition** across workflow calls and local actions: from `with: config:` to the callee's input, from
-  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output. Into
-  workflows and actions of other repositories too, at the commit that runs, once `flowpact remotes update` or
+  `needs.build.outputs.url` to the reusable workflow's output, from `steps.x.outputs.y` to the action's output, from
+  `steps.x.outcome` to the step. Into workflows and actions of other repositories too, at the commit that runs, once `flowpact remotes update` or
   `flowpact remotes download` has cached their sources; the hover on a remote `uses:` shows its inputs, secrets and
   outputs.
 - **Find references** and **highlights** across files.
