@@ -1124,3 +1124,126 @@ describe('rename', () => {
     expect(plain.shown.join('\n')).toContain('is published');
   });
 });
+
+describe('completion', () => {
+  const W = '.github/workflows/ci.yml';
+  const SHA = 'c'.repeat(40);
+  const LOCK = [
+    'version: 1',
+    'remotes:',
+    '  octo/setup@v2:',
+    `    sha: ${SHA}`,
+    '    kind: action',
+    '    inputs:',
+    '      version: { required: true }',
+    '      cache: { type: boolean, default: false }',
+    '  octo/ship/.github/workflows/deploy.yml@v1:',
+    `    sha: ${SHA}`,
+    '    kind: workflow',
+    '    inputs:',
+    '      env: { type: string, required: true }',
+    '      dry-run: { type: boolean, default: false }',
+    '    secrets:',
+    '      token: { required: true }',
+    '',
+  ].join('\n');
+
+  type Item = { label: string; detail: string; sortText: string; documentation: { value: string } };
+  /** Opens the workflow as the editor has it, and asks for completion where `|` is (removed from the text). */
+  async function complete(files: Record<string, string>, typed: string, settings = {}) {
+    const text = typed.replace('|', '');
+    const dir = repo({ ...files, [W]: text, '.github/flowpact/remotes.lock.yaml': LOCK });
+    const client = await start(dir, settings);
+    await client.open(dir, W, text);
+    const before = typed.slice(0, typed.indexOf('|')).split('\n');
+    const items = (await client.conn.sendRequest('textDocument/completion', {
+      textDocument: { uri: uri(dir, W) },
+      position: { line: before.length - 1, character: before.at(-1)!.length },
+    })) as Item[] | null;
+    return items && [...items].sort((a, b) => a.sortText.localeCompare(b.sortText));
+  }
+  const step = (lines: string[]) =>
+    ['on: push', 'jobs:', '  a:', '    runs-on: ubuntu-latest', '    steps:', ...lines, ''].join('\n');
+
+  it("offers a remote action's inputs from the lockfile, required first, leaving out those passed", async () => {
+    const all = await complete({}, step(['      - uses: octo/setup@v2', '        with:', '          |']));
+    expect(all?.map((i) => i.label)).toEqual(['version', 'cache']);
+    expect(all?.[0]?.detail).toBe('required input of octo/setup@v2');
+    expect(all?.[1]?.documentation.value).toBe('optional · boolean · default `false`');
+    // A key half typed under one already passed does not parse: the offers come from the text as the editor has it.
+    const rest = await complete(
+      {},
+      step(['      - uses: octo/setup@v2', '        with:', '          cache: true', '          ver|']),
+    );
+    expect(rest?.map((i) => i.label)).toEqual(['version']);
+  });
+
+  it("offers a remote reusable workflow's inputs under with: and its secrets under secrets:", async () => {
+    const call = (block: string) =>
+      [
+        'on: push',
+        'jobs:',
+        '  deploy:',
+        '    uses: octo/ship/.github/workflows/deploy.yml@v1',
+        `    ${block}:`,
+        '      |',
+        '',
+      ].join('\n');
+    expect((await complete({}, call('with')))?.map((i) => i.label)).toEqual(['env', 'dry-run']);
+    expect((await complete({}, call('secrets')))?.map((i) => i.label)).toEqual(['token']);
+  });
+
+  it('offers what a local reusable workflow or action declares', async () => {
+    const files = {
+      '.github/workflows/build.yml':
+        'on:\n  workflow_call:\n    inputs:\n      target: { type: string, required: true, description: Where to build }\njobs: {}\n',
+      '.github/actions/lint/action.yml':
+        "name: lint\ninputs:\n  strict: { description: 'Fail on warnings' }\nruns:\n  using: composite\n  steps: []\n",
+    };
+    const call = await complete(
+      files,
+      [
+        'on: push',
+        'jobs:',
+        '  b:',
+        '    with:',
+        '      |',
+        '    uses: ./.github/workflows/build.yml',
+        '',
+      ].join('\n'),
+    );
+    expect(call?.map((i) => [i.label, i.documentation.value])).toEqual([
+      ['target', 'Where to build\n\nrequired · string'],
+    ]);
+    const action = await complete(
+      files,
+      step(['      - uses: ./.github/actions/lint', '        with:', '          |']),
+    );
+    expect(action?.map((i) => i.label)).toEqual(['strict']);
+  });
+
+  it("adds the descriptions of a remote reference's cached source", async () => {
+    const cache = repo({});
+    write(cache, {
+      [join('remotes', 'octo', 'setup', SHA, 'action.yml')]:
+        "name: setup\ninputs:\n  version: { required: true, description: 'The version to install' }\nruns:\n  using: node24\n  main: x.js\n",
+    });
+    const items = await complete({}, step(['      - uses: octo/setup@v2', '        with:', '          |']), {
+      cacheDir: cache,
+    });
+    expect(items?.[0]?.documentation.value).toBe('The version to install\n\nrequired');
+  });
+
+  it('offers nothing outside a block of a call it knows', async () => {
+    expect(
+      await complete({}, step(['      - uses: octo/setup@v2', '        with:', '          version: |'])),
+    ).toBeNull();
+    expect(
+      await complete({}, step(['      - uses: elsewhere/unlocked@v1', '        with:', '          |'])),
+    ).toBeNull();
+    expect(await complete({}, step(['      - run: echo', '        env:', '          |']))).toBeNull();
+    expect(
+      await complete({}, step(['      - uses: octo/setup@v2', '        secrets:', '          |'])),
+    ).toBeNull();
+  });
+});

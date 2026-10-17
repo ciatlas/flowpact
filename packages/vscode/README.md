@@ -35,6 +35,8 @@ reported twice.
   outputs.
 - **Find references** and **highlights** across files.
 - **Rename** an input, secret or output where it is declared, passed and read, in every file.
+- **Completion** of the inputs and secrets a call does not pass yet, for calls into other repositories too, from the
+  lockfile, with no network.
 - **Quick fixes** for findings flowpact can fix with certainty, and **Accept this finding with an override** on any
   of them.
 - **Contract drift** as you edit, when the repository [locks its contracts](https://ciatlas.github.io/flowpact/docs/contracts).

@@ -253,12 +253,18 @@ export class Workspace {
     return remote ? { root, at: remote.at, remote } : undefined;
   }
 
-  /** The findings of the repository a file belongs to, after pending edits are analyzed. */
-  async findingsOf(path: string): Promise<{ root: Root; findings: AnalysisResult['findings'] } | undefined> {
+  /** The analysis of the repository a file belongs to, after pending edits are analyzed. */
+  async analysisOf(path: string): Promise<{ root: Root; result: AnalysisResult } | undefined> {
     const root = this.rootOf(path);
     if (!root?.rel(path)) return undefined;
     await this.ready(root);
-    return root.result ? { root, findings: root.result.findings } : undefined;
+    return root.result ? { root, result: root.result } : undefined;
+  }
+
+  /** The findings of the repository a file belongs to, after pending edits are analyzed. */
+  async findingsOf(path: string): Promise<{ root: Root; findings: AnalysisResult['findings'] } | undefined> {
+    const analysis = await this.analysisOf(path);
+    return analysis && { root: analysis.root, findings: analysis.result.findings };
   }
 
   /**

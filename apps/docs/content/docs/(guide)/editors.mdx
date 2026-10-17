@@ -21,6 +21,8 @@ release: see [Install without a marketplace](#install-without-a-marketplace). Yo
   [other repositories' workflows and actions](#remote-workflows-and-actions) too, once their sources are cached.
 - **Find references** and **highlights** across files, and **rename** an input, secret or output in every file that
   names it.
+- **Completion** of the inputs and secrets a call or step does not pass yet, for calls into other repositories too,
+  from the lockfile.
 
 <Screenshot name="editor-diagnostics" format="png" alt="VS Code showing FP401 on matrix.config in tests.yml: the windows matrix entry has no config, with the call chain and flowpact's hover card" caption="A finding as you type: the windows matrix entry passes an empty config to run-suite.yml." />
 
@@ -183,6 +185,13 @@ breaks: VS Code asks you to confirm, and other editors show a warning. Afterward
 [contracts](/docs/contracts) (a quick fix offers it) and update any [override](/docs/configuration#overrides) that
 targets the old name.
 
+## Completion
+
+Under a call's or step's `with:` or `secrets:`, completion offers the inputs or secrets it does not pass yet, required
+ones first, with their type, default and description. A local reusable workflow or action declares them; for a call
+into another repository, they come from the [remote interfaces lockfile](/docs/remote-interfaces), without a network.
+The descriptions of a remote reference's inputs need its [cached source](#remote-workflows-and-actions).
+
 ## Settings
 
 In VS Code and the editors built on it, under **Settings → Extensions → flowpact**:
@@ -216,7 +225,8 @@ for a repository above the folder you opened.
 
 - `env` set on a step or in a composite action, `steps.<id>.outcome` / `conclusion` and step ids are not navigable
   yet.
-- There is no completion yet.
+- Completion covers the keys of `with:` and `secrets:` only, not workflow syntax or expressions: GitHub's Actions
+  extension completes those.
 
 ## Other editors
 

@@ -41,6 +41,7 @@ import {
   regenerateAction,
   suggestionActions,
 } from './actions';
+import { completionItems, keyContext, offersFor } from './completion';
 import { pathToUri, toRange, uriToPath } from './convert';
 import { hoverMarkdown, remoteBindingMarkdown } from './hover';
 import { RenameRefused, renameEdits, renameTarget } from './rename';
@@ -173,6 +174,7 @@ export function startServer(connection: Connection): void {
         codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
         executeCommandProvider: { commands: [ACCEPT_COMMAND] },
         renameProvider: { prepareProvider: true },
+        completionProvider: {},
         workspace: { workspaceFolders: { supported: true, changeNotifications: true } },
       },
       serverInfo: { name: 'flowpact', version: VERSION },
@@ -244,6 +246,17 @@ export function startServer(connection: Connection): void {
       ? remoteBindingMarkdown(remote, occurrencesOf(found).length, sources.of(lock?.lock, remote.ref))
       : hoverMarkdown(root.locator!, at, { ...(lock ? { lock } : {}), sources, webHost: root.webHost });
     return { contents: { kind: 'markdown', value }, range: toRange(at.loc) };
+  });
+
+  // The inputs and secrets a call or step does not pass yet: a remote one's from the lockfile, without a network.
+  connection.onCompletion(async ({ textDocument, position }) => {
+    const path = uriToPath(textDocument.uri);
+    const text = documents.get(textDocument.uri)?.getText();
+    const ctx = text === undefined ? undefined : keyContext(text, position.line, position.character);
+    const analysis = ctx && path ? await workspace?.analysisOf(path) : undefined;
+    if (!ctx || !analysis) return null;
+    const offers = offersFor(analysis.result.index, analysis.result.remotes?.lock, sources, ctx);
+    return offers ? completionItems(offers, ctx) : null;
   });
 
   /** Go to Definition into the cached source of a remote reference: the file, or the declaration in it. */
