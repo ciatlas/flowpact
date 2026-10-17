@@ -4,6 +4,14 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.24.0](https://github.com/ciatlas/flowpact/compare/v0.23.0...v0.24.0) (2026-10-17)
+
+
+### Features
+
+* **language-server:** complete the inputs and secrets a call does not pass yet ([#220](https://github.com/ciatlas/flowpact/issues/220)) ([a9dd8f1](https://github.com/ciatlas/flowpact/commit/a9dd8f12dc83b034dfc34aad6b44ff8a2ee534f7))
+* **language-server:** navigate to a step's own env and to steps from their outcome ([#222](https://github.com/ciatlas/flowpact/issues/222)) ([d643603](https://github.com/ciatlas/flowpact/commit/d6436032ebb34c4593c40103ead53612b169754a))
+
 ## [0.23.0](https://github.com/ciatlas/flowpact/compare/v0.22.0...v0.23.0) (2026-10-16)
 
 
