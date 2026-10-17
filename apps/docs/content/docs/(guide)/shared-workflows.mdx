@@ -45,7 +45,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7       # pin to a commit SHA
-      - uses: ciatlas/flowpact@v0.23    # pin to a commit SHA
+      - uses: ciatlas/flowpact@v0.24    # pin to a commit SHA
         with:
           mode: check    # lint, and compare with the committed contracts
           impact: auto   # grade the change against the pull request title
