@@ -3,13 +3,10 @@ title: Comparison
 description: What flowpact reports that actionlint and GitHub's VS Code extension do not, with actionlint's and flowpact's output side by side, and where the tools overlap.
 ---
 
-flowpact reports what happens between files and between matrix combinations: values that are present in the YAML but
-arrive empty, because one `include` entry lacks a key, an optional input is never set, or a called workflow reads a
-secret while declaring none. GitHub raises no error for these and the run carries on, and neither actionlint nor
-GitHub's VS Code extension reports them. Where the checks overlap, on direct calls to a workflow or an action, flowpact
-adds the chain of calls, why it matters, how to fix it and a link to the rule, and it checks the calls into other
-repositories against a committed lockfile: in CI too, without network, and before you take a new version. actionlint
-checks each file in more depth (shell scripts, expression types, runner labels), so use both.
+flowpact reports what happens between files and matrix combinations: values written in the YAML that arrive empty,
+with no error from GitHub and nothing from actionlint or GitHub's VS Code extension. It also checks calls into other
+repositories against a committed lockfile, in CI too, and grades a new version before you take it. actionlint checks
+each file in more depth (shell scripts, expression types, runner labels), so use both.
 
 What each tool reports, from small test repositories and the tools' own documentation:
 
@@ -40,28 +37,24 @@ What each tool reports, from small test repositories and the tools' own document
 | Bugs in `run:` scripts, such as an unquoted variable | ✓ runs shellcheck when it is installed | — | — |
 | Security: script injection, permissions, pinning ([zizmor](https://github.com/zizmorcore/zizmor) covers these) | script injection and hard-coded credentials | not compared | — |
 
-¹ GitHub Actions extension 0.31.5, run through its language server; the rows on calls into other repositories with its
-language server 0.3.60, the one extension 0.32.3 bundles (2026-10-15). It checks calls to reusable workflows and to
-actions in other repositories only when you are signed in to GitHub, and calls to local reusable workflows only when
-GitHub also returns the repository of the workspace's git remote. Without that it misses them, and can warn about
-outputs that do exist. It reports nothing for local composite actions.
+¹ GitHub Actions extension 0.31.5 through its language server; for calls into other repositories, language server 0.3.60
+from extension 0.32.3 (2026-10-15). It checks calls to reusable workflows and remote actions only when you are signed
+in, and calls to local reusable workflows only when GitHub also returns the workspace's repository; otherwise it misses
+them and can warn about outputs that exist. It reports nothing for local composite actions.
 
 <InlineTOC items={toc} />
 
 ## Side by side
 
-Each case is a small repository of its own: its files are in the tabs after flowpact's output. actionlint 1.7.12 ran
-from the repository root and flowpact ran `flowpact lint` with `NO_COLOR=1`. The outputs are copied unchanged, without
-the version banner and `root` line that flowpact prints first and its closing summary. GitHub's Actions extension 0.31.5 ran through its language server, with
-the repository resolved as when you are signed in and without; what it reported is in the text.
+Each case is a small repository, with its files in the tabs after flowpact's output. actionlint 1.7.12 and
+`flowpact lint` ran at its root (`NO_COLOR=1`); the outputs are unchanged apart from flowpact's banner and summary.
+GitHub's extension 0.31.5 ran signed in and not; what it reported is in the text.
 
 ### One matrix entry lacks a key that a reusable workflow requires
 
-The windows entry has no `config`. GitHub evaluates a missing matrix key to an empty string, so the windows leg calls
-integration.yml with an empty `config` and runs `./scripts/integration.sh --config ""`. The `config:` key is present
-under `with:`, so GitHub's required-input check passes and the run raises no error. actionlint makes the same check:
-delete the `config:` line and it reports the missing input, but an empty value in one combination passes. GitHub's
-extension reports nothing. It is the same mistake as the incident that started flowpact.
+The windows entry has no `config`, so the windows leg passes an empty `config` and runs
+`./scripts/integration.sh --config ""`. The `config:` key is present under `with:`, so GitHub's required-input check
+passes, and so does actionlint's. GitHub's extension reports nothing. This is the incident that started flowpact.
 
 **actionlint:** no output.
 
@@ -149,11 +142,10 @@ jobs:
 
 ### An include entry left over after a runner upgrade starts a job of its own
 
-GitHub adds each `include` entry to every combination it can join without overwriting a value; an entry that joins none
-becomes a new combination. `os: windows-2022` matches no `os` in the matrix, so it becomes a separate windows-2022 job,
-and the windows-2025 job has no `archive`. That job runs `./scripts/package.sh --format` with an empty value. actionlint
-treats `archive` as defined because some entries set it, and GitHub's extension reports nothing. flowpact expands the
-matrix with GitHub's rules and names the one combination without the key.
+An `include` entry that joins no combination becomes a new one. `os: windows-2022` matches no `os`, so it starts a job
+of its own, and the windows-2025 job runs `./scripts/package.sh --format` with an empty `archive`. actionlint treats
+`archive` as defined because some entries set it; GitHub's extension reports nothing. flowpact expands the matrix as
+GitHub does and names the combination without the key.
 
 **actionlint:** no output.
 
@@ -218,10 +210,9 @@ jobs:
 
 ### An optional input decides an `if:`, and the caller leaves it out
 
-An optional string input without a default is an empty string when the caller omits it. ci.yml does not pass
-`push-image`, so `if: inputs.push-image` is false and the push step is skipped on every push to main: the image is
-built, never published, and the run is green. actionlint and GitHub's extension report nothing. With `type: boolean`
-flowpact reports nothing, because the default is then `false` and leaving the input out is a deliberate opt-in.
+ci.yml does not pass `push-image`, an optional string with no default, so `if: inputs.push-image` is false: the image
+is built on every push to main, never published, and the run is green. actionlint and GitHub's extension report
+nothing. With `type: boolean`, flowpact stays quiet too: the default is then `false`, and leaving it out is an opt-in.
 
 **actionlint:** no output.
 
@@ -303,11 +294,9 @@ jobs:
 
 ### A required input is fed from an optional input nobody sets
 
-release.yml passes `environment: ${{ inputs.environment }}`, so its call to deploy.yml looks complete and GitHub starts
-the run. ci.yml never sets release.yml's optional `environment`, which has no default, so deploy.yml's required
-`environment` arrives as an empty string. Each file is valid on its own; the value is lost between them. actionlint
-reads the interface of each direct callee, finds `environment:` present and reports nothing. GitHub's extension reports
-nothing either.
+release.yml passes `environment: ${{ inputs.environment }}` to deploy.yml, but ci.yml never sets release.yml's
+optional `environment`, so deploy.yml's required input arrives empty. Each file is valid on its own; the value is lost
+between them. actionlint sees `environment:` present in each call; GitHub's extension reports nothing.
 
 **actionlint:** no output.
 
@@ -386,10 +375,9 @@ jobs:
 
 ### A composite action reads a misspelled input
 
-`inputs.enviroment` is not declared, so it evaluates to an empty string, and the action runs
-`./scripts/deploy.sh --env ""` although the caller passes `environment: production`. actionlint lints workflow files,
-not `action.yml`, and reports nothing; GitHub's extension reports nothing for either file. flowpact reports the typo
-and suggests the declared name, and reports that the declared input is never read.
+`inputs.enviroment` is not declared, so the action runs `./scripts/deploy.sh --env ""` although the caller passes
+`environment: production`. actionlint does not lint `action.yml`, and GitHub's extension reports nothing. flowpact
+reports the typo with the declared name, and that the declared input is never read.
 
 **actionlint:** no output.
 
@@ -472,12 +460,10 @@ runs:
 
 ### A local action after a checkout into a subdirectory
 
-A step's `./` path resolves against the runner's workspace, not the repository. The checkout writes this repository to
-`src`, so the action is at `./src/.github/actions/setup-node`, nothing is at `./.github/actions/setup-node`, and the
-step fails when it is reached. actionlint resolves `./` against the repository root, where the action exists, and
-reports nothing; neither does GitHub's extension. flowpact maps the path through the checkout and suggests the paths
-that work. A typo in a step's action path, such as `./.github/actions/setup-nod`, is the same rule, and the other two
-tools report nothing there either.
+A step's `./` path resolves against the workspace, not the repository. The checkout writes the repository to `src`, so
+nothing is at `./.github/actions/setup-node` and the step fails when it is reached. actionlint resolves `./` against the
+repository root and reports nothing; neither does GitHub's extension. flowpact maps the path through the checkout and
+suggests the paths that work. A typo in the path is the same rule.
 
 **actionlint:** no output.
 
@@ -550,10 +536,9 @@ runs:
 
 ### A reusable workflow declares one secret and reads another
 
-Both tools report this one, at the same position. A called workflow sees only the secrets passed to it, so
-`secrets.NPM_TOKEN` is empty and `./publish.sh` runs without a token. actionlint reports an undefined property of the
-`secrets` object and looks no further than publish.yml. flowpact says the value will be empty and counts the callers
-that do not use `secrets: inherit`. GitHub's extension reports nothing.
+A called workflow sees only the secrets passed to it, so `./publish.sh` runs without `NPM_TOKEN`. actionlint and
+flowpact both report it, at the same position: actionlint an undefined property of `secrets`, flowpact an empty value,
+with the callers that do not use `secrets: inherit`. GitHub's extension reports nothing.
 
 <Tabs items={['flowpact', 'actionlint', 'ci.yml', 'publish.yml']}>
 <Tab value="flowpact">
@@ -636,16 +621,13 @@ The difference shows when the repository changes:
 
 ## Beyond lint
 
-Some breakages exist only relative to something the current files do not show: the interface that other repositories
-were written against, or the commit a pull request starts from.
+Some breaks exist only against something the files do not show: the interface other repositories were written
+against, or the commit a pull request starts from.
 
-**Contracts.** `flowpact generate` writes each workflow's and action's interface to a contract file that you commit,
-and `flowpact check` reports a change that breaks it. It compares the workflow with its committed contract, not with
-the callers, which it cannot see when they live in other repositories. For a reusable workflow whose callers are all
-elsewhere, it is the only check here that notices: after an output was removed and a required input added, actionlint
-printed nothing, GitHub's language server published 0 diagnostics, and `flowpact check` reported both changes, as did
-flowpact's language server while the file was open. `flowpact lint` does not report the removed output; `check` does.
-See [contracts](/docs/contracts).
+**Contracts.** `flowpact check` compares each workflow and action with its committed [contract](/docs/contracts). For a
+reusable workflow whose callers are all elsewhere, it is the only check here that notices: after an output was removed
+and a required input added, actionlint and GitHub's language server reported nothing, and `flowpact check` reported
+both.
 
 ```text
 ✖  ERROR  FP803 breaking-interface-change
@@ -653,11 +635,10 @@ See [contracts](/docs/contracts).
   consumers reading it get an empty value
 ```
 
-**Impact mode.** A pull request titled `fix: tidy the test job` renamed a job in a published reusable workflow from
-`Test` to `Unit tests`. Consumers whose branch protection requires the old check name then wait for it forever, and a
-release tool that reads the title, such as release-please, ships the change as a patch to everyone on `@v1`. actionlint
-and GitHub's language server report nothing. `flowpact impact` fails; retitled `feat!: rename the test job`, the same
-change passes. See [impact mode](/docs/impact-mode).
+**Impact mode.** A pull request titled `fix: tidy the test job` renamed a published workflow's job from `Test` to
+`Unit tests`: callers' branch protection waits forever for the old check, and release-please ships it as a patch.
+actionlint and GitHub's language server report nothing. `flowpact impact` fails until the title is
+`feat!: rename the test job`. See [impact mode](/docs/impact-mode).
 
 ```text
 ✖  ERROR  FP810 impact-under-declared
@@ -665,8 +646,8 @@ change passes. See [impact mode](/docs/impact-mode).
   Test" is now "… / Unit tests"; consumers that require the old name wait forever
 ```
 
-**Trace.** `flowpact trace` follows a value through reusable workflows down to where it is used, or with `--up` back to
-where it comes from. actionlint has no equivalent. On the
+**Trace.** `flowpact trace` follows a value down to where it is used, or with `--up` to where it comes from. actionlint
+has no equivalent. On the
 [`deep-nesting`](https://github.com/ciatlas/flowpact/tree/main/fixtures/deep-nesting) fixture:
 
 ```text
@@ -682,9 +663,9 @@ $ flowpact trace pipeline.yml:environment
                 ${{ inputs.environment }}
 ```
 
-**In the editor.** flowpact's hover shows where a value comes from and where it goes, and go to definition and find
-references work across workflow calls. GitHub's Actions language server documents the syntax on hover; it declares no
-definition or references provider and answers both requests with "Unhandled method". See [editors](/docs/editors).
+**In the editor.** flowpact's hover shows where a value comes from and goes, and go to definition, references and
+rename work across workflow calls. GitHub's language server documents the syntax on hover, and has no definition or
+references. See [editors](/docs/editors).
 
 ## Where they overlap
 
@@ -702,19 +683,14 @@ These are reported by more than one tool, and actionlint and flowpact report the
   extension reads the callee from GitHub as you edit; flowpact reads the lockfile you commit, so the same check runs
   in CI and grades a new version before you take it.
 
-A missing input deep in a chain belongs to the first group: actionlint lints every file, so it reports the call in
-whichever file makes it. What it does not do is follow a value from one level to the next, as in the `FP107` case
-above.
+actionlint reports a missing input in whichever file makes the call; it does not follow a value from one level to the
+next, as in the `FP107` case above. On shared findings, flowpact adds the chain of calls, why it matters, how to fix
+it and a "did you mean".
 
-On these findings flowpact adds context: the chain of calls that reaches the file, why the value matters, how to fix
-it, a link to the rule, and a "did you mean" for a misspelled name, where actionlint lists every declared name.
-
-Both CLIs produce JSON, SARIF and pull request annotations: actionlint through `-format` templates, a problem matcher or
-reviewdog, flowpact through `--format` and the [Action](/docs/action), which also writes a job summary. GitHub's
-extension does what neither CLI does: it manages runs and logs, and completes workflow syntax, including, when you are
-signed in, the outputs of a called reusable workflow. flowpact's YAML, schema and expression checks (`FP502`–`FP505`)
-repeat the extension's, so flowpact's VS Code extension by default [hides them](/docs/editors#settings) in the files you
-open while the GitHub extension runs.
+Both CLIs produce JSON, SARIF and pull request annotations. GitHub's extension manages runs and logs and completes
+workflow syntax, which neither CLI does. flowpact's YAML, schema and expression checks (`FP502`–`FP505`) repeat the
+extension's, so flowpact's VS Code extension [hides them](/docs/editors#settings) by default in files you open while it
+runs.
 
 ## Measured on the fixture repositories
 
@@ -744,8 +720,6 @@ boundaries and matrix combinations.
 
 <Callout title="Same-repository $/ references">
 GitHub documents `uses: $/path` for this repository at the running commit (not on GitHub Enterprise Server). actionlint
-1.7.12 and GitHub's extension report it as an error, so actionlint never checks the workflow or action it points to.
-actionlint accepts the invalid `$/path@v1`, in a step and in a job's `uses:`; GitHub's extension accepts it in a step.
-flowpact resolves `$/`, checks the workflow or action it points to, and reports the `@ref` form. Some `FP606` fixes
-suggest `$/`; if you also run actionlint, use the `./` form they offer.
+1.7.12 and GitHub's extension report it as an error, yet accept the invalid `$/path@v1` (the extension in a step only).
+flowpact resolves `$/`, checks what it points to, and reports the `@ref` form. If you also run actionlint, use the `./` form of an `FP606` fix.
 </Callout>
