@@ -38,7 +38,7 @@ export function renameTarget(index: ProjectIndex, locator: SymbolLocator, at: Oc
   const [d] = locator.declarations(at.symbol);
   if (!d) throw new RenameRefused('Only a declared input, secret or output can be renamed.');
   if (index.unit(d.unit)?.external) throw new RenameRefused('It is declared in another repository.');
-  if (d.kind === 'step')
+  if (d.kind === 'step' && at.symbol.includes('.outputs.'))
     throw new RenameRefused("The step's script writes this output: rename it in the script and its reads.");
   if (d.kind === 'input')
     return { kind: 'input', unit: d.unit, name: d.decl.name, symbol: sym.input(d.unit, d.decl.name) };

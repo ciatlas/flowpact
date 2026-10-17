@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: "What flowpact does today, and what comes next: the rest of the editor."
+description: "What flowpact does today, and where to ask for what comes next."
 ---
 
 What each release changed is in the [changelog](/docs/changelog).
@@ -25,11 +25,11 @@ What each release changed is in the [changelog](/docs/changelog).
 - **[GitHub Action](/docs/action):** a job summary, pull request annotations, SARIF, and the regenerated contracts as an
   artifact.
 - **[Language server](/docs/editors)** (`flowpact lsp`): findings as you type across files, hover traces, go to
-  definition across workflow calls, and references. Calls into other repositories are described from the remote
-  interfaces lockfile, and go to definition opens their cached sources.
+  definition across workflow calls, and references, a step's own `env` and step ids included. Calls into other
+  repositories are described from the remote interfaces lockfile, and go to definition opens their cached sources.
   [Quick fixes](/docs/editors#quick-fixes) rename a misspelled name, add a missing input, secret or matrix key, remove
-  an unused input, regenerate the contracts, and accept a finding with an override. Contract files have hover and go to
-  definition too. [Rename](/docs/editors#rename) an input, secret or output across its declaration, its callers and
+  an unused input, regenerate the contracts, and accept a finding with an override. Contract files have hover and go
+  to definition too. [Rename](/docs/editors#rename) an input, secret or output across its declaration, its callers and
   its reads. [Completion](/docs/editors#completion) offers the inputs and secrets a call does not pass yet, from the
   lockfile for calls into other repositories.
 - **[VS Code extension](/docs/editors#vs-code)** on the Visual Studio Marketplace and Open VSX, with the language server
@@ -53,6 +53,8 @@ What each release changed is in the [changelog](/docs/changelog).
   moves to another version, each of your calls is graded as broken, unchecked or still fitting: in a scheduled drift
   check, and on the pull request that moves it.
 
-## Next: the rest of the editor
+## Next
 
-- **Navigation** for `env` set on a step or in a composite action, step outcomes and step ids.
+The editor plan is complete. Ask for what you need next in
+[GitHub issues](https://github.com/ciatlas/flowpact/issues); what each release brings is in the
+[changelog](/docs/changelog).

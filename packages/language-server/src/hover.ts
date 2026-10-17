@@ -50,6 +50,7 @@ const KIND: Record<string, string> = {
   env: 'env variable',
   matrix: 'matrix key',
   job: 'job',
+  step: 'step',
   var: 'configuration variable',
   remote: 'remote reference',
   workflow: 'workflow',
@@ -89,7 +90,8 @@ const UNDECLARED_KINDS: [RegExp, string][] = [
   [/(^|\.)steps\.[^.]+\.outputs\./, 'step-output'],
   [/^jobs\.[^.]+\.outputs\./, 'job-output'],
   [/^jobs\.[^.]+\.matrix\./, 'matrix'],
-  [/^(jobs\.[^.]+\.)?env\./, 'env'],
+  [/^(jobs\.[^.]+\.)?(steps\[\d+\]\.)?env\./, 'env'],
+  [/(^|\.)steps\.[^.]+$/, 'step'],
 ];
 
 /** The kind of a symbol, also for symbols nothing declares (the graph marks those unresolved). */
@@ -308,8 +310,23 @@ function matrixFacts(d: DeclOf<'matrix'>): Facts {
   return { line: `values ${list([...values])}` };
 }
 
-/** An output of a step: of its remote action, as the lockfile records it, or written by the step's script. */
+/** A step, by its id: what it runs, and what its outcome and conclusion are. */
+function stepIdFacts(step: DeclOf<'step'>['decl']): Facts {
+  return {
+    line: joinFacts([
+      step.name ? `name ${code(step.name)}` : undefined,
+      step.uses ? `uses ${code(step.uses.raw)}` : 'runs a script',
+    ]),
+    description: `${code('outcome')} is its result before ${code('continue-on-error')} applies, ${code('conclusion')} after.`,
+  };
+}
+
+/**
+ * A step by its id, or an output of a step: of its remote action, as the lockfile records it, or written by the step's
+ * script.
+ */
 function stepFacts(index: ProjectIndex, step: DeclOf<'step'>['decl'], symbol: string): Facts {
+  if (!symbol.includes('.outputs.')) return stepIdFacts(step);
   const action = step.uses?.kind === 'remote-action' ? index.actionInterfaceOf(step) : undefined;
   const name = symbol.slice(symbol.lastIndexOf('.outputs.') + '.outputs.'.length);
   if (action && lookup(action.outputs, name)) return { line: `declared by ${code(step.uses!.raw)}` };

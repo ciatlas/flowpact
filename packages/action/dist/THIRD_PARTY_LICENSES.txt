@@ -121,7 +121,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 --------------------------------------------------------------------------------
-@ciatlas/core 2.2.0 (MIT)
+@ciatlas/core 2.3.0 (MIT)
 https://github.com/ciatlas/core
 
 MIT License

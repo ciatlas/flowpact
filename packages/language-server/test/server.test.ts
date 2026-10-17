@@ -1248,3 +1248,73 @@ describe('completion', () => {
     ).toBeNull();
   });
 });
+
+describe('steps and their own env', () => {
+  const W = '.github/workflows/steps.yml';
+  const TEXT = [
+    'on: push',
+    'jobs:',
+    '  a:',
+    '    runs-on: ubuntu-latest',
+    '    env:',
+    '      MODE: job',
+    '    steps:',
+    '      - id: test',
+    '        name: Unit tests',
+    '        run: make test',
+    '        continue-on-error: true',
+    '      - env:',
+    '          MODE: step',
+    "        if: steps.test.outcome == 'failure'",
+    '        run: echo "${{ env.MODE }} ${{ steps.test.conclusion }}"',
+    '',
+  ].join('\n');
+  async function open() {
+    const dir = repo({ [W]: TEXT });
+    const client = await start(dir);
+    await client.open(dir, W, TEXT);
+    const request = (method: string, needle: string, extra = {}, offset = 0) =>
+      client.conn.sendRequest(`textDocument/${method}`, {
+        textDocument: { uri: uri(dir, W) },
+        position: position(TEXT, needle, offset),
+        ...extra,
+      });
+    return { dir, client, request };
+  }
+  type Range = { start: { line: number; character: number } };
+  /** Where each location or location link starts, as line:character (0-based). */
+  const lines = (locations: unknown) =>
+    (locations as { range?: Range; targetSelectionRange?: Range }[]).map((l) => {
+      const { start } = (l.range ?? l.targetSelectionRange)!;
+      return `${start.line}:${start.character}`;
+    });
+
+  it("goes to a step's own env, and hovers it", async () => {
+    const { request } = await open();
+    expect(lines(await request('definition', 'env.MODE'))).toEqual([`${12}:10`]);
+    const hover = (await request('hover', 'env.MODE')) as { contents: { value: string } };
+    expect(hover.contents.value).toContain('env variable');
+    expect(hover.contents.value).toContain('value `step`');
+  });
+
+  it('goes to a step from its outcome and conclusion, lists its reads, and hovers it', async () => {
+    const { request } = await open();
+    expect(lines(await request('definition', 'steps.test.outcome'))).toEqual(['7:12']);
+    expect(lines(await request('definition', 'steps.test.conclusion'))).toEqual(['7:12']);
+    const refs = await request('references', 'id: test', { context: { includeDeclaration: true } }, 4);
+    expect(lines(refs)).toEqual(['7:12', '13:12', '14:39']);
+    const hover = (await request('hover', 'steps.test.conclusion')) as { contents: { value: string } };
+    expect(hover.contents.value).toContain('**flowpact** · step');
+    expect(hover.contents.value).toContain('name `Unit tests` · runs a script');
+    expect(hover.contents.value).toContain('before `continue-on-error` applies');
+  });
+
+  it('does not rename a step id', async () => {
+    const { request } = await open();
+    const refused = await request('rename', 'steps.test.outcome', { newName: 'unit' }).then(
+      () => 'renamed',
+      (e: Error) => e.message,
+    );
+    expect(refused).toContain('Only an input, a secret or an output can be renamed');
+  });
+});

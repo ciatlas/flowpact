@@ -222,8 +222,8 @@ expiry, plugins, the CLI (pretty, JSON, Markdown and SARIF output; `flowpact gra
 GitHub Action, a language server and the
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (diagnostics as you
 type, hover traces, go to definition across workflow calls and into the sources of remote workflows and actions,
-quick fixes and rename; also on [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). Next: the rest of
-the editor — see the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
+quick fixes, rename and completion; also on [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact)). See
+the [roadmap](https://ciatlas.github.io/flowpact/docs/roadmap).
 
 ## Security
 
