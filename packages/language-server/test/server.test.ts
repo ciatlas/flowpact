@@ -1151,11 +1151,12 @@ describe('completion', () => {
   type Item = { label: string; detail: string; sortText: string; documentation: { value: string } };
   /** Opens the workflow as the editor has it, and asks for completion where `|` is (removed from the text). */
   async function complete(files: Record<string, string>, typed: string, settings = {}) {
-    const text = typed.replace('|', '');
+    const cursor = typed.indexOf('|');
+    const text = typed.slice(0, cursor) + typed.slice(cursor + 1);
     const dir = repo({ ...files, [W]: text, '.github/flowpact/remotes.lock.yaml': LOCK });
     const client = await start(dir, settings);
     await client.open(dir, W, text);
-    const before = typed.slice(0, typed.indexOf('|')).split('\n');
+    const before = typed.slice(0, cursor).split('\n');
     const items = (await client.conn.sendRequest('textDocument/completion', {
       textDocument: { uri: uri(dir, W) },
       position: { line: before.length - 1, character: before.at(-1)!.length },

@@ -3,8 +3,13 @@ import { keyContext } from '../src/completion';
 
 /** The context where `|` is (removed from the text). */
 function at(typed: string) {
-  const before = typed.slice(0, typed.indexOf('|')).split('\n');
-  return keyContext(typed.replace('|', ''), before.length - 1, before.at(-1)!.length);
+  const cursor = typed.indexOf('|');
+  const before = typed.slice(0, cursor).split('\n');
+  return keyContext(
+    typed.slice(0, cursor) + typed.slice(cursor + 1),
+    before.length - 1,
+    before.at(-1)!.length,
+  );
 }
 
 describe('keyContext', () => {
