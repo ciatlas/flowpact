@@ -3,19 +3,29 @@ title: Upgrading
 description: What changes between flowpact releases, and what to do when you move to a new one.
 ---
 
-A minor release can change what is reported; an incompatible change to the CLI, the configuration, the action, the
-reports or the API is a major release (the next one is 1.0.0). Up to 0.14, such a change could also come in a minor
-release. Each section below lists what to do when you move to that release.
+A minor release can change what is reported. An incompatible change to the CLI, the configuration, the action, the
+reports or the API is a major release (the next one is 1.0.0); up to 0.14, a minor release could make one too.
 
-<InlineTOC items={toc} />
+## Move to a new version
+
+- **GitHub Action:** `uses: ciatlas/flowpact@v0.<minor>` with the new minor version. Before 1.0 the floating tag
+  follows a minor release, so `@v0.22` stays on 0.22.
+- **CLI:** `npx flowpact@0.<minor>`, or update the dev dependency.
+- **VS Code:** the extension updates itself.
+
+Then read the sections below from your version up.
+
+## 0.21 → 0.23
+
+Nothing to change. What is new:
+
+- **Editor:** [quick fixes](/docs/editors#quick-fixes), **Accept this finding with an override**,
+  [rename](/docs/editors#rename), and hover and go to definition in contract files. A repository with no `.github`
+  folder, such as an action's, is now analyzed, so its findings appear.
+- **Reports:** a finding flowpact can fix with certainty carries `suggestions` in the
+  [JSON report](/docs/cli#json-report) and `fixes` in SARIF. Both are additions to the existing schemas.
 
 ## 0.20 → 0.21
-
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.21`.
-- **CLI:** `npx flowpact@0.21`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
 
 ### Remote interfaces lockfile
 
@@ -46,15 +56,12 @@ the 3 most recently used commits of each repository. Nothing to do: it keeps not
 (`--cache-dir`), and `--no-cache` turns it off. `remotes update` also no longer loads the plugins your config lists: it
 runs no rule.
 
-## 0.19 → 0.20
+## Older releases
 
-### Move to the new version
+<Accordions type="multiple">
+<Accordion title="0.19 → 0.20" id="from-0-19-to-0-20">
 
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.20`.
-- **CLI:** `npx flowpact@0.20`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Remote interfaces lockfile
+**Remote interfaces lockfile**
 
 0.20 writes a leaner lockfile: an input or secret is marked `required: true` only when it is, and `required: false`
 is left out. An entry read on github.com through the new opt-in fallback records `host: github.com`. flowpact 0.19
@@ -65,25 +72,20 @@ reads the lockfile (the action's pin, the CLI, the editor extension) before runn
 a path that names nothing is an error (exit 2). It shows its progress and the source of its token, and says why a
 reference could not be fetched.
 
-### GitHub Enterprise Server and GHE.com
+**GitHub Enterprise Server and GHE.com**
 
 `--github-com` (the action's `remotes-github-com` and `github-com-token` inputs) also looks on github.com for the
 references the enterprise server lacks, as the runner does through GitHub Connect. It is opt-in, because it sends
 those references' names to github.com; see
 [Remote interfaces](/docs/remote-interfaces#github-enterprise-server-and-ghecom).
 
-## 0.18 → 0.19
+</Accordion>
+<Accordion title="0.18 → 0.19" id="from-0-18-to-0-19">
 
 0.19 checks calls into other repositories, once you record their interfaces, and grades more kinds of change in
 impact mode.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.19`.
-- **CLI:** `npx flowpact@0.19`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Remote interfaces
+**Remote interfaces**
 
 `flowpact remotes update` writes `.github/flowpact/remotes.lock.yaml`, the interfaces of the reusable workflows and
 actions you call from other repositories. With it committed, those calls are checked like local ones
@@ -97,7 +99,7 @@ update. The action reads the lockfile as committed; `remotes: fetch` fetches wha
 0.19.1 records references it cannot read under the lockfile's `unreadable:`, which 0.19.0 refuses (FP611). Use
 0.19.1 or later wherever the lockfile is read.
 
-### Impact mode grades more
+**Impact mode grades more**
 
 Impact mode now also grades what a published reusable workflow or action does in its callers' runs, so a pull request
 can require more than before:
@@ -116,18 +118,13 @@ title declares less than a minor or major it now requires fails with [FP810](/do
 it needs, or accept the finding with an [override](/docs/configuration#overrides). See
 [Impact mode](/docs/impact-mode).
 
-## 0.17 → 0.18
+</Accordion>
+<Accordion title="0.17 → 0.18" id="from-0-17-to-0-18">
 
 0.18 writes new contracts as `.contract.yaml` and reads `.contract.yaml` and `.contract.yml` alike. Existing contracts
 keep their names, so a repository that locks contracts sees no change.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.18`.
-- **CLI:** `npx flowpact@0.18`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Contract file names
+**Contract file names**
 
 `flowpact generate` names a new contract `.contract.yaml`, except in a repository whose contracts are all
 `.contract.yml`, where it keeps to `.contract.yml` so the directory has one extension. A contract named either way is
@@ -135,19 +132,14 @@ read, compared and updated under its own name. To move a repository to `.contrac
 (`git mv`): each contract names its unit, so a renamed file is still that unit's contract, and `flowpact check` stays
 clean. Where tooling or `CODEOWNERS` matches `*.contract.yml`, match `*.contract.yaml` too.
 
-## 0.16 → 0.17
+</Accordion>
+<Accordion title="0.16 → 0.17" id="from-0-16-to-0-17">
 
 0.17 follows secrets as GitHub holds them, and places some findings more exactly. No finding is added or removed: what
 changes is where a few findings are, and what `flowpact trace`, the editor, the JSON report's graph and custom rules see
 of secrets.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.17`.
-- **CLI:** `npx flowpact@0.17`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Finding locations
+**Finding locations**
 
 A finding on an expression that spans lines in a block scalar, or on a double-quoted scalar with escapes, now ends where
 the expression ends in the file: [FP502](/docs/rules/fp502)'s range, for example, ended early. A reference written after
@@ -155,7 +147,7 @@ a property that follows a dot and spaces or a line break (`fromJSON(x). inputs.a
 at the property, and so is an expression whose `${{` or `}}` is written with an escape (`\x7d`). A finding's
 fingerprint does not include its location, so code scanning keeps these alerts.
 
-### `flowpact trace`, the editor and custom rules
+**`flowpact trace`, the editor and custom rules**
 
 `flowpact trace` now names the workflow of a secret or input that no file declares, such as a secret a called workflow
 reads through `secrets: inherit` without declaring it: `<workflow>#secrets.<name> (unresolved)`, where 0.16 showed
@@ -174,20 +166,15 @@ summary, gain these secrets.
 above. A secret read by name, and `GITHUB_TOKEN`, now have these usages next to their reads by name, and an inherited
 secret that the workflow does not name, which had no usage, now has them.
 
-## 0.15 → 0.16
+</Accordion>
+<Accordion title="0.15 → 0.16" id="from-0-15-to-0-16">
 
 0.16 follows inputs that a workflow reads through `github` as GitHub does. A workflow's own inputs are in
 `github.event.inputs` only when the workflow is dispatched. When it is called, GitHub gives it the caller's `github`
 context, so there `github` never holds what the caller passes in `with:`. Some findings change, and each change below
 says what to do about it.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.16`.
-- **CLI:** `npx flowpact@0.16`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### New and changed findings
+**New and changed findings**
 
 - [FP104](/docs/rules/fp104) reports more inputs that nothing reads:
   - in a workflow that can be both dispatched and called, an input that only `workflow_call` declares and that is
@@ -228,7 +215,7 @@ overrides matching nothing. The reworded FP106 findings keep their overrides, wh
 not the message. Code scanning closes the alerts of reworded findings and opens new ones once, because an alert's
 fingerprint includes its message.
 
-### `flowpact trace`, the editor and custom rules
+**`flowpact trace`, the editor and custom rules**
 
 `flowpact trace` and the editor follow reads of `github` the way the findings do. `flowpact trace` now follows
 `toJSON(github)` and `github.event[x]`, and the editor lists them among a dispatch input's references. Trace, hover,
@@ -252,17 +239,12 @@ A read of one output written in another letter case (`needs.<job>.Outputs.<name>
 longer marked `whole`, and a `run:` step's output read that way is now a usage. A rule about the value a caller passes
 should skip usages through `github` (see `Usage.whole` in the API types).
 
-## 0.14 → 0.15
+</Accordion>
+<Accordion title="0.14 → 0.15" id="from-0-14-to-0-15">
 
 0.15 changes what some runs report. Each change below says what to do about it.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.15`.
-- **CLI:** `npx flowpact@0.15`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Impact mode honours paths
+**Impact mode honours paths**
 
 [Impact mode](/docs/impact-mode#only-some-units) with paths (`lint --impact <paths>`, `check --impact <paths>`, the
 action's `paths` input with `impact`, the API's `paths`) now grades only the published workflows and actions within
@@ -284,13 +266,13 @@ still refuses these paths.
 
 `flowpact graph` takes paths as well, and then draws only those workflows and actions and what they call.
 
-### Orphaned contracts within the paths
+**Orphaned contracts within the paths**
 
 `flowpact check <paths>` reports the orphaned contract (`FP804`) of a workflow or action that no longer exists when
 its path lies within the paths, and `flowpact generate <paths>` deletes it; 0.14 left it to runs without paths. A
 `check` job with paths may now fail on such a contract: run `flowpact generate` to delete it.
 
-### Impact mode leaves ignored units out
+**Impact mode leaves ignored units out**
 
 A published workflow or action whose file both the baseline's `ignore` and the pull request's match is no longer
 graded. 0.14 graded it but dropped its findings, so the verdict could say `required major` while the run passed. Now
@@ -313,19 +295,14 @@ baseline too, where 0.14 left them out as those of a file of the repository. A b
 pull request's own, as a file of the repository is, and its `ignore` counts on the baseline's side as the baseline's
 commit of the submodule has it.
 
-## 0.13 → 0.14
+</Accordion>
+<Accordion title="0.13 → 0.14" id="from-0-13-to-0-14">
 
 0.14 reads more of what workflows write: a read of a whole object or through a computed key (`toJSON(inputs)`,
 `matrix[inputs.key]`, `secrets.*`), an input's `default:` where a caller omits the input, and `github.event.inputs`
 in a workflow that can be called, which holds the caller's event there. A few findings change with it.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.14`.
-- **CLI:** `npx flowpact@0.14`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Regenerate your contracts
+**Regenerate your contracts**
 
 A call to a reusable workflow whose matrix has an `include` or `exclude` item that is an expression
 (`- ${{ fromJSON(inputs.extra) }}`) now records its matrix as `exact: false`, since that item is only known at runtime;
@@ -333,7 +310,7 @@ with such an `exclude` item it also records the combinations it knows, where 0.1
 contracts, `flowpact check` reports [FP802](/docs/rules/fp802) for such a call until you run `flowpact generate` and
 commit the result.
 
-### New and changed findings
+**New and changed findings**
 
 - **[FP404](/docs/rules/fp404)** no longer reports a matrix key as missing from every combination when an `exclude`
   item is an expression: such an item removed every combination before.
@@ -349,7 +326,7 @@ commit the result.
   the `|` or the quote, and a reference whose text also appears earlier inside a string literal is located at the
   reference. Code scanning may close and reopen those alerts once.
 
-### `flowpact trace` and custom rules
+**`flowpact trace` and custom rules**
 
 - `flowpact trace --up` also ends at an omitted input's `default:`, follows a whole read to each member, and shows a
   `github.event.inputs` read in a workflow that can be called as the dispatch input `(when dispatched)` next to the
@@ -358,20 +335,17 @@ commit the result.
 - In [custom rules](/docs/custom-rules), `usagesOf` now includes whole and computed reads of `inputs`, `matrix`,
   `secrets` and `env`, marked `whole`. A rule about how one specific input or key is read should skip them.
 
-## 0.11 → 0.12
+</Accordion>
+<Accordion title="0.11 → 0.12" id="from-0-11-to-0-12">
+
+The action moved to `ciatlas/flowpact`. GitHub redirects the old name, so `rumankazi/flowpact@v0.11` and older
+references keep working, but use the new one from now on.
 
 flowpact moved to the [ciatlas](https://github.com/ciatlas) organization: the repository is now `ciatlas/flowpact` and
 the docs are at [ciatlas.github.io/flowpact](https://ciatlas.github.io/flowpact). The npm package, the VS Code extension and the GitHub Marketplace
 listing keep their names, and nothing changes in what flowpact reports.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: ciatlas/flowpact@v0.12`. GitHub redirects the old name, so `rumankazi/flowpact@v0.11` and
-  older references keep working, but use the new one from now on.
-- **CLI:** `npx flowpact@0.12`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Regenerate your contracts
+**Regenerate your contracts**
 
 Contracts name their schema and docs by URL, and both moved. Until you run `flowpact generate` once and commit the
 result, `flowpact check` reports [FP802](/docs/rules/fp802) for every contract written by 0.11 or earlier. If your
@@ -379,28 +353,22 @@ result, `flowpact check` reports [FP802](/docs/rules/fp802) for every contract w
 point it at `https://ciatlas.github.io/flowpact/schemas/config/v1.json`: the old docs and schema URLs under
 `rumankazi.github.io/flowpact` no longer resolve.
 
-### Verifying older releases
+**Verifying older releases**
 
 Releases up to 0.11.1 were built before the move, and GitHub keeps their attestations under the old owner: verify
 them online with `--owner rumankazi`, or offline against the bundle attached to the release with
 `gh attestation verify <file> --bundle <file>.sigstore.json --repo rumankazi/flowpact`. `gh release verify` no longer
 finds their release attestations. See [verify a release](/docs/security#verify-a-release).
 
-## 0.9 → 0.10
+</Accordion>
+<Accordion title="0.9 → 0.10" id="from-0-9-to-0-10">
 
 0.10 is for organizations that build on flowpact: a [programmatic API](/docs/api) with a function per command, the
 action's `base-config` and `plugin` inputs for a [copy of the action](/docs/integrating#copy-the-action), and an action
 about a third of its old size. Nothing changes for workflows that use the action or the CLI as before, except a copy of
-the CLI's `dist/index.js` on its own ([below](#a-vendored-cli-is-its-whole-package-folder)).
+the CLI's `dist/index.js` on its own (see below).
 
-### Move to the new version
-
-- **GitHub Action:** `uses: rumankazi/flowpact@v0.10`. Before 1.0 the floating tag follows a minor release, so `@v0.9`
-  stays on 0.9.
-- **CLI:** `npx flowpact@0.10`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### A vendored CLI is its whole package folder
+**A vendored CLI is its whole package folder**
 
 The npm package's `dist/index.js` now loads a second file next to it (code it shares with the API), so a copy of
 `dist/index.js` alone no longer runs. It fails with exit code `1`, the code for findings:
@@ -413,46 +381,34 @@ Keep the package's whole `package/` folder, as [Run the CLI in a step](/docs/int
 `node tools/flowpact/dist/index.js lint …`. The second file's name changes with each release, so to update, replace
 the folder rather than copy the new files into it.
 
-## 0.8 → 0.9
+</Accordion>
+<Accordion title="0.8 → 0.9" id="from-0-8-to-0-9">
 
 0.9 is for organizations that run flowpact in their own action or CI template ([Roll it out across an organization](/docs/integrating)):
 GitHub annotations from the CLI, several reports from one run, `--plugin` and `--no-plugins`, and a
 [base config](/docs/configuration#base-config). One change can fail a CI run: options must come after the command.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: rumankazi/flowpact@v0.9`. Before 1.0 the floating tag follows a minor release, so `@v0.8`
-  stays on 0.8.
-- **CLI:** `npx flowpact@0.9`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Put options after the command
+**Put options after the command**
 
 Before 0.9, an option written before the command was dropped without a word: `flowpact --no-plugins lint` ran with the
 repository's plugins, and `flowpact -q lint` was not quiet. 0.9 stops with a usage error (exit `2`) instead. Write
 `flowpact lint --no-plugins`. `flowpact --help` and `flowpact --version` work as before.
 
-### Config entries for rules that are not loaded
+**Config entries for rules that are not loaded**
 
 A `rules:` or `overrides:` entry for a rule that no loaded plugin defines used to stop the run with a config error. 0.9
 ignores it with a warning, so a repository can configure organization rules that only its organization's wrapper
 loads. An unknown code with the built-in prefix (`FP999`), or a typo of a loaded rule (`unused-inptu`), is still an
 error; see [Rules that are not loaded](/docs/configuration#rules-that-are-not-loaded).
 
-## 0.7 → 0.8
+</Accordion>
+<Accordion title="0.7 → 0.8" id="from-0-7-to-0-8">
 
 0.8 removes most false positives found on 28 large public repositories, so most repositories see fewer findings.
 Two things can still fail a CI run right after the upgrade: contracts written by 0.7, and overrides for findings 0.8 no
 longer reports.
 
-### Move to the new version
-
-- **GitHub Action:** `uses: rumankazi/flowpact@v0.8`. Before 1.0 the floating tag follows a minor release, so `@v0.7`
-  stays on 0.7.
-- **CLI:** `npx flowpact@0.8`, or update the dev dependency.
-- **VS Code:** the extension updates itself.
-
-### Regenerate your contracts
+**Regenerate your contracts**
 
 If the repository locks its contracts (`.github/flowpact/contracts/`), run `flowpact generate` and commit the result.
 0.8 records more of each interface:
@@ -464,7 +420,7 @@ If the repository locks its contracts (`.github/flowpact/contracts/`), run `flow
 Until then, `flowpact check` reports those contracts as [FP802](/docs/rules/fp802) (contract-outdated, an error).
 In `mode: check` the action attaches the regenerated contracts as an artifact and a patch.
 
-### Remove overrides that no longer match
+**Remove overrides that no longer match**
 
 Overrides written for findings that 0.8 no longer reports match nothing. [FP902](/docs/rules/fp902)
 (override-unused, a warning) names each one so you can delete it:
@@ -481,7 +437,7 @@ Overrides written for findings that 0.8 no longer reports match nothing. [FP902]
 - **FP302** for a job's own `if:` that reads a job it depends on indirectly: GitHub makes those visible there.
 - **FP503** for background steps and `cache-mode`, which GitHub runs.
 
-### New and changed findings
+**New and changed findings**
 
 - **[FP610](/docs/rules/fp610) (workspace-unverified, info)** marks a step's `uses: ./…` that flowpact cannot read,
   such as a path inside another repository's checkout. Write `owner/repo/path@ref` to have those actions checked, or
@@ -500,12 +456,15 @@ Overrides written for findings that 0.8 no longer reports match nothing. [FP902]
   in a subdirectory, list it under `impact.publish`; that setting replaces the default list, so include your other
   published units too.
 
-### Code scanning alerts
+**Code scanning alerts**
 
 A finding's fingerprint includes its message. Messages changed for some FP105, FP205, FP302, FP401, FP404 and FP503
 findings, so those alerts close and reopen once. If you had dismissed one, dismiss the new alert again.
 
-### `flowpact generate` with paths
+**`flowpact generate` with paths**
 
 `flowpact generate <paths>` now writes only the contracts of those workflows and actions, and leaves the others
 (including orphaned ones) alone. A path that names no workflow or action exits with code 2.
+
+</Accordion>
+</Accordions>
