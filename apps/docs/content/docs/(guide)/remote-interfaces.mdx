@@ -3,13 +3,12 @@ title: Remote interfaces
 description: Check what your workflows pass to, and read from, reusable workflows and actions in other repositories, from a lockfile of their interfaces.
 ---
 
-flowpact analyzes one repository. A call to a reusable workflow or an action in another repository
-(`uses: octo/ship/.github/workflows/deploy.yml@v1`, `uses: octo/setup@v2`) is taken on trust: nothing checks that the
-inputs you pass exist, have the right type, or include the required ones ([`FP603`](/docs/rules/fp603) says so for
-remote workflows).
+A call into another repository (`uses: octo/ship/.github/workflows/deploy.yml@v1`, `uses: octo/setup@v2`) is taken on
+trust: nothing checks that the inputs you pass exist, have the right type, or include the required ones
+([`FP603`](/docs/rules/fp603) says so for remote workflows).
 
-A **remote interfaces lockfile** records the interface of each one: its inputs, secrets and outputs, at the commit a
-reference resolved to.
+A **remote interfaces lockfile** records each one's inputs, secrets and outputs, at the commit its reference resolved
+to.
 
 ```mermaid
 flowchart TD
@@ -36,26 +35,29 @@ flowchart TD
 With it, flowpact checks remote calls as it checks local ones:
 
 - [`FP101`](/docs/rules/fp101): a required input is not passed;
-- [`FP102`](/docs/rules/fp102): an input that the workflow or action does not declare is passed;
+- [`FP102`](/docs/rules/fp102): an input the workflow or action does not declare is passed;
 - [`FP103`](/docs/rules/fp103): a literal of the wrong type is passed to a `boolean` or `number` input;
-- [`FP201`](/docs/rules/fp201): a required secret is not passed to a remote reusable workflow;
+- [`FP201`](/docs/rules/fp201): a required secret is not passed to a reusable workflow;
 - [`FP202`](/docs/rules/fp202): a secret it does not declare is passed;
-- [`FP205`](/docs/rules/fp205): a remote reusable workflow reads a secret it does not declare (relying on
-  `secrets: inherit`), and your call does not use `secrets: inherit`, so the secret is empty. `flowpact remotes update`
-  records such secrets as `undeclaredSecrets` when it reads the workflow, only reads that run on every call: a read
-  under an `if:` (on its step, its job, or a job its job needs), or in a condition, is left out, since a caller's
-  inputs, event or environment may switch it off. Not followed: a secret the remote workflow hands on with its own
-  `secrets: inherit`, and `inherit` from a workflow of yours that was itself given secrets by name;
-- [`FP301`](/docs/rules/fp301): an output it does not declare is read (`needs.<job>.outputs.<name>`,
-  `steps.<id>.outputs.<name>`). A JavaScript or Docker action may set outputs it does not declare, so only a
-  composite action's are checked.
+- [`FP205`](/docs/rules/fp205): a reusable workflow reads a secret it does not declare, and your call does not use
+  `secrets: inherit`, so the secret is empty;
+- [`FP301`](/docs/rules/fp301): an output it does not declare is read. Only a composite action's outputs are checked: a
+  JavaScript or Docker action may set others.
 
-Otherwise, what a remote workflow does with what it gets is not checked: its jobs and steps are in another repository,
-so rules about what a callee reads ([`FP203`](/docs/rules/fp203), [`FP204`](/docs/rules/fp204), [`FP106`](/docs/rules/fp106))
-stay quiet about it.
+<Accordions>
+<Accordion title="Which undeclared secrets FP205 knows" id="undeclared-secrets">
 
-Findings point at your call; the message names the remote reference, whose file is in another repository. Nothing is
-fetched during a run: flowpact reads only the committed lockfile, so results do not depend on the network.
+`flowpact remotes update` records them as `undeclaredSecrets`: only reads that run on every call. A read under an
+`if:` (on its step, its job, or a job its job needs) or in a condition is left out, since a caller's inputs, event or
+environment may switch it off. Not followed: a secret the remote workflow hands on with its own `secrets: inherit`, and
+`inherit` from a workflow of yours that was itself given secrets by name.
+
+</Accordion>
+</Accordions>
+
+What a remote workflow does with what it gets is not checked: its jobs are in another repository, so
+[`FP203`](/docs/rules/fp203), [`FP204`](/docs/rules/fp204) and [`FP106`](/docs/rules/fp106) stay quiet about it.
+Findings point at your call. Nothing is fetched during a run, so results do not depend on the network.
 
 <Screenshot name="lint-remote" alt="flowpact lint reporting FP102, octo/setup@v2 has no input cache-dependency (did you mean cache-dependency-path), and FP101, jobs.deploy calls octo/ship's deploy workflow without required input environment" caption="Two calls into other repositories, checked against the lockfile: a misspelled input and a missing required one." />
 
@@ -69,16 +71,14 @@ flowpact remotes update                                   # every remote referen
 flowpact remotes update .github/workflows/release.yml     # only what release.yml (and what it calls) uses
 ```
 
-[`flowpact remotes update`](/docs/cli#flowpact-remotes-update) resolves every remote reference the repository uses to
-a commit, reads its workflow file or `action.yml` there through the GitHub API, and writes the lockfile. Commit it, and
-run it again when you move a reference to another version, or on a schedule to notice a tag that moved: it says what
-each changed entry does to your calls ([When a version changes](#when-a-version-changes)). In a terminal
-it counts the references as it fetches them; `-v` or `-d` logs a line for each instead, with the commit it resolved to
-or why it could not be fetched. It also keeps the files it reads in your [sources cache](#sources-for-the-editor), so
-the editor can open them.
+[`flowpact remotes update`](/docs/cli#flowpact-remotes-update) resolves each remote reference to a commit, reads its
+workflow file or `action.yml` there through the GitHub API, and writes the lockfile. Commit it. Run it again when you
+move a reference to another version, or on a schedule to notice a tag that moved: it says what each changed entry does
+to your calls ([When a version changes](#when-a-version-changes)).
 
-A program can do the same with [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean) from the
-API, and read what changed and what failed from its result.
+It also keeps the files it reads in your [sources cache](#sources-for-the-editor), for the editor. `-v` logs a line per
+reference, with its commit or why it was not fetched. From a program, use
+[`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean).
 
 ### Which token
 
@@ -89,10 +89,10 @@ API, and read what changed and what failed from its result.
 | the GitHub CLI's (`gh auth token`) | when neither is set, for github.com |
 | none | public repositories only, at GitHub's 60 requests an hour for anonymous reads |
 
-The output starts with the source it used (`token: GH_TOKEN`); the token itself is never printed, and it is sent only to
-the GitHub API (`GITHUB_API_URL` on GitHub Enterprise Server). Public repositories need no permission. Private and
-internal ones need read access to their contents: a fine-grained token with **Contents: read** on those repositories,
-a classic token with `repo`, or a GitHub App installation token that includes them.
+The output names the source (`token: GH_TOKEN`), never the token, which goes only to the GitHub API (`GITHUB_API_URL`
+on GitHub Enterprise Server). Public repositories need no permission. Private and internal ones need read access to
+their contents: a fine-grained token with **Contents: read**, a classic token with `repo`, or a GitHub App installation
+token that includes them.
 
 ### When a reference is not fetched
 
@@ -106,26 +106,24 @@ a classic token with `repo`, or a GitHub App installation token that includes th
 | `could not reach https://api.github.com (…)` | Node's `fetch failed`: no network, DNS, TLS or a proxy. Check `GITHUB_API_URL`; behind a proxy, set `HTTPS_PROXY` with `NODE_USE_ENV_PROXY=1` (Node 24 and later), as Node's fetch ignores proxy variables otherwise. |
 | `no answer from … within 30 s` | The network or the API is slow: try again. |
 
-Before it gives up on a reference, flowpact sends a request again after no answer, a server error (5xx) or the
-secondary rate limit, three times at most and waiting longer each time (as long as the rate limit asks, up to a
-minute), and asks once more for a commit or file the API says is not there, which it now and then says of one it has.
-An invalid token, missing access and a used-up rate limit are not tried again.
+flowpact retries after no answer, a server error (5xx) or the secondary rate limit, three times at most and backing off
+(as long as the rate limit asks, up to a minute). It asks once more for a commit or file the API says is not there,
+which it now and then says of one it has. An invalid token, missing access and a used-up rate limit are not retried.
 
 ## Sources for the editor
 
-The lockfile holds interfaces only. The files they were read from, the remote workflow files and `action.yml`s, go to
-a cache of your own, outside the repository, so the [editor](/docs/editors) can open them:
-`flowpact remotes update` keeps every file it reads there, and `flowpact remotes download` fills it for a lockfile
-someone else wrote, say after a `git pull`:
+The lockfile holds interfaces only. The files they come from go to a cache outside the repository, so the
+[editor](/docs/editors) can open them. `flowpact remotes update` keeps every file it reads there, and
+`flowpact remotes download` fills it for a lockfile someone else wrote, say after a `git pull`:
 
 ```sh
 flowpact remotes download                                 # every remote reference the lockfile pins
 flowpact remotes download .github/workflows/release.yml   # only what release.yml (and what it calls) uses
 ```
 
-[`flowpact remotes download`](/docs/cli#flowpact-remotes-download) reads each file at the commit the lockfile pins:
-it resolves no tag and does not change the lockfile, so the editor shows the version the checks used. It skips what
-the cache has, and needs the same [token](#which-token) as `remotes update`.
+[`flowpact remotes download`](/docs/cli#flowpact-remotes-download) reads each file at the commit the lockfile pins, so
+the editor shows the version the checks used. It resolves no tag, changes nothing in the lockfile, skips what the cache
+has, and needs the same [token](#which-token).
 
 | Platform | Cache |
 | --- | --- |
@@ -134,25 +132,35 @@ the cache has, and needs the same [token](#which-token) as `remotes update`.
 | Windows | `%LOCALAPPDATA%\flowpact\Cache\remotes` |
 
 `--cache-dir <dir>` (relative to where you run flowpact) or `FLOWPACT_CACHE_DIR` (an absolute path) moves it to
-`<dir>/remotes`; point your editor at the same place (see [Editors](/docs/editors)). Files are kept by repository and
-commit (`octo/ship/<sha>/.github/workflows/deploy.yml`), read-only. A file at a commit never changes, so nothing in
-the cache goes stale; one cache serves every repository on the machine, and you can delete any of it at any time.
-Two versions of one action (`octo/setup@v1` in one job, `@v2` in another) are two lockfile entries and two commits in
-the cache, each call checked against its own version.
+`<dir>/remotes`; point your editor at the same place ([Editors](/docs/editors)). Files are kept read-only, by
+repository and commit (`octo/ship/<sha>/.github/workflows/deploy.yml`). A file at a commit never changes, so nothing
+goes stale, one cache serves every repository on the machine, and you can delete any of it at any time.
 
-The cache stays small on its own: after `remotes update` and `remotes download`, each repository they used keeps its
-3 most recently used commits (never one the run used). `flowpact remotes clean` empties it, and
-`flowpact remotes clean --keep 2` keeps the 2 most recently used commits of each repository. Cleaning removes only the
-commits flowpact keeps there (`<owner>/<repo>/<sha>` directories), nothing else in the directory.
+<Accordions type="multiple">
+<Accordion title="How big the cache gets, and cleaning it" id="cache-cleaning">
+
+After `remotes update` and `remotes download`, each repository they used keeps its 3 most recently used commits (never
+one the run used). `flowpact remotes clean` empties the cache, and `flowpact remotes clean --keep 2` keeps 2 per
+repository. Cleaning removes only the `<owner>/<repo>/<sha>` directories flowpact keeps, nothing else.
+
+</Accordion>
+<Accordion title="Private repositories, and paths that are not cached" id="cache-privacy">
+
 Files of private and internal repositories land there too, readable by your user only: flowpact creates the cache's
 files and directories for you alone, wherever it is. A reference whose path could not be a file name on every platform
 (`..`, a character Windows rejects) is not cached.
 
-**In CI**, nobody opens the files, so `remotes update` keeps none there (when `CI` is set, as GitHub Actions, GitLab,
-CircleCI and most CI services set it, or Azure Pipelines' `TF_BUILD` or Jenkins' `JENKINS_URL`) unless `--cache-dir`
-or `FLOWPACT_CACHE_DIR` says where; the output says it kept none. `remotes update --no-cache` keeps none anywhere. The
-action never writes the cache, and neither does `--fetch-remotes` or `--dry-run`. Without a home directory and without either option, `remotes update` keeps nothing
-and `remotes download` stops with a usage error.
+</Accordion>
+<Accordion title="The cache in CI" id="cache-in-ci">
+
+Nobody opens the files in CI, so `remotes update` keeps none there unless `--cache-dir` or `FLOWPACT_CACHE_DIR` says
+where; the output says it kept none. CI is detected from `CI` (set by GitHub Actions, GitLab, CircleCI and most
+others), Azure Pipelines' `TF_BUILD` or Jenkins' `JENKINS_URL`. `remotes update --no-cache` keeps none anywhere. The
+action, `--fetch-remotes` and `--dry-run` never write the cache. Without a home directory and without either option,
+`remotes update` keeps nothing and `remotes download` stops with a usage error.
+
+</Accordion>
+</Accordions>
 
 ## GitHub Enterprise Server and GHE.com
 
@@ -180,14 +188,14 @@ flowpact remotes update --github-com          # GITHUB_COM_TOKEN for github.com,
     github-com-token: ${{ secrets.GITHUB_COM_TOKEN }}   # optional; public repositories need none
 ```
 
-Entries read from github.com are marked `host: github.com`. The enterprise token is never sent to github.com: it is read
-with `GITHUB_COM_TOKEN` (the action's `github-com-token`), or without a token. It is opt-in because it sends the names
-of the references your enterprise server lacks to github.com, internal ones that are misspelled or deleted included.
+Entries read there are marked `host: github.com`. The enterprise token is never sent to github.com:
+`GITHUB_COM_TOKEN` (the action's `github-com-token`) is, or none. It is opt-in because it sends github.com the names of
+the references your enterprise server lacks, misspelled or deleted internal ones included.
 
 ## In CI
 
-The [action](/docs/action) and the CLI read the committed lockfile and nothing else. To also check references the
-lockfile lacks, opt in to fetching them for the run: nothing is written back, and the lockfile's own entries stand.
+The [action](/docs/action) and the CLI read the committed lockfile and nothing else. To also check references it lacks,
+fetch them for the run. Nothing is written back, and the lockfile's own entries stand.
 
 ```yaml title=".github/workflows/flowpact.yml"
 - uses: ciatlas/flowpact@v0.23
@@ -195,29 +203,24 @@ lockfile lacks, opt in to fetching them for the run: nothing is written back, an
     remotes: fetch            # token defaults to github.token
 ```
 
-On the command line, `flowpact lint --fetch-remotes` (or `check`) does the same with `GH_TOKEN`, `GITHUB_TOKEN` or the
-GitHub CLI's token. A reference that cannot be fetched is a warning and stays unchecked. The job's `github.token` reads
-public repositories; private and internal ones of your organization need a token that can read them (a GitHub App
-installation token, for example from `actions/create-github-app-token` with their names under `repositories:`).
+On the command line, `flowpact lint --fetch-remotes` (or `check`) does the same with the [token](#which-token) above. A
+reference that cannot be fetched is a warning and stays unchecked. `github.token` reads public repositories; private
+and internal ones need a token that can read them, such as a GitHub App installation token from
+`actions/create-github-app-token` with their names under `repositories:`.
 
-The action does not fetch on `pull_request_target` or `workflow_run`: there the workflows come from an untrusted
-pull request while the token may be privileged, so the pull request would choose which repositories the token reads,
-and the findings would show what it read.
+The action does not fetch on `pull_request_target` or `workflow_run`. There the workflows come from an untrusted pull
+request while the token may be privileged, so the pull request would choose which repositories the token reads.
 
-A lockfile that lacks a reference the repository uses, or has one nothing uses, is reported by
-[`FP612`](/docs/rules/fp612) (a warning), also when the run fetched it: run `flowpact remotes update` and commit it.
-
-A reference pinned to a full commit SHA (`octo/setup@<sha>`) runs that commit, whatever the lockfile says.
-`flowpact remotes update` records that same commit for it; an entry that records another one was edited by hand, and
-describes other code than what runs. flowpact does not check calls against such an entry (they are unverified, as
-without one), and FP612 reports it.
+[`FP612`](/docs/rules/fp612) warns when the lockfile lacks a reference the repository uses or has one nothing uses,
+even when the run fetched it: run `flowpact remotes update` and commit it. It also reports an entry for a reference
+pinned to a full commit SHA that records another commit. Such an entry was edited by hand and describes other code than
+what runs, so calls are not checked against it.
 
 ## When a version changes
 
-A tag moves, or you move a reference to another version, and the new interface may drop an input your calls pass, make
-one required, or stop declaring an output you read. `flowpact remotes update` grades each changed entry against every
-call of its reference in the repository, before you commit the new lockfile (with `--dry-run`, before it writes
-anything):
+A tag moves, or you move a reference to another version, and the new interface may drop an input you pass, make one
+required, or stop declaring an output you read. `flowpact remotes update` grades each changed entry against every call
+of its reference, before you commit the new lockfile (with `--dry-run`, before it writes anything):
 
 ```text
 would write .github/flowpact/remotes.lock.yaml
@@ -237,26 +240,22 @@ That one is real: setup-node 6.1.0 dropped `always-auth`, and `@v6` moved to it.
 | not fully checked | No check fails, but part of the change is out of the checks' reach for this call; the line under it says which. |
 | fits | Every check passes as before. Only the calls that do not simply fit are listed. |
 
-The verdict comes from the rules this page starts with (FP101 to FP103, FP201, FP202, FP205 and FP301), run with the
-entry before and after; the interface diff under the reference explains it, and problems a call already had do not
-count. A call is **not fully checked**
-when:
+The verdict comes from the rules above (FP101 to FP103, FP201, FP202, FP205 and FP301), run with the entry before and
+after. Problems a call already had do not count. A call is **not fully checked** when it:
 
-- it passes an expression to an input the new version declares as a `boolean` or `number`: only literal values are
-  checked ([`FP103`](/docs/rules/fp103));
-- it uses `secrets: inherit`, and the new version needs a secret the old one did not: whether your repository or
-  organization has it is not known;
-- it reads an output the new version no longer declares, of a JavaScript or Docker action, which can still set it.
+- passes an expression to an input the new version declares as `boolean` or `number`: only literals are checked
+  ([`FP103`](/docs/rules/fp103));
+- uses `secrets: inherit`, and the new version needs a secret the old one did not: whether you have it is not known;
+- reads an output a JavaScript or Docker action no longer declares, which it can still set.
 
-A note follows a call that leaves out an input whose default changed: it runs with the new default. A change of an
-action's runtime (`runs.using`, such as `node20` to `node24`) is listed under the reference. The grade is about the
-interface, not the behaviour: a release that keeps its inputs but changes what they do fits your calls, so read the
-release notes of a major version.
+A call that leaves out an input whose default changed gets a note: it runs with the new default. A runtime change
+(`runs.using`, such as `node20` to `node24`) is listed under the reference. The grade is about the interface, not the
+behaviour: read the release notes of a major version.
 
 ### A scheduled drift check
 
-To hear about a moved tag before a run fails, check on a schedule. `--fail-on breaks` makes the job fail when a changed
-entry breaks a call; `--fail-on unchecked` also when it leaves part of one unchecked:
+To hear about a moved tag before a run fails, check on a schedule. `--fail-on breaks` fails the job when a changed entry
+breaks a call; `--fail-on unchecked` also when it leaves part of one unchecked:
 
 ```yaml title=".github/workflows/remotes-drift.yml"
 name: Remote interfaces drift
@@ -282,30 +281,28 @@ When a tag the lockfile records has moved to a commit that drops an input your w
 
 <Screenshot name="remotes-update" alt="flowpact remotes update --dry-run --fail-on breaks: octo/setup@v2 changed from e3b1c7a to 9d4e2f1 and breaks 1 of 1 call, because input registry-auth was removed and release.yml passes it" caption="The tag octo/setup@v2 moved: the new commit no longer has the input release.yml passes." />
 
-`github.token` reads public repositories; private and internal ones need a token that can read them
-([Which token](#which-token)). With `--format json`, the same comes as JSON for a script: `grades` has one entry per
-changed reference, with its `verdict`, the interface `changes`, and its `calls`, each with its `verdict`, the findings
-it `added`, why it is `unchecked`, and `notes`. [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean)
+Private and internal repositories need a token that can read them ([Which token](#which-token)). With
+`--format json`, a script gets the same as JSON: `grades` has one entry per changed reference, with its `verdict`, the
+interface `changes` and its `calls`. [`remotesUpdate()`](/docs/api#remotesupdate-remotesdownload-and-remotesclean)
 returns the same.
 
 ### On a pull request
 
 With `remotes: fetch`, the [action](/docs/action) also grades the references a pull request moves to another version
-(`octo/setup@v2` → `@v3`, the same workflow or action at another ref), and adds a **Version changes** section to the
-job summary. The interface before is the base commit's (its lockfile's entry for `@v2`, else `@v2` fetched); the one
-after is always fetched, never read from the pull request's own lockfile, which could record one that hides a break. A
-version change that breaks a call fails the step (unless `fail-on` is `never`), and the `version-verdict` output says
+(`octo/setup@v2` → `@v3`) and adds a **Version changes** section to the job summary. The interface before is the base
+commit's; the one after is always fetched, never read from the pull request's own lockfile, which could hide a break.
+A version change that breaks a call fails the step (unless `fail-on` is `never`), and the `version-verdict` output says
 `breaks`, `unchecked` or `fits`.
 
 ## Renovate and Dependabot
 
 When Renovate or Dependabot moves a reference to another version (`octo/setup@v2` → `@v3`), the lockfile still has
-`@v2` and lacks `@v3`. Until it is updated, `@v3` is checked only by a run that fetches it, and [`FP612`](/docs/rules/fp612)
-says the lockfile is out of date.
+`@v2`. Until it is updated, `@v3` is checked only by a run that fetches it, and [`FP612`](/docs/rules/fp612) says the
+lockfile is out of date.
 
-**Gate the bump.** With `remotes: fetch` in your flowpact job on pull requests, the bot's pull request is
+**Gate the bump.** With `remotes: fetch` in your flowpact job, the bot's pull request is
 [graded](#on-a-pull-request): the step fails when `@v3` breaks one of your calls, even when the pull request updates
-the lockfile too. Make that job a required status check, and Renovate's `automerge` and GitHub's auto-merge for
+the lockfile too. Make the job a required status check, and Renovate's `automerge` and GitHub's auto-merge for
 Dependabot wait for it:
 
 ```yaml title=".github/workflows/flowpact.yml"
@@ -324,64 +321,70 @@ jobs:
           remotes: fetch
 ```
 
-Three ways to keep the lockfile current:
+**Keep the lockfile current** in the bot's pull request, or update it after the merge (FP612 reminds you until then):
 
-- **Check the pull request anyway.** With `remotes: fetch` in your flowpact job, the bot's pull request is checked
-  against `@v3`'s interface, and FP612 reminds you to update the lockfile before merging.
-- **Self-hosted Renovate:** update the lockfile in the same pull request with a post-upgrade task. Allow the command in
-  the bot's admin config, not in `renovate.json` (`allowedCommands: ["^npx --yes flowpact@"]`, formerly
-  `allowedPostUpgradeCommands`), and give it a token that can read the remote repositories through the environment
-  Renovate runs commands in (for example `customEnvVariables`):
+<Accordions type="multiple">
+<Accordion title="Self-hosted Renovate: a post-upgrade task" id="renovate-post-upgrade">
 
-  ```json title="renovate.json"
-  {
-    "postUpgradeTasks": {
-      "commands": ["npx --yes flowpact@0.23 remotes update"],
-      "fileFilters": [".github/flowpact/remotes.lock.yaml"],
-      "executionMode": "branch"
-    }
+Allow the command in the bot's admin config, not in `renovate.json` (`allowedCommands: ["^npx --yes flowpact@"]`,
+formerly `allowedPostUpgradeCommands`), and give it a token that can read the remote repositories through the
+environment Renovate runs commands in (for example `customEnvVariables`):
+
+```json title="renovate.json"
+{
+  "postUpgradeTasks": {
+    "commands": ["npx --yes flowpact@0.23 remotes update"],
+    "fileFilters": [".github/flowpact/remotes.lock.yaml"],
+    "executionMode": "branch"
   }
-  ```
+}
+```
 
-- **The Renovate app or Dependabot**, which run no commands of yours: a workflow on their pull requests runs the update
-  and pushes the lockfile to their branch. Push with a GitHub App token rather than `github.token`, whose pushes start
-  no workflow runs, so the pull request's checks run again on the new commit. Dependabot's runs get a read-only token
-  and only Dependabot secrets, so store the app's key as a Dependabot secret.
+</Accordion>
+<Accordion title="The Renovate app or Dependabot: a workflow that pushes the lockfile" id="bot-lockfile-workflow">
 
-  ```yaml title=".github/workflows/remotes-lock.yml"
-  name: Remote interfaces lockfile
-  on:
-    pull_request:
-      paths: ['.github/workflows/**', '**/action.yml', '**/action.yaml']
-  permissions: {}
-  jobs:
-    update:
-      if: contains(fromJSON('["renovate[bot]", "dependabot[bot]"]'), github.event.pull_request.user.login)
-      runs-on: ubuntu-latest
-      steps:
-        - id: app
-          uses: actions/create-github-app-token@v3       # pin to a commit SHA
-          with:
-            client-id: ${{ vars.LOCK_BOT_CLIENT_ID }}
-            private-key: ${{ secrets.LOCK_BOT_PRIVATE_KEY }}
-        - uses: actions/checkout@v7                       # pin to a commit SHA
-          with:
-            ref: ${{ github.head_ref }}
-            token: ${{ steps.app.outputs.token }}
-            persist-credentials: true
-        - run: npx --yes flowpact@0.23 remotes update
-          env:
-            GH_TOKEN: ${{ steps.app.outputs.token }}
-        - run: |
-            git diff --quiet -- .github/flowpact/remotes.lock.yaml && exit 0
-            git config user.name 'remotes-lock[bot]'
-            git config user.email 'remotes-lock[bot]@users.noreply.github.com'
-            git commit -m 'chore: update the remote interfaces lockfile' -- .github/flowpact/remotes.lock.yaml
-            git push
-  ```
+They run no commands of yours, so a workflow on their pull requests runs the update and pushes the lockfile to their
+branch. Push with a GitHub App token: pushes with `github.token` start no workflow runs, so the checks would not run
+again on the new commit. Dependabot's runs get a read-only token and only Dependabot secrets, so store the app's key as
+a Dependabot secret.
 
-  The job runs only for the bots' pull requests, checks out their branch (never a fork's: bots push to your
-  repository), and runs `flowpact` from npm, not code from the pull request.
+```yaml title=".github/workflows/remotes-lock.yml"
+name: Remote interfaces lockfile
+on:
+  pull_request:
+    paths: ['.github/workflows/**', '**/action.yml', '**/action.yaml']
+permissions: {}
+jobs:
+  update:
+    if: contains(fromJSON('["renovate[bot]", "dependabot[bot]"]'), github.event.pull_request.user.login)
+    runs-on: ubuntu-latest
+    steps:
+      - id: app
+        uses: actions/create-github-app-token@v3       # pin to a commit SHA
+        with:
+          client-id: ${{ vars.LOCK_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.LOCK_BOT_PRIVATE_KEY }}
+      - uses: actions/checkout@v7                       # pin to a commit SHA
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ steps.app.outputs.token }}
+          persist-credentials: true
+      - run: npx --yes flowpact@0.23 remotes update
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+      - run: |
+          git diff --quiet -- .github/flowpact/remotes.lock.yaml && exit 0
+          git config user.name 'remotes-lock[bot]'
+          git config user.email 'remotes-lock[bot]@users.noreply.github.com'
+          git commit -m 'chore: update the remote interfaces lockfile' -- .github/flowpact/remotes.lock.yaml
+          git push
+```
+
+The job runs only for the bots' pull requests, checks out their branch (never a fork's: bots push to your repository),
+and runs `flowpact` from npm, not code from the pull request.
+
+</Accordion>
+</Accordions>
 
 ## GitHub's actions.lock
 
@@ -396,18 +399,18 @@ files do different jobs:
 | Records | the commit each reference runs, and who owns it | each reference's inputs, secrets and outputs at a commit |
 | Used by | the runner, which runs that commit and checks it | flowpact, which checks your calls against the interface |
 
-flowpact reads `actions.lock`, never writes it, and checks each reference at the commit that runs: `remotes update`,
-`--fetch-remotes`, the action's `remotes: fetch` and the [pull request grading](#on-a-pull-request) read a reference it
-pins at its commit, not at the commit its tag points to now, and `remotes update` says how many it read that way. An
-entry of flowpact's lockfile that records another commit is reported by [`FP612`](/docs/rules/fp612): the bot that
-updated `actions.lock` left `remotes.lock.yaml` as it was, so run `flowpact remotes update`.
+flowpact reads `actions.lock` and never writes it. `remotes update`, `--fetch-remotes`, the action's `remotes: fetch`
+and the [pull request grading](#on-a-pull-request) read each reference it pins at the pinned commit, not where its tag
+points now, and `remotes update` says how many it read that way. When flowpact's lockfile records another commit,
+[`FP612`](/docs/rules/fp612) reports it: the bot that updated `actions.lock` left `remotes.lock.yaml` as it was, so run
+`flowpact remotes update`.
 
-- Only the workflows `actions.lock` lists are covered: a reference it pins for none of them resolves as usual. One
-  that a covered and an uncovered workflow both use is read at the pinned commit.
+- Only the workflows `actions.lock` lists are covered. A reference used by a covered and an uncovered workflow is read
+  at the pinned commit.
 - A reference with a path (`octo/ship/.github/workflows/deploy.yml@v1`, `actions/cache/restore@v4`) is pinned by its
   repository's key (`octo/ship@v1`), as `gh actions-lock` writes it.
 - The schema is before 1.0: flowpact reads versions `v0.0.x`. Another version, or a file that does not parse, is not
-  used, and `remotes update` says why. Its `hostname` is not read: a reference is fetched as without `actions.lock`.
+  used, and `remotes update` says why. Its `hostname` is not read.
 
 ## The lockfile
 
@@ -435,9 +438,10 @@ remotes:
     outputs: [path]
 ```
 
-A reference `flowpact remotes update` cannot read (it does not exist, or the token cannot read it, as for a private
-repository of another organization) is recorded under `unreadable:`, with why. It is not checked, but the lockfile
-accounts for it, so [`FP612`](/docs/rules/fp612) does not report it:
+Two versions of one action (`octo/setup@v1` in one job, `@v2` in another) are two entries, and each call is checked
+against its own. A reference that `flowpact remotes update` cannot read (it does not exist, or the token cannot read
+it) is recorded under `unreadable:`, with why. It is not checked, but the lockfile accounts for it, so
+[`FP612`](/docs/rules/fp612) does not report it:
 
 ```yaml
 unreadable:
