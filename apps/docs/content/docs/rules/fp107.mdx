@@ -15,7 +15,7 @@ In the [`deep-nesting`](https://github.com/ciatlas/flowpact/tree/main/fixtures/d
 
 ```text
 ▲  WARN  FP107 optional-forwarded-to-required
-  Required input "notes" of .github/workflows/build.yml is fed from optional input "release-notes" without a default
+  Required input "notes" of .github/workflows/build.yml is empty when optional input "release-notes" is omitted
   ▶ .github/workflows/pipeline.yml:24:18
 ```
 
@@ -25,7 +25,7 @@ The call looks complete, so GitHub never complains about the required input, but
 
 ## How to fix
 
-Make the outer input required too, give it a default, or add a fallback: `${{ inputs.x || 'value' }}`.
+Make the outer input required too, give it a default, or add a non-empty fallback: `${{ inputs.x || 'value' }}`. If the callee handles an empty value, make its input `required: false`. If the call is pointless without the value, skip it with `if: inputs.x != ''`.
 
 ## Example
 
