@@ -4,6 +4,13 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.25.1](https://github.com/ciatlas/flowpact/compare/v0.25.0...v0.25.1) (2026-10-19)
+
+
+### Bug Fixes
+
+* **rules:** FP107 says the input is empty when the optional one is omitted ([#233](https://github.com/ciatlas/flowpact/issues/233)) ([6d2773d](https://github.com/ciatlas/flowpact/commit/6d2773d6649cf91eab87472953ccacb9eafeef1f))
+
 ## [0.25.0](https://github.com/ciatlas/flowpact/compare/v0.24.0...v0.25.0) (2026-10-19)
 
 
