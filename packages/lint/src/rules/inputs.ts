@@ -655,7 +655,10 @@ const optionalForwardedToRequired = defineRule({
     why:
       'The call looks complete, so GitHub never complains about the required input, but when the outer caller omits the ' +
       'optional value the callee receives an empty string. The "required" guarantee is lost one level up.',
-    fix: "Make the outer input required too, give it a default, or add a fallback: `${{ inputs.x || 'value' }}`.",
+    fix:
+      "Make the outer input required too, give it a default, or add a non-empty fallback: `${{ inputs.x || 'value' }}`. " +
+      'If the callee handles an empty value, make its input `required: false`. If the call is pointless without the ' +
+      "value, skip it with `if: inputs.x != ''`.",
     examples: {
       bad: `# pipeline.yml
 inputs:
@@ -695,7 +698,11 @@ function emptyWhenInputsOmitted(site: ExprSite, outer: Record<string, InputDecl>
   return v.known && (v.value === '' || v.value === null);
 }
 
-/** FP107's report, at the caller's input the value is fed from. */
+/**
+ * FP107's report, at the first read of an omitted input. It names every input the value was evaluated without: an
+ * input may only pick a branch (`inputs.x == 'a' && … || ''`), so the message says what was omitted, not where the
+ * value comes from.
+ */
 function reportForwarded(
   ctx: RuleContext,
   call: CallSite,
@@ -704,17 +711,34 @@ function reportForwarded(
   site: ExprSite,
   target: InputDecl,
 ): void {
-  const srcRef = site.segments.flatMap((s) => s.refs).find((r) => r.context === 'inputs');
-  const src = srcRef?.path[0] ? lookup(outer, srcRef.path[0]) : undefined;
+  const srcs = omittedReads(site, outer);
   ctx.report({
-    message: `Required input ${quote(target.name)} of ${call.callee.path} is fed from optional input ${quote(src?.name ?? '?')} without a default`,
-    loc: srcRef?.loc ?? b.valueLoc,
+    message: `Required input ${quote(target.name)} of ${call.callee.path} is ${whenEmpty(srcs.map((s) => quote(s.decl.name)))}`,
+    loc: srcs[0]?.loc ?? b.valueLoc,
     symbol: sym.input(call.callee.path, target.name),
     related: [
-      ...(src ? [{ loc: src.loc, message: 'optional, no default' }] : []),
+      ...srcs.map((s) => ({ loc: s.decl.loc, message: 'optional, no default' })),
       { loc: target.loc, message: `required by ${call.callee.path}` },
     ],
   });
+}
+
+/** The caller's inputs a value reads that are '' when omitted, in order, each with its first read. */
+function omittedReads(site: ExprSite, outer: Record<string, InputDecl>): { decl: InputDecl; loc: Loc }[] {
+  const omitted = new Map<string, { decl: InputDecl; loc: Loc }>();
+  for (const ref of site.segments.flatMap((s) => s.refs)) {
+    const decl = ref.context === 'inputs' && ref.path[0] ? lookup(outer, ref.path[0]) : undefined;
+    if (!decl || !emptyWhenOmitted(decl) || omitted.has(decl.name)) continue;
+    omitted.set(decl.name, { decl, loc: ref.loc });
+  }
+  return [...omitted.values()];
+}
+
+/** When FP107's value is empty, given the quoted names of the omitted inputs it reads. */
+function whenEmpty(names: string[]): string {
+  if (names.length === 0) return 'always empty';
+  if (names.length === 1) return `empty when optional input ${names[0]} is omitted`;
+  return `empty when optional inputs ${listNames(names)} are omitted`;
 }
 
 /** Resolves `inputs.<name>` to '' for the declared inputs that are '' when omitted; other references stay unknown. */

@@ -50,7 +50,7 @@ exports[`fixture repositories > deep-nesting: findings snapshot 1`] = `
   "error FP201 .github/workflows/build.yml:29:11 jobs.package calls .github/workflows/package.yml without required secret "signing-key"",
   "warning FP203 .github/workflows/package.yml:17:7 Secret "signing-key" of .github/workflows/package.yml is never read",
   "warning FP104 .github/workflows/pipeline.yml:15:7 Input "legacy-flag" of .github/workflows/pipeline.yml is never read",
-  "warning FP107 .github/workflows/pipeline.yml:24:18 Required input "notes" of .github/workflows/build.yml is fed from optional input "release-notes" without a default",
+  "warning FP107 .github/workflows/pipeline.yml:24:18 Required input "notes" of .github/workflows/build.yml is empty when optional input "release-notes" is omitted",
   "info FP106 .github/workflows/pipeline.yml:25:7 jobs.build passes "verbose" to .github/workflows/build.yml, which never reads it",
   "info FP204 .github/workflows/pipeline.yml:26:5 jobs.build inherits all secrets; .github/workflows/build.yml and its callees read REGISTRY_TOKEN",
   "error FP301 .github/workflows/pipeline.yml:33:73 jobs.build has no output "image-digest"",

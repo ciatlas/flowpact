@@ -671,9 +671,78 @@ describe('FP107 optional-forwarded-to-required', () => {
     });
     const [f] = byCode(r, 'FP107');
     expect(f?.message).toBe(
-      'Required input "name" of .github/workflows/callee.yml is fed from optional input "outer" without a default',
+      'Required input "name" of .github/workflows/callee.yml is empty when optional input "outer" is omitted',
     );
     expect(at(f!)).toBe(`${WF}/caller.yml:9:17`);
+  });
+
+  it('names the input that picks an empty fallback, not a source of the value (#232)', () => {
+    const r = lint({
+      [`${WF}/caller.yml`]: yaml`
+        on:
+          workflow_call:
+            inputs:
+              sector: { type: string, required: false }
+        jobs:
+          setup:
+            runs-on: x
+            outputs:
+              workspace-path: \${{ steps.s.outputs.path }}
+            steps:
+              - id: s
+                run: echo "path=p" >> "$GITHUB_OUTPUT"
+          call:
+            needs: setup
+            uses: ./.github/workflows/callee.yml
+            with:
+              name: \${{ inputs.sector == 'WLT' && needs.setup.outputs.workspace-path || '' }}
+      `,
+      [`${WF}/callee.yml`]: callee,
+    });
+    const [f] = byCode(r, 'FP107');
+    expect(f?.message).toBe(
+      'Required input "name" of .github/workflows/callee.yml is empty when optional input "sector" is omitted',
+    );
+    expect(at(f!)).toBe(`${WF}/caller.yml:17:17`);
+    expect(f?.related.map((x) => x.message)).toEqual([
+      'optional, no default',
+      'required by .github/workflows/callee.yml',
+    ]);
+  });
+
+  it('names every omitted input the value reads, and no required one', () => {
+    const r = lint({
+      [`${WF}/caller.yml`]: yaml`
+        on:
+          workflow_call:
+            inputs:
+              mode: { type: string, required: true }
+              first: { type: string, required: false }
+              second: { type: string }
+        jobs:
+          call:
+            uses: ./.github/workflows/callee.yml
+            with:
+              name: \${{ inputs.first && inputs.mode || inputs.second }}
+      `,
+      [`${WF}/callee.yml`]: callee,
+    });
+    const [f] = byCode(r, 'FP107');
+    expect(f?.message).toBe(
+      'Required input "name" of .github/workflows/callee.yml is empty when optional inputs "first", "second" are omitted',
+    );
+    expect(at(f!)).toBe(`${WF}/caller.yml:11:17`);
+    expect(f?.related).toHaveLength(3);
+  });
+
+  it('says a value that reads no input is always empty', () => {
+    const r = lint({
+      [`${WF}/caller.yml`]: caller('{ type: string }').replace('${{ inputs.outer }}', "${{ '' }}"),
+      [`${WF}/callee.yml`]: callee,
+    });
+    const [f] = byCode(r, 'FP107');
+    expect(f?.message).toBe('Required input "name" of .github/workflows/callee.yml is always empty');
+    expect(f?.related).toHaveLength(1);
   });
 
   it.each(['{ type: string, required: true }', '{ type: string, default: x }'])('is quiet for %s', (decl) => {

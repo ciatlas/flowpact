@@ -307,8 +307,8 @@ between them. actionlint sees `environment:` present in each call; GitHub's exte
 ── .github/workflows/release.yml ──────────────────────────────────────────────────────── 1 warning
 
 ▲  WARN  FP107 optional-forwarded-to-required
-  Required input "environment" of .github/workflows/deploy.yml is fed from optional input
-  "environment" without a default
+  Required input "environment" of .github/workflows/deploy.yml is empty when optional input
+  "environment" is omitted
 
   ▶ .github/workflows/release.yml:11:24
      9 │     uses: ./.github/workflows/deploy.yml
@@ -321,8 +321,10 @@ between them. actionlint sees `environment:` present in each call; GitHub's exte
   why     The call looks complete, so GitHub never complains about the required input, but when
           the outer caller omits the optional value the callee receives an empty string. The
           "required" guarantee is lost one level up.
-  fix     Make the outer input required too, give it a default, or add a fallback: `${{ inputs.x
-          || 'value' }}`.
+  fix     Make the outer input required too, give it a default, or add a non-empty fallback:
+          `${{ inputs.x || 'value' }}`. If the callee handles an empty value, make its input
+          `required: false`. If the call is pointless without the value, skip it with `if:
+          inputs.x != ''`.
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp107
 ```
 
