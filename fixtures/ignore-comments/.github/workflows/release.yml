@@ -1,0 +1,26 @@
+# Findings accepted where they are, with `# flowpact: ignore[<rules>] <reason>` comments.
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        type: string
+        default: stable
+      # flowpact: ignore[unused-input] read by the release dispatcher until its migration (JIRA-123)
+      legacy-flag:
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # The script exports DEPLOY_URL through $GITHUB_ENV, which flowpact does not read.
+      - run: ./scripts/setup-env.sh "${{ inputs.channel }}"
+      - run: | # flowpact: ignore[FP501] set by scripts/setup-env.sh
+          curl --fail "${{ env.DEPLOY_URL }}/health"
+      - run: echo "Deployed to ${{ env.DEPLOY_URL }}" # flowpact: ignore[FP5O1]
+      - run: echo "Released on ${{ inputs.channel }}" # flowpact: ignore[undefined-input-ref]
+
+  notify:
+    needs: publish
+    uses: acme/shared/.github/workflows/notify.yml@3f1c2a9b7d4e6f8a0b1c2d3e4f5a6b7c8d9e0f1a # v1.2.0 # flowpact: ignore[remote-unverified] checked in acme/shared

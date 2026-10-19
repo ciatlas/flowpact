@@ -13,9 +13,9 @@ engine as the [CLI](/docs/cli), bundled into the action itself, so the job does 
   artifact, so anyone can update them without running flowpact.
 
 <Callout title="Version tag">
-  `ciatlas/flowpact@v0.24` follows the patch releases of its minor line. Before 1.0 each minor line has its own tag
+  `ciatlas/flowpact@v0.25` follows the patch releases of its minor line. Before 1.0 each minor line has its own tag
   (`v0.<minor>`), because a minor release can change what is reported, so moving to the next one is your choice; a
-  breaking change is a major release (1.0.0 and `v1` next). Pin an exact release (`ciatlas/flowpact@v0.24.0`) or a commit SHA to control every update.
+  breaking change is a major release (1.0.0 and `v1` next). Pin an exact release (`ciatlas/flowpact@v0.25.0`) or a commit SHA to control every update.
 </Callout>
 
 ## Usage
@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.24
+      - uses: ciatlas/flowpact@v0.25
 ```
 
 <Callout type="warn" title="No paths filter on a required check">
@@ -58,7 +58,7 @@ rule and also fails when the contracts no longer match the workflows:
 ```yaml
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.24
+      - uses: ciatlas/flowpact@v0.25
         with:
           mode: check
 ```
@@ -77,7 +77,7 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.24
+      - uses: ciatlas/flowpact@v0.25
         with:
           report-sarif: flowpact.sarif
       - if: always()
@@ -88,14 +88,15 @@ jobs:
 ```
 
 `if: always()` uploads the report even when the flowpact step failed because of findings. Findings then appear under
-**Security → Code scanning**. Findings accepted by an [override](/docs/configuration) are left out: code scanning
-has no way to mark them as accepted and would open an alert for each. The JSON report lists them under `suppressed`.
+**Security → Code scanning**. Findings accepted by an [override](/docs/configuration#overrides) or an
+[ignore comment](/docs/configuration#ignore-comments) are left out: code scanning has no way to mark them as accepted
+and would open an alert for each. The JSON report lists them under `suppressed` and `ignoredByComment`.
 
 ### Use the outputs
 
 ```yaml
       - id: flowpact
-        uses: ciatlas/flowpact@v0.24
+        uses: ciatlas/flowpact@v0.25
         with:
           mode: check
           fail-on: never
@@ -148,6 +149,7 @@ or action outside them is not graded.
 | `warnings` | Number of warning findings. |
 | `infos` | Number of info findings. |
 | `suppressed` | Number of findings accepted by overrides. |
+| `ignored-by-comment` | Number of findings accepted by `# flowpact: ignore[…]` comments. |
 | `findings` | Total number of findings (errors, warnings and info). |
 | `drift` | `true` when check mode found that the contracts drifted, otherwise `false`. |
 | `breaking` | Number of breaking contract changes (check mode). |
@@ -176,8 +178,8 @@ so use those when a run has many.
 The summary has:
 
 - the tool and schema versions and how long the analysis took;
-- a status line and a table of counts (errors, warnings, info, suppressed, workflows, actions, jobs, matrix
-  combinations);
+- a status line and a table of counts (errors, warnings, info, suppressed by overrides and ignore comments,
+  workflows, actions, jobs, matrix combinations);
 - the findings, errors first, each with its rule docs link, its location (linked to the file at the commit being
   checked), the affected matrix combinations, and a collapsed **Why / fix** section with the related locations;
 - in `check` mode, a **Contracts** section: which contract files are new, changed or removed, every change (breaking

@@ -228,6 +228,13 @@ function scopeLines(t: Theme, result: AnalysisResult): string[] {
       ),
     );
   }
+  if (s.ignoredByComment) {
+    lines.push(
+      c.dim(
+        `${s.ignoredByComment} finding${s.ignoredByComment === 1 ? '' : 's'} accepted by ignore comments (listed under "ignoredByComment" in --format json)`,
+      ),
+    );
+  }
   if (s.skippedInGenerated) {
     lines.push(
       c.dim(

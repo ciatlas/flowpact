@@ -56,8 +56,19 @@ inputs:
 
 ## Accept one finding
 
-When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes
-back when the date passes ([overrides](/docs/configuration#overrides)):
+When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart from the other
+findings, and does not fail the build.
+
+**On its line**, with an [ignore comment](/docs/configuration#ignore-comments) alone on the line above it (the
+editor's quick fix adds it there) or at the end of the line, after any other comment such as a version
+(`# v4.3.0 # flowpact: ignore[FP107] why`):
+
+```yaml title=".github/workflows/pipeline.yml"
+# flowpact: ignore[FP107] why it is acceptable here
+notes: ${{ inputs.release-notes }}
+```
+
+**In the config**, with an [override](/docs/configuration#overrides), which can expire:
 
 ```yaml title=".github/flowpact/flowpact.config.yml"
 overrides:

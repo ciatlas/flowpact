@@ -166,6 +166,11 @@ for it to the config, creating `.github/flowpact/flowpact.config.yml` when there
 and, optionally, a date until which the finding is accepted. Other editors write a placeholder reason to replace
 (*Explain why this finding is accepted*).
 
+A finding in a workflow or action offers **Ignore FP… on this line with a comment** too. It adds an
+[ignore comment](/docs/configuration#ignore-comments) on a line of its own above the finding's
+(`# flowpact: ignore[FP501]`), or adds the rule to a comment that accepts that line already. For a finding in a
+`run: |` script, the comment goes above the `run:` line. Write the reason after the `]`.
+
 The same fixes are in the [JSON report](/docs/cli#json-report) as `suggestions`, and in SARIF as `fixes`.
 
 ## Rename

@@ -55,8 +55,10 @@ export const RELATED: Record<string, string[]> = {
   FP813: ['FP810'],
   FP814: ['FP810'],
   FP901: ['FP902', 'FP903'],
-  FP902: ['FP901'],
+  FP902: ['FP901', 'FP905'],
   FP903: ['FP901'],
+  FP904: ['FP905'],
+  FP905: ['FP904', 'FP902'],
 };
 
 /** A guide that explains a rule's feature: its title and its docs path. */
@@ -71,6 +73,7 @@ const MATRIX_SHAPES: Guide = ['Matrix shapes', '/docs/configuration#matrix-shape
 const CONTRACTS: Guide = ['Contracts', '/docs/contracts'];
 const IMPACT: Guide = ['Impact mode', '/docs/impact-mode'];
 const OVERRIDES: Guide = ['Overrides', '/docs/configuration#overrides'];
+const IGNORE_COMMENTS: Guide = ['Ignore comments', '/docs/configuration#ignore-comments'];
 
 /** The guides a rule's page links to: by code first, else by its code's range. */
 const GUIDES: Record<string, Guide[]> = {
@@ -91,6 +94,8 @@ const GUIDES: Record<string, Guide[]> = {
   FP603: [REMOTES],
   FP611: [REMOTES],
   FP612: [REMOTES],
+  FP904: [IGNORE_COMMENTS],
+  FP905: [IGNORE_COMMENTS],
 };
 
 const RANGE_GUIDES: [prefix: string, guides: Guide[]][] = [

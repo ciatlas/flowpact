@@ -33,6 +33,14 @@ import {
   scopePlan,
 } from './contracts';
 import {
+  applyIgnoreComments,
+  type FileIgnores,
+  type IgnoreCommentUsage,
+  type IgnoredFinding,
+  type IgnoredRuleResolution,
+  readIgnoreComments,
+} from './ignore-comments';
+import {
   computeImpact,
   type DeclaredInput,
   type ImpactLookAt,
@@ -137,6 +145,8 @@ export interface Summary {
   byFile: Record<string, number>;
   /** Findings accepted by overrides (not counted above). */
   suppressed: number;
+  /** Findings accepted by `# flowpact: ignore[…]` comments (not counted above). */
+  ignoredByComment: number;
   /**
    * Findings not reported because they are about the internals of generated files (rules with
    * `generatedFiles: 'skip'`; not counted above).
@@ -154,6 +164,8 @@ export interface AnalysisResult {
   rules: { code: string; name: string; severity: SeveritySetting }[];
   /** Findings accepted by overrides, with the override that accepted them. */
   suppressed: SuppressedFinding[];
+  /** Findings accepted by `# flowpact: ignore[…]` comments, with the comment that accepted them. */
+  ignoredByComment: IgnoredFinding[];
   /** Contract comparison (check mode only). */
   contracts?: ContractPlan;
   /** The config file, for code frames of FP9xx findings. */
@@ -708,19 +720,72 @@ function countSkipped(u: OverrideUsage, code: string, skipped: Finding[]): void 
   if (n) u.skippedInGenerated = n;
 }
 
+/** Whether the rule with `code` does not run in this analysis: off, excluded by `--only`, or not run in this mode. */
+function inactiveIn(run: RuleRun, opts: AnalyzeOptions, code: string): boolean {
+  return (
+    run.severities.get(code) === 'off' ||
+    (run.only !== undefined && !run.only.includes(code)) ||
+    notRunIn(run.registry.get(code), opts)
+  );
+}
+
 /**
  * Marks an override whose rule does not run in this analysis as inactive, and counts the findings it would match that
  * are skipped in generated files.
  */
 function judgeOverride(u: OverrideUsage, run: RuleRun, opts: AnalyzeOptions): void {
-  const code = run.registry.get(u.override.rule)?.code ?? '';
-  const severity = run.severities.get(code);
-  const rule = run.registry.get(code);
-  const notRun = notRunIn(rule, opts);
-  if (severity === 'off' || (run.only && !run.only.includes(code)) || notRun) u.inactive = true;
+  const rule = run.registry.get(u.override.rule);
+  if (inactiveIn(run, opts, rule?.code ?? '')) u.inactive = true;
   // An override written for findings that are now skipped in generated files.
   if (!u.matched && rule) countSkipped(u, rule.code, run.skipped);
 }
+
+/** What a rule named in an ignore comment is: a rule it can ignore, a mistake (FP904), or a rule not loaded. */
+function resolveIgnored(registry: RuleRegistry, key: string): IgnoredRuleResolution {
+  const rule = registry.get(key);
+  if (rule?.phase === 'post') {
+    return {
+      invalid: `Ignore comment names ${rule.code} ${rule.name}, which runs once overrides and ignore comments are applied: no comment can ignore it`,
+    };
+  }
+  if (rule) return { code: rule.code };
+  const { typo, rule: guess } = typoOf(registry, key);
+  if (!typo) return { unloaded: true };
+  return {
+    invalid: `Ignore comment names an unknown rule "${key}"${guess ? ` (did you mean ${guess}?)` : ''}`,
+  };
+}
+
+/** The ignore comments of the repository's workflows and actions, by file. */
+function ignoreCommentsOf(project: Project): Map<string, FileIgnores> {
+  const out = new Map<string, FileIgnores>();
+  for (const u of [...project.workflows.values(), ...project.actions.values()]) {
+    const ignores = readIgnoreComments(u.file, u.source.text);
+    if (ignores.comments.length) out.set(u.file, ignores);
+  }
+  return out;
+}
+
+/** Applies the ignore comments to what the overrides kept; a rule that is not loaded is logged, like the config's. */
+function applyComments(
+  run: RuleRun,
+  opts: AnalyzeOptions,
+  logger: Logger,
+  applied: { kept: Finding[]; suppressed: Finding[] },
+): ReturnType<typeof applyIgnoreComments> {
+  const comments = applyIgnoreComments(applied, ignoreCommentsOf(run.index.project), (key) =>
+    resolveIgnored(run.registry, key),
+  );
+  const unloaded: string[] = [];
+  for (const u of comments.usage) {
+    if (u.code && inactiveIn(run, opts, u.code)) u.inactive = true;
+    else if (u.inactive && u.rule) unloaded.push(`${formatLine(u.rule.loc)} "${u.rule.key}"`);
+  }
+  if (unloaded.length) logger.warn(`ignore comments name rules that are not loaded: ${unloaded.join('; ')}`);
+  return comments;
+}
+
+const formatLine = (loc: Loc) => `${loc.file}:${loc.line}`;
 
 /**
  * Whether a finding is reported: impact mode's always (it grades only the published units within the paths that
@@ -759,8 +824,10 @@ function logFiltered(
     findings: Finding[];
     accepted: Finding[];
     suppressed: SuppressedFinding[];
+    ignored: IgnoredFinding[];
     skippedInScope: Finding[];
     usage: OverrideUsage[];
+    comments: IgnoreCommentUsage[];
   },
 ): void {
   if (f.skippedInScope.length > 0) {
@@ -768,10 +835,9 @@ function logFiltered(
       `skipped ${f.skippedInScope.length} finding(s) about the internals of ${new Set(f.skippedInScope.map((s) => s.loc.file)).size} generated file(s)`,
     );
   }
-  if (f.accepted.length + f.suppressed.length !== f.findings.length) {
-    logger.debug(
-      `filtered ${f.findings.length - f.accepted.length - f.suppressed.length} finding(s) by targets/ignore`,
-    );
+  const accepted = f.accepted.length + f.suppressed.length + f.ignored.length;
+  if (accepted !== f.findings.length) {
+    logger.debug(`filtered ${f.findings.length - accepted} finding(s) by targets/ignore`);
   }
   if (config.overrides.length) {
     logger.info(
@@ -779,6 +845,15 @@ function logFiltered(
       {
         expired: f.usage.filter((u) => u.expired).length,
         unused: f.usage.filter((u) => !u.matched && !u.expired && !u.inactive).length,
+      },
+    );
+  }
+  if (f.comments.length) {
+    logger.info(
+      `ignore comments: ${f.ignored.length} finding(s) ignored by ${new Set(f.comments.filter((u) => u.matched).map((u) => u.comment)).size} comment(s)`,
+      {
+        invalid: f.comments.filter((u) => u.invalid).length,
+        unused: f.comments.filter((u) => u.code && !u.matched && !u.inactive).length,
       },
     );
   }
@@ -819,7 +894,7 @@ function resultOf(
   run: RuleRun,
   r: Pick<
     AnalysisResult,
-    'project' | 'findings' | 'summary' | 'suppressed' | 'durationMs' | 'removedPaths'
+    'project' | 'findings' | 'summary' | 'suppressed' | 'ignoredByComment' | 'durationMs' | 'removedPaths'
   > & {
     repository: string | undefined;
     unloaded: string[];
@@ -837,6 +912,7 @@ function resultOf(
       severity: run.severities.get(x.code) ?? x.defaultSeverity,
     })),
     suppressed: r.suppressed,
+    ignoredByComment: r.ignoredByComment,
     ...(run.contracts ? { contracts: run.contracts } : {}),
     ...(r.unloaded.length ? { unloadedRules: r.unloaded } : {}),
     ...impactFieldsOf(run, r.removedPaths),
@@ -884,8 +960,8 @@ function prepareRules(
 }
 
 /**
- * Runs the main rules, applies the overrides and the scope, then runs the post rules: the findings to report, the
- * ones overrides accepted, and the ones in scope skipped in generated files.
+ * Runs the main rules, applies the overrides, the ignore comments and the scope, then runs the post rules: the findings
+ * to report, the ones overrides and ignore comments accepted, and the ones in scope skipped in generated files.
  */
 function runPhases(
   run: RuleRun,
@@ -893,7 +969,12 @@ function runPhases(
   logger: Logger,
   scope: ReportScope,
   unloaded: string[],
-): { kept: Finding[]; suppressed: SuppressedFinding[]; skippedInScope: Finding[] } {
+): {
+  kept: Finding[];
+  suppressed: SuppressedFinding[];
+  ignored: IgnoredFinding[];
+  skippedInScope: Finding[];
+} {
   const { config } = run;
   const findings = dedupe(runRules(run, 'main', {}));
   // Overrides are matched against the whole repository, so linting a subset of files does not make
@@ -909,13 +990,33 @@ function runPhases(
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join('; ')}`);
   for (const u of applied.usage) judgeOverride(u, run, opts);
+  const comments = applyComments(run, opts, logger, applied);
   const inScope = scopeOf(run.index, config, run.contracts, scope);
-  const accepted = applied.kept.filter(inScope);
+  const accepted = comments.kept.filter(inScope);
   const suppressed = applied.suppressed.filter(inScope);
+  const ignored = comments.ignored.filter(inScope);
   const skippedInScope = dedupe(run.skipped).filter(inScope);
-  logFiltered(logger, config, { findings, accepted, suppressed, skippedInScope, usage: applied.usage });
-  const post = runRules(run, 'post', { overrides: applied.usage });
-  return { kept: dedupe([...accepted, ...post]).sort(byReportOrder), suppressed, skippedInScope };
+  logFiltered(logger, config, {
+    findings,
+    accepted,
+    suppressed,
+    ignored,
+    skippedInScope,
+    usage: applied.usage,
+    comments: comments.usage,
+  });
+  const post = runRules(run, 'post', { overrides: applied.usage, ignoreComments: comments.usage });
+  // Findings about ignore comments are in workflow and action files, which the scope applies to; the config is not.
+  const units = new Set(
+    [...run.index.project.workflows.values(), ...run.index.project.actions.values()].map((u) => u.file),
+  );
+  const postInScope = post.filter((f) => !units.has(f.loc.file) || inScope(f));
+  return {
+    kept: dedupe([...accepted, ...postInScope]).sort(byReportOrder),
+    suppressed,
+    ignored,
+    skippedInScope,
+  };
 }
 
 export function analyze(opts: AnalyzeOptions): AnalysisResult {
@@ -946,9 +1047,13 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
 
   const unloaded: string[] = [];
   const { run, scope } = prepareRules(opts, logger, { registry, index, config, matrix, remotes }, unloaded);
-  const { kept, suppressed, skippedInScope } = runPhases(run, opts, logger, scope, unloaded);
+  const { kept, suppressed, ignored, skippedInScope } = runPhases(run, opts, logger, scope, unloaded);
 
-  const summary = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
+  const summary = summarize(project, index, kept, combinations(), {
+    suppressed: suppressed.length,
+    ignoredByComment: ignored.length,
+    skippedInGenerated: skippedInScope.length,
+  });
   const durationMs = Math.round(performance.now() - started);
   logger.info(
     `analysis finished: ${summary.errors} error(s), ${summary.warnings} warning(s), ${summary.infos} info`,
@@ -960,6 +1065,7 @@ export function analyze(opts: AnalyzeOptions): AnalysisResult {
     findings: kept,
     summary,
     suppressed,
+    ignoredByComment: ignored,
     unloaded,
     durationMs,
     removedPaths: removedPathsOf(opts, project),
@@ -1023,8 +1129,7 @@ function summarize(
   index: ProjectIndex,
   findings: Finding[],
   combinations: number,
-  suppressed: number,
-  skippedInGenerated: number,
+  accepted: Pick<Summary, 'suppressed' | 'ignoredByComment' | 'skippedInGenerated'>,
 ): Summary {
   const byCode: Record<string, number> = {};
   const byFile: Record<string, number> = {};
@@ -1044,8 +1149,7 @@ function summarize(
     graph: { nodes: index.nodes.size, edges: index.edges.length },
     byCode,
     byFile,
-    suppressed,
-    skippedInGenerated,
+    ...accepted,
   };
 }
 

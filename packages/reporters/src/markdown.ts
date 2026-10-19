@@ -222,7 +222,7 @@ function headerLines(result: AnalysisResult, opts: MarkdownOptions): string[] {
     '',
     '| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |',
     '| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
-    `| ${s.errors} | ${s.warnings} | ${s.infos} | ${s.suppressed} | ${s.workflows} | ${s.actions} | ${s.jobs} | ${s.matrixCombinations} |`,
+    `| ${s.errors} | ${s.warnings} | ${s.infos} | ${s.suppressed + s.ignoredByComment} | ${s.workflows} | ${s.actions} | ${s.jobs} | ${s.matrixCombinations} |`,
   ];
   if (s.skippedInGenerated) {
     out.push('');
@@ -259,23 +259,44 @@ function findingSections(result: AnalysisResult, opts: MarkdownOptions, max: num
   return out;
 }
 
-/** The findings accepted by overrides, the first `max` of them, in a collapsed table. */
-function suppressedSection(result: AnalysisResult, opts: MarkdownOptions, max: number): string[] {
-  const out = [
-    `<details><summary>${plural(result.suppressed.length, 'suppressed finding')}</summary>`,
-    '',
-    '| Code | Location | Reason | Expires | Owner |',
-    '| --- | --- | --- | --- | --- |',
+/** An accepted finding as a row: what accepted it, the reason, and an override's expiry and owner. */
+interface AcceptedRow {
+  f: Finding;
+  by: string;
+  reason?: string | undefined;
+  expires?: string | undefined;
+  owner?: string | undefined;
+}
+
+/** The findings accepted by overrides, then those accepted by ignore comments. */
+function acceptedRows(result: AnalysisResult): AcceptedRow[] {
+  return [
+    ...result.suppressed.map((f) => ({ f, by: 'override', ...f.override })),
+    ...result.ignoredByComment.map((f) => ({ f, by: 'comment', reason: f.comment.reason })),
   ];
-  for (const f of result.suppressed.slice(0, max)) {
-    const o = f.override;
+}
+
+/**
+ * The findings accepted by overrides and ignore comments, the first `max` of them, in a collapsed table; with a column
+ * for what accepted each when ignore comments accepted some.
+ */
+function suppressedSection(result: AnalysisResult, opts: MarkdownOptions, max: number): string[] {
+  const rows = acceptedRows(result);
+  const withBy = result.ignoredByComment.length > 0;
+  const out = [
+    `<details><summary>${plural(rows.length, 'suppressed finding')}</summary>`,
+    '',
+    `| Code | Location |${withBy ? ' By |' : ''} Reason | Expires | Owner |`,
+    `| --- | --- |${withBy ? ' --- |' : ''} --- | --- | --- |`,
+  ];
+  for (const { f, by, reason, expires, owner } of rows.slice(0, max)) {
     out.push(
-      `| [${code(f.code)}](${f.docsUrl}) | ${tableCell(locLink(f.loc, opts))} | ${cell(o.reason)} | ${o.expires ?? '—'} | ${o.owner ? cell(o.owner) : '—'} |`,
+      `| [${code(f.code)}](${f.docsUrl}) | ${tableCell(locLink(f.loc, opts))} |${withBy ? ` ${by} |` : ''} ${reason ? cell(reason) : '—'} | ${expires ?? '—'} | ${owner ? cell(owner) : '—'} |`,
     );
   }
-  if (result.suppressed.length > max) {
+  if (rows.length > max) {
     out.push('');
-    out.push(`_… ${result.suppressed.length - max} more suppressed findings (see the JSON report)._`);
+    out.push(`_… ${rows.length - max} more suppressed findings (see the JSON report)._`);
   }
   out.push('');
   out.push('</details>');
@@ -303,7 +324,9 @@ export function renderMarkdown(result: AnalysisResult, opts: MarkdownOptions = {
     ...findingSections(result, opts, max),
     ...(result.contracts ? ['', ...renderContracts(result.contracts, opts)] : []),
     ...(result.impact ? ['', ...renderImpactMarkdown(result.impact, opts)] : []),
-    ...(result.suppressed.length ? ['', ...suppressedSection(result, opts, max)] : []),
+    ...(result.suppressed.length || result.ignoredByComment.length
+      ? ['', ...suppressedSection(result, opts, max)]
+      : []),
     ...(opts.includeGraph ? ['', ...graphSection(result)] : []),
   ];
   return `${out.join('\n')}\n`;

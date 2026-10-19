@@ -5983,7 +5983,7 @@ var require_lexer = __commonJS({
     var flowIndicatorChars = new Set(",[]{}");
     var invalidAnchorChars = new Set(" ,[]{}\n\r	");
     var isNotAnchorChar = (ch) => !ch || invalidAnchorChars.has(ch);
-    var Lexer2 = class {
+    var Lexer3 = class {
       constructor() {
         this.atEnd = false;
         this.blockScalarIndent = -1;
@@ -6546,7 +6546,7 @@ var require_lexer = __commonJS({
         return yield* this.pushToIndex(i, false);
       }
     };
-    exports.Lexer = Lexer2;
+    exports.Lexer = Lexer3;
   }
 });
 
@@ -13163,14 +13163,14 @@ var ProjectIndex = class {
     if (sink) this.define(sink, { unit, site });
     for (const seg of site.segments) {
       for (const ref of seg.refs) {
-        for (const read of this.reads(unit, site, ref)) this.addUsage(unit, site, ref, read, sink);
+        for (const read2 of this.reads(unit, site, ref)) this.addUsage(unit, site, ref, read2, sink);
       }
     }
   }
-  addUsage(unit, site, ref, read, sink) {
-    const { symbol } = read;
+  addUsage(unit, site, ref, read2, sink) {
+    const { symbol } = read2;
     if (!this.nodes.has(symbol)) {
-      const named = read.member ?? ref;
+      const named = read2.member ?? ref;
       this.node({
         id: symbol,
         kind: named.context === "vars" ? "var" : "unresolved",
@@ -13183,7 +13183,7 @@ var ProjectIndex = class {
       site,
       ref,
       ...sink ? { sink } : {},
-      ...read.whole ? { whole: true } : {}
+      ...read2.whole ? { whole: true } : {}
     };
     const list = this.usages.get(symbol);
     if (list) list.push(usage);
@@ -17486,7 +17486,7 @@ function workspaceResolver(opts) {
     if (rootless) return { kind: "local", target: rel, found: false, elsewhere: elsewhere() };
     return { kind: "local", target: rel, found: false, ...checkout };
   };
-  const record2 = (unit, job, step2, outcome, rooted, via) => {
+  const record3 = (unit, job, step2, outcome, rooted, via) => {
     let r = records.get(step2);
     if (!r) {
       r = { unit, ...job !== void 0 ? { job } : {}, step: step2, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
@@ -17516,7 +17516,7 @@ function workspaceResolver(opts) {
       }
       if (uses.kind !== "local-action" || uses.target === void 0) continue;
       const outcome = resolve9(uses, ws);
-      record2(unit, job, step2, outcome, rooted, via);
+      record3(unit, job, step2, outcome, rooted, via);
       const action = outcome.kind === "local" && outcome.found ? opts.loadAction(outcome.target) : void 0;
       if (action) {
         const caller = {
@@ -20518,7 +20518,7 @@ function readActionsLock(fs3) {
   }
   return { file, commits };
 }
-var lockedCommit = (read, r) => read?.commits?.get(pinKey(r.owner, r.repo, r.ref));
+var lockedCommit = (read2, r) => read2?.commits?.get(pinKey(r.owner, r.repo, r.ref));
 
 // ../lint/src/analyze.ts
 import { createHash } from "crypto";
@@ -20537,7 +20537,7 @@ var location_default = {
 
 // ../lint/src/version.ts
 var TOOL_NAME = "flowpact";
-var VERSION2 = "0.24.0";
+var VERSION2 = "0.25.0";
 var SCHEMA_VERSIONS = {
   config: 1,
   contract: 1,
@@ -21969,8 +21969,172 @@ function scopePlan(plan, keep) {
   );
 }
 
-// ../lint/src/impact.ts
+// ../lint/src/ignore-comments.ts
 var import_yaml8 = __toESM(require_dist(), 1);
+var DIRECTIVE = /(?<=^|\s)#\s*flowpact:/g;
+var MARKERS = /* @__PURE__ */ new Set(["", "", ""]);
+var NOT_YAML = /* @__PURE__ */ new Set(["space", "newline", "comment"]);
+function positions(text2) {
+  const starts = [0];
+  for (let i = text2.indexOf("\n"); i !== -1; i = text2.indexOf("\n", i + 1)) starts.push(i + 1);
+  const line = (offset) => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = lo + hi + 1 >> 1;
+      if (starts[mid] <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo + 1;
+  };
+  return {
+    line,
+    loc: (file, start, end) => {
+      const a = line(start);
+      const b = line(end);
+      return {
+        file,
+        line: a,
+        column: start - starts[a - 1] + 1,
+        endLine: b,
+        endColumn: end - starts[b - 1] + 1
+      };
+    }
+  };
+}
+function spanOf2(token, start, line, header) {
+  const text2 = token.trimEnd();
+  const first = header ?? line(start);
+  const last = text2.trim() ? line(start + text2.length - 1) : first;
+  return last > first ? { first, last } : void 0;
+}
+var QUOTED = /* @__PURE__ */ new Set(["single-quoted-scalar", "double-quoted-scalar"]);
+function closeScalar(out, st, span) {
+  if (span) out.spans.push(span);
+  st.scalar = false;
+  st.header = void 0;
+}
+function noteLine(out, st, type, token, start, line) {
+  if (type === "newline") st.lineHasYaml = false;
+  else if (type === "comment") out.comments.push({ offset: start, text: token, alone: !st.lineHasYaml });
+  else if (!NOT_YAML.has(type) && token.trim()) {
+    const at = line(start + token.length - token.trimStart().length);
+    if (out.yamlLines.at(-1) !== at) out.yamlLines.push(at);
+    st.lineHasYaml = true;
+  }
+}
+function record2(out, st, token, start, line) {
+  const type = st.scalar ? "scalar" : import_yaml8.CST.tokenType(token) ?? "other";
+  if (type === "scalar" || QUOTED.has(type)) closeScalar(out, st, spanOf2(token, start, line, st.header));
+  else if (type === "block-scalar-header") st.header = line(start);
+  noteLine(out, st, type, token, start, line);
+}
+function lex(text2, line) {
+  const out = { comments: [], spans: [], yamlLines: [] };
+  const st = { offset: 0, scalar: false, lineHasYaml: false };
+  for (const token of new import_yaml8.Lexer().lex(text2)) {
+    if (MARKERS.has(token)) {
+      st.scalar ||= token === "";
+      continue;
+    }
+    record2(out, st, token, st.offset, line);
+    st.offset += token.length;
+  }
+  return out;
+}
+function parseDirective(body, offset, locOf) {
+  const m = /^(\s*ignore\s*\[)([^\]]*)\](.*)$/s.exec(body);
+  if (!m) {
+    return {
+      rules: [],
+      malformed: /^\s*ignore\b/.test(body) ? "lists no rules in brackets, as in `# flowpact: ignore[FP301]`" : "is not `# flowpact: ignore[<rules>]`"
+    };
+  }
+  const listAt = offset + m[1].length;
+  const rules = [...m[2].matchAll(/[^\s,]+/g)].map((k) => ({
+    key: k[0],
+    loc: locOf(listAt + k.index, listAt + k.index + k[0].length)
+  }));
+  if (!rules.length)
+    return { rules, malformed: "lists no rules in brackets, as in `# flowpact: ignore[FP301]`" };
+  const reason = m[3].trim().replace(/^(?:--|:)\s*/, "");
+  return { rules, ...reason ? { reason } : {} };
+}
+function nextYamlLine(lines, after) {
+  return lines.find((l) => l > after) ?? 0;
+}
+function readIgnoreComments(file, text2) {
+  return text2.includes("flowpact:") ? read(file, text2) : { comments: [], spans: [] };
+}
+function read(file, text2) {
+  const pos = positions(text2);
+  const lexed = lex(text2, pos.line);
+  const comments = [];
+  for (const c of lexed.comments) {
+    const starts = [...c.text.matchAll(DIRECTIVE)];
+    const line = pos.line(c.offset);
+    const accepts = c.alone ? nextYamlLine(lexed.yamlLines, line) : line;
+    starts.forEach((d, i) => {
+      const from = c.offset + d.index;
+      const to = c.offset + (starts[i + 1]?.index ?? c.text.length);
+      const raw = text2.slice(from, to).trimEnd();
+      comments.push({
+        loc: pos.loc(file, from, from + raw.length),
+        line: accepts,
+        ...parseDirective(raw.slice(d[0].length), from + d[0].length, (a, b) => pos.loc(file, a, b))
+      });
+    });
+  }
+  return { comments, spans: lexed.spans };
+}
+function coversLine(ignores, line, findingLine) {
+  if (line === 0) return false;
+  if (findingLine === line) return true;
+  return ignores.spans.some(
+    (s) => s.first <= findingLine && findingLine <= s.last && (s.first === line || s.last === line)
+  );
+}
+function usageOf(comment, resolve9) {
+  if (comment.malformed) return [{ comment, invalid: `Ignore comment ${comment.malformed}`, matched: 0 }];
+  return comment.rules.map((rule) => {
+    const r = resolve9(rule.key);
+    return {
+      comment,
+      rule,
+      matched: 0,
+      ..."code" in r ? { code: r.code } : "invalid" in r ? { invalid: r.invalid } : { inactive: true }
+    };
+  });
+}
+function applyIgnoreComments(findings, files, resolve9) {
+  const byFile = /* @__PURE__ */ new Map();
+  for (const [file, ignores] of files)
+    byFile.set(
+      file,
+      ignores.comments.flatMap((c) => usageOf(c, resolve9))
+    );
+  const matching = (f) => {
+    const ignores = files.get(f.loc.file);
+    return (byFile.get(f.loc.file) ?? []).filter(
+      (u) => u.code === f.code && ignores !== void 0 && coversLine(ignores, u.comment.line, f.loc.line)
+    );
+  };
+  for (const f of findings.suppressed) for (const u of matching(f)) u.matched++;
+  const kept = [];
+  const ignored = [];
+  for (const f of findings.kept) {
+    const by = matching(f);
+    for (const u of by) u.matched++;
+    const first = by[0]?.comment;
+    if (!first) kept.push(f);
+    else
+      ignored.push({ ...f, comment: { loc: first.loc, ...first.reason ? { reason: first.reason } : {} } });
+  }
+  return { kept, ignored, usage: [...byFile.values()].flat() };
+}
+
+// ../lint/src/impact.ts
+var import_yaml9 = __toESM(require_dist(), 1);
 var IMPACT_LEVELS = ["none", "patch", "minor", "major"];
 var levelRank = (l) => IMPACT_LEVELS.indexOf(l);
 var maxLevel = (levels) => levels.reduce((a, b) => levelRank(b) > levelRank(a) ? b : a, "none");
@@ -22289,7 +22453,7 @@ function canonical(v) {
 }
 function implementationOf(unit) {
   try {
-    const doc = (0, import_yaml8.parse)(unit.source.text);
+    const doc = (0, import_yaml9.parse)(unit.source.text);
     return canonical(doc?.[unit.kind === "workflow" ? "jobs" : "runs"] ?? null);
   } catch {
     return unit.source.text;
@@ -22657,7 +22821,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
 }
 
 // ../lint/src/remotes.ts
-var import_yaml9 = __toESM(require_dist(), 1);
+var import_yaml10 = __toESM(require_dist(), 1);
 var REMOTES_LOCK_FILES = [
   `${CONFIG_DIR}/remotes.lock.yaml`,
   `${CONFIG_DIR}/remotes.lock.yml`
@@ -22701,7 +22865,7 @@ function readRemotesLock(fs3) {
   if (!file) return {};
   let data;
   try {
-    data = (0, import_yaml9.parse)(fs3.read(file));
+    data = (0, import_yaml10.parse)(fs3.read(file));
   } catch (e) {
     return { file, error: `not valid YAML: ${e.message.split("\n")[0]}` };
   }
@@ -22714,12 +22878,12 @@ function interfaceYaml(e) {
   const inputs = e.inputs ?? {};
   if (e.kind === "workflow") {
     const outputs2 = Object.fromEntries((e.outputs ?? []).map((o) => [o, { value: "" }]));
-    return (0, import_yaml9.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
+    return (0, import_yaml10.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
   }
   const outputs = Object.fromEntries((e.outputs ?? []).map((o) => [o, { description: "" }]));
   const using = e.using ?? "composite";
   const runs = using === "composite" ? { using, steps: [] } : { using, main: "" };
-  return (0, import_yaml9.stringify)({ name: "", inputs, outputs, runs });
+  return (0, import_yaml10.stringify)({ name: "", inputs, outputs, runs });
 }
 var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !pinMismatch(ref, e)).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
 function pinMismatch(ref, entry) {
@@ -22822,7 +22986,7 @@ function serializeRemotesLock(lock) {
   const sorted = (rec) => Object.fromEntries(Object.entries(rec).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0));
   const unreadable = Object.keys(lock.unreadable ?? {}).length ? { unreadable: sorted(lock.unreadable) } : {};
   const doc = { version: 1, remotes: sorted(lock.remotes), ...unreadable };
-  return `${LOCK_HEADER}${(0, import_yaml9.stringify)(doc, { lineWidth: 0, singleQuote: true })}`;
+  return `${LOCK_HEADER}${(0, import_yaml10.stringify)(doc, { lineWidth: 0, singleQuote: true })}`;
 }
 
 // ../lint/src/rules/types.ts
@@ -23562,7 +23726,7 @@ var impactRules = [
 var IMPACT_CODES = impactRules.map((r) => r.code);
 
 // ../lint/src/suggestions.ts
-var import_yaml10 = __toESM(require_dist(), 1);
+var import_yaml11 = __toESM(require_dist(), 1);
 var sources = /* @__PURE__ */ new WeakMap();
 function sourceOf(index, file) {
   let byFile = sources.get(index);
@@ -23604,26 +23768,26 @@ var documents = /* @__PURE__ */ new WeakMap();
 function documentOf(source) {
   let doc = documents.get(source);
   if (!doc) {
-    doc = (0, import_yaml10.parseDocument)(source.text);
+    doc = (0, import_yaml11.parseDocument)(source.text);
     documents.set(source, doc);
   }
   return doc;
 }
 function pairOf(map, key) {
-  const pairs2 = map.items.filter((p) => (0, import_yaml10.isScalar)(p.key));
+  const pairs2 = map.items.filter((p) => (0, import_yaml11.isScalar)(p.key));
   const name = (p) => String(p.key.value);
   return pairs2.find((p) => name(p) === key) ?? pairs2.find((p) => name(p).toLowerCase() === key.toLowerCase());
 }
 function nodeAt(doc, path) {
   let node = doc.contents;
   for (const step2 of path) {
-    if (typeof step2 === "number") node = (0, import_yaml10.isSeq)(node) ? node.items[step2] : void 0;
-    else node = (0, import_yaml10.isMap)(node) ? pairOf(node, step2)?.value : void 0;
+    if (typeof step2 === "number") node = (0, import_yaml11.isSeq)(node) ? node.items[step2] : void 0;
+    else node = (0, import_yaml11.isMap)(node) ? pairOf(node, step2)?.value : void 0;
     if (node === void 0) return void 0;
   }
   return node;
 }
-var isBlockMap = (node) => (0, import_yaml10.isMap)(node) && !node.flow && node.items.length > 0;
+var isBlockMap = (node) => (0, import_yaml11.isMap)(node) && !node.flow && node.items.length > 0;
 var keyStart = (source, pair) => source.loc(pair.key.range[0]);
 function pairLines(source, pair) {
   const first = keyStart(source, pair).line;
@@ -24540,12 +24704,12 @@ function judgedValue(site, job) {
   return site.yamlPath.at(-1) !== "continue-on-error";
 }
 function matrixKeysRead(site) {
-  const read = /* @__PURE__ */ new Map();
+  const read2 = /* @__PURE__ */ new Map();
   for (const seg of site.segments)
     for (const r of seg.refs)
-      if (r.context === "matrix" && r.path[0] && !read.has(r.path[0].toLowerCase()))
-        read.set(r.path[0].toLowerCase(), r.path[0]);
-  return [...read.values()];
+      if (r.context === "matrix" && r.path[0] && !read2.has(r.path[0].toLowerCase()))
+        read2.set(r.path[0].toLowerCase(), r.path[0]);
+  return [...read2.values()];
 }
 function checkMatrixKeys(ctx, { wf, job, exp }, site) {
   const predicate = WITH_FIELDS.has(site.field) ? (v) => !isEmptyValue(v) : () => true;
@@ -25037,10 +25201,10 @@ function reportUnusedWorkflowOutputs(ctx, wf) {
   const callers = ctx.index.callersOf(wf.path);
   if (!wf.call || callers.length === 0 || isPublished(wf, ctx.config.impact)) return;
   for (const o of Object.values(wf.call.outputs)) {
-    const read = callers.some(
+    const read2 = callers.some(
       (c) => ctx.index.usagesOf(sym.jobOutput(c.caller.path, c.job.id, o.name)).length > 0
     );
-    if (read) continue;
+    if (read2) continue;
     ctx.report({
       message: `Workflow output ${quote(o.name)} of ${wf.path} is not read by any of its ${callers.length} caller${callers.length > 1 ? "s" : ""}`,
       loc: o.loc,
@@ -25054,10 +25218,10 @@ function reportUnusedActionOutputs(ctx, action) {
   const users = ctx.index.usersOf(action.path);
   if (users.length === 0 || isPublished(action, ctx.config.impact)) return;
   for (const o of Object.values(action.outputs)) {
-    const read = users.some(
+    const read2 = users.some(
       (u) => u.step.id && ctx.index.usagesOf(sym.stepOutput(u.unit.path, u.job?.id, u.step.id, o.name)).length > 0
     );
-    if (read) continue;
+    if (read2) continue;
     ctx.report({
       message: `Output ${quote(o.name)} of ${action.path} is not read by any of its ${users.length} user${users.length > 1 ? "s" : ""}`,
       loc: o.loc,
@@ -25229,7 +25393,64 @@ var overrideExpiringSoon = defineRule({
     }
   }
 });
-var overrideRules = [overrideExpired, overrideUnused, overrideExpiringSoon];
+var ignoreCommentInvalid = defineRule({
+  code: "FP904",
+  name: "ignore-comment-invalid",
+  category: "config",
+  defaultSeverity: "warning",
+  phase: "post",
+  generatedFiles: "skip",
+  docs: {
+    summary: "A `# flowpact: ignore[\u2026]` comment names an unknown rule or one no comment can ignore, or is not written as `ignore[<rules>]`.",
+    why: "Such a comment accepts nothing: the finding it was written for is still reported, and the comment hides why.",
+    fix: "Correct the rule: its code or its name, as `flowpact rules` lists them, in brackets after `# flowpact: ignore`. The rules about overrides and ignore comments (FP9xx) check them once they are applied, so no comment can ignore them.",
+    examples: {
+      bad: `notify:
+  uses: acme/shared/.github/workflows/notify.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.0 # flowpact: ignore[remote-unverifed] checked in acme/shared`,
+      good: `notify:
+  uses: acme/shared/.github/workflows/notify.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.0 # flowpact: ignore[remote-unverified] checked in acme/shared`
+    }
+  },
+  check(ctx) {
+    for (const u of ctx.ignoreComments ?? []) {
+      if (u.invalid) ctx.report({ message: u.invalid, loc: u.rule?.loc ?? u.comment.loc });
+    }
+  }
+});
+var ignoreCommentUnused = defineRule({
+  code: "FP905",
+  name: "ignore-comment-unused",
+  category: "config",
+  defaultSeverity: "warning",
+  phase: "post",
+  generatedFiles: "skip",
+  docs: {
+    summary: "A `# flowpact: ignore[\u2026]` comment names a rule that reports nothing on the line it accepts.",
+    why: "The problem was fixed, or the comment is on another line than the finding. Either way it would hide a later finding of that rule there that nobody looked at.",
+    fix: "Delete the rule from the comment, or the comment when it names no other. A comment accepts the findings reported on its line; alone on its line, those on the next line of YAML; on a block scalar\u2019s line (`run: |`), those in its text.",
+    examples: {
+      bad: `# the workflow declares inputs.target now, so FP108 reports nothing on the next line
+- run: echo "\${{ inputs.target }}" # flowpact: ignore[FP108]`,
+      good: `- run: echo "\${{ inputs.target }}"`
+    }
+  },
+  check(ctx) {
+    for (const u of ctx.ignoreComments ?? []) {
+      if (!u.code || !u.rule || u.invalid || u.inactive || u.matched > 0) continue;
+      ctx.report({
+        message: u.comment.line ? `Ignore comment for ${u.code} matches no finding on line ${u.comment.line}` : `Ignore comment for ${u.code} matches no finding: no line of YAML follows it`,
+        loc: u.rule.loc
+      });
+    }
+  }
+});
+var overrideRules = [
+  overrideExpired,
+  overrideUnused,
+  overrideExpiringSoon,
+  ignoreCommentInvalid,
+  ignoreCommentUnused
+];
 
 // ../lint/src/rules/registry.ts
 var CODE_PATTERN = /^([A-Z][A-Z0-9]{1,9}?)(\d)(\d{2})$/;
@@ -25523,8 +25744,8 @@ jobs:
 });
 function emptyInCall(ctx, call) {
   if (!isExternal(call.callee) || call.job.secretsInherit) return [];
-  const read = ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
-  return read.filter((name) => !lookup(call.job.secrets, name));
+  const read2 = ctx.remotes?.lock?.remotes[call.callee.path]?.undeclaredSecrets ?? [];
+  return read2.filter((name) => !lookup(call.job.secrets, name));
 }
 function checkRemoteCalls(ctx) {
   for (const call of interfaceCalls(ctx.index)) {
@@ -26458,11 +26679,11 @@ function effectiveConfig(opts) {
   const configured = opts.config ?? defaultConfig();
   return opts.only?.length === 0 ? { ...configured, rules: {}, overrides: [] } : configured;
 }
-function withFetched(read, fetched) {
-  if (!fetched || !Object.keys(fetched).length) return read;
+function withFetched(read2, fetched) {
+  if (!fetched || !Object.keys(fetched).length) return read2;
   return {
-    ...read,
-    lock: { ...read.lock, version: 1, remotes: { ...fetched, ...read.lock?.remotes } },
+    ...read2,
+    lock: { ...read2.lock, version: 1, remotes: { ...fetched, ...read2.lock?.remotes } },
     fetched: Object.keys(fetched)
   };
 }
@@ -26672,14 +26893,51 @@ function countSkipped(u, code, skipped) {
   const n = skipped.filter((f) => overrideMatches(u.override, code, f)).length;
   if (n) u.skippedInGenerated = n;
 }
+function inactiveIn(run2, opts, code) {
+  return run2.severities.get(code) === "off" || run2.only !== void 0 && !run2.only.includes(code) || notRunIn(run2.registry.get(code), opts);
+}
 function judgeOverride(u, run2, opts) {
-  const code = run2.registry.get(u.override.rule)?.code ?? "";
-  const severity = run2.severities.get(code);
-  const rule = run2.registry.get(code);
-  const notRun = notRunIn(rule, opts);
-  if (severity === "off" || run2.only && !run2.only.includes(code) || notRun) u.inactive = true;
+  const rule = run2.registry.get(u.override.rule);
+  if (inactiveIn(run2, opts, rule?.code ?? "")) u.inactive = true;
   if (!u.matched && rule) countSkipped(u, rule.code, run2.skipped);
 }
+function resolveIgnored(registry2, key) {
+  const rule = registry2.get(key);
+  if (rule?.phase === "post") {
+    return {
+      invalid: `Ignore comment names ${rule.code} ${rule.name}, which runs once overrides and ignore comments are applied: no comment can ignore it`
+    };
+  }
+  if (rule) return { code: rule.code };
+  const { typo, rule: guess } = typoOf(registry2, key);
+  if (!typo) return { unloaded: true };
+  return {
+    invalid: `Ignore comment names an unknown rule "${key}"${guess ? ` (did you mean ${guess}?)` : ""}`
+  };
+}
+function ignoreCommentsOf(project) {
+  const out = /* @__PURE__ */ new Map();
+  for (const u of [...project.workflows.values(), ...project.actions.values()]) {
+    const ignores = readIgnoreComments(u.file, u.source.text);
+    if (ignores.comments.length) out.set(u.file, ignores);
+  }
+  return out;
+}
+function applyComments(run2, opts, logger, applied) {
+  const comments = applyIgnoreComments(
+    applied,
+    ignoreCommentsOf(run2.index.project),
+    (key) => resolveIgnored(run2.registry, key)
+  );
+  const unloaded = [];
+  for (const u of comments.usage) {
+    if (u.code && inactiveIn(run2, opts, u.code)) u.inactive = true;
+    else if (u.inactive && u.rule) unloaded.push(`${formatLine(u.rule.loc)} "${u.rule.key}"`);
+  }
+  if (unloaded.length) logger.warn(`ignore comments name rules that are not loaded: ${unloaded.join("; ")}`);
+  return comments;
+}
+var formatLine = (loc) => `${loc.file}:${loc.line}`;
 function scopeOf2(index, config2, contracts, scope) {
   const { targets } = index.project;
   const scopedEntries = (contracts?.entries ?? []).filter(scope.contractInScope);
@@ -26695,10 +26953,9 @@ function logFiltered(logger, config2, f) {
       `skipped ${f.skippedInScope.length} finding(s) about the internals of ${new Set(f.skippedInScope.map((s) => s.loc.file)).size} generated file(s)`
     );
   }
-  if (f.accepted.length + f.suppressed.length !== f.findings.length) {
-    logger.debug(
-      `filtered ${f.findings.length - f.accepted.length - f.suppressed.length} finding(s) by targets/ignore`
-    );
+  const accepted = f.accepted.length + f.suppressed.length + f.ignored.length;
+  if (accepted !== f.findings.length) {
+    logger.debug(`filtered ${f.findings.length - accepted} finding(s) by targets/ignore`);
   }
   if (config2.overrides.length) {
     logger.info(
@@ -26706,6 +26963,15 @@ function logFiltered(logger, config2, f) {
       {
         expired: f.usage.filter((u) => u.expired).length,
         unused: f.usage.filter((u) => !u.matched && !u.expired && !u.inactive).length
+      }
+    );
+  }
+  if (f.comments.length) {
+    logger.info(
+      `ignore comments: ${f.ignored.length} finding(s) ignored by ${new Set(f.comments.filter((u) => u.matched).map((u) => u.comment)).size} comment(s)`,
+      {
+        invalid: f.comments.filter((u) => u.invalid).length,
+        unused: f.comments.filter((u) => u.code && !u.matched && !u.inactive).length
       }
     );
   }
@@ -26740,6 +27006,7 @@ function resultOf(opts, run2, r) {
       severity: run2.severities.get(x.code) ?? x.defaultSeverity
     })),
     suppressed: r.suppressed,
+    ignoredByComment: r.ignoredByComment,
     ...run2.contracts ? { contracts: run2.contracts } : {},
     ...r.unloaded.length ? { unloadedRules: r.unloaded } : {},
     ...impactFieldsOf(run2, r.removedPaths),
@@ -26788,13 +27055,32 @@ function runPhases(run2, opts, logger, scope, unloaded) {
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join("; ")}`);
   for (const u of applied.usage) judgeOverride(u, run2, opts);
+  const comments = applyComments(run2, opts, logger, applied);
   const inScope = scopeOf2(run2.index, config2, run2.contracts, scope);
-  const accepted = applied.kept.filter(inScope);
+  const accepted = comments.kept.filter(inScope);
   const suppressed = applied.suppressed.filter(inScope);
+  const ignored = comments.ignored.filter(inScope);
   const skippedInScope = dedupe2(run2.skipped).filter(inScope);
-  logFiltered(logger, config2, { findings, accepted, suppressed, skippedInScope, usage: applied.usage });
-  const post = runRules(run2, "post", { overrides: applied.usage });
-  return { kept: dedupe2([...accepted, ...post]).sort(byReportOrder), suppressed, skippedInScope };
+  logFiltered(logger, config2, {
+    findings,
+    accepted,
+    suppressed,
+    ignored,
+    skippedInScope,
+    usage: applied.usage,
+    comments: comments.usage
+  });
+  const post = runRules(run2, "post", { overrides: applied.usage, ignoreComments: comments.usage });
+  const units = new Set(
+    [...run2.index.project.workflows.values(), ...run2.index.project.actions.values()].map((u) => u.file)
+  );
+  const postInScope = post.filter((f) => !units.has(f.loc.file) || inScope(f));
+  return {
+    kept: dedupe2([...accepted, ...postInScope]).sort(byReportOrder),
+    suppressed,
+    ignored,
+    skippedInScope
+  };
 }
 function analyze(opts) {
   const started = performance.now();
@@ -26822,8 +27108,12 @@ function analyze(opts) {
   const { matrix: matrix2, combinations } = expandMatrices(project, config2, logger);
   const unloaded = [];
   const { run: run2, scope } = prepareRules(opts, logger, { registry: registry2, index, config: config2, matrix: matrix2, remotes }, unloaded);
-  const { kept, suppressed, skippedInScope } = runPhases(run2, opts, logger, scope, unloaded);
-  const summary2 = summarize(project, index, kept, combinations(), suppressed.length, skippedInScope.length);
+  const { kept, suppressed, ignored, skippedInScope } = runPhases(run2, opts, logger, scope, unloaded);
+  const summary2 = summarize(project, index, kept, combinations(), {
+    suppressed: suppressed.length,
+    ignoredByComment: ignored.length,
+    skippedInGenerated: skippedInScope.length
+  });
   const durationMs = Math.round(performance.now() - started);
   logger.info(
     `analysis finished: ${summary2.errors} error(s), ${summary2.warnings} warning(s), ${summary2.infos} info`,
@@ -26835,6 +27125,7 @@ function analyze(opts) {
     findings: kept,
     summary: summary2,
     suppressed,
+    ignoredByComment: ignored,
     unloaded,
     durationMs,
     removedPaths: removedPathsOf(opts, project)
@@ -26874,7 +27165,7 @@ function dedupe2(findings) {
     return true;
   });
 }
-function summarize(project, index, findings, combinations, suppressed, skippedInGenerated) {
+function summarize(project, index, findings, combinations, accepted) {
   const byCode = {};
   const byFile = {};
   for (const f of findings) {
@@ -26893,8 +27184,7 @@ function summarize(project, index, findings, combinations, suppressed, skippedIn
     graph: { nodes: index.nodes.size, edges: index.edges.length },
     byCode,
     byFile,
-    suppressed,
-    skippedInGenerated
+    ...accepted
   };
 }
 function generatedFilesOf(project, config2) {
@@ -26975,7 +27265,7 @@ function exitCodeFor(summary2, failOn) {
 }
 
 // ../lint/src/contract-locate.ts
-var import_yaml11 = __toESM(require_dist(), 1);
+var import_yaml12 = __toESM(require_dist(), 1);
 
 // ../lint/src/impact-run.ts
 import { execFileSync as execFileSync2 } from "child_process";
@@ -27487,7 +27777,7 @@ function prepareImpact(root, headConfig, req, logger) {
 }
 
 // ../lint/src/override-entry.ts
-var import_yaml12 = __toESM(require_dist(), 1);
+var import_yaml13 = __toESM(require_dist(), 1);
 
 // ../lint/src/plugins.ts
 import { existsSync as existsSync6 } from "fs";
@@ -27650,11 +27940,11 @@ var tooLarge = () => new FetchError(`a response over ${MAX_FILE_BYTES} bytes`);
 var repoUrl = (r, opts) => `${trimChar(opts.apiUrl ?? "https://api.github.com", "/")}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
 var contentsPath = (path) => path.split("/").map(encodeURIComponent).join("/");
 var RETRY_DELAY_MS = 300;
-async function onceMore(read, opts) {
-  const first = await read();
+async function onceMore(read2, opts) {
+  const first = await read2();
   if (first !== void 0) return first;
   await pause(opts.retryDelayMs ?? RETRY_DELAY_MS);
-  return read();
+  return read2();
 }
 async function shaOf(r, opts) {
   const locked = opts.lockedCommit?.(r);
@@ -27779,10 +28069,10 @@ function gradeRemoteChanges(opts, changes) {
   return changes.map((change) => gradeOne(change, before, after));
 }
 function gradingRun(opts, fs3, changes, pick2) {
-  const read = readRemotesLock(fs3);
-  const lock = read.lock ? { ...read.lock, remotes: { ...read.lock.remotes } } : { version: 1, remotes: {} };
+  const read2 = readRemotesLock(fs3);
+  const lock = read2.lock ? { ...read2.lock, remotes: { ...read2.lock.remotes } } : { version: 1, remotes: {} };
   for (const change of changes) setEntry(lock, change.ref, pick2(change));
-  const file = read.file ?? REMOTES_LOCK_FILES[0];
+  const file = read2.file ?? REMOTES_LOCK_FILES[0];
   const {
     paths: _paths,
     impact: _impact,
@@ -27919,13 +28209,13 @@ function secretsInherited(c, { ref, before, after }) {
 var setsUndeclared = (e) => e.kind === "action" && (e.using ?? "composite") !== "composite";
 var readsStepOutput = (ref, id) => ref.context === "steps" && ref.path[0]?.toLowerCase() === id.toLowerCase() && isProperty(ref.path[1], "outputs");
 function outputsRead(c, id, names) {
-  const read = /* @__PURE__ */ new Set();
+  const read2 = /* @__PURE__ */ new Set();
   for (const { site, ref } of refsOf(c.unit)) {
     const name = ref.path[2];
     if (site.job === c.job?.id && readsStepOutput(ref, id) && name && names.has(name.toLowerCase()))
-      read.add(name);
+      read2.add(name);
   }
-  return [...read];
+  return [...read2];
 }
 function outputsMaybeSet(c, { ref, before, after }) {
   const id = c.step?.id;
@@ -28127,6 +28417,10 @@ var reportSchema = object({
     byCode: record(string2(), int2()),
     byFile: record(string2(), int2()),
     suppressed: int2(),
+    ignoredByComment: described(
+      optional(int2()),
+      "Findings accepted by `# flowpact: ignore[\u2026]` comments (not counted above)."
+    ),
     skippedInGenerated: described(
       optional(int2()),
       "Findings not reported because they are about the internals of generated files."
@@ -28142,6 +28436,16 @@ var reportSchema = object({
         owner: optional(string2())
       })
     })
+  ),
+  ignoredByComment: described(
+    optional(
+      array(
+        extend2(findingSchema, {
+          comment: object({ loc: locSchema, reason: optional(string2()) })
+        })
+      )
+    ),
+    "Findings accepted by `# flowpact: ignore[\u2026]` comments, each with the comment that accepted it."
   ),
   contracts: optional(
     object({
@@ -28232,6 +28536,7 @@ function toJsonReport(result, opts = {}) {
     summary: result.summary,
     findings: result.findings,
     suppressed: result.suppressed,
+    ignoredByComment: result.ignoredByComment,
     ...result.contracts ? {
       contracts: {
         drift: result.contracts.drift,
@@ -28789,7 +29094,7 @@ function headerLines(result, opts) {
     "",
     "| Errors | Warnings | Info | Suppressed | Workflows | Actions | Jobs | Matrix combinations |",
     "| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
-    `| ${s.errors} | ${s.warnings} | ${s.infos} | ${s.suppressed} | ${s.workflows} | ${s.actions} | ${s.jobs} | ${s.matrixCombinations} |`
+    `| ${s.errors} | ${s.warnings} | ${s.infos} | ${s.suppressed + s.ignoredByComment} | ${s.workflows} | ${s.actions} | ${s.jobs} | ${s.matrixCombinations} |`
   ];
   if (s.skippedInGenerated) {
     out.push("");
@@ -28823,22 +29128,29 @@ function findingSections(result, opts, max) {
   }
   return out;
 }
-function suppressedSection(result, opts, max) {
-  const out = [
-    `<details><summary>${plural(result.suppressed.length, "suppressed finding")}</summary>`,
-    "",
-    "| Code | Location | Reason | Expires | Owner |",
-    "| --- | --- | --- | --- | --- |"
+function acceptedRows(result) {
+  return [
+    ...result.suppressed.map((f) => ({ f, by: "override", ...f.override })),
+    ...result.ignoredByComment.map((f) => ({ f, by: "comment", reason: f.comment.reason }))
   ];
-  for (const f of result.suppressed.slice(0, max)) {
-    const o = f.override;
+}
+function suppressedSection(result, opts, max) {
+  const rows = acceptedRows(result);
+  const withBy = result.ignoredByComment.length > 0;
+  const out = [
+    `<details><summary>${plural(rows.length, "suppressed finding")}</summary>`,
+    "",
+    `| Code | Location |${withBy ? " By |" : ""} Reason | Expires | Owner |`,
+    `| --- | --- |${withBy ? " --- |" : ""} --- | --- | --- |`
+  ];
+  for (const { f, by, reason, expires, owner } of rows.slice(0, max)) {
     out.push(
-      `| [${markdownCode(f.code)}](${f.docsUrl}) | ${markdownTableCell(markdownLocation(f.loc, opts))} | ${markdownCell(o.reason)} | ${o.expires ?? "\u2014"} | ${o.owner ? markdownCell(o.owner) : "\u2014"} |`
+      `| [${markdownCode(f.code)}](${f.docsUrl}) | ${markdownTableCell(markdownLocation(f.loc, opts))} |${withBy ? ` ${by} |` : ""} ${reason ? markdownCell(reason) : "\u2014"} | ${expires ?? "\u2014"} | ${owner ? markdownCell(owner) : "\u2014"} |`
     );
   }
-  if (result.suppressed.length > max) {
+  if (rows.length > max) {
     out.push("");
-    out.push(`_\u2026 ${result.suppressed.length - max} more suppressed findings (see the JSON report)._`);
+    out.push(`_\u2026 ${rows.length - max} more suppressed findings (see the JSON report)._`);
   }
   out.push("");
   out.push("</details>");
@@ -28862,7 +29174,7 @@ function renderMarkdown(result, opts = {}) {
     ...findingSections(result, opts, max),
     ...result.contracts ? ["", ...renderContracts(result.contracts, opts)] : [],
     ...result.impact ? ["", ...renderImpactMarkdown(result.impact, opts)] : [],
-    ...result.suppressed.length ? ["", ...suppressedSection(result, opts, max)] : [],
+    ...result.suppressed.length || result.ignoredByComment.length ? ["", ...suppressedSection(result, opts, max)] : [],
     ...opts.includeGraph ? ["", ...graphSection(result)] : []
   ];
   return `${out.join("\n")}
@@ -28915,11 +29227,20 @@ function sarifRule(code, result, registry2, sample) {
     properties: { tags: ruleTags(def, sample) }
   };
 }
+function suppressionsOf(f) {
+  if ("override" in f)
+    return { suppressions: [{ kind: "external", status: "accepted", justification: f.override.reason }] };
+  if ("comment" in f) {
+    const justification = f.comment.reason ? { justification: f.comment.reason } : {};
+    return { suppressions: [{ kind: "inSource", status: "accepted", ...justification }] };
+  }
+  return {};
+}
 function renderSarif(result, opts = {}) {
   const registry2 = createRegistry();
   const all = [
     ...result.findings,
-    ...opts.includeSuppressed ? result.suppressed : []
+    ...opts.includeSuppressed ? [...result.suppressed, ...result.ignoredByComment] : []
   ];
   const firstFinding = /* @__PURE__ */ new Map();
   for (const f of all) if (!firstFinding.has(f.code)) firstFinding.set(f.code, f);
@@ -28943,7 +29264,7 @@ function renderSarif(result, opts = {}) {
     } : {},
     partialFingerprints: { "flowpact/v1": f.fingerprint },
     ...f.suggestions?.length ? { fixes: sarifFixes(f.suggestions, opts.pathPrefix) } : {},
-    ..."override" in f ? { suppressions: [{ kind: "external", status: "accepted", justification: f.override.reason }] } : {},
+    ...suppressionsOf(f),
     properties: {
       ...f.combos?.length ? { combos: f.combos } : {},
       ...f.symbol ? { symbol: f.symbol } : {}
@@ -29015,7 +29336,7 @@ function renderVersionChanges(v, links = {}) {
 }
 
 // src/main.ts
-var import_yaml13 = __toESM(require_dist(), 1);
+var import_yaml14 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -29370,7 +29691,7 @@ var fromActionDir = (p) => isAbsolute8(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml13.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml14.parse)(readFileSync5(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
@@ -29533,7 +29854,8 @@ function pluginsAllowed(value) {
 }
 var slug = (s) => s.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "root";
 function initOutputs() {
-  for (const k of ["errors", "warnings", "infos", "suppressed", "findings", "breaking"]) setOutput(k, 0);
+  for (const k of ["errors", "warnings", "infos", "suppressed", "ignored-by-comment", "findings", "breaking"])
+    setOutput(k, 0);
   setOutput("drift", "false");
   setOutput("exit-code", 2);
   for (const k of [
@@ -29926,6 +30248,7 @@ function setResultOutputs(s, plan) {
   setOutput("warnings", s.warnings);
   setOutput("infos", s.infos);
   setOutput("suppressed", s.suppressed);
+  setOutput("ignored-by-comment", s.ignoredByComment);
   setOutput("findings", s.total);
   setOutput("drift", plan?.drift ? "true" : "false");
   setOutput("breaking", plan?.breaking ?? 0);
@@ -29971,7 +30294,7 @@ async function report(result, inputs, place, log, versions) {
   setImpactOutputs(result.impact);
   setVersionOutputs(versions);
   info(
-    `flowpact ${inputs.mode}: ${plural2(s.errors, "error")}, ${plural2(s.warnings, "warning")}, ${s.infos} info, ${s.suppressed} suppressed \xB7 ${plural2(s.workflows, "workflow")} \xB7 ${result.durationMs} ms`
+    `flowpact ${inputs.mode}: ${plural2(s.errors, "error")}, ${plural2(s.warnings, "warning")}, ${s.infos} info, ${s.suppressed} suppressed${s.ignoredByComment ? `, ${s.ignoredByComment} ignored by comments` : ""} \xB7 ${plural2(s.workflows, "workflow")} \xB7 ${result.durationMs} ms`
   );
   if (failure2) setFailed(failure2);
 }

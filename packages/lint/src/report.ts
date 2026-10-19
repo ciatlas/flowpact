@@ -67,6 +67,10 @@ export const reportSchema = z.object({
     byCode: z.record(z.string(), int()),
     byFile: z.record(z.string(), int()),
     suppressed: int(),
+    ignoredByComment: described(
+      z.optional(int()),
+      'Findings accepted by `# flowpact: ignore[…]` comments (not counted above).',
+    ),
     skippedInGenerated: described(
       z.optional(int()),
       'Findings not reported because they are about the internals of generated files.',
@@ -82,6 +86,16 @@ export const reportSchema = z.object({
         owner: z.optional(z.string()),
       }),
     }),
+  ),
+  ignoredByComment: described(
+    z.optional(
+      z.array(
+        z.extend(findingSchema, {
+          comment: z.object({ loc: locSchema, reason: z.optional(z.string()) }),
+        }),
+      ),
+    ),
+    'Findings accepted by `# flowpact: ignore[…]` comments, each with the comment that accepted it.',
   ),
   contracts: z.optional(
     z.object({
@@ -177,6 +191,7 @@ export function toJsonReport(result: AnalysisResult, opts: { includeGraph?: bool
     summary: result.summary,
     findings: result.findings,
     suppressed: result.suppressed,
+    ignoredByComment: result.ignoredByComment,
     ...(result.contracts
       ? {
           contracts: {

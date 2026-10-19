@@ -120,6 +120,8 @@ outputs:
     description: 'Number of info findings.'
   suppressed:
     description: 'Number of findings accepted by overrides.'
+  ignored-by-comment:
+    description: 'Number of findings accepted by `# flowpact: ignore[…]` comments.'
   findings:
     description: 'Total number of findings (errors, warnings and info).'
   drift:

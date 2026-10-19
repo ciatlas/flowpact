@@ -3,6 +3,7 @@ import {
   createRegistry,
   DOCS_BASE_URL,
   type Finding,
+  type IgnoredFinding,
   type RuleDefinition,
   type RuleRegistry,
   type Severity,
@@ -18,8 +19,9 @@ const LEVEL: Record<Severity, 'error' | 'warning' | 'note'> = {
 
 export interface SarifOptions {
   /**
-   * Also list findings accepted by overrides, as results with a `suppressions` entry. Off by default: GitHub code
-   * scanning ignores `suppressions` and would open an alert for every accepted finding.
+   * Also list findings accepted by overrides and ignore comments, as results with a `suppressions` entry (`external`
+   * and `inSource`). Off by default: GitHub code scanning ignores `suppressions` and would open an alert for every
+   * accepted finding.
    */
   includeSuppressed?: boolean;
   /**
@@ -98,12 +100,23 @@ function sarifRule(
   };
 }
 
+/** How a finding was accepted, as SARIF has it: by an override (`external`) or an ignore comment (`inSource`). */
+function suppressionsOf(f: Finding | SuppressedFinding | IgnoredFinding) {
+  if ('override' in f)
+    return { suppressions: [{ kind: 'external', status: 'accepted', justification: f.override.reason }] };
+  if ('comment' in f) {
+    const justification = f.comment.reason ? { justification: f.comment.reason } : {};
+    return { suppressions: [{ kind: 'inSource', status: 'accepted', ...justification }] };
+  }
+  return {};
+}
+
 /** SARIF 2.1.0 for GitHub code scanning and other SARIF viewers. */
 export function renderSarif(result: AnalysisResult, opts: SarifOptions = {}): string {
   const registry = createRegistry();
-  const all: (Finding | SuppressedFinding)[] = [
+  const all: (Finding | SuppressedFinding | IgnoredFinding)[] = [
     ...result.findings,
-    ...(opts.includeSuppressed ? result.suppressed : []),
+    ...(opts.includeSuppressed ? [...result.suppressed, ...result.ignoredByComment] : []),
   ];
   const firstFinding = new Map<string, Finding>();
   for (const f of all) if (!firstFinding.has(f.code)) firstFinding.set(f.code, f);
@@ -133,9 +146,7 @@ export function renderSarif(result: AnalysisResult, opts: SarifOptions = {}): st
       : {}),
     partialFingerprints: { 'flowpact/v1': f.fingerprint },
     ...(f.suggestions?.length ? { fixes: sarifFixes(f.suggestions, opts.pathPrefix) } : {}),
-    ...('override' in f
-      ? { suppressions: [{ kind: 'external', status: 'accepted', justification: f.override.reason }] }
-      : {}),
+    ...suppressionsOf(f),
     properties: {
       ...(f.combos?.length ? { combos: f.combos } : {}),
       ...(f.symbol ? { symbol: f.symbol } : {}),

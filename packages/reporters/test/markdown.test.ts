@@ -202,6 +202,30 @@ describe('renderMarkdown contracts and suppressions', () => {
     expect(out).toContain('Kept for callers on v1 \\| removed in v3 | 2099-01-01 | @\u200bplatform |');
   });
 
+  it('says which suppressed findings an ignore comment accepted, and counts them as suppressed', () => {
+    const files = {
+      [`${WF}/ci.yml`]:
+        'on:\n  workflow_dispatch:\n    inputs:\n      legacy: # flowpact: ignore[FP104] read | by a script\n        type: string\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n',
+      [`${WF}/other.yml`]:
+        'on:\n  workflow_dispatch:\n    inputs:\n      old:\n        type: string\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n',
+    };
+    const out = renderMarkdown(
+      analyze({
+        root: '/virtual/repo',
+        fs: memoryFileSystem(files),
+        validateSchema: false,
+        config: parseConfig({
+          overrides: [{ rule: 'FP104', file: `${WF}/other.yml`, reason: 'Read by the dispatcher' }],
+        }),
+      }),
+    );
+    expect(out).toContain('| 0 | 0 | 0 | 2 |');
+    expect(out).toContain('<details><summary>2 suppressed findings</summary>');
+    expect(out).toContain('| Code | Location | By | Reason | Expires | Owner |');
+    expect(out).toContain('`.github/workflows/other.yml:4:7` | override | Read by the dispatcher | — | — |');
+    expect(out).toContain('`.github/workflows/ci.yml:4:7` | comment | read \\| by a script | — | — |');
+  });
+
   it('links the location of a suppressed finding instead of escaping the link', () => {
     const out = renderMarkdown(r, { repoUrl: 'https://github.com/o/r', sha: 'abc' });
     const row = out.split('\n').find((l) => l.includes('Kept for callers on v1'))!;

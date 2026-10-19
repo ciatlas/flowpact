@@ -10,7 +10,7 @@ flowpact checks both sides of a reusable workflow or action: what it declares, a
 - **You call one:** each call is checked against the version it targets, and each version bump before you take it
   ([remote interfaces](/docs/remote-interfaces)).
 - **Inside a repository:** every value is followed across workflows, actions and matrix combinations. GitHub turns a
-  missing one into an empty string and a green run; [53 rules](/docs/rules) report where.
+  missing one into an empty string and a green run; [55 rules](/docs/rules) report where.
 
 ```mermaid
 flowchart TD
@@ -73,7 +73,7 @@ enough. Otherwise, use flowpact next to actionlint and [zizmor](https://github.c
         runs-on: ubuntu-latest
         steps:
           - uses: actions/checkout@v7       # pin to a commit SHA
-          - uses: ciatlas/flowpact@v0.24    # pin to a commit SHA
+          - uses: ciatlas/flowpact@v0.25    # pin to a commit SHA
     ```
 
     Findings become annotations on the pull request and a job summary. See [Run on pull requests](/docs/ci).

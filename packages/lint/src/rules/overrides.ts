@@ -133,4 +133,72 @@ const overrideExpiringSoon = defineRule({
   },
 });
 
-export const overrideRules: RuleDefinition[] = [overrideExpired, overrideUnused, overrideExpiringSoon];
+const ignoreCommentInvalid = defineRule({
+  code: 'FP904',
+  name: 'ignore-comment-invalid',
+  category: 'config',
+  defaultSeverity: 'warning',
+  phase: 'post',
+  generatedFiles: 'skip',
+  docs: {
+    summary:
+      'A `# flowpact: ignore[…]` comment names an unknown rule or one no comment can ignore, or is not written as `ignore[<rules>]`.',
+    why: 'Such a comment accepts nothing: the finding it was written for is still reported, and the comment hides why.',
+    fix:
+      'Correct the rule: its code or its name, as `flowpact rules` lists them, in brackets after `# flowpact: ignore`. ' +
+      'The rules about overrides and ignore comments (FP9xx) check them once they are applied, so no comment can ignore them.',
+    examples: {
+      bad: `notify:
+  uses: acme/shared/.github/workflows/notify.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.0 # flowpact: ignore[remote-unverifed] checked in acme/shared`,
+      good: `notify:
+  uses: acme/shared/.github/workflows/notify.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.0 # flowpact: ignore[remote-unverified] checked in acme/shared`,
+    },
+  },
+  check(ctx) {
+    for (const u of ctx.ignoreComments ?? []) {
+      if (u.invalid) ctx.report({ message: u.invalid, loc: u.rule?.loc ?? u.comment.loc });
+    }
+  },
+});
+
+const ignoreCommentUnused = defineRule({
+  code: 'FP905',
+  name: 'ignore-comment-unused',
+  category: 'config',
+  defaultSeverity: 'warning',
+  phase: 'post',
+  generatedFiles: 'skip',
+  docs: {
+    summary: 'A `# flowpact: ignore[…]` comment names a rule that reports nothing on the line it accepts.',
+    why:
+      'The problem was fixed, or the comment is on another line than the finding. Either way it would hide a later ' +
+      'finding of that rule there that nobody looked at.',
+    fix:
+      'Delete the rule from the comment, or the comment when it names no other. A comment accepts the findings reported ' +
+      'on its line; alone on its line, those on the next line of YAML; on a block scalar’s line (`run: |`), those in its text.',
+    examples: {
+      bad: `# the workflow declares inputs.target now, so FP108 reports nothing on the next line
+- run: echo "\${{ inputs.target }}" # flowpact: ignore[FP108]`,
+      good: `- run: echo "\${{ inputs.target }}"`,
+    },
+  },
+  check(ctx) {
+    for (const u of ctx.ignoreComments ?? []) {
+      if (!u.code || !u.rule || u.invalid || u.inactive || u.matched > 0) continue;
+      ctx.report({
+        message: u.comment.line
+          ? `Ignore comment for ${u.code} matches no finding on line ${u.comment.line}`
+          : `Ignore comment for ${u.code} matches no finding: no line of YAML follows it`,
+        loc: u.rule.loc,
+      });
+    }
+  },
+});
+
+export const overrideRules: RuleDefinition[] = [
+  overrideExpired,
+  overrideUnused,
+  overrideExpiringSoon,
+  ignoreCommentInvalid,
+  ignoreCommentUnused,
+];
