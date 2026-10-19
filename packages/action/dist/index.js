@@ -24810,7 +24810,7 @@ var undefinedOutputRef = defineRule({
   docs: {
     summary: "An expression reads an output (`needs.*`, `jobs.*`, `steps.*`) that is never defined.",
     why: "Undefined outputs evaluate to an empty string. Downstream jobs then run with missing versions, tags or flags.",
-    fix: "Fix the output name, declare the output on the job/workflow/action, or reference the right job or step.",
+    fix: "Fix the output name, declare the output on the job/workflow/action, or reference the right job or step. In a composite action, a step writing to `$GITHUB_OUTPUT` sets its own output, not the action's: give the step an `id` and map the output under the action's `outputs:` (`value: ${{ steps.<id>.outputs.<name> }}`).",
     examples: {
       bad: `jobs:
   build:
