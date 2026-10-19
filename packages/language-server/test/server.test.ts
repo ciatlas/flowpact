@@ -647,7 +647,25 @@ describe('code actions', () => {
   it('offers no accept for a client that cannot create the config file', async () => {
     const dir = repo();
     const client = await start(dir);
-    expect((await actionsFor(client, dir)).map((a) => a.title)).toEqual(['Rename "nmae" to "name"']);
+    expect((await actionsFor(client, dir)).map((a) => a.title)).toEqual([
+      'Rename "nmae" to "name"',
+      'Ignore FP102 on this line with a comment',
+    ]);
+  });
+
+  it('ignores a finding with a comment above its line, after which it is no longer reported', async () => {
+    const dir = repo();
+    const client = await start(dir);
+    const ignore = (await actionsFor(client, dir)).find((a) => a.title.startsWith('Ignore'));
+    const text = edited(REPO[CALLER]!, ignore!.edit!.changes![uri(dir, CALLER)]!);
+    expect(text).toBe(
+      REPO[CALLER]!.replace('      nmae: x', '      # flowpact: ignore[FP102]\n      nmae: x'),
+    );
+    write(dir, { [CALLER]: text });
+    await client.conn.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: uri(dir, CALLER), type: FileChangeType.Changed }],
+    });
+    expect(codesOf(await client.diagnosticsOf(dir, CALLER))).not.toContain('FP102');
   });
 
   it('adds the override to the config the repository has', async () => {

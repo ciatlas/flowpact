@@ -116,6 +116,24 @@ describe('renderSarif', () => {
     expect(run.tool.driver.rules.map((x: Sarif) => x.id)).toContain('FP104');
   });
 
+  it('lists findings accepted by ignore comments as suppressed in source on request', () => {
+    const r = analyze({
+      root: '/virtual/repo',
+      fs: memoryFileSystem({
+        '.github/workflows/ci.yml':
+          'on:\n  workflow_dispatch:\n    inputs:\n      legacy: # flowpact: ignore[FP104] read by a script\n        type: string\n      old: # flowpact: ignore[FP104]\n        type: string\njobs:\n  a:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n',
+      }),
+      validateSchema: false,
+    });
+    expect(r.ignoredByComment).toHaveLength(2);
+    expect(parse(r).runs[0].results.filter((x: Sarif) => x.ruleId === 'FP104')).toEqual([]);
+    const results = JSON.parse(renderSarif(r, { includeSuppressed: true })).runs[0].results;
+    expect(results.filter((x: Sarif) => x.suppressions).map((x: Sarif) => x.suppressions)).toEqual([
+      [{ kind: 'inSource', status: 'accepted', justification: 'read by a script' }],
+      [{ kind: 'inSource', status: 'accepted' }],
+    ]);
+  });
+
   it('falls back to finding docs for plugin rules', () => {
     const registry = createRegistry().register(
       defineRule({

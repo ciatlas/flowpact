@@ -37,8 +37,8 @@ reported twice.
 - **Rename** an input, secret or output where it is declared, passed and read, in every file.
 - **Completion** of the inputs and secrets a call does not pass yet, for calls into other repositories too, from the
   lockfile, with no network.
-- **Quick fixes** for findings flowpact can fix with certainty, and **Accept this finding with an override** on any
-  of them.
+- **Quick fixes** for findings flowpact can fix with certainty, and **Accept this finding with an override** or
+  **Ignore it on this line with a comment** (`# flowpact: ignore[FP501]`) on any of them.
 - **Contract drift** as you edit, when the repository [locks its contracts](https://ciatlas.github.io/flowpact/docs/contracts).
 
 ![Hover on an input: a required string that comes from pipeline.yml and goes on to package.yml](../../apps/docs/public/screenshots/editor-hover.png)

@@ -13,9 +13,12 @@ What each release changed is in the [changelog](/docs/changelog).
   followed across files.
 - **Exact matrix expansion**, with each combination evaluated on its own, and declared shapes for matrices computed at
   run time ([`matrixShapes`](/docs/configuration#matrix-shapes)).
-- **53 [rules](/docs/rules)** (`FP1xx`–`FP9xx`) with stable codes, a page each and `flowpact explain`.
+- **55 [rules](/docs/rules)** (`FP1xx`–`FP9xx`) with stable codes, a page each and `flowpact explain`.
 - **[Overrides](/docs/configuration#overrides)** with a mandatory reason, an optional expiry date and owner. Expired,
   unused and soon-expiring overrides are reported (`FP901`–`FP903`).
+- **[Ignore comments](/docs/configuration#ignore-comments)** that accept a finding on its line
+  (`# flowpact: ignore[FP501] why`), also after a pinned action's version comment. Invalid and unused ones are reported
+  (`FP904`, `FP905`).
 - **[Plugins](/docs/custom-rules):** an organization's own rules, loaded from the config.
 
 ### Where it runs
@@ -28,7 +31,7 @@ What each release changed is in the [changelog](/docs/changelog).
   definition across workflow calls, and references, a step's own `env` and step ids included. Calls into other
   repositories are described from the remote interfaces lockfile, and go to definition opens their cached sources.
   [Quick fixes](/docs/editors#quick-fixes) rename a misspelled name, add a missing input, secret or matrix key, remove
-  an unused input, regenerate the contracts, and accept a finding with an override. Contract files have hover and go
+  an unused input, regenerate the contracts, and accept a finding with an override or an ignore comment. Contract files have hover and go
   to definition too. [Rename](/docs/editors#rename) an input, secret or output across its declaration, its callers and
   its reads. [Completion](/docs/editors#completion) offers the inputs and secrets a call does not pass yet, from the
   lockfile for calls into other repositories.

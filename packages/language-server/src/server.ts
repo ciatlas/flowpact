@@ -38,6 +38,7 @@ import {
   acceptAction,
   acceptEdit,
   type FileOps,
+  ignoreAction,
   regenerateAction,
   suggestionActions,
 } from './actions';
@@ -317,17 +318,14 @@ export function startServer(connection: Connection): void {
     for (const d of context.diagnostics) {
       const f = findingOf(found.findings, d);
       if (!f) continue;
-      actions.push(...suggestionActions(found.root.dir, f, d));
-      const accept = acceptAction(f, d, textDocument.uri, {
-        prompt: promptForReason,
-        canCreate: fileOps.create,
-        config,
-      });
-      if (accept) actions.push(accept);
-      const regenerate = regenerateAction(found.root.dir, found.root.result?.contracts, d, fileOps, (p) =>
-        workspace?.textOf(p),
-      );
-      if (regenerate) actions.push(regenerate);
+      const textOf = (p: string) => workspace?.textOf(p);
+      const offered = [
+        ...suggestionActions(found.root.dir, f, d),
+        acceptAction(f, d, textDocument.uri, { prompt: promptForReason, canCreate: fileOps.create, config }),
+        ignoreAction(f, d, found.root, textOf),
+        regenerateAction(found.root.dir, found.root.result?.contracts, d, fileOps, textOf),
+      ];
+      actions.push(...offered.filter((a) => a !== undefined));
     }
     return actions;
   });

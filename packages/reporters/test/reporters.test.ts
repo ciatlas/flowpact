@@ -43,6 +43,12 @@ describe('renderPretty', () => {
     }
   });
 
+  it('counts the findings ignore comments accepted', () => {
+    expect(renderPretty(result('ignore-comments'), plain)).toContain(
+      '3 findings accepted by ignore comments (listed under "ignoredByComment" in --format json)',
+    );
+  });
+
   it('reports a clean run', () => {
     expect(renderPretty(result('clean'), plain)).toContain('✔ No problems found');
     expect(renderPretty(result('clean'), plain)).not.toContain('generated files');

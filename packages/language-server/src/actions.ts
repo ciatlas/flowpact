@@ -1,5 +1,7 @@
 import { join } from 'node:path';
 import {
+  type AnalysisResult,
+  addIgnoreComment,
   addOverride,
   type ContractPlan,
   type ContractPlanEntry,
@@ -115,6 +117,39 @@ export function acceptAction(
     opts.canCreate,
   );
   return edit && { ...base, title, edit };
+}
+
+/** Whether a file is one of the repository's workflows or actions, where ignore comments are read. */
+function isUnitFile(result: AnalysisResult | undefined, file: string): boolean {
+  if (!result) return false;
+  const { workflows, actions } = result.project;
+  return [...workflows.values(), ...actions.values()].some((u) => u.file === file);
+}
+
+/**
+ * "Ignore it on this line": a `# flowpact: ignore[<code>]` comment on a line of its own above the finding's, or the
+ * code added to a comment that accepts that line already. Only in a workflow or action file of the repository at
+ * `root.dir` (`textOf` gives its text as the editor has it), and not for a finding about the config, overrides or
+ * ignore comments.
+ */
+export function ignoreAction(
+  f: Finding,
+  diagnostic: Diagnostic,
+  root: { dir: string; result?: AnalysisResult | undefined },
+  textOf: (path: string) => string | undefined,
+): CodeAction | undefined {
+  if (f.category === 'config' || !isUnitFile(root.result, f.loc.file)) return undefined;
+  const path = join(root.dir, f.loc.file);
+  const text = textOf(path);
+  const at = text === undefined ? undefined : addIgnoreComment(text, f.code, f.loc.line);
+  if (!at) return undefined;
+  const pos = { line: at.line - 1, character: at.column - 1 };
+  return {
+    title: `Ignore ${f.code} on this line with a comment`,
+    kind: CodeActionKind.QuickFix,
+    diagnostics: [diagnostic],
+    edit: { changes: { [pathToUri(path)]: [{ range: { start: pos, end: pos }, newText: at.newText }] } },
+  };
 }
 
 /** The contract findings, which regenerating the contracts fixes. */

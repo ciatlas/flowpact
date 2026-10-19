@@ -15,6 +15,18 @@ reports or the API is a major release (the next one is 1.0.0); up to 0.14, a min
 
 Then read the sections below from your version up.
 
+## 0.24 → 0.25
+
+Nothing to change. What is new:
+
+- **[Ignore comments](/docs/configuration#ignore-comments):** `# flowpact: ignore[FP501] why` accepts a finding on its
+  line, or alone on the line above it, also after a pinned action's version comment. The editor offers it as a quick
+  fix. Accepted findings are listed under `ignoredByComment` in the [JSON report](/docs/cli#json-report) and counted in
+  `summary.ignoredByComment`, both additions to the schema; the action sets the `ignored-by-comment` output.
+- **Two new warnings:** [FP904](/docs/rules/fp904) reports a `# flowpact:` comment that names an unknown rule or is not
+  `ignore[<rules>]`, and [FP905](/docs/rules/fp905) one whose rule reports nothing on its line. A repository that has
+  no `# flowpact:` comments gets neither.
+
 ## 0.21 → 0.24
 
 Nothing to change. What is new:

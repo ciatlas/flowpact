@@ -2,9 +2,10 @@
  * Generates one MDX page per rule (plus an index) from the rule registry, so the docs, `flowpact explain`
  * and the docs URLs printed with every finding can never drift apart.
  */
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  addIgnoreComment,
   analyze,
   CATEGORIES,
   createRegistry,
@@ -137,9 +138,53 @@ function sampleLines(rule: RuleDefinition, sample: RuleSample): string[] {
   ];
 }
 
+/** Rules about a whole file, or about a lockfile or contract file: no ignore comment accepts their findings. */
+const WHOLE_FILE_RULES = new Set(['FP611', 'FP612', 'FP801', 'FP802', 'FP804', 'FP805']);
+
+const REASON = 'why it is acceptable here';
+
 /**
- * "Accept one finding": an override for it, by its symbol (else its file). Not for the rules about overrides, which
- * run after them and which they cannot accept.
+ * The ignore comment for a finding of `code`, above the sample's line as the editor's quick fix adds it, without the
+ * indentation they share; a placeholder line without a sample.
+ */
+function ignoreSnippet(code: string, sample: RuleSample | undefined): { file: string; lines: string[] } {
+  const text = sample && readFileSync(join(FIXTURES, sample.fixture, sample.file), 'utf8');
+  const at = sample && text !== undefined ? addIgnoreComment(text, code, sample.line) : undefined;
+  if (sample && text !== undefined && at?.column === 1) {
+    const target = text.split('\n')[at.line - 1]!;
+    const indent = /^ */.exec(target)![0].length;
+    return {
+      file: sample.file,
+      lines: [`${at.newText.trimEnd()} ${REASON}`, target].map((l) => l.slice(indent)),
+    };
+  }
+  return {
+    file: '.github/workflows/ci.yml',
+    lines: [`# flowpact: ignore[${code}] ${REASON}`, '<the line of the finding>'],
+  };
+}
+
+/** "On its line": the ignore comment, unless the rule's findings are about whole files or files other than YAML ones. */
+function commentLines(rule: RuleDefinition, sample: RuleSample | undefined): string[] {
+  if (WHOLE_FILE_RULES.has(rule.code)) return [];
+  const { file, lines } = ignoreSnippet(rule.code, sample);
+  return [
+    '**On its line**, with an [ignore comment](/docs/configuration#ignore-comments) alone on the line above it (the',
+    "editor's quick fix adds it there) or at the end of the line, after any other comment such as a version",
+    `(\`# v4.3.0 # flowpact: ignore[${rule.code}] why\`):`,
+    '',
+    `\`\`\`yaml title=${JSON.stringify(file)}`,
+    ...lines,
+    '```',
+    '',
+    '**In the config**, with an [override](/docs/configuration#overrides), which can expire:',
+    '',
+  ];
+}
+
+/**
+ * "Accept one finding": an ignore comment on its line, and an override for it, by its symbol (else its file). Not for
+ * the rules about overrides and ignore comments, which run after them and which they cannot accept.
  */
 function acceptLines(rule: RuleDefinition, sample: RuleSample | undefined): string[] {
   if (rule.phase === 'post') return [];
@@ -148,12 +193,16 @@ function acceptLines(rule: RuleDefinition, sample: RuleSample | undefined): stri
     : sample
       ? `file: ${JSON.stringify(sample.file)}`
       : "target: <the finding's symbol>";
+  const comment = commentLines(rule, sample);
   return [
     '## Accept one finding',
     '',
-    'When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart, and comes',
-    'back when the date passes ([overrides](/docs/configuration#overrides)):',
+    'When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart from the other',
+    comment.length
+      ? 'findings, and does not fail the build.'
+      : 'findings, and comes back when the date passes ([overrides](/docs/configuration#overrides)):',
     '',
+    ...comment,
     '```yaml title=".github/flowpact/flowpact.config.yml"',
     'overrides:',
     `  - rule: ${rule.code}`,

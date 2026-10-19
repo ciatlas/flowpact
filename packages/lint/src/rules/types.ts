@@ -1,6 +1,7 @@
 import type { JobDecl, Loc, Logger, MatrixExpansion, ProjectIndex, UnitDecl } from '@ciatlas/core';
 import type { FlowpactConfig, Override } from '../config';
 import type { ContractPlan } from '../contracts';
+import type { IgnoreCommentUsage } from '../ignore-comments';
 import type { ImpactResult } from '../impact';
 import type { RemotesLockRead } from '../remotes';
 import type { Suggestion } from '../suggestions';
@@ -116,6 +117,8 @@ export interface RuleContext {
   readonly impact?: ImpactResult;
   /** Override usage; only present for post-phase rules. */
   readonly overrides?: OverrideUsage[];
+  /** How each rule of each `# flowpact: ignore[…]` comment was used; only present for post-phase rules. */
+  readonly ignoreComments?: IgnoreCommentUsage[];
   /** Cached matrix expansion of a job. */
   matrix(unit: UnitDecl, job: JobDecl): MatrixExpansion;
   /** Whether a rule runs in this analysis: loaded, not turned off, and selected by `--only` if that is given. */
@@ -134,8 +137,8 @@ export interface RuleDefinition {
   /** Required for third-party rules; built-in rules derive it from the code. */
   docsUrl?: string;
   /**
-   * `post` rules run after overrides were applied and see `ctx.overrides`; their own findings cannot be
-   * suppressed by overrides. Default: `main`.
+   * `post` rules run after overrides and ignore comments were applied and see `ctx.overrides` and
+   * `ctx.ignoreComments`; neither can accept their own findings. Default: `main`.
    */
   phase?: 'main' | 'post';
   /**

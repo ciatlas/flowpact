@@ -103,7 +103,8 @@ npx flowpact remotes update             # record the interfaces of the remote wo
 [Open VSX](https://open-vsx.org/extension/flowpact/vscode-flowpact); other editors run `flowpact lsp`.
 
 Findings you accept go into `.github/flowpact/flowpact.config.yml` as **overrides** with a reason, an owner and an
-expiry date; expired overrides bring the findings back.
+expiry date; expired overrides bring the findings back. To accept one on its line instead, add an **ignore comment**:
+`# flowpact: ignore[FP501] why`, after any version comment the line has.
 
 📖 **Docs:** https://ciatlas.github.io/flowpact: [install](https://ciatlas.github.io/flowpact/docs/installation), a
 [quickstart](https://ciatlas.github.io/flowpact/docs/getting-started),
@@ -215,10 +216,10 @@ use the language server, `flowpact lsp` ([editors](https://ciatlas.github.io/flo
 
 ## Status
 
-Shipped: the engine, 53 rules, contracts (`flowpact generate` / `flowpact check`), impact mode, the remote interfaces
+Shipped: the engine, 55 rules, contracts (`flowpact generate` / `flowpact check`), impact mode, the remote interfaces
 lockfile (`flowpact remotes update`, read at the commits GitHub's `actions.lock` pins) with a grade of every version
 change against your calls (a drift check, and a verdict on pull requests in the action), overrides with reason and
-expiry, plugins, the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`, `trace`), a JavaScript API, the
+expiry, ignore comments, plugins, the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`, `trace`), a JavaScript API, the
 GitHub Action, a language server and the
 [VS Code extension](https://marketplace.visualstudio.com/items?itemName=flowpact.vscode-flowpact) (diagnostics as you
 type, hover traces, go to definition across workflow calls and into the sources of remote workflows and actions,

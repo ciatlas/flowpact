@@ -249,6 +249,11 @@ export interface SuppressedFinding extends Finding {
   override: { index: number; reason: string; expires?: string; owner?: string };
 }
 
+/** A finding a `# flowpact: ignore[…]` comment accepted: the comment's location, and its reason when it gives one. */
+export interface IgnoredFinding extends Finding {
+  comment: { loc: Loc; reason?: string };
+}
+
 export type ContractStatus = 'create' | 'update' | 'delete' | 'unchanged';
 
 export interface ContractChange {
@@ -331,11 +336,15 @@ export interface Report {
     byCode: Record<string, number>;
     byFile: Record<string, number>;
     suppressed: number;
+    /** Findings accepted by `# flowpact: ignore[…]` comments (not counted above). */
+    ignoredByComment?: number;
     /** Findings not reported because they are about the internals of generated files. */
     skippedInGenerated?: number;
   };
   findings: Finding[];
   suppressed: SuppressedFinding[];
+  /** Findings accepted by `# flowpact: ignore[…]` comments, each with the comment that accepted it. */
+  ignoredByComment?: IgnoredFinding[];
   /** `check` only. */
   contracts?: {
     drift: boolean;
@@ -895,7 +904,10 @@ export interface RuleDefinition {
   };
   /** Where the rule is documented; required for plugin rules. */
   docsUrl?: string;
-  /** `post` rules run after overrides were applied and see `ctx.overrides`; overrides cannot accept their findings. */
+  /**
+   * `post` rules run after overrides and ignore comments were applied and see `ctx.overrides` and `ctx.ignoreComments`;
+   * neither can accept their findings.
+   */
   phase?: 'main' | 'post';
   /** `skip` drops the rule's findings located in generated files. Default: `report`. */
   generatedFiles?: 'report' | 'skip';
@@ -983,6 +995,23 @@ export interface RuleContext {
     matched: number;
     expired: boolean;
     daysLeft?: number;
+    inactive?: boolean;
+  }[];
+  /** How each rule of each `# flowpact: ignore[…]` comment was used; only for `post` rules. */
+  readonly ignoreComments?: {
+    comment: {
+      loc: Loc;
+      /** The line whose findings it accepts; 0 when no line of YAML follows a comment alone on its line. */
+      line: number;
+      rules: { key: string; loc: Loc }[];
+      reason?: string;
+      malformed?: string;
+    };
+    /** The rule as the comment names it; none for a malformed comment. */
+    rule?: { key: string; loc: Loc };
+    code?: string;
+    invalid?: string;
+    matched: number;
     inactive?: boolean;
   }[];
   /** The expanded matrix of a job (cached). */

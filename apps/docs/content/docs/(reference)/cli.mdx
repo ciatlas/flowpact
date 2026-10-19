@@ -79,7 +79,7 @@ The summary card at the end:
 | `pretty` | The terminal: code frames, call chains, matrix combinations and a summary card. |
 | `json` | Tooling. Follows [`/schemas/report/v1.json`](/schemas/report/v1.json) (below). |
 | `markdown` | Job summaries and pull request comments: counts, findings grouped by severity with docs links, and contract changes in `flowpact check`. Inside GitHub Actions, locations link to the file at the commit being checked. |
-| `sarif` | [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for GitHub code scanning and other SARIF viewers. Findings accepted by overrides are left out (code scanning ignores SARIF suppressions); the JSON report lists them under `suppressed`. |
+| `sarif` | [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) for GitHub code scanning and other SARIF viewers. Findings accepted by overrides and ignore comments are left out (code scanning ignores SARIF suppressions); the JSON report lists them under `suppressed` and `ignoredByComment`. |
 | `github` | GitHub Actions: one [workflow command](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands) per finding, which GitHub shows as an error, warning or notice annotation on the file and line, in the run and the pull request — the same annotations as the [action](/docs/action#annotations). Stdout only. |
 
 Inside GitHub Actions, when `--root` is a subdirectory of the repository, the paths in `github` annotations, SARIF and
@@ -104,7 +104,7 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
 {
   "$schema": "https://ciatlas.github.io/flowpact/schemas/report/v1.json",
   "meta": { "tool": "flowpact", "version": "0.24.0", "schemas": { "config": 1, "contract": 1, "report": 1 }, "node": "v24.4.0", "platform": "linux-x64", "root": "/home/runner/work/app/app", "durationMs": 31 },
-  "summary": { "errors": 1, "warnings": 0, "infos": 0, "suppressed": 0, "byCode": { "FP401": 1 } },
+  "summary": { "errors": 1, "warnings": 0, "infos": 0, "suppressed": 0, "ignoredByComment": 0, "byCode": { "FP401": 1 } },
   "findings": [
     {
       "code": "FP401",
@@ -121,6 +121,7 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
     }
   ],
   "suppressed": [],
+  "ignoredByComment": [],
   "rules": [{ "code": "FP101", "name": "missing-required-input", "severity": "error" }, "…"]
 }
 ```
@@ -129,6 +130,8 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
   [override](/docs/configuration#overrides).
 - `suppressed` lists findings accepted by overrides, each with an `override` object (`index`, `reason`, `expires`,
   `owner`); they are not part of the counts.
+- `ignoredByComment` lists findings accepted by [ignore comments](/docs/configuration#ignore-comments), each with a
+  `comment` object (`loc`, and `reason` when the comment gives one); they are not part of the counts either.
 - In `flowpact check`, `contracts` holds the contract comparison: `drift`, the number of `breaking` changes, `counts` per
   status and one entry per contract file with its status and semantic changes.
 - `fingerprint` is stable across unrelated edits (line shifts, changed counts), so it can be used to track findings

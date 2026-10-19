@@ -18,7 +18,7 @@ flowchart TD
   RL[("remotes.lock.yaml")]
   MX["Matrix expansion: every include and exclude"]
   C[("Contracts, in flowpact check")]
-  RU["53 rules"]
+  RU["55 rules"]
   O["Overrides: reason, expiry"]
   REP["Terminal · JSON · Markdown · SARIF · editor · annotations"]
   Y --> IR
@@ -122,12 +122,13 @@ Findings outside the paths you asked for, or matching `ignore` patterns, are dro
 rules still see the whole picture.
 </Step>
 <Step>
-### 7. Apply overrides
+### 7. Apply overrides and ignore comments
 
 Each remaining finding is matched against the [overrides](/docs/configuration#overrides) in the config by rule and
-symbol or file. Accepted findings move to a separate `suppressed` list with the reason that accepted them. Then a last
-set of rules checks the overrides themselves: expired (`FP901`, the findings come back), unused (`FP902`) and
-expiring soon (`FP903`).
+symbol or file, then against the [ignore comments](/docs/configuration#ignore-comments) on its line. Accepted findings
+move to a separate `suppressed` or `ignoredByComment` list with the reason that accepted them. Then a last set of rules
+checks the overrides and comments themselves: expired (`FP901`, the findings come back), unused (`FP902`, `FP905`),
+expiring soon (`FP903`) and invalid comments (`FP904`).
 </Step>
 <Step>
 ### 8. Report

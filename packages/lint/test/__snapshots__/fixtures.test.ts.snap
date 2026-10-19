@@ -67,6 +67,14 @@ exports[`fixture repositories > dynamic-matrix: findings snapshot 1`] = `
 ]
 `;
 
+exports[`fixture repositories > ignore-comments: findings snapshot 1`] = `
+[
+  "warning FP501 .github/workflows/release.yml:21:36 env.DEPLOY_URL is not defined in this scope",
+  "warning FP904 .github/workflows/release.yml:21:74 Ignore comment names an unknown rule "FP5O1" (did you mean FP501?)",
+  "warning FP905 .github/workflows/release.yml:22:74 Ignore comment for FP108 matches no finding on line 22",
+]
+`;
+
 exports[`fixture repositories > incident-matrix: findings snapshot 1`] = `
 [
   "error FP401 .github/workflows/tests.yml:23:19 Input "config" for .github/workflows/run-suite.yml is empty in 1 of 3 matrix combinations — matrix.config is not defined there",

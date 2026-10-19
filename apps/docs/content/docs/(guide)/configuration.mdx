@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Configure severities, limits, ignored paths, overrides, matrix shapes, generated files and plugins in .github/flowpact/flowpact.config.yml, and share defaults across repositories with a base config.
+description: Configure severities, limits, ignored paths, overrides, matrix shapes, generated files and plugins in .github/flowpact/flowpact.config.yml, accept single findings with ignore comments, and share defaults across repositories with a base config.
 ---
 
 flowpact works without configuration. To change behaviour, create
@@ -65,7 +65,7 @@ Red Hat YAML extension, JetBrains IDEs, Neovim):
 ## Overrides
 
 `rules:` and `ignore:` change a rule or a path everywhere. An **override** accepts one specific finding, with a reason
-that stays next to it in the repository:
+that stays next to it in the repository (to accept it on its line instead, use an [ignore comment](#ignore-comments)):
 
 ```yaml
 overrides:
@@ -113,6 +113,61 @@ they cannot be overridden):
 
 Overrides apply to every rule, including the [contract rules](/docs/contracts) — but an intended interface change is
 better recorded by regenerating the contracts than by overriding `FP803`.
+
+## Ignore comments
+
+An **ignore comment** accepts a rule's findings on one line of a workflow or action file, next to the code they are
+about:
+
+```yaml title=".github/workflows/release.yml"
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./scripts/setup-env.sh   # exports DEPLOY_URL through $GITHUB_ENV
+      # flowpact: ignore[FP501] set by scripts/setup-env.sh
+      - run: curl --fail "${{ env.DEPLOY_URL }}/health"
+
+  notify:
+    needs: publish
+    uses: acme/shared/.github/workflows/notify.yml@3f1c2a9b7d4e6f8a0b1c2d3e4f5a6b7c8d9e0f1a # v1.2.0 # flowpact: ignore[remote-unverified] checked in acme/shared
+```
+
+- `ignore[…]` names one rule or several, by code or by name, separated by commas: `ignore[FP501, unused-input]`.
+- Text after the `]` is the reason. It is optional (a leading `--` is dropped), and the reports show it with the
+  finding.
+- The comment accepts the findings reported on its own line: the line of `file:line:column`, where the editor
+  underlines them. Alone on its line, it accepts those on the next line of YAML, past blank lines and other comments.
+- On the line of a block scalar (`run: |`), it accepts the findings in the scalar's text. After a scalar over several
+  lines, it accepts those on all its lines. A `#` inside a string or a `run:` script is not a YAML comment, so a
+  directive there does nothing.
+- It can follow other comments on the line, such as the version of a pinned action or workflow. Keep the version first
+  (`@<sha> # v1.2.0 # flowpact: ignore[…]`): Dependabot and Renovate read it right after the SHA.
+
+An ignore comment has no expiry and no owner. For an exception that should come back on a date, use an
+[override](#overrides). Findings outside workflow and action files (a lockfile, a contract) are accepted with an
+override too.
+
+**What happens to accepted findings.** The same as with overrides. They are removed from the report and from the
+counts, and listed apart: JSON output lists them under `ignoredByComment`, each with the `comment` that accepted it
+(`loc`, and `reason` when it has one), and `summary.ignoredByComment` counts them. The Markdown summary lists them with
+the findings overrides accepted, and SARIF leaves both out. A finding that an override and a comment both accept is
+listed under the override, and neither counts as unused.
+
+**Keeping ignore comments honest.** Two rules check them once they are applied (no comment can ignore them):
+
+| Code | Severity | Reported when |
+| --- | --- | --- |
+| [`FP904`](/docs/rules/fp904) `ignore-comment-invalid` | warning | The comment names an unknown rule (a typo gets a suggestion) or one no comment can ignore (`FP9xx`), or it is not written as `ignore[<rules>]`. |
+| [`FP905`](/docs/rules/fp905) `ignore-comment-unused` | warning | A rule it names reports nothing on the line it accepts: the problem was fixed, or the comment is on another line than the finding. |
+
+A rule that is turned off, or left out by `--only`, does not make its comments unused. A comment that names a rule
+of a plugin this run does not load is [ignored with a warning](#rules-that-are-not-loaded), like a config entry for
+it.
+
+In the [editor](/docs/editors#quick-fixes), every finding in a workflow or action offers **Ignore FP… on this line with
+a comment**, which adds the comment on a line of its own above the finding's, or adds the rule to a comment that is
+there already.
 
 ## Matrix shapes
 
@@ -169,8 +224,8 @@ generated:
 
 A file listed under `exclude` is never treated as generated, even when it also matches `include`.
 
-In a generated file, these rules are not reported — dead declarations and style advice whose only fix is an edit to the
-file:
+In a generated file, these rules are not reported — dead declarations, style advice and ignore comments, whose only
+fix is an edit to the file:
 
 | Code | Name |
 | --- | --- |
@@ -183,6 +238,8 @@ file:
 | [`FP604`](/docs/rules/fp604) | `needs-without-data` |
 | [`FP605`](/docs/rules/fp605) | `large-interface` |
 | [`FP607`](/docs/rules/fp607) | `unreferenced-reusable-workflow` |
+| [`FP904`](/docs/rules/fp904) | `ignore-comment-invalid` |
+| [`FP905`](/docs/rules/fp905) | `ignore-comment-unused` |
 
 Every other rule still applies: invalid YAML or expressions, schema errors, and every check of a call between units —
 a generated workflow that calls one of your reusable workflows without a required input (`FP101`), or a hand-written
@@ -231,6 +288,9 @@ not hidden:
 
 A code with another prefix (`AC201`, `DP201`) or a name that adds a word to a loaded one (`no-secrets-inherit`) belongs
 to a plugin and is ignored with the warning.
+
+The rules an [ignore comment](#ignore-comments) names are sorted the same way, except that a typo is reported as
+[`FP904`](/docs/rules/fp904) rather than as a config error.
 
 ## Base config
 

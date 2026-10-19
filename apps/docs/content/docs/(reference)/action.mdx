@@ -88,8 +88,9 @@ jobs:
 ```
 
 `if: always()` uploads the report even when the flowpact step failed because of findings. Findings then appear under
-**Security → Code scanning**. Findings accepted by an [override](/docs/configuration) are left out: code scanning
-has no way to mark them as accepted and would open an alert for each. The JSON report lists them under `suppressed`.
+**Security → Code scanning**. Findings accepted by an [override](/docs/configuration#overrides) or an
+[ignore comment](/docs/configuration#ignore-comments) are left out: code scanning has no way to mark them as accepted
+and would open an alert for each. The JSON report lists them under `suppressed` and `ignoredByComment`.
 
 ### Use the outputs
 
@@ -148,6 +149,7 @@ or action outside them is not graded.
 | `warnings` | Number of warning findings. |
 | `infos` | Number of info findings. |
 | `suppressed` | Number of findings accepted by overrides. |
+| `ignored-by-comment` | Number of findings accepted by `# flowpact: ignore[…]` comments. |
 | `findings` | Total number of findings (errors, warnings and info). |
 | `drift` | `true` when check mode found that the contracts drifted, otherwise `false`. |
 | `breaking` | Number of breaking contract changes (check mode). |
@@ -176,8 +178,8 @@ so use those when a run has many.
 The summary has:
 
 - the tool and schema versions and how long the analysis took;
-- a status line and a table of counts (errors, warnings, info, suppressed, workflows, actions, jobs, matrix
-  combinations);
+- a status line and a table of counts (errors, warnings, info, suppressed by overrides and ignore comments,
+  workflows, actions, jobs, matrix combinations);
 - the findings, errors first, each with its rule docs link, its location (linked to the file at the commit being
   checked), the affected matrix combinations, and a collapsed **Why / fix** section with the related locations;
 - in `check` mode, a **Contracts** section: which contract files are new, changed or removed, every change (breaking

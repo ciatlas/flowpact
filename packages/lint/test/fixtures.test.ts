@@ -32,6 +32,16 @@ describe('fixture repositories', () => {
     expect(f!.severity).toBe('error');
   });
 
+  it('ignore-comments: the comments accept a finding each, after a version comment too', () => {
+    expect(
+      run('ignore-comments').ignoredByComment.map((f) => `${f.code}:${f.loc.line} ${f.comment.reason}`),
+    ).toEqual([
+      'FP104:10 read by the release dispatcher until its migration (JIRA-123)',
+      'FP501:20 set by scripts/setup-env.sh',
+      'FP603:26 checked in acme/shared',
+    ]);
+  });
+
   for (const name of readdirSync(FIXTURES).filter((n) => !n.startsWith('.'))) {
     it(`${name}: findings snapshot`, () => {
       expect(compact(name)).toMatchSnapshot();

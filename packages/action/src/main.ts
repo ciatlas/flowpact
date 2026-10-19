@@ -460,7 +460,8 @@ const slug = (s: string) =>
 
 /** Every output starts out defined, so steps that read them after an early failure see sane values. */
 function initOutputs(): void {
-  for (const k of ['errors', 'warnings', 'infos', 'suppressed', 'findings', 'breaking']) core.setOutput(k, 0);
+  for (const k of ['errors', 'warnings', 'infos', 'suppressed', 'ignored-by-comment', 'findings', 'breaking'])
+    core.setOutput(k, 0);
   core.setOutput('drift', 'false');
   core.setOutput('exit-code', 2);
   for (const k of [
@@ -1022,6 +1023,7 @@ function setResultOutputs(s: AnalysisResult['summary'], plan: ContractPlan | und
   core.setOutput('warnings', s.warnings);
   core.setOutput('infos', s.infos);
   core.setOutput('suppressed', s.suppressed);
+  core.setOutput('ignored-by-comment', s.ignoredByComment);
   core.setOutput('findings', s.total);
   core.setOutput('drift', plan?.drift ? 'true' : 'false');
   core.setOutput('breaking', plan?.breaking ?? 0);
@@ -1097,7 +1099,7 @@ async function report(
   setImpactOutputs(result.impact);
   setVersionOutputs(versions);
   core.info(
-    `flowpact ${inputs.mode}: ${plural(s.errors, 'error')}, ${plural(s.warnings, 'warning')}, ${s.infos} info, ${s.suppressed} suppressed · ${plural(s.workflows, 'workflow')} · ${result.durationMs} ms`,
+    `flowpact ${inputs.mode}: ${plural(s.errors, 'error')}, ${plural(s.warnings, 'warning')}, ${s.infos} info, ${s.suppressed} suppressed${s.ignoredByComment ? `, ${s.ignoredByComment} ignored by comments` : ''} · ${plural(s.workflows, 'workflow')} · ${result.durationMs} ms`,
   );
   if (failure) core.setFailed(failure);
 }
