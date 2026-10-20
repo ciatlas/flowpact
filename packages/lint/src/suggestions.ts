@@ -47,10 +47,21 @@ function textAt(source: SourceFile, loc: Loc): string | undefined {
 const quoted = (q: string) => (q === "'" ? "'" : '"');
 
 /**
+ * A name a suggestion may write: one a YAML key or an expression's property holds as it is, with nothing to quote or
+ * escape. Names come from the analyzed files and the remote interfaces lockfile, which a pull request controls; one
+ * with a line break or a `:` could add other keys (`secrets: inherit`) to the file the fix edits.
+ */
+const PLAIN_NAME = /^\w[\w.-]*$/;
+
+/** Whether an editor may write a name as it is (see `PLAIN_NAME`): completion offers no other. */
+export const isPlainName = (name: string) => PLAIN_NAME.test(name);
+
+/**
  * Renames the key or name written at `loc` from `from` to `to`, keeping its quotes; none when the text there is not
  * `from` (a key GitHub matched case-insensitively is renamed too).
  */
 export function renameAt(index: ProjectIndex, loc: Loc, from: string, to: string): Suggestion | undefined {
+  if (!PLAIN_NAME.test(to)) return undefined;
   const source = sourceOf(index, loc.file);
   const text = source && textAt(source, loc);
   if (text === undefined) return undefined;
@@ -75,7 +86,7 @@ export function renameSegment(
 ): Suggestion | undefined {
   const source = sourceOf(index, loc.file);
   const text = source && textAt(source, loc);
-  if (text === undefined || !/^[\w.-]+$/.test(text)) return undefined;
+  if (text === undefined || !/^[\w.-]+$/.test(text) || !PLAIN_NAME.test(to)) return undefined;
   const parts = text.split('.');
   if (parts[segment]?.toLowerCase() !== from.toLowerCase()) return undefined;
   const column = loc.column + parts.slice(0, segment).reduce((n, p) => n + p.length + 1, 0);
@@ -192,15 +203,20 @@ export const addKeys = (
   keys: string[],
   after: string[] = [],
 ) =>
-  addPairs(
-    index,
-    file,
-    path,
-    keys.map((k) => `${k}: `),
-    after,
-  );
+  keys.every((k) => PLAIN_NAME.test(k))
+    ? addPairs(
+        index,
+        file,
+        path,
+        keys.map((k) => `${k}: `),
+        after,
+      )
+    : undefined;
 
-/** Adds `pairs`, each `<key>: <value>` as written, to the block mapping at `path`, the way `addKeys` adds keys. */
+/**
+ * Adds `pairs`, each `<key>: <value>` as written, to the block mapping at `path`, the way `addKeys` adds keys. None
+ * for a pair over several lines.
+ */
 export function addPairs(
   index: ProjectIndex,
   file: string,
@@ -209,7 +225,7 @@ export function addPairs(
   after: string[] = [],
 ): SuggestedEdit | undefined {
   const at = editable(index, file);
-  if (!at || pairs.length === 0) return undefined;
+  if (!at || pairs.length === 0 || pairs.some(hasLineBreak)) return undefined;
   const { source, doc } = at;
   const map = nodeAt(doc, path);
   if (map !== undefined) {
@@ -231,9 +247,12 @@ export function addPairs(
   return insertAfter(source, last, [`${indent}${own}:`, ...pairs.map((p) => `${indent}  ${p}`)]);
 }
 
+/** Whether a text would start another line of YAML. */
+const hasLineBreak = (text: string) => /[\r\n\u0085\u2028\u2029]/.test(text);
+
 /**
- * Replaces the value at `path`, a scalar or a flow collection on one line, with `newText`. None for a block value, a
- * value that is not there, or a file with CRLF line endings.
+ * Replaces the value at `path`, a scalar or a flow collection on one line, with `newText` on one line. None for a
+ * block value, a value that is not there, or a file with CRLF line endings.
  */
 export function replaceValue(
   index: ProjectIndex,
@@ -246,7 +265,7 @@ export function replaceValue(
   if (!at || !(isScalar(node) || ((isMap(node) || isSeq(node)) && node.flow)) || !node.range)
     return undefined;
   const loc = at.source.loc(node.range[0], node.range[1]);
-  return loc.line === loc.endLine ? { loc, newText } : undefined;
+  return loc.line === loc.endLine && !hasLineBreak(newText) ? { loc, newText } : undefined;
 }
 
 /** Where the key of the pair at `path` is written; none when it is not there. */

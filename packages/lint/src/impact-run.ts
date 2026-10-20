@@ -35,6 +35,7 @@ import {
 } from './config';
 import { pathInside } from './contracts';
 import { type DeclaredInput, type ImpactLevel, type ImpactPolicy, isPublished } from './impact';
+import { createRegistry, IMPACT_CODES } from './rules/index';
 
 export class ImpactSetupError extends Error {}
 
@@ -754,6 +755,34 @@ function ignoreAfterMerge(
   return [...new Set([...(recorded instanceof ConfigError ? [] : recorded.ignore), ...own])];
 }
 
+/** A config's severities and overrides of impact mode's own rules (FP810–FP814), as they are written. */
+function impactSettings(config: FlowpactConfig): unknown {
+  const registry = createRegistry();
+  const isImpact = (key: string) => IMPACT_CODES.includes(registry.get(key)?.code ?? '');
+  return [
+    Object.entries(config.rules).filter(([key]) => isImpact(key)),
+    config.overrides.filter((o) => isImpact(o.rule)),
+  ];
+}
+
+/**
+ * What the pull request changes that grades it, and so applies only once it is merged: the impact policy (unless a base
+ * config of the repository sets it, which neither side reads), and the severities and overrides of impact mode's rules.
+ */
+function pendingSettings(baseline: FlowpactConfig, head: FlowpactConfig, comparePolicy: boolean): string[] {
+  const changed = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
+  return [
+    ...(comparePolicy && changed(baseline.impact, head.impact)
+      ? ['this pull request changes impact settings; they apply after it is merged']
+      : []),
+    ...(changed(impactSettings(baseline), impactSettings(head))
+      ? [
+          "this pull request changes the severities or overrides of impact mode's rules; they apply after it is merged",
+        ]
+      : []),
+  ];
+}
+
 /** The baseline's config, the impact policy it sets, and its `ignore`, beside the pull request's once merged. */
 function baselinePolicy(
   root: string,
@@ -778,9 +807,7 @@ function baselinePolicy(
   const config = baselineConfig(baseline.fs, configPath, repositoryBase ? undefined : req.baseConfig, notes);
   // Policy comes from the baseline (or the defaults), never from the pull request, so it cannot relax its own check.
   const policy: ImpactPolicy = { ...(config ?? defaultConfig()).impact };
-  if (!repositoryBase && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
-    notes.push('this pull request changes impact settings; they apply after it is merged');
-  }
+  notes.push(...pendingSettings(config ?? defaultConfig(), headConfig, !repositoryBase));
   const ignore = baselineIgnore(repositoryBase, config, notes);
   const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath, notes);
   return { config, policy, ignore: { ...ignore, ...(afterMerge ? { ignoreAfterMerge: afterMerge } : {}) } };
@@ -860,6 +887,8 @@ export function prepareImpact(
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
       ...ignore,
+      // Nor switch off or accept its own check: impact mode's rules take their severities and overrides from here.
+      baselineSettings: { rules: config.rules, overrides: config.overrides },
     },
     notes,
   };

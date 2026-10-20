@@ -3,9 +3,9 @@ title: Threat model
 description: What flowpact protects, where untrusted data and code cross into it, and its threats ranked by risk, each with the code and tests that defend against it and the risk that remains.
 ---
 
-This is the security assessment of flowpact 0.20.0 and the changes on `main` since (the sources cache,
-`remotes download` and `clean`, editor navigation into cached sources, and the remotes functions of the API), built on
-`@ciatlas/core` 2.2.0, as of 2026-10-14. It names what
+This is the security assessment of flowpact 0.26.0 and the changes on `main` since (the two fixes this review led to:
+impact mode's own rules judged by the baseline, and suggested edits that write only plain names), built on
+`@ciatlas/core` 2.3.0, as of 2026-10-20. It names what
 flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
@@ -13,7 +13,7 @@ review. The [security page](/docs/security) describes what flowpact reads, write
 release; to report a vulnerability, see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
 
 Paths are in this repository, except those marked (core), which are in
-[ciatlas/core](https://github.com/ciatlas/core/tree/v2.2.0) at v2.2.0.
+[ciatlas/core](https://github.com/ciatlas/core/tree/v2.3.0) at v2.3.0.
 
 <InlineTOC items={toc} />
 
@@ -65,6 +65,9 @@ Paths are in this repository, except those marked (core), which are in
    repository, with a token. With `--github-com` (the action's `remotes-github-com`), the references a GitHub
    Enterprise Server lacks are looked up on github.com too, with `GITHUB_COM_TOKEN` or none. `remotes update` and
    `remotes download` keep the files they read in a per-user cache, which the editor opens.
+9. **Suggestions to the repository's files.** Quick fixes, completion, rename, the override the editor adds and the
+   regenerated contracts are edits built partly from text of the analyzed repository and the lockfile. The editor
+   applies them when the user picks them; the JSON report and SARIF carry the same fixes (`suggestions`, `fixes`).
 
 ## Threats, ranked
 
@@ -82,8 +85,9 @@ are ordered by the residual risk.
 | 7 | [A compromised `@ciatlas/core` release](#a-compromised-ciatlascore-release) | low | high | low |
 | 8 | [A tampered release](#a-tampered-release) | low | high | low |
 | 9 | [Argument injection through flag values](#argument-injection-through-flag-values) | low | high | low |
-| 10 | [Remote interfaces mislead the checks or the token](#remote-interfaces-mislead-the-checks-or-the-token) | low | medium | low |
-| 11 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
+| 10 | [Edits built from untrusted names](#edits-built-from-untrusted-names) | low | high | low |
+| 11 | [Remote interfaces mislead the checks or the token](#remote-interfaces-mislead-the-checks-or-the-token) | low | medium | low |
+| 12 | [Resource exhaustion](#resource-exhaustion) | medium | low | low |
 
 ### Plugins run on untrusted code
 
@@ -156,14 +160,16 @@ anywhere), to rewrite a terminal with escape sequences, or to add HTML, links, i
   `safe` (`packages/reporters/src/kit/theme.ts`) print C0 and C1 control characters, ESC included, as visible escapes,
   and colors and OSC 8 links appear only when asked for. For Markdown, `markdownText`
   (`packages/reporters/src/kit/markdown.ts`) escapes HTML, link brackets and backslashes, keeps code spans balanced
-  and breaks @mentions; the job summary is cut to fit GitHub's 1 MiB limit (`summaryWithinLimit`). Hovers in the
-  editor show repository text escaped or as inline code (`packages/language-server/src/hover.ts`).
+  and breaks @mentions; the job summary is cut to fit GitHub's 1 MiB limit (`summaryWithinLimit`). Hovers and
+  completion in the editor show repository text escaped or as inline code (`packages/language-server/src/hover.ts`,
+  `completion.ts`).
 - **Tests.** `test/text.test.ts` (core); `packages/cli/test/cli.e2e.test.ts` and `packages/cli/test/api.test.ts` (no
   line GitHub would run as a workflow command, control characters from the YAML);
   `packages/reporters/test/github.test.ts` (nothing can end an annotation early);
   `packages/reporters/test/markdown.test.ts` (Markdown escaping of untrusted names);
   `packages/reporters/test/reporters.test.ts` (colors and OSC 8 links only when asked);
-  `packages/lint/test/review-round3.test.ts`; `packages/language-server/test/hover.test.ts`.
+  `packages/lint/test/review-round3.test.ts`; `packages/language-server/test/hover.test.ts` and
+  `completion.test.ts`.
 - **Residual risk: low.** Unicode bidirectional controls and look-alike characters are printed as they are, so a name
   can read differently from what it is. GitHub still turns bare URLs in the job summary into links. Patches and
   contracts are written byte for byte, as git must apply them; a later step that prints them prints text from the pull
@@ -206,9 +212,11 @@ another checkout, or in its `.git` directory.
 ### A pull request weakens its own impact check
 
 Impact mode gates a pull request on how its changes to published workflows and actions affect callers. The pull
-request also controls the files that decide what is graded: the repository's config and its `ignore`, a base config
-inside the repository, the links and submodules on the way to it, and the paths the workflow passes. Since 0.15, paths
-and `ignore` leave units out of grading, so a pull request could try to leave out the unit it breaks.
+request also controls the files that decide what is graded and whether a finding counts: the repository's config, with
+its `ignore`, the severities of rules and their overrides; a base config inside the repository, and the links and
+submodules on the way to it; the paths the workflow passes; and, since 0.25, ignore comments in the files it changes.
+Since 0.15, paths and `ignore` leave units out of grading, so a pull request could try to leave out the unit it breaks,
+or turn off, override or comment away the finding that fails it.
 
 - **Mitigation.** A published unit is left out only when both the baseline's `ignore` and the pull request's match
   it, so adding a unit to `ignore` still grades the pull request that adds it, with a note
@@ -217,16 +225,26 @@ and `ignore` leave units out of grading, so a pull request could try to leave ou
   in the letter case the file system stores, also with `core.ignorecase=false` (`repositoryPathOf`, `locate`,
   `recordedAt`, `ignoresCase` and `ignoreAfterMerge` in `packages/lint/src/impact-run.ts`). A submodule commit the
   clone lacks leaves nothing out, and the run says so. Paths scope the verdict and the findings together, so a run
-  never passes with a verdict that requires more than the pull request declares. `impact: auto` skips a run only when the recorded commit's config leaves out every published unit too
-  (`nothingPublishedNote` in `packages/action/src/main.ts`).
+  never passes with a verdict that requires more than the pull request declares. `impact: auto` skips a run only when
+  the recorded commit's config leaves out every published unit too (`nothingPublishedNote` in
+  `packages/action/src/main.ts`). Impact mode's own rules (FP810 to FP814) take their severities and overrides from
+  the baseline's config, like the policy, so the pull request's `rules:` cannot turn them off and an override it adds
+  applies only once it is merged, with a note saying so; an ignore comment that names one accepts nothing and is
+  reported ([`FP904`](/docs/rules/fp904)) (`baselineSettings`, `impactSeverities` and `honoredIn` in
+  `packages/lint/src/analyze.ts`, `pendingSettings` in `packages/lint/src/impact-run.ts`).
 - **Tests.** `packages/lint/test/impact-run.test.ts` and `packages/lint/test/impact.test.ts` (links, chains, a link to
   the repository's top, submodules moved off or lacking their recorded commit, letter case);
-  `packages/cli/test/cli.impact.e2e.test.ts` (each bypass found in review, end to end); `packages/action/test/main.test.ts`
+  `packages/cli/test/cli.impact.e2e.test.ts` (each bypass found in review, end to end, including impact mode's rules
+  turned off, overridden or named in an ignore comment by the pull request); `packages/action/test/main.test.ts`
   (`impact: auto`). Before release, a matrix of 3,024 runs over seven kinds of base config and every event gave no run
   that passes where the stricter reading fails.
 - **Residual risk: low.** A base config that a workflow step generates counts on both sides, so a pull request that edits that step controls it; on `pull_request` the workflow runs from the pull
   request's head, so the pull request controls the run anyway. Requiring the check, and reviewing changes to the
-  workflow that runs it, is up to the repository.
+  workflow that runs it, is up to the repository. Outside impact mode, the pull request's own config and ignore
+  comments decide what `lint` reports, as they decide the rest of what it changes: accepted findings are listed apart
+  (`suppressed`, `ignoredByComment`, the job summary), and the override or comment shows in the diff. Before 0.26.1,
+  a pull request could turn impact mode's rules off or accept their findings in its own config, and from 0.25.0 with
+  an ignore comment.
 
 ### A stolen release-bot key or publishing credential
 
@@ -315,19 +333,50 @@ A workflow passes untrusted text as a flag value, such as `--title "$PR_TITLE"`.
   is still read as an option; put untrusted paths after `--` (`flowpact lint -- "$PATHS"`). Quoting is the workflow's
   job: pass untrusted text through `env:`, not by expression interpolation in `run:`.
 
+### Edits built from untrusted names
+
+A fix flowpact suggests, or a completion the editor offers, writes names it read from the analyzed files or the remote
+interfaces lockfile: an input to add, a name to rename to, a permission to grant. A pull request controls both, and a
+remote repository the names its lockfile entry records. Written as they are, a name with a line break or a `: ` adds
+other keys to the file the fix edits: a lockfile input named `x\n    secrets: inherit\n    y` would hand every secret
+to a remote workflow once the fix is applied. An edit that writes or deletes contract files could follow a symbolic
+link out of the repository.
+
+- **Mitigation.** A suggestion writes a name only when it needs no quoting, and no edit over several lines
+  (`PLAIN_NAME` and `hasLineBreak` in `packages/lint/src/suggestions.ts`); otherwise the finding has no fix, and its
+  message names the key escaped. A rule attaches a fix only when the change is certain, and FP613's writes only scope
+  names of `[a-z-]` and the levels it knows (`raiseGrant` in `packages/lint/src/rules/permissions.ts`). Completion
+  offers no other name (`completionItems` in `packages/language-server/src/completion.ts`, with `isPlainName`). A
+  rename writes the name the user types, and only a valid one (`packages/language-server/src/rename.ts`). The
+  override the editor adds is written as quoted YAML strings (`packages/lint/src/override-entry.ts`), an ignore
+  comment holds only the rule's code, and "Regenerate the contracts" is not offered when a contract path is a symlink,
+  goes through one, or leads outside the repository (`unsafeContractPaths` in `packages/lint/src/contracts.ts`, the
+  check `flowpact generate` makes). The language server writes no file itself: it returns workspace edits, which the
+  editor applies when the user picks one (`packages/language-server/src/actions.ts`).
+- **Tests.** `packages/lint/test/suggestions.test.ts` (applying each fix removes its finding and adds no error; no fix
+  that would write a name from the lockfile or a quoted key that is not plain);
+  `packages/language-server/test/completion.test.ts` (names that are not plain left out, descriptions shown as text);
+  `packages/language-server/test/server.test.ts` (quick fixes, an override added with the reason the user gives,
+  rename, regenerated contracts); `packages/lint/test/review-round3.test.ts` (contracts not written through symlinks).
+- **Residual risk: low.** A fix is applied as flowpact wrote it, and reviewing the change is up to whoever applies it; a
+  tool that applies SARIF `fixes` by itself applies them unreviewed. No test runs the editor's "Regenerate" against a
+  symlinked contract; it makes the same check as `generate`. From 0.22.0 to 0.26.0, suggestions wrote names as they
+  were, and from 0.24.0 so did completion.
+
 ### Remote interfaces mislead the checks or the token
 
 flowpact checks calls to other repositories against interfaces it does not hold itself: the
 [remote interfaces lockfile](/docs/remote-interfaces), which a pull request can edit, and the files it fetches, which
 those repositories serve. A pull request can try to make the checks pass with a false interface (an input marked
-optional), a remote repository can serve a file built to waste memory, a pull request that controls the
-references can try to make a privileged token read repositories it should not, and show what it read in findings, a
-reference built with `..` can try to make the [sources cache](/docs/remote-interfaces#sources-for-the-editor) write
-outside its directory, and a lockfile can name a host, or a commit other than the one a reference pins, to make the
-editor link or open other code than what runs. A pull request that moves a reference to another version can update
-the lockfile to an interface that keeps what the new version dropped, so that a breaking bump passes a check that gates
-automerge. GitHub's `actions.lock`, which a pull request can edit too, chooses the commit a reference is read at. The
-opt-in look on github.com sends reference names to a second host.
+optional, or a job that requests fewer permissions than it does), a remote repository can serve a file built to waste
+memory, a pull request that controls the references can try to make a privileged token read repositories it should
+not, and show what it read in findings, a reference built with `..` can try to make the
+[sources cache](/docs/remote-interfaces#sources-for-the-editor) write outside its directory, and a lockfile can name a
+host, or a commit other than the one a reference pins, to make the editor link or open other code than what runs. A
+pull request that moves a reference to another version can update the lockfile to an interface that keeps what the
+new version dropped, so that a breaking bump passes a check that gates automerge. GitHub's `actions.lock`, which a
+pull request can edit too, chooses the commit a reference is read at. The opt-in look on github.com sends reference
+names to a second host.
 
 - **Mitigation.** The lockfile is validated against its schema before anything uses it, or reported by
   [`FP611`](/docs/rules/fp611) and not used (`readRemotesLock` in `packages/lint/src/remotes.ts`); each entry pins a

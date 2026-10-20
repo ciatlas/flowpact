@@ -61,10 +61,11 @@ const KIND: Record<string, string> = {
 const cut = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s);
 
 /** Inline code, on one line and cut to size; YAML text may hold backticks and newlines. */
-const code = (s: string) => `\`${cut(s.replace(/`/g, "'").replace(/\s+/g, ' ').trim(), MAX_CODE) || ' '}\``;
+export const code = (s: string) =>
+  `\`${cut(s.replace(/`/g, "'").replace(/\s+/g, ' ').trim(), MAX_CODE) || ' '}\``;
 
 /** Free text from a repository (descriptions) shown as text, not markdown. */
-const text = (s: string) =>
+export const text = (s: string) =>
   cut(s.replace(/\s+/g, ' ').trim(), MAX_TEXT).replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, (c) => `\\${c}`);
 
 const json = (v: Json | undefined) => (typeof v === 'string' ? v : JSON.stringify(v));
