@@ -37,6 +37,13 @@ const inputSchema = z.looseObject({
   options: z.optional(z.array(z.string())),
 });
 
+/** `permissions:` as written: a shorthand, or a scope → level map. */
+const permissionsSchema = z.union([
+  z.literal('read-all'),
+  z.literal('write-all'),
+  z.record(z.string(), z.enum(['read', 'write', 'none'])),
+]);
+
 const entrySchema = z.looseObject({
   /** The commit the reference resolved to when the entry was written. */
   sha: z.string().check(z.regex(/^[0-9a-f]{40}$/)),
@@ -53,6 +60,13 @@ const entrySchema = z.looseObject({
    * reads no caller's inputs can switch off.
    */
   undeclaredSecrets: z.optional(z.array(z.string())),
+  /**
+   * A workflow's `permissions:`, when one of its jobs has none of its own and so requests them (see FP613). A job that
+   * calls a workflow of its own repository with neither is not followed.
+   */
+  permissions: z.optional(permissionsSchema),
+  /** The `permissions:` of each job of a workflow that has its own, by job id (see FP613). */
+  jobPermissions: z.optional(z.record(z.string(), permissionsSchema)),
 });
 
 const remotesLockSchema = z.looseObject({
@@ -260,6 +274,19 @@ const lockedInputs = (decls: Record<string, InputDecl>) =>
 const ifAny = <K extends string, V extends object>(key: K, value: V): Partial<Record<K, V>> =>
   Object.keys(value).length ? ({ [key]: value } as Record<K, V>) : {};
 
+/** What a workflow's jobs request: each one's own `permissions:`, and the workflow's when a job has none of its own. */
+function lockedPermissions(wf: WorkflowDecl): Pick<RemoteEntry, 'permissions' | 'jobPermissions'> {
+  const jobs = Object.values(wf.jobs);
+  const inherits = jobs.some((j) => !j.permissions);
+  return {
+    ...(wf.permissions && inherits ? { permissions: wf.permissions } : {}),
+    ...ifAny(
+      'jobPermissions',
+      Object.fromEntries(jobs.flatMap((j) => (j.permissions ? [[j.id, j.permissions]] : []))),
+    ),
+  };
+}
+
 /**
  * The lockfile entry of a remote unit, read from its file at commit `sha`. What is the default is left out: `required`
  * when false, and empty inputs, secrets and outputs.
@@ -281,6 +308,7 @@ export function lockEntryOf(unit: UnitDecl, sha: string): RemoteEntry {
         'outputs',
         Object.values(call?.outputs ?? {}).map((o) => o.name),
       ),
+      ...lockedPermissions(unit),
     };
   }
   return {

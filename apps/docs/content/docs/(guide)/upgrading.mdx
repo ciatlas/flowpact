@@ -15,6 +15,18 @@ reports or the API is a major release (the next one is 1.0.0); up to 0.14, a min
 
 Then read the sections below from your version up.
 
+## 0.25 → 0.26
+
+Nothing to change. What is new:
+
+- **A new error, [FP613](/docs/rules/fp613):** a job of a called workflow requests a `GITHUB_TOKEN` permission the
+  call does not grant, which GitHub refuses when the run starts. A call that sets no `permissions:`, in its job or its
+  workflow, is not checked: it gets the repository's default. The editor offers a quick fix that raises the grant.
+- **Remote interfaces lockfile:** `flowpact remotes update` now records what a remote reusable workflow's jobs request
+  (`permissions`, `jobPermissions`), and FP613 checks your calls of it too. The first `remotes update` lists those
+  entries as `changed`, though their commits are the same, and grades no call on what they now record. flowpact 0.21
+  and later ignore keys a later version adds, so an older pin of the action or the CLI keeps reading the lockfile.
+
 ## 0.24 → 0.25
 
 Nothing to change. What is new:

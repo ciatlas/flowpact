@@ -43,7 +43,15 @@ function expectAgreement(g: RemoteChangeGrade): void {
   if (!g.changes.length) return; // no earlier entry: nothing to explain with
   const breaking = new Set(g.changes.filter((c) => c.breaking).map((c) => c.path.toLowerCase()));
   for (const call of g.calls)
-    for (const f of call.added) expect([...breaking], `${f.code}: ${f.message}`).toContain(aboutOf(f.symbol));
+    for (const f of call.added) {
+      // FP613 is about the call's grant; the diff names the scopes the new version requests more of.
+      if (f.code === 'FP613')
+        expect(
+          [...breaking].some((p) => p.startsWith('permissions.')),
+          f.message,
+        ).toBe(true);
+      else expect([...breaking], `${f.code}: ${f.message}`).toContain(aboutOf(f.symbol));
+    }
 }
 
 function grade(
@@ -259,6 +267,56 @@ describe('secrets', () => {
           'reads secret "NPM_TOKEN" without declaring it — calls without secrets: inherit pass it empty',
       },
     ]);
+  });
+});
+
+describe('permissions', () => {
+  const callers = {
+    ...ci(yaml`
+      reads:
+        uses: ${SHIP}
+        permissions: { contents: read }
+      writes:
+        uses: ${SHIP}
+        permissions: { contents: write }
+      unset:
+        uses: ${SHIP}
+      lib:
+        uses: ./.github/workflows/lib.yml
+        permissions: { contents: read }
+    `),
+    // Its call of SHIP sets no permissions: it gets what ci.yml's lib job grants.
+    [`${WF}/lib.yml`]: `on: workflow_call\njobs:\n  nested:\n    uses: ${SHIP}\n`,
+  };
+  const reads = workflow({ jobPermissions: { deploy: { contents: 'read' } } });
+  const writes = workflow({ sha: B, jobPermissions: { deploy: { contents: 'write' } } });
+
+  it('a job that requests more breaks the calls that grant less, and leaves a call that sets none unchecked', () => {
+    const g = gradeOne(callers, { ref: SHIP, before: reads, after: writes });
+    expect(verdicts(g)).toEqual({ reads: 'breaks', writes: 'fits', unset: 'unchecked', nested: 'breaks' });
+    expect(g.calls[0]!.added.map((f) => f.message)).toEqual([
+      `${SHIP} › jobs.deploy requests contents: write, but jobs.reads grants contents: read`,
+    ]);
+    expect(g.calls[2]!.unchecked).toEqual([
+      `sets no permissions, and ${SHIP} now requests contents: write: whether the default token permissions allow it is not known`,
+    ]);
+    expect(g.changes).toEqual([
+      {
+        breaking: true,
+        path: 'permissions.contents',
+        message: 'requests contents: write (was read) — calls that grant less fail when the run starts',
+      },
+    ]);
+  });
+
+  it('an entry written again at the same commit requests what it did: what it now records is no change', () => {
+    const g = gradeOne(callers, {
+      ref: SHIP,
+      before: workflow(),
+      after: workflow({ permissions: { contents: 'write' } }),
+    });
+    expect(verdicts(g)).toEqual({ reads: 'fits', writes: 'fits', unset: 'fits', nested: 'fits' });
+    expect(g.changes).toEqual([]);
   });
 });
 

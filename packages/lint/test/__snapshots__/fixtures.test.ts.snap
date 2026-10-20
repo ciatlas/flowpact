@@ -14,6 +14,7 @@ exports[`fixture repositories > broken: findings snapshot 1`] = `
 exports[`fixture repositories > call-permissions: findings snapshot 1`] = `
 [
   "error FP613 .github/workflows/release.yml:5:1 .github/workflows/publish.yml › jobs.npm requests contents: write, packages: write, but jobs.publish grants contents: read, packages: none",
+  "error FP613 .github/workflows/release.yml:16:5 acme/pages/.github/workflows/deploy.yml@v2 › jobs.deploy requests id-token: write, but jobs.docs grants id-token: none",
 ]
 `;
 

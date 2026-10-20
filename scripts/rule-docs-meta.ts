@@ -95,6 +95,7 @@ const GUIDES: Record<string, Guide[]> = {
   FP603: [REMOTES],
   FP611: [REMOTES],
   FP612: [REMOTES],
+  FP613: [REMOTES],
   FP904: [IGNORE_COMMENTS],
   FP905: [IGNORE_COMMENTS],
 };

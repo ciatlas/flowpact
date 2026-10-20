@@ -20,7 +20,7 @@ What each tool reports, from small test repositories and the tools' own document
 | An output arrives empty: its step never writes it, or a nested workflow no longer has it | — | nested workflow only | ✓ [`FP304`](/docs/rules/fp304), [`FP301`](/docs/rules/fp301) |
 | A matrix built with `fromJSON` is read with a key it never has | — | — | ✓ once you declare its keys ([`FP403`](/docs/rules/fp403), [`FP404`](/docs/rules/fp404)) |
 | GitHub rejects the run: a call cycle, a call chain of more than 10 workflows, more than 256 matrix jobs | — | — | ✓ [`FP601`](/docs/rules/fp601), [`FP602`](/docs/rules/fp602), [`FP406`](/docs/rules/fp406) |
-| GitHub rejects the run: a job of a called workflow, or of a workflow it calls, requests a `GITHUB_TOKEN` permission the call does not grant | — | — | ✓ names the job and each scope, and raises the grant in a quick fix ([`FP613`](/docs/rules/fp613)) |
+| GitHub rejects the run: a job of a called workflow, or of a workflow it calls, requests a `GITHUB_TOKEN` permission the call does not grant | — | — | ✓ names the job and each scope, raises the grant in a quick fix, and checks remote workflows against the [lockfile](/docs/remote-interfaces) ([`FP613`](/docs/rules/fp613)) |
 | Inputs, outputs and secrets nothing reads, and which secrets a `secrets: inherit` call actually needs | — | — | ✓ [`FP104`](/docs/rules/fp104), [`FP106`](/docs/rules/fp106), [`FP203`](/docs/rules/fp203), [`FP303`](/docs/rules/fp303), [`FP204`](/docs/rules/fp204) |
 | A published workflow changes an input, an output or a check name that consumers in other repositories may depend on | — | — | ✓ against the committed [contract](/docs/contracts) (`FP803`) or the pull request's base in [impact mode](/docs/impact-mode) (`FP810`); it does not read the consumers |
 | Where a value comes from and where it goes, across files | — | — (no go to definition or references) | ✓ `flowpact trace`, hover, go to definition, references |
@@ -705,7 +705,7 @@ The repositories under [`fixtures/`](https://github.com/ciatlas/flowpact/tree/ma
 | `incident-matrix` — one include entry without `config` | **0 findings** | `FP401` naming `{ name: windows }`, the include entry and the receiving input |
 | `deep-nesting` — a workflow that calls three levels of reusable workflows | 4 findings | the same 4 at identical positions **plus 9**: optional→required forwarding, dropped pass-throughs, unused inputs/outputs/secrets, an output never written by its step, inherited secrets, an undefined env var |
 | `composite-actions` | 4 findings | the same 4 at identical positions plus unused action inputs/outputs |
-| `call-permissions` — a release workflow grants `contents: read` to a publish workflow whose job requests write | **0 findings** | `FP613` naming the job and the scopes it lacks |
+| `call-permissions` — a release workflow grants less than its publish workflow's job and a Pages deploy in another repository request | **0 findings** | `FP613` twice, naming each job and the scopes it lacks; the remote one from the [lockfile](/docs/remote-interfaces) |
 | `clean` | 0 | 0 |
 
 ## Use them together

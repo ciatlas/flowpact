@@ -22872,6 +22872,11 @@ var inputSchema = looseObject({
   default: optional(json()),
   options: optional(array(string2()))
 });
+var permissionsSchema = union([
+  literal("read-all"),
+  literal("write-all"),
+  record(string2(), _enum(["read", "write", "none"]))
+]);
 var entrySchema = looseObject({
   /** The commit the reference resolved to when the entry was written. */
   sha: string2().check(_regex(/^[0-9a-f]{40}$/)),
@@ -22887,7 +22892,14 @@ var entrySchema = looseObject({
    * A workflow's secrets it reads without declaring them, which only `secrets: inherit` gives it (see FP205); only
    * reads no caller's inputs can switch off.
    */
-  undeclaredSecrets: optional(array(string2()))
+  undeclaredSecrets: optional(array(string2())),
+  /**
+   * A workflow's `permissions:`, when one of its jobs has none of its own and so requests them (see FP613). A job that
+   * calls a workflow of its own repository with neither is not followed.
+   */
+  permissions: optional(permissionsSchema),
+  /** The `permissions:` of each job of a workflow that has its own, by job id (see FP613). */
+  jobPermissions: optional(record(string2(), permissionsSchema))
 });
 var remotesLockSchema = looseObject({
   version: literal(1),
@@ -22990,6 +23002,17 @@ var lockedInput = (i) => ({
 });
 var lockedInputs = (decls) => Object.fromEntries(Object.values(decls).map((i) => [i.name, lockedInput(i)]));
 var ifAny = (key, value) => Object.keys(value).length ? { [key]: value } : {};
+function lockedPermissions(wf) {
+  const jobs2 = Object.values(wf.jobs);
+  const inherits = jobs2.some((j) => !j.permissions);
+  return {
+    ...wf.permissions && inherits ? { permissions: wf.permissions } : {},
+    ...ifAny(
+      "jobPermissions",
+      Object.fromEntries(jobs2.flatMap((j) => j.permissions ? [[j.id, j.permissions]] : []))
+    )
+  };
+}
 function lockEntryOf(unit, sha) {
   if (unit.kind === "workflow") {
     const call = unit.call;
@@ -23006,7 +23029,8 @@ function lockEntryOf(unit, sha) {
       ...ifAny(
         "outputs",
         Object.values(call?.outputs ?? {}).map((o) => o.name)
-      )
+      ),
+      ...lockedPermissions(unit)
     };
   }
   return {
@@ -25537,7 +25561,7 @@ var ungrantedPermissions = defineRule({
     summary: "A job of a called workflow requests a permission the call does not grant.",
     why: "A called workflow's jobs run with the caller's `GITHUB_TOKEN` and can only keep or lower its permissions. GitHub refuses the whole run when it starts (\"The nested job \u2026 is requesting 'contents: write', but is only allowed 'contents: read'\").",
     fix: "Grant the permission in the calling job's `permissions:`; a job's `permissions:` replaces the workflow's for that job only. If the called job does not need it, lower its `permissions:` instead.",
-    scope: "What a call grants is the calling job's `permissions:`, else its workflow's. With neither, it gets the repository's or organization's default, which flowpact cannot see, so the call is not checked; when the calling workflow is itself called, the workflows it calls are checked against what its callers grant instead. What a called job requests is its `permissions:`, else its workflow's (reported once for every job that uses them); a job with neither gets what the call grants. A called job that calls another workflow requests its permissions for all of it, and the jobs of that workflow are checked against them at that call. Jobs are checked whatever their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is not checked: the remote interfaces lockfile does not record what its jobs request. Whether a job requests more than it needs is not checked.",
+    scope: "What a call grants is the calling job's `permissions:`, else its workflow's. With neither, it gets the repository's or organization's default, which flowpact cannot see, so the call is not checked; when the calling workflow is itself called, the workflows it calls are checked against what its callers grant instead. What a called job requests is its `permissions:`, else its workflow's (reported once for every job that uses them); a job with neither gets what the call grants. A called job that calls another workflow requests its permissions for all of it, and the jobs of that workflow are checked against them at that call. Jobs are checked whatever their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is checked against what the remote interfaces lockfile records: its jobs' `permissions:`, and its own for the jobs that have none (an entry written before flowpact recorded them has neither until `flowpact remotes update`). A job of it that calls another workflow without permissions is not followed. Whether a job requests more than it needs is not checked.",
     examples: {
       bad: `permissions:
   contents: read
@@ -25552,10 +25576,10 @@ jobs:
     }
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       const grant = grantOf(call);
       if (!grant) continue;
-      for (const r of requestsOf(ctx.index, call.callee)) {
+      for (const r of requestsOf(ctx, call)) {
         const short = shortScopes(grant.permissions, r.scopes);
         if (short.length) reportShort(ctx, call, grant, r, short);
       }
@@ -25568,15 +25592,39 @@ function grantOf(call) {
   if (call.caller.permissions) return { permissions: call.caller.permissions, path: ["permissions"] };
   return void 0;
 }
-var askedBy = (job, wf) => job.permissions ? { own: true, scopes: levelsOf(job.permissions) } : wf.permissions ? { own: false, scopes: levelsOf(wf.permissions) } : null;
-function requestsOf(index, wf) {
+function asksOf(ctx, job, wf) {
+  const own2 = job.permissions ?? wf.permissions;
+  if (own2) return [{ by: job.permissions ? "job" : "workflow", scopes: levelsOf(own2) }];
+  return calledAsks(ctx, job);
+}
+function calledAsks(ctx, job) {
+  const uses = job.uses;
+  if (uses?.kind !== "remote-workflow" || !ctx.index.interfaceOf(job)) return [];
+  const entry = lockedRemote(ctx.remotes?.lock, uses.raw).entry;
+  return [
+    ...entry?.permissions ? [{ by: "called", scopes: levelsOf(entry.permissions) }] : [],
+    ...Object.entries(entry?.jobPermissions ?? {}).map(([id, p]) => ({
+      by: "called",
+      job: id,
+      scopes: levelsOf(p)
+    }))
+  ];
+}
+function requestsOf(ctx, call) {
   const out = /* @__PURE__ */ new Map();
-  for (const [chain, asked] of byJobChain(index, wf, askedBy, (job, w) => askedBy(job, w) ?? void 0)) {
-    if (!asked) continue;
-    const via = chain.split(" > ");
-    const job = via.pop();
-    const r = asked.own ? { via, job, scopes: asked.scopes } : { via, scopes: asked.scopes };
+  const add = (ids, a) => {
+    const r = a.by === "called" ? { via: ids, ...a.job === void 0 ? {} : { job: a.job }, scopes: a.scopes } : { via: ids.slice(0, -1), ...a.by === "job" ? { job: ids.at(-1) } : {}, scopes: a.scopes };
     out.set(JSON.stringify([r.via, r.job]), r);
+  };
+  if (isExternal(call.callee)) for (const a of calledAsks(ctx, call.job)) add([], a);
+  else {
+    const asks = (job, wf) => asksOf(ctx, job, wf);
+    const stopAt = (job, wf) => {
+      const found = asks(job, wf);
+      return found.length ? found : void 0;
+    };
+    for (const [chain, found] of byJobChain(ctx.index, call.callee, asks, stopAt))
+      for (const a of found) add(chain.split(" > "), a);
   }
   return [...out.values()];
 }
@@ -25586,13 +25634,17 @@ function reportShort(ctx, call, grant, r, short) {
   const file = call.caller.source.path;
   const callLoc = call.job.uses?.loc ?? call.job.loc;
   const wanted = levels(short, "requested");
-  const { where, related: related2 } = describeRequest(ctx.index, call.callee, r, wanted);
+  const { where, related: related2, remote } = describeRequest(ctx.index, call.callee, r, wanted);
   ctx.report({
     message: `${where} requests ${wanted}, but jobs.${call.job.id} grants ${levels(short, "granted")}`,
     loc: keyLoc(ctx.index, file, grant.path) ?? callLoc,
     symbol: `${call.caller.path}#jobs.${call.job.id}.permissions`,
     related: [{ loc: callLoc, message: `jobs.${call.job.id} calls ${call.callee.path}` }, ...related2],
-    suggestions: [raiseGrant(ctx.index, call, grant, short)]
+    suggestions: [raiseGrant(ctx.index, call, grant, short)],
+    // The rule's fix also says to lower the request, which a workflow of another repository does not let you do.
+    ...remote ? {
+      fix: `Grant ${wanted} in the calling job's \`permissions:\` (a job's \`permissions:\` replaces the workflow's for that job only), or call a version of ${remote} that requests less.`
+    } : {}
   });
 }
 function describeRequest(index, callee, r, wanted) {
@@ -25600,17 +25652,23 @@ function describeRequest(index, callee, r, wanted) {
   const related2 = [];
   let wf = callee;
   for (const id of r.via) {
-    const job2 = wf.jobs[id];
-    const next = index.calleeOf(job2);
-    related2.push({ loc: job2.uses?.loc ?? job2.loc, message: `jobs.${id} calls ${next.path}` });
+    const job = wf.jobs[id];
+    const next = index.interfaceOf(job);
+    related2.push({ loc: job.uses?.loc ?? job.loc, message: `jobs.${id} calls ${next.path}` });
     parts.push(`jobs.${id}`, next.path);
     wf = next;
   }
-  const job = r.job === void 0 ? void 0 : wf.jobs[r.job];
-  if (job) parts.push(`jobs.${job.id}`);
-  const loc = keyLoc(index, wf.source.path, job ? ["jobs", job.id, "permissions"] : ["permissions"]);
-  if (loc) related2.push({ loc, message: `${job ? `jobs.${job.id}` : wf.path} requests ${wanted}` });
-  return { where: parts.join(" \u203A "), related: related2 };
+  if (r.job !== void 0) parts.push(`jobs.${escapeControl(r.job)}`);
+  const where = parts.join(" \u203A ");
+  if (isExternal(wf)) return { where, related: related2, remote: wf.path };
+  const loc = keyLoc(
+    index,
+    wf.source.path,
+    r.job === void 0 ? ["permissions"] : ["jobs", r.job, "permissions"]
+  );
+  if (loc)
+    related2.push({ loc, message: `${r.job === void 0 ? wf.path : `jobs.${r.job}`} requests ${wanted}` });
+  return { where, related: related2 };
 }
 var SCOPE_NAME = /^[a-z][a-z-]*$/;
 function raiseGrant(index, call, grant, short) {
@@ -28249,15 +28307,26 @@ async function fetchRemoteEntries(refs, opts = {}) {
 }
 
 // ../lint/src/remotes-grade.ts
-var GRADE_CODES = ["FP101", "FP102", "FP103", "FP201", "FP202", "FP205", "FP301"];
+var GRADE_CODES = ["FP101", "FP102", "FP103", "FP201", "FP202", "FP205", "FP301", "FP613"];
 var VERDICT_ORDER = { breaks: 0, unchecked: 1, fits: 2 };
 var worstVerdict = (verdicts) => verdicts.reduce((w, v) => VERDICT_ORDER[v] < VERDICT_ORDER[w] ? v : w, "fits");
-function gradeRemoteChanges(opts, changes) {
-  if (!changes.length) return [];
+function gradeRemoteChanges(opts, graded) {
+  if (!graded.length) return [];
+  const changes = graded.map(samePermissions);
   const fs3 = opts.fs ?? nodeFileSystem(opts.root);
   const before = gradingRun(opts, fs3, changes, (c) => c.before);
   const after = gradingRun(opts, fs3, changes, (c) => c.after);
   return changes.map((change) => gradeOne(change, before, after));
+}
+var permissionsOf = (e) => ({
+  ...e.permissions ? { permissions: e.permissions } : {},
+  ...e.jobPermissions ? { jobPermissions: e.jobPermissions } : {}
+});
+function samePermissions(change) {
+  const { before, after } = change;
+  if (!before || before.sha !== after.sha) return change;
+  const { permissions: _p, jobPermissions: _j, ...rest } = before;
+  return { ...change, before: { ...rest, ...permissionsOf(after) } };
 }
 function gradingRun(opts, fs3, changes, pick2) {
   const read2 = readRemotesLock(fs3);
@@ -28352,7 +28421,7 @@ function gradeOne(change, beforeRun, afterRun) {
     const cur = now.get(c);
     const added = [...cur].filter(([k]) => !old.has(k)).map(([, f]) => f);
     const removed = [...old].filter(([k]) => !cur.has(k)).map(([, f]) => f);
-    const unchecked = uncheckedParts(c, change);
+    const unchecked = uncheckedParts(afterRun.index, c, change);
     const verdict = added.length ? "breaks" : unchecked.length ? "unchecked" : "fits";
     return { call: c.site, verdict, added, removed, unchecked, notes: defaultNotes(c, change) };
   });
@@ -28369,8 +28438,13 @@ function addedNames(before, after) {
   const had = new Set((before ?? []).map((n) => n.toLowerCase()));
   return [...new Set(after ?? [])].filter((n) => !had.has(n.toLowerCase()));
 }
-function uncheckedParts(c, change) {
-  return [...typedExpressions(c, change), ...secretsInherited(c, change), ...outputsMaybeSet(c, change)];
+function uncheckedParts(index, c, change) {
+  return [
+    ...typedExpressions(c, change),
+    ...secretsInherited(c, change),
+    ...outputsMaybeSet(c, change),
+    ...permissionsDefault(index, c, change)
+  ];
 }
 function newCheckedType(name, { before, after }) {
   const type = lookup(inputsOf(after), name)?.type;
@@ -28397,6 +28471,35 @@ function secretsInherited(c, { ref, before, after }) {
     (n) => `passes secrets: inherit, and ${ref} now needs secret ${n}: whether this repository has it is not known`
   );
 }
+function grantKnown(index, wf, job, seen = /* @__PURE__ */ new Set()) {
+  if (job.permissions || wf.permissions) return true;
+  const callers = index.callersOf(wf.path);
+  if (!callers.length || seen.has(wf.path)) return false;
+  seen.add(wf.path);
+  return callers.every((call) => grantKnown(index, call.caller, call.job, seen));
+}
+function permissionsDefault(index, c, { ref, before, after }) {
+  if (!c.job || c.step || c.unit.kind !== "workflow" || grantKnown(index, c.unit, c.job)) return [];
+  const wider = widenedScopes(before, after);
+  if (!wider.length) return [];
+  return [
+    `sets no permissions, and ${ref} now requests ${wider.map(scopeLevel).join(", ")}: whether the default token permissions allow it is not known`
+  ];
+}
+function requestedLevels(e) {
+  const out = {};
+  for (const p of [e?.permissions, ...Object.values(e?.jobPermissions ?? {})])
+    for (const [scope, level2] of Object.entries(p ? levelsOf(p) : {}))
+      out[scope] = Math.max(out[scope] ?? 0, level2);
+  return out;
+}
+function widenedScopes(before, after) {
+  const was = requestedLevels(before);
+  return Object.entries(requestedLevels(after)).flatMap(
+    ([scope, requested]) => requested > (was[scope] ?? 0) ? [{ scope, requested, granted: was[scope] ?? 0 }] : []
+  );
+}
+var scopeLevel = (s) => `${escapeControl(s.scope)}: ${LEVEL_NAMES[s.requested]}`;
 var setsUndeclared = (e) => e.kind === "action" && (e.using ?? "composite") !== "composite";
 var readsStepOutput = (ref, id) => ref.context === "steps" && ref.path[0]?.toLowerCase() === id.toLowerCase() && isProperty(ref.path[1], "outputs");
 function outputsRead(c, id, names) {
@@ -28480,6 +28583,11 @@ var undeclaredSecretChanges = (before, after) => [
     message: `no longer reads undeclared secret "${n}"`
   }))
 ];
+var permissionChanges2 = (before, after) => widenedScopes(before, after).map((s) => ({
+  breaking: true,
+  path: `permissions.${s.scope}`,
+  message: `requests ${scopeLevel(s)} (was ${LEVEL_NAMES[s.granted]}) \u2014 calls that grant less fail when the run starts`
+}));
 function runtimeChange(before, after) {
   if (after.kind !== "action" || before.using === after.using) return [];
   const runtime = (e) => e.using ?? "an unknown runtime";
@@ -28494,6 +28602,7 @@ function runtimeChange(before, after) {
 var interfaceChanges2 = (ref, before, after) => [
   ...diffContracts(entryContract(ref, namedLike(before, after)), entryContract(ref, after)),
   ...undeclaredSecretChanges(before, after),
+  ...permissionChanges2(before, after),
   ...runtimeChange(before, after)
 ];
 
