@@ -146,7 +146,8 @@ const ignoreCommentInvalid = defineRule({
     why: 'Such a comment accepts nothing: the finding it was written for is still reported, and the comment hides why.',
     fix:
       'Correct the rule: its code or its name, as `flowpact rules` lists them, in brackets after `# flowpact: ignore`. ' +
-      'The rules about overrides and ignore comments (FP9xx) check them once they are applied, so no comment can ignore them.',
+      'The rules about overrides and ignore comments (FP9xx) check them once they are applied, so no comment can ignore them. ' +
+      "Impact mode's rules (FP810–FP814) grade the pull request itself: only an override in the baseline's config accepts them.",
     examples: {
       bad: `notify:
   uses: acme/shared/.github/workflows/notify.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.0 # flowpact: ignore[remote-unverifed] checked in acme/shared`,

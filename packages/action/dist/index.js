@@ -25505,7 +25505,7 @@ var ignoreCommentInvalid = defineRule({
   docs: {
     summary: "A `# flowpact: ignore[\u2026]` comment names an unknown rule or one no comment can ignore, or is not written as `ignore[<rules>]`.",
     why: "Such a comment accepts nothing: the finding it was written for is still reported, and the comment hides why.",
-    fix: "Correct the rule: its code or its name, as `flowpact rules` lists them, in brackets after `# flowpact: ignore`. The rules about overrides and ignore comments (FP9xx) check them once they are applied, so no comment can ignore them.",
+    fix: "Correct the rule: its code or its name, as `flowpact rules` lists them, in brackets after `# flowpact: ignore`. The rules about overrides and ignore comments (FP9xx) check them once they are applied, so no comment can ignore them. Impact mode's rules (FP810\u2013FP814) grade the pull request itself: only an override in the baseline's config accepts them.",
     examples: {
       bad: `notify:
   uses: acme/shared/.github/workflows/notify.yml@0123456789abcdef0123456789abcdef01234567 # v1.2.0 # flowpact: ignore[remote-unverifed] checked in acme/shared`,
@@ -26994,8 +26994,11 @@ function expandMatrices(project, config2, logger) {
     for (const job of Object.values(wf.jobs)) if (job.matrix) matrix2(wf, job);
   return { matrix: matrix2, combinations: () => combinations };
 }
-function selectRules(registry2, config2, only, unloaded) {
+function selectRules(registry2, config2, opts, unloaded) {
+  const { only } = opts;
   const severities = resolveSeverities(registry2, config2, { unloaded });
+  const baseline = opts.impact?.baselineSettings;
+  if (baseline) for (const [code, s] of impactSeverities(registry2, baseline.rules)) severities.set(code, s);
   const unknownOnly = (only ?? []).filter((o) => !registry2.get(o));
   if (unknownOnly.length) {
     const names = registry2.all().flatMap((r) => [r.code, r.name]);
@@ -27009,6 +27012,23 @@ function selectRules(registry2, config2, only, unloaded) {
     );
   }
   return { severities, only: only?.map((o) => registry2.get(o).code) };
+}
+var isImpactRule = (registry2, key) => IMPACT_CODES.includes(registry2.get(key)?.code ?? "");
+function impactSeverities(registry2, rules) {
+  const out = /* @__PURE__ */ new Map();
+  for (const code of IMPACT_CODES) {
+    const rule = registry2.get(code);
+    if (rule) out.set(code, rule.defaultSeverity);
+  }
+  for (const [key, setting] of Object.entries(rules))
+    if (isImpactRule(registry2, key)) out.set(registry2.get(key).code, setting);
+  return out;
+}
+function honoredIn(registry2, baseline) {
+  if (!baseline) return void 0;
+  const key = (o) => JSON.stringify([registry2.get(o.rule)?.code, o.target, o.file, o.expires]);
+  const onBaseline = new Set(baseline.overrides.map(key));
+  return (o) => !isImpactRule(registry2, o.rule) || onBaseline.has(key(o));
 }
 function compareContracts(opts, index, scope, logger) {
   if (!opts.checkContracts) return void 0;
@@ -27160,6 +27180,11 @@ function resolveIgnored(registry2, key) {
       invalid: `Ignore comment names ${rule.code} ${rule.name}, which runs once overrides and ignore comments are applied: no comment can ignore it`
     };
   }
+  if (rule && IMPACT_CODES.includes(rule.code)) {
+    return {
+      invalid: `Ignore comment names ${rule.code} ${rule.name}, which grades the pull request itself: no comment can ignore it, only an override the baseline's config has`
+    };
+  }
   if (rule) return { code: rule.code };
   const { typo, rule: guess } = typoOf(registry2, key);
   if (!typo) return { unloaded: true };
@@ -27269,7 +27294,7 @@ function resultOf(opts, run2, r) {
 }
 function prepareRules(opts, logger, base, unloaded) {
   const { registry: registry2, index, config: config2 } = base;
-  const { severities, only } = selectRules(registry2, config2, opts.only, unloaded);
+  const { severities, only } = selectRules(registry2, config2, opts, unloaded);
   const ruleLog = logger.child("rules");
   const generatedFiles = generatedFilesOf(index.project, config2);
   for (const [file, marker] of generatedFiles) logger.debug(`generated file: ${file}`, { marker });
@@ -27296,13 +27321,14 @@ function prepareRules(opts, logger, base, unloaded) {
 function runPhases(run2, opts, logger, scope, unloaded) {
   const { config: config2 } = run2;
   const findings = dedupe2(runRules(run2, "main", {}));
+  const honored = honoredIn(run2.registry, opts.impact?.baselineSettings);
   const applied = applyOverrides(
     findings,
     config2,
     run2.registry,
     opts.overrideLocs ?? [],
     opts.now ?? /* @__PURE__ */ new Date(),
-    { unloaded }
+    { unloaded, ...honored ? { honored } : {} }
   );
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join("; ")}`);
@@ -27466,21 +27492,26 @@ function overrideMatches(o, code, f) {
     return false;
   return true;
 }
+function expiryOf(override, today) {
+  if (!override.expires) return { expired: false };
+  const daysLeft = Math.round((Date.parse(`${override.expires}T00:00:00Z`) - today) / DAY);
+  return { expired: daysLeft < 0, daysLeft };
+}
 function applyOverrides(findings, config2, registry2, locs, now, opts = {}) {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const unknown2 = { hard: [], tolerated: [] };
   const usage = config2.overrides.map((override, index) => {
     const rule = registry2.get(override.rule);
     if (!rule) triageUnknown(registry2, override.rule, `overrides.${index}.rule`, unknown2);
-    const daysLeft = override.expires ? Math.round((Date.parse(`${override.expires}T00:00:00Z`) - today) / DAY) : void 0;
     return {
       index,
       override,
       code: rule?.code ?? "",
       ...locs[index] ? { loc: locs[index] } : {},
       matched: 0,
-      expired: daysLeft !== void 0 && daysLeft < 0,
-      ...daysLeft !== void 0 ? { daysLeft } : {}
+      ...expiryOf(override, today),
+      // Not applied here (see `honored`), so whether it is used cannot be judged.
+      ...opts.honored && !opts.honored(override) ? { inactive: true } : {}
     };
   });
   if (unknown2.hard.length)
@@ -27489,7 +27520,7 @@ function applyOverrides(findings, config2, registry2, locs, now, opts = {}) {
   const kept = [];
   const suppressed = [];
   for (const f of findings) {
-    const matching = usage.filter((u) => overrideMatches(u.override, u.code, f));
+    const matching = usage.filter((u) => !u.inactive && overrideMatches(u.override, u.code, f));
     for (const u of matching) u.matched++;
     const active = matching.find((u) => !u.expired);
     if (!active) {
@@ -27953,6 +27984,23 @@ function ignoreAfterMerge(root, base, configPath, notes) {
   const recorded = asBaseConfig(textOf(head) ?? "", head.path);
   return [.../* @__PURE__ */ new Set([...recorded instanceof ConfigError ? [] : recorded.ignore, ...own2])];
 }
+function impactSettings(config2) {
+  const registry2 = createRegistry();
+  const isImpact = (key) => IMPACT_CODES.includes(registry2.get(key)?.code ?? "");
+  return [
+    Object.entries(config2.rules).filter(([key]) => isImpact(key)),
+    config2.overrides.filter((o) => isImpact(o.rule))
+  ];
+}
+function pendingSettings(baseline, head, comparePolicy) {
+  const changed = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+  return [
+    ...comparePolicy && changed(baseline.impact, head.impact) ? ["this pull request changes impact settings; they apply after it is merged"] : [],
+    ...changed(impactSettings(baseline), impactSettings(head)) ? [
+      "this pull request changes the severities or overrides of impact mode's rules; they apply after it is merged"
+    ] : []
+  ];
+}
 function baselinePolicy(root, baseline, req, headConfig, notes) {
   const configPath = req.configPath ? relative5(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
   const repositoryBase = repositoryBaseConfig(root, baseline.commit, req);
@@ -27963,9 +28011,7 @@ function baselinePolicy(root, baseline, req, headConfig, notes) {
   }
   const config2 = baselineConfig(baseline.fs, configPath, repositoryBase ? void 0 : req.baseConfig, notes);
   const policy = { ...(config2 ?? defaultConfig()).impact };
-  if (!repositoryBase && JSON.stringify(policy) !== JSON.stringify(headConfig.impact)) {
-    notes.push("this pull request changes impact settings; they apply after it is merged");
-  }
+  notes.push(...pendingSettings(config2 ?? defaultConfig(), headConfig, !repositoryBase));
   const ignore = baselineIgnore(repositoryBase, config2, notes);
   const afterMerge = repositoryBase && ignoreAfterMerge(root, repositoryBase, configPath, notes);
   return { config: config2, policy, ignore: { ...ignore, ...afterMerge ? { ignoreAfterMerge: afterMerge } : {} } };
@@ -28022,7 +28068,9 @@ function prepareImpact(root, headConfig, req, logger) {
       publishedFiles: base.index.units().filter((u) => isPublished(u, policy)).map((u) => u.file),
       // Impact mode leaves out only the units both this and the pull request's own `ignore` match, so a pull request
       // can neither ignore a published unit to take it out of its own check, nor take one out of `ignore` unchecked.
-      ...ignore
+      ...ignore,
+      // Nor switch off or accept its own check: impact mode's rules take their severities and overrides from here.
+      baselineSettings: { rules: config2.rules, overrides: config2.overrides }
     },
     notes
   };

@@ -39,18 +39,7 @@ Declare the impact: a Conventional Commits pull request title (`feat: …`, `fix
 ## Accept one finding
 
 When a finding is intended, accept it with a reason rather than turning the rule off. It is listed apart from the other
-findings, and does not fail the build.
-
-**On its line**, with an [ignore comment](/docs/configuration#ignore-comments) alone on the line above it (the
-editor's quick fix adds it there) or at the end of the line, after any other comment such as a version
-(`# v4.3.0 # flowpact: ignore[FP813] why`):
-
-```yaml title=".github/workflows/ci.yml"
-# flowpact: ignore[FP813] why it is acceptable here
-<the line of the finding>
-```
-
-**In the config**, with an [override](/docs/configuration#overrides), which can expire:
+findings, and comes back when the date passes ([overrides](/docs/configuration#overrides)):
 
 ```yaml title=".github/flowpact/flowpact.config.yml"
 overrides:
@@ -66,6 +55,10 @@ overrides:
 flowpact lint --format json | jq -r '.findings[] | select(.code == "FP813") | .symbol'
 ```
 
+An override counts only once it is on the base branch: impact mode reads the overrides and severities of its rules
+from the baseline's config, so a pull request cannot accept or switch off its own check. No ignore comment accepts
+its findings.
+
 ## Change the severity
 
 Change the severity (or turn the rule off) in `.github/flowpact/flowpact.config.yml`, by code or by name:
@@ -75,6 +68,8 @@ rules:
   FP813: off
   # or: impact-undeclared: error
 ```
+
+A severity counts only once it is on the base branch, as impact mode reads it from the baseline's config.
 
 Explain it in the terminal:
 
