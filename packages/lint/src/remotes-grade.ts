@@ -8,6 +8,7 @@ import {
   type ActionUse,
   type Binding,
   type CallSite,
+  escapeControl,
   evaluateTemplate,
   type FileSystem,
   type JobDecl,
@@ -23,10 +24,12 @@ import {
   type StepDecl,
   UNKNOWN,
   type UnitDecl,
+  type WorkflowDecl,
 } from '@ciatlas/core';
 import { type AnalysisResult, type AnalyzeOptions, analyze } from './analyze';
 import { defaultConfig, type FlowpactConfig } from './config';
 import { type Contract, type ContractChange, type ContractInput, diffContracts } from './contracts';
+import { LEVEL_NAMES, levelsOf, type ShortScope } from './permissions';
 import {
   commitOf,
   interfaceCalls,
@@ -46,9 +49,10 @@ import { SCHEMA_VERSIONS } from './version';
 
 /**
  * The rules that check a call against the interface it calls: inputs passed and missing (FP101–FP103), secrets
- * (FP201, FP202, FP205) and outputs read (FP301). Only their findings can differ between the two runs.
+ * (FP201, FP202, FP205), outputs read (FP301) and permissions granted (FP613). Only their findings can differ between
+ * the two runs.
  */
-export const GRADE_CODES = ['FP101', 'FP102', 'FP103', 'FP201', 'FP202', 'FP205', 'FP301'] as const;
+export const GRADE_CODES = ['FP101', 'FP102', 'FP103', 'FP201', 'FP202', 'FP205', 'FP301', 'FP613'] as const;
 
 /** A version change of one remote reference: its lockfile entry before (none when it had none) and after. */
 export interface RemoteChange {
@@ -109,12 +113,31 @@ const worstVerdict = (verdicts: RemoteVerdict[]): RemoteVerdict =>
  * of changes: each call's checks depend on its own reference's entry only. The config's severities do not switch the
  * grading rules off (a rule set to `off` would hide a break); its overrides of them still accept findings.
  */
-export function gradeRemoteChanges(opts: AnalyzeOptions, changes: RemoteChange[]): RemoteChangeGrade[] {
-  if (!changes.length) return [];
+export function gradeRemoteChanges(opts: AnalyzeOptions, graded: RemoteChange[]): RemoteChangeGrade[] {
+  if (!graded.length) return [];
+  const changes = graded.map(samePermissions);
   const fs = opts.fs ?? nodeFileSystem(opts.root);
   const before = gradingRun(opts, fs, changes, (c) => c.before);
   const after = gradingRun(opts, fs, changes, (c) => c.after);
   return changes.map((change) => gradeOne(change, before, after));
+}
+
+/** An entry's record of what a workflow's jobs request (see `lockedPermissions`). */
+const permissionsOf = (e: RemoteEntry): Pick<RemoteEntry, 'permissions' | 'jobPermissions'> => ({
+  ...(e.permissions ? { permissions: e.permissions } : {}),
+  ...(e.jobPermissions ? { jobPermissions: e.jobPermissions } : {}),
+});
+
+/**
+ * A change at the commit the entry already recorded: the code is the same, so what its jobs request is too, and the
+ * entry before gets the new one's record of it. An entry written before flowpact recorded permissions has none, which
+ * would otherwise read as new requests.
+ */
+function samePermissions(change: RemoteChange): RemoteChange {
+  const { before, after } = change;
+  if (!before || before.sha !== after.sha) return change;
+  const { permissions: _p, jobPermissions: _j, ...rest } = before;
+  return { ...change, before: { ...rest, ...permissionsOf(after) } };
 }
 
 /** One analysis with each changed reference's entry replaced (or removed), the grading rules on. */
@@ -270,7 +293,7 @@ function gradeOne(
     const cur = now.get(c)!;
     const added = [...cur].filter(([k]) => !old.has(k)).map(([, f]) => f);
     const removed = [...old].filter(([k]) => !cur.has(k)).map(([, f]) => f);
-    const unchecked = uncheckedParts(c, change);
+    const unchecked = uncheckedParts(afterRun.index, c, change);
     const verdict: RemoteVerdict = added.length ? 'breaks' : unchecked.length ? 'unchecked' : 'fits';
     return { call: c.site, verdict, added, removed, unchecked, notes: defaultNotes(c, change) };
   });
@@ -296,8 +319,13 @@ function addedNames(before: string[] | undefined, after: string[] | undefined): 
 }
 
 /** The parts of a call the change touches where the checks cannot see. */
-function uncheckedParts(c: Call, change: RemoteChange): string[] {
-  return [...typedExpressions(c, change), ...secretsInherited(c, change), ...outputsMaybeSet(c, change)];
+function uncheckedParts(index: ProjectIndex, c: Call, change: RemoteChange): string[] {
+  return [
+    ...typedExpressions(c, change),
+    ...secretsInherited(c, change),
+    ...outputsMaybeSet(c, change),
+    ...permissionsDefault(index, c, change),
+  ];
 }
 
 /** The type FP103 checks (boolean or number) an input takes after the change and did not before; else undefined. */
@@ -346,6 +374,50 @@ function secretsInherited(c: Call, { ref, before, after }: RemoteChange): string
       `passes secrets: inherit, and ${ref} now needs secret ${n}: whether this repository has it is not known`,
   );
 }
+
+/**
+ * Whether what a job grants the workflow it calls is known: its `permissions:` or its workflow's, else, in a workflow
+ * this repository calls, what every caller grants. Without, it gets the repository's or organization's default.
+ */
+function grantKnown(index: ProjectIndex, wf: WorkflowDecl, job: JobDecl, seen = new Set<string>()): boolean {
+  if (job.permissions || wf.permissions) return true;
+  const callers = index.callersOf(wf.path);
+  if (!callers.length || seen.has(wf.path)) return false;
+  seen.add(wf.path);
+  return callers.every((call) => grantKnown(index, call.caller, call.job, seen));
+}
+
+/**
+ * A call whose grant is not known, of a version that requests more: FP613 cannot tell whether the default token
+ * permissions allow it.
+ */
+function permissionsDefault(index: ProjectIndex, c: Call, { ref, before, after }: RemoteChange): string[] {
+  if (!c.job || c.step || c.unit.kind !== 'workflow' || grantKnown(index, c.unit, c.job)) return [];
+  const wider = widenedScopes(before, after);
+  if (!wider.length) return [];
+  return [
+    `sets no permissions, and ${ref} now requests ${wider.map(scopeLevel).join(', ')}: whether the default token permissions allow it is not known`,
+  ];
+}
+
+/** The level each scope is requested at by the workflow or any of its jobs, the highest of them, as an entry records it. */
+function requestedLevels(e: RemoteEntry | undefined): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const p of [e?.permissions, ...Object.values(e?.jobPermissions ?? {})])
+    for (const [scope, level] of Object.entries(p ? levelsOf(p) : {}))
+      out[scope] = Math.max(out[scope] ?? 0, level);
+  return out;
+}
+
+/** The scopes `after` requests at a higher level than `before` did (`granted` is the level before). */
+function widenedScopes(before: RemoteEntry | undefined, after: RemoteEntry): ShortScope[] {
+  const was = requestedLevels(before);
+  return Object.entries(requestedLevels(after)).flatMap(([scope, requested]) =>
+    requested > (was[scope] ?? 0) ? [{ scope, requested, granted: was[scope] ?? 0 }] : [],
+  );
+}
+
+const scopeLevel = (s: ShortScope) => `${escapeControl(s.scope)}: ${LEVEL_NAMES[s.requested]}`;
 
 /** Whether an action can set outputs it does not declare: a JavaScript or Docker one, any but a composite action. */
 const setsUndeclared = (e: RemoteEntry) => e.kind === 'action' && (e.using ?? 'composite') !== 'composite';
@@ -470,6 +542,14 @@ const undeclaredSecretChanges = (before: RemoteEntry, after: RemoteEntry): Contr
   })),
 ];
 
+/** A workflow whose jobs request a scope at a higher level: calls that grant less fail when the run starts (FP613). */
+const permissionChanges = (before: RemoteEntry, after: RemoteEntry): ContractChange[] =>
+  widenedScopes(before, after).map((s) => ({
+    breaking: true,
+    path: `permissions.${s.scope}`,
+    message: `requests ${scopeLevel(s)} (was ${LEVEL_NAMES[s.granted]}) — calls that grant less fail when the run starts`,
+  }));
+
 /** An action's `runs.using` changed: a change of behaviour, not of the interface. */
 function runtimeChange(before: RemoteEntry, after: RemoteEntry): ContractChange[] {
   if (after.kind !== 'action' || before.using === after.using) return [];
@@ -485,10 +565,11 @@ function runtimeChange(before: RemoteEntry, after: RemoteEntry): ContractChange[
 
 /**
  * What changed in the interface: the contract diff, and what only the lockfile records — the secrets a workflow reads
- * without declaring them and an action's `runs.using`.
+ * without declaring them, the permissions its jobs request and an action's `runs.using`.
  */
 const interfaceChanges = (ref: string, before: RemoteEntry, after: RemoteEntry): ContractChange[] => [
   ...diffContracts(entryContract(ref, namedLike(before, after)), entryContract(ref, after)),
   ...undeclaredSecretChanges(before, after),
+  ...permissionChanges(before, after),
   ...runtimeChange(before, after),
 ];

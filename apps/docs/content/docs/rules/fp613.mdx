@@ -56,7 +56,7 @@ jobs:
 
 ## Scope
 
-What a call grants is the calling job's `permissions:`, else its workflow's. With neither, it gets the repository's or organization's default, which flowpact cannot see, so the call is not checked; when the calling workflow is itself called, the workflows it calls are checked against what its callers grant instead. What a called job requests is its `permissions:`, else its workflow's (reported once for every job that uses them); a job with neither gets what the call grants. A called job that calls another workflow requests its permissions for all of it, and the jobs of that workflow are checked against them at that call. Jobs are checked whatever their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is not checked: the remote interfaces lockfile does not record what its jobs request. Whether a job requests more than it needs is not checked.
+What a call grants is the calling job's `permissions:`, else its workflow's. With neither, it gets the repository's or organization's default, which flowpact cannot see, so the call is not checked; when the calling workflow is itself called, the workflows it calls are checked against what its callers grant instead. What a called job requests is its `permissions:`, else its workflow's (reported once for every job that uses them); a job with neither gets what the call grants. A called job that calls another workflow requests its permissions for all of it, and the jobs of that workflow are checked against them at that call. Jobs are checked whatever their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is checked against what the remote interfaces lockfile records: its jobs' `permissions:`, and its own for the jobs that have none (an entry written before flowpact recorded them has neither until `flowpact remotes update`). A job of it that calls another workflow without permissions is not followed. Whether a job requests more than it needs is not checked.
 
 ## Accept one finding
 
@@ -108,3 +108,4 @@ flowpact explain FP613
 
 - [`FP609`](/docs/rules/fp609) callee-not-reusable: A job calls a local workflow that has no `on.workflow_call` trigger.
 - [`FP503`](/docs/rules/fp503) schema-violation: The file does not match GitHub’s workflow / action schema (validated with GitHub’s own parser).
+- [Remote interfaces](/docs/remote-interfaces)

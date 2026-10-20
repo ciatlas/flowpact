@@ -10,3 +10,9 @@ jobs:
   publish:
     needs: test
     uses: ./.github/workflows/publish.yml
+  docs:
+    needs: publish
+    uses: acme/pages/.github/workflows/deploy.yml@v2
+    permissions:
+      contents: read
+      pages: write

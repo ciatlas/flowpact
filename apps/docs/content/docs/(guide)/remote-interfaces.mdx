@@ -7,8 +7,8 @@ A call into another repository (`uses: octo/ship/.github/workflows/deploy.yml@v1
 trust: nothing checks that the inputs you pass exist, have the right type, or include the required ones
 ([`FP603`](/docs/rules/fp603) says so for remote workflows).
 
-A **remote interfaces lockfile** records each one's inputs, secrets and outputs, at the commit its reference resolved
-to.
+A **remote interfaces lockfile** records each one's inputs, secrets and outputs, and the permissions a reusable
+workflow's jobs request, at the commit its reference resolved to.
 
 ```mermaid
 flowchart TD
@@ -17,7 +17,7 @@ flowchart TD
   L[("remotes.lock.yaml")]
   W["Your workflows: uses: octo/setup@v2"]
   LINT["flowpact lint, check, the editor: no network"]
-  F["FP101 · FP102 · FP103 · FP201 · FP202 · FP205 · FP301"]
+  F["FP101 · FP102 · FP103 · FP201 · FP202 · FP205 · FP301 · FP613"]
   B["A new version, or a tag that moved"]
   U -->|"GitHub API"| L
   L --> LINT
@@ -42,7 +42,9 @@ With it, flowpact checks remote calls as it checks local ones:
 - [`FP205`](/docs/rules/fp205): a reusable workflow reads a secret it does not declare, and your call does not use
   `secrets: inherit`, so the secret is empty;
 - [`FP301`](/docs/rules/fp301): an output it does not declare is read. Only a composite action's outputs are checked: a
-  JavaScript or Docker action may set others.
+  JavaScript or Docker action may set others;
+- [`FP613`](/docs/rules/fp613): a job of a reusable workflow requests a `GITHUB_TOKEN` permission your call does not
+  grant, so GitHub refuses the run when it starts.
 
 <Accordions>
 <Accordion title="Which undeclared secrets FP205 knows" id="undeclared-secrets">
@@ -51,6 +53,14 @@ With it, flowpact checks remote calls as it checks local ones:
 `if:` (on its step, its job, or a job its job needs) or in a condition is left out, since a caller's inputs, event or
 environment may switch it off. Not followed: a secret the remote workflow hands on with its own `secrets: inherit`, and
 `inherit` from a workflow of yours that was itself given secrets by name.
+
+</Accordion>
+<Accordion title="Which permissions FP613 knows" id="permissions">
+
+`flowpact remotes update` records each job's own `permissions:` as `jobPermissions`, and the workflow's as
+`permissions` when a job has none of its own. A job of the remote workflow that calls another workflow without
+permissions hands on what it is granted to jobs flowpact does not read, so those are not checked. An entry written by
+flowpact 0.25 or earlier records neither until the next `remotes update`.
 
 </Accordion>
 </Accordions>
@@ -240,13 +250,15 @@ That one is real: setup-node 6.1.0 dropped `always-auth`, and `@v6` moved to it.
 | not fully checked | No check fails, but part of the change is out of the checks' reach for this call; the line under it says which. |
 | fits | Every check passes as before. Only the calls that do not simply fit are listed. |
 
-The verdict comes from the rules above (FP101 to FP103, FP201, FP202, FP205 and FP301), run with the entry before and
-after. Problems a call already had do not count. A call is **not fully checked** when it:
+The verdict comes from the rules above (FP101 to FP103, FP201, FP202, FP205, FP301 and FP613), run with the entry before
+and after. Problems a call already had do not count. A call is **not fully checked** when it:
 
 - passes an expression to an input the new version declares as `boolean` or `number`: only literals are checked
   ([`FP103`](/docs/rules/fp103));
 - uses `secrets: inherit`, and the new version needs a secret the old one did not: whether you have it is not known;
-- reads an output a JavaScript or Docker action no longer declares, which it can still set.
+- reads an output a JavaScript or Docker action no longer declares, which it can still set;
+- sets no `permissions:` (nor does its workflow, or every workflow that calls it), and the new version requests a
+  permission at a higher level: whether the repository's default token permissions allow it is not known.
 
 A call that leaves out an input whose default changed gets a note: it runs with the new default. A runtime change
 (`runs.using`, such as `node20` to `node24`) is listed under the reference. The grade is about the interface, not the
@@ -429,6 +441,9 @@ remotes:
       token: { required: true }
     outputs: [url]
     undeclaredSecrets: [NPM_TOKEN]   # read without being declared: only secrets: inherit gives it
+    permissions: { contents: read }  # the workflow's, for its jobs without their own
+    jobPermissions:
+      release: { contents: write }   # a job's own
   octo/setup@v2:
     sha: 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432
     kind: action

@@ -606,6 +606,44 @@ describe('secrets a remote workflow reads without declaring them', () => {
   });
 });
 
+describe('permissions', () => {
+  it("records each job's own, and the workflow's when a job has none", async () => {
+    const api = fakeApi(
+      { 'octo/ship@v1': SHA('a'), 'octo/ship@v2': SHA('b') },
+      {
+        [`octo/ship/.github/workflows/ship.yml@${SHA('a')}`]: yaml`
+          on: workflow_call
+          permissions: { contents: read }
+          jobs:
+            build: { runs-on: x, steps: [{ run: x }] }
+            publish:
+              runs-on: x
+              permissions: { contents: write, packages: write }
+              steps: [{ run: x }]
+        `,
+        // Every job has its own: the workflow's are not requested.
+        [`octo/ship/.github/workflows/ship.yml@${SHA('b')}`]: yaml`
+          on: workflow_call
+          permissions: write-all
+          jobs:
+            build: { runs-on: x, permissions: read-all, steps: [{ run: x }] }
+        `,
+      },
+    );
+    const index = lint({
+      [`${WF}/ci.yml`]:
+        'on: push\njobs:\n  a:\n    uses: octo/ship/.github/workflows/ship.yml@v1\n  b:\n    uses: octo/ship/.github/workflows/ship.yml@v2\n',
+    }).index;
+    const { remotes } = (await updateRemotesLock(index, undefined, { fetch: api.fetch })).lock;
+    expect(remotes['octo/ship/.github/workflows/ship.yml@v1']).toMatchObject({
+      permissions: { contents: 'read' },
+      jobPermissions: { publish: { contents: 'write', packages: 'write' } },
+    });
+    expect(remotes['octo/ship/.github/workflows/ship.yml@v2']?.permissions).toBeUndefined();
+    expect(remotes['octo/ship/.github/workflows/ship.yml@v2']?.jobPermissions).toEqual({ build: 'read-all' });
+  });
+});
+
 describe('the files read, for the sources cache', () => {
   const api = () =>
     fakeApi(

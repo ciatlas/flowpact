@@ -174,7 +174,7 @@ describe('FP613 ungranted-permissions', () => {
       ]);
     });
 
-    it('stops at a remote workflow, whose requests the lockfile does not record', () => {
+    it('stops at a remote workflow without a lockfile entry', () => {
       expect(
         messages({
           [`${WF}/ci.yml`]: top,
@@ -184,6 +184,66 @@ describe('FP613 ungranted-permissions', () => {
               remote:
                 uses: acme/shared/.github/workflows/release.yml@v1
           `,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  describe('remote reusable workflows', () => {
+    const REF = 'acme/shared/.github/workflows/release.yml@v1';
+    const lock = (entry: Record<string, unknown>) => ({
+      '.github/flowpact/remotes.lock.yaml': JSON.stringify({
+        version: 1,
+        remotes: { [REF]: { sha: 'a'.repeat(40), kind: 'workflow', ...entry } },
+      }),
+    });
+    const remoteCaller = yaml`
+      on: push
+      permissions: { contents: read }
+      jobs:
+        call:
+          uses: ${REF}
+    `;
+    const recorded = { permissions: { issues: 'write' }, jobPermissions: { publish: { contents: 'write' } } };
+
+    it('checks a call against what the lockfile entry records the workflow and its jobs request', () => {
+      const found = fp613({ [`${WF}/ci.yml`]: remoteCaller, ...lock(recorded) });
+      expect(found.map((f) => f.message)).toEqual([
+        `${REF} requests issues: write, but jobs.call grants issues: none`,
+        `${REF} › jobs.publish requests contents: write, but jobs.call grants contents: read`,
+      ]);
+      expect(found[1]?.related.map((r) => r.message)).toEqual([`jobs.call calls ${REF}`]);
+      expect(found[1]?.fix).toBe(
+        `Grant contents: write in the calling job's \`permissions:\` (a job's \`permissions:\` replaces the workflow's for that job only), or call a version of ${REF} that requests less.`,
+      );
+    });
+
+    it('follows a local workflow into a remote one it calls without permissions', () => {
+      const found = fp613({
+        [`${WF}/ci.yml`]: caller('{ contents: read }').replace('r.yml', 'mid.yml'),
+        [`${WF}/mid.yml`]: `on: workflow_call\njobs:\n  nested:\n    uses: ${REF}\n`,
+        ...lock(recorded),
+      });
+      expect(found.map((f) => f.message)).toEqual([
+        `.github/workflows/mid.yml › jobs.nested › ${REF} requests issues: write, but jobs.call grants issues: none`,
+        `.github/workflows/mid.yml › jobs.nested › ${REF} › jobs.publish requests contents: write, but jobs.call grants contents: read`,
+      ]);
+      expect(found[0]?.related.map((r) => r.message)).toEqual([
+        'jobs.call calls .github/workflows/mid.yml',
+        `jobs.nested calls ${REF}`,
+      ]);
+    });
+
+    it('says nothing for an entry that records no permissions, or one that records another commit', () => {
+      expect(messages({ [`${WF}/ci.yml`]: remoteCaller, ...lock({}) })).toEqual([]);
+      const pinned = `acme/shared/.github/workflows/release.yml@${'b'.repeat(40)}`;
+      expect(
+        messages({
+          [`${WF}/ci.yml`]: remoteCaller.replace(REF, pinned),
+          '.github/flowpact/remotes.lock.yaml': JSON.stringify({
+            version: 1,
+            remotes: { [pinned]: { sha: 'a'.repeat(40), kind: 'workflow', ...recorded } },
+          }),
         }),
       ).toEqual([]);
     });

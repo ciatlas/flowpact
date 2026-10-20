@@ -8,6 +8,7 @@ import {
 } from '@ciatlas/core';
 import { byJobChain } from '../job-chains';
 import { LEVEL_NAMES, levelsOf, type ShortScope, shortScopes } from '../permissions';
+import { interfaceCalls, isExternal, lockedRemote } from '../remotes';
 import { addPairs, keyLoc, replaceValue, type Suggestion, suggestion, type YamlPath } from '../suggestions';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 
@@ -32,8 +33,10 @@ const ungrantedPermissions = defineRule({
       "job requests is its `permissions:`, else its workflow's (reported once for every job that uses them); a job " +
       'with neither gets what the call grants. A called job that calls another workflow requests its permissions for ' +
       'all of it, and the jobs of that workflow are checked against them at that call. Jobs are checked whatever ' +
-      'their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is not checked: the remote ' +
-      'interfaces lockfile does not record what its jobs request. Whether a job requests more than it needs is not ' +
+      'their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is checked against what ' +
+      "the remote interfaces lockfile records: its jobs' `permissions:`, and its own for the jobs that have none (an " +
+      'entry written before flowpact recorded them has neither until `flowpact remotes update`). A job of it that ' +
+      'calls another workflow without permissions is not followed. Whether a job requests more than it needs is not ' +
       'checked.',
     examples: {
       bad: `permissions:
@@ -49,10 +52,10 @@ jobs:
     },
   },
   check(ctx) {
-    for (const call of ctx.index.callSites) {
+    for (const call of interfaceCalls(ctx.index)) {
       const grant = grantOf(call);
       if (!grant) continue;
-      for (const r of requestsOf(ctx.index, call.callee)) {
+      for (const r of requestsOf(ctx, call)) {
         const short = shortScopes(grant.permissions, r.scopes);
         if (short.length) reportShort(ctx, call, grant, r, short);
       }
@@ -73,18 +76,33 @@ function grantOf(call: CallSite): Grant | undefined {
   return undefined;
 }
 
-/** What a job asks for: its own `permissions:`, else its workflow's (`own` false); nothing with neither. */
-interface Asked {
-  own: boolean;
-  scopes: Record<string, number>;
+/**
+ * What a job asks for: its own `permissions:` (`job`), else its workflow's (`workflow`). A job with neither that calls
+ * a remote workflow asks for what its lockfile entry records (`called`): the `permissions:` of that workflow's job
+ * `job`, or of the workflow itself.
+ */
+type Ask = { scopes: Record<string, number> } & ({ by: 'job' | 'workflow' } | { by: 'called'; job?: string });
+
+function asksOf(ctx: RuleContext, job: JobDecl, wf: WorkflowDecl): Ask[] {
+  const own = job.permissions ?? wf.permissions;
+  if (own) return [{ by: job.permissions ? 'job' : 'workflow', scopes: levelsOf(own) }];
+  return calledAsks(ctx, job);
 }
 
-const askedBy = (job: JobDecl, wf: WorkflowDecl): Asked | null =>
-  job.permissions
-    ? { own: true, scopes: levelsOf(job.permissions) }
-    : wf.permissions
-      ? { own: false, scopes: levelsOf(wf.permissions) }
-      : null;
+/** What the lockfile entry of the remote workflow a job calls records it requests; nothing when the checks do not use one. */
+function calledAsks(ctx: RuleContext, job: JobDecl): Ask[] {
+  const uses = job.uses;
+  if (uses?.kind !== 'remote-workflow' || !ctx.index.interfaceOf(job)) return [];
+  const entry = lockedRemote(ctx.remotes?.lock, uses.raw).entry;
+  return [
+    ...(entry?.permissions ? [{ by: 'called' as const, scopes: levelsOf(entry.permissions) }] : []),
+    ...Object.entries(entry?.jobPermissions ?? {}).map(([id, p]) => ({
+      by: 'called' as const,
+      job: id,
+      scopes: levelsOf(p),
+    })),
+  ];
+}
 
 /**
  * What a called workflow requests: the `permissions:` of the job `job`, or of the workflow itself without one, reached
@@ -97,19 +115,30 @@ interface Request {
 }
 
 /**
- * Every request of a called workflow (see `byJobChain`): each job's own `permissions:`, and its workflow's once for
- * the jobs that have none (GitHub says "The workflow is requesting …"). A job that calls another workflow requests
+ * Every request of the workflow a call calls (see `byJobChain`): each job's own `permissions:`, and its workflow's once
+ * for the jobs that have none (GitHub says "The workflow is requesting …"). A job that calls another workflow requests
  * them for all of it, and GitHub checks the jobs of that workflow against them at that call; with neither, it hands on
- * what it is granted, so they are followed. A job with neither requests nothing: it gets what it is granted.
+ * what it is granted, so they are followed, into a remote workflow as far as its lockfile entry says. A job with
+ * neither requests nothing: it gets what it is granted.
  */
-function requestsOf(index: ProjectIndex, wf: WorkflowDecl): Request[] {
+function requestsOf(ctx: RuleContext, call: CallSite): Request[] {
   const out = new Map<string, Request>();
-  for (const [chain, asked] of byJobChain(index, wf, askedBy, (job, w) => askedBy(job, w) ?? undefined)) {
-    if (!asked) continue;
-    const via = chain.split(' > ');
-    const job = via.pop()!;
-    const r: Request = asked.own ? { via, job, scopes: asked.scopes } : { via, scopes: asked.scopes };
+  const add = (ids: string[], a: Ask) => {
+    const r: Request =
+      a.by === 'called'
+        ? { via: ids, ...(a.job === undefined ? {} : { job: a.job }), scopes: a.scopes }
+        : { via: ids.slice(0, -1), ...(a.by === 'job' ? { job: ids.at(-1)! } : {}), scopes: a.scopes };
     out.set(JSON.stringify([r.via, r.job]), r);
+  };
+  if (isExternal(call.callee)) for (const a of calledAsks(ctx, call.job)) add([], a);
+  else {
+    const asks = (job: JobDecl, wf: WorkflowDecl) => asksOf(ctx, job, wf);
+    const stopAt = (job: JobDecl, wf: WorkflowDecl) => {
+      const found = asks(job, wf);
+      return found.length ? found : undefined;
+    };
+    for (const [chain, found] of byJobChain(ctx.index, call.callee, asks, stopAt))
+      for (const a of found) add(chain.split(' > '), a);
   }
   return [...out.values()];
 }
@@ -123,13 +152,19 @@ function reportShort(ctx: RuleContext, call: CallSite, grant: Grant, r: Request,
   const file = call.caller.source.path;
   const callLoc = call.job.uses?.loc ?? call.job.loc;
   const wanted = levels(short, 'requested');
-  const { where, related } = describeRequest(ctx.index, call.callee, r, wanted);
+  const { where, related, remote } = describeRequest(ctx.index, call.callee, r, wanted);
   ctx.report({
     message: `${where} requests ${wanted}, but jobs.${call.job.id} grants ${levels(short, 'granted')}`,
     loc: keyLoc(ctx.index, file, grant.path) ?? callLoc,
     symbol: `${call.caller.path}#jobs.${call.job.id}.permissions`,
     related: [{ loc: callLoc, message: `jobs.${call.job.id} calls ${call.callee.path}` }, ...related],
     suggestions: [raiseGrant(ctx.index, call, grant, short)],
+    // The rule's fix also says to lower the request, which a workflow of another repository does not let you do.
+    ...(remote
+      ? {
+          fix: `Grant ${wanted} in the calling job's \`permissions:\` (a job's \`permissions:\` replaces the workflow's for that job only), or call a version of ${remote} that requests less.`,
+        }
+      : {}),
   });
 }
 
@@ -142,22 +177,29 @@ function describeRequest(
   callee: WorkflowDecl,
   r: Request,
   wanted: string,
-): { where: string; related: RelatedLocation[] } {
+): { where: string; related: RelatedLocation[]; remote?: string } {
   const parts = [callee.path];
   const related: RelatedLocation[] = [];
   let wf = callee;
   for (const id of r.via) {
     const job = wf.jobs[id]!;
-    const next = index.calleeOf(job)!;
+    const next = index.interfaceOf(job)!;
     related.push({ loc: job.uses?.loc ?? job.loc, message: `jobs.${id} calls ${next.path}` });
     parts.push(`jobs.${id}`, next.path);
     wf = next;
   }
-  const job = r.job === undefined ? undefined : wf.jobs[r.job]!;
-  if (job) parts.push(`jobs.${job.id}`);
-  const loc = keyLoc(index, wf.source.path, job ? ['jobs', job.id, 'permissions'] : ['permissions']);
-  if (loc) related.push({ loc, message: `${job ? `jobs.${job.id}` : wf.path} requests ${wanted}` });
-  return { where: parts.join(' › '), related };
+  if (r.job !== undefined) parts.push(`jobs.${escapeControl(r.job)}`);
+  const where = parts.join(' › ');
+  // A remote workflow has no file here: its lockfile entry says what it requests.
+  if (isExternal(wf)) return { where, related, remote: wf.path };
+  const loc = keyLoc(
+    index,
+    wf.source.path,
+    r.job === undefined ? ['permissions'] : ['jobs', r.job, 'permissions'],
+  );
+  if (loc)
+    related.push({ loc, message: `${r.job === undefined ? wf.path : `jobs.${r.job}`} requests ${wanted}` });
+  return { where, related };
 }
 
 const SCOPE_NAME = /^[a-z][a-z-]*$/;
