@@ -4,6 +4,18 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.28.0](https://github.com/ciatlas/flowpact/compare/v0.27.0...v0.28.0) (2026-10-20)
+
+
+### Features
+
+* **cli:** name the GitHub API and token before fetching, show progress, and say what to check on failure ([#245](https://github.com/ciatlas/flowpact/issues/245)) ([b4f591f](https://github.com/ciatlas/flowpact/commit/b4f591fd0a722d00d31357c1e99d74b6ab2e14f2))
+
+
+### Bug Fixes
+
+* **lint:** fail fast once the GitHub API host cannot be reached, instead of waiting for each reference ([#245](https://github.com/ciatlas/flowpact/issues/245)) ([b4f591f](https://github.com/ciatlas/flowpact/commit/b4f591fd0a722d00d31357c1e99d74b6ab2e14f2))
+
 ## [0.27.0](https://github.com/ciatlas/flowpact/compare/v0.26.0...v0.27.0) (2026-10-20)
 
 
