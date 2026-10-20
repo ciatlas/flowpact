@@ -27,7 +27,7 @@ import {
 import { parse as parseYaml } from 'yaml';
 import { buildContract, diffContracts, pathHolds } from './contracts';
 import { byJobChain } from './job-chains';
-import { LEVEL_NAMES, scopesOf } from './permissions';
+import { LEVEL_NAMES, type Scopes, scopesOf } from './permissions';
 
 export const IMPACT_LEVELS = ['none', 'patch', 'minor', 'major'] as const;
 export type ImpactLevel = (typeof IMPACT_LEVELS)[number];
@@ -270,9 +270,43 @@ function interfaceChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h
   return out;
 }
 
-/** What each job requests (see `byJobChain`). */
+/** What a job requests: its `permissions:`, else its workflow's; `inherit` with neither. */
+const requestOf = (job: JobDecl, wf: WorkflowDecl) => scopesOf(job.permissions ?? wf.permissions);
+
+/**
+ * What each job requests (see `byJobChain`). A job that calls a workflow and requests permissions requests them for all
+ * of it: GitHub checks that workflow's jobs against them, not against the callers (FP613), so it is not followed. One
+ * that requests none hands on what it is granted, and the jobs of the local workflow it calls are followed.
+ */
 const requestedByJob = (index: ProjectIndex, wf: WorkflowDecl) =>
-  byJobChain(index, wf, (job, w) => scopesOf(job.permissions ?? w.permissions));
+  byJobChain(index, wf, requestOf, (job, w) => {
+    const s = requestOf(job, w);
+    return s === 'inherit' ? undefined : s;
+  });
+
+/** The highest level each scope is requested at. */
+function highest(all: Record<string, number>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const s of all) for (const [k, v] of Object.entries(s)) out[k] = Math.max(out[k] ?? 0, v);
+  return out;
+}
+
+/**
+ * What the base requested where a head job is: the same chain of jobs; else a calling job above it, which requested
+ * for all of what it calls; else, for a calling job that now requests permissions and was followed in the base, the
+ * most the jobs below it requested (`inherit` when none did). Undefined when the base had none of these.
+ */
+function baseRequest(before: Map<string, Scopes>, chain: string): Scopes | undefined {
+  const ids = chain.split(' > ');
+  for (let n = ids.length; n > 0; n--) {
+    const s = before.get(ids.slice(0, n).join(' > '));
+    if (s !== undefined) return s;
+  }
+  const below = [...before].filter(([c]) => c.startsWith(`${chain} > `)).map(([, s]) => s);
+  if (!below.length) return undefined;
+  const explicit = below.filter((s): s is Record<string, number> => s !== 'inherit');
+  return explicit.length ? highest(explicit) : 'inherit';
+}
 
 function permissionChanges(
   base: ProjectIndex,
@@ -286,7 +320,7 @@ function permissionChanges(
   const out: ImpactChange[] = [];
   for (const [chain, hs] of after) {
     if (hs === 'inherit') continue;
-    const bs = before.get(chain) ?? workflowLevel;
+    const bs = baseRequest(before, chain) ?? workflowLevel;
     const widened = Object.entries(hs).filter(([k, v]) =>
       bs === 'inherit' ? v >= 2 || (k === 'id-token' && v > 0) : v > (bs[k] ?? 0),
     );

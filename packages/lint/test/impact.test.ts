@@ -616,6 +616,56 @@ describe('review fixes', () => {
     ]);
   });
 
+  describe('a job that calls a workflow with permissions of its own', () => {
+    const PUBLISH = ['.github/workflows/reuse.yml'];
+    const reuse = (p = '', target = './.github/workflows/inner.yml') =>
+      wf(`  call:\n    uses: ${target}\n${p ? `    permissions: ${p}\n` : ''}`);
+    const inner = (p: string) => `on: workflow_call\njobs:\n${job('j', `    permissions: ${p}\n`)}`;
+    const grade = (b: [string, string], h: [string, string]) =>
+      summary(
+        changes(
+          { [`${WF}/reuse.yml`]: reuse(b[0]), [`${WF}/inner.yml`]: inner(b[1]) },
+          { [`${WF}/reuse.yml`]: reuse(h[0]), [`${WF}/inner.yml`]: inner(h[1]) },
+          PUBLISH,
+        ),
+      );
+
+    it('requests them for all of it: a job inside that asks for more within them changes nothing for callers', () => {
+      const write = '{ contents: write }';
+      expect(grade([write, '{ contents: read }'], [write, write])).toEqual([]);
+      expect(grade([write, write], ['{ contents: write, issues: write }', write])).toEqual([
+        'major jobs.call now requests issues: write; callers that grant less fail when the run starts',
+      ]);
+    });
+
+    it('is graded when what it calls is in another repository', () => {
+      const remote = 'acme/shared/.github/workflows/release.yml@v1';
+      expect(
+        summary(
+          changes(
+            { [`${WF}/reuse.yml`]: reuse('{ contents: read }', remote) },
+            { [`${WF}/reuse.yml`]: reuse('{ contents: write }', remote) },
+            PUBLISH,
+          ),
+        ),
+      ).toEqual([
+        'major jobs.call now requests contents: write; callers that grant less fail when the run starts',
+      ]);
+    });
+
+    it('is compared with what the jobs it called requested, when it sets them now or no longer does', () => {
+      const write = '{ contents: write }';
+      expect(grade(['', write], [write, write])).toEqual([]);
+      expect(grade(['', write], ['{ contents: write, issues: write }', write])).toEqual([
+        'major jobs.call now requests issues: write; callers that grant less fail when the run starts',
+      ]);
+      expect(grade(['{ contents: write, packages: write }', write], ['', write])).toEqual([]);
+      expect(grade(['{ contents: read }', '{ contents: read }'], ['', write])).toEqual([
+        'major jobs.call › j now requests contents: write; callers that grant less fail when the run starts',
+      ]);
+    });
+  });
+
   it('follows $/ calls, and does not count $/ or workspace paths as third-party actions', () => {
     const reuse = `${wf('  call:\n    uses: $/.github/workflows/inner.yml\n')}`;
     const inner = (p: string) => `on: workflow_call\npermissions: ${p}\njobs:\n${job('j')}`;

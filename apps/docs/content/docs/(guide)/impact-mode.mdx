@@ -63,7 +63,7 @@ it, since its check names appear under the caller's.
 | Input default changed | minor |
 | Reusable workflow or action moved or deleted, or `workflow_call` removed | major |
 | A published unit no longer parses | major |
-| A job, its own or a called workflow's, needs a new or higher `permissions:` scope: callers that grant less fail when the run starts | major |
+| A job, its own or a called workflow's, needs a new or higher `permissions:` scope: callers that grant less fail when the run starts. A job that calls a workflow and sets `permissions:` (or whose workflow does) requests them for all of it, so only its own count | major |
 | Action `runs.using` changed (`node20` → `node24`) | major |
 | A job, its own or a called workflow's, needs a runner label or group it did not need (`[self-hosted, gpu]`): callers without one never start it | major |
 | A job's runners are now chosen at run time (`runs-on: ${{ inputs.runner }}`) | major, uncertain ([`FP814`](/docs/rules/fp814)) |

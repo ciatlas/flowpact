@@ -22329,7 +22329,27 @@ function interfaceChanges(base, head, b, h) {
   }
   return out;
 }
-var requestedByJob = (index, wf) => byJobChain(index, wf, (job, w) => scopesOf(job.permissions ?? w.permissions));
+var requestOf = (job, wf) => scopesOf(job.permissions ?? wf.permissions);
+var requestedByJob = (index, wf) => byJobChain(index, wf, requestOf, (job, w) => {
+  const s = requestOf(job, w);
+  return s === "inherit" ? void 0 : s;
+});
+function highest(all) {
+  const out = {};
+  for (const s of all) for (const [k, v] of Object.entries(s)) out[k] = Math.max(out[k] ?? 0, v);
+  return out;
+}
+function baseRequest(before, chain) {
+  const ids = chain.split(" > ");
+  for (let n = ids.length; n > 0; n--) {
+    const s = before.get(ids.slice(0, n).join(" > "));
+    if (s !== void 0) return s;
+  }
+  const below = [...before].filter(([c]) => c.startsWith(`${chain} > `)).map(([, s]) => s);
+  if (!below.length) return void 0;
+  const explicit = below.filter((s) => s !== "inherit");
+  return explicit.length ? highest(explicit) : "inherit";
+}
 function permissionChanges(base, head, b, h) {
   const before = requestedByJob(base, b);
   const after = requestedByJob(head, h);
@@ -22337,7 +22357,7 @@ function permissionChanges(base, head, b, h) {
   const out = [];
   for (const [chain, hs] of after) {
     if (hs === "inherit") continue;
-    const bs = before.get(chain) ?? workflowLevel;
+    const bs = baseRequest(before, chain) ?? workflowLevel;
     const widened = Object.entries(hs).filter(
       ([k, v]) => bs === "inherit" ? v >= 2 || k === "id-token" && v > 0 : v > (bs[k] ?? 0)
     );
