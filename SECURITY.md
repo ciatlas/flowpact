@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-flowpact is before 1.0: only the latest release (`flowpact` on npm, `ciatlas/flowpact@v0.25`, the newest minor line, for the GitHub Action)
+flowpact is before 1.0: only the latest release (`flowpact` on npm, `ciatlas/flowpact@v0.26`, the newest minor line, for the GitHub Action)
 receives fixes.
 
 ## Reporting a vulnerability
