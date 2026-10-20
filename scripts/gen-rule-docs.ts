@@ -166,7 +166,7 @@ function ignoreSnippet(code: string, sample: RuleSample | undefined): { file: st
 
 /** "On its line": the ignore comment, unless the rule's findings are about whole files or files other than YAML ones. */
 function commentLines(rule: RuleDefinition, sample: RuleSample | undefined): string[] {
-  if (WHOLE_FILE_RULES.has(rule.code)) return [];
+  if (WHOLE_FILE_RULES.has(rule.code) || IMPACT_CODES.includes(rule.code)) return [];
   const { file, lines } = ignoreSnippet(rule.code, sample);
   return [
     '**On its line**, with an [ignore comment](/docs/configuration#ignore-comments) alone on the line above it (the',
@@ -216,6 +216,26 @@ function acceptLines(rule: RuleDefinition, sample: RuleSample | undefined): stri
     '```sh',
     `flowpact lint --format json | jq -r '.findings[] | select(.code == "${rule.code}") | .symbol'`,
     '```',
+    '',
+    ...baselineLines(rule, 'override'),
+  ];
+}
+
+/**
+ * Impact mode grades the pull request itself, so its rules take their overrides and severities from the baseline's
+ * config, and no ignore comment accepts them.
+ */
+function baselineLines(rule: RuleDefinition, what: 'override' | 'severity'): string[] {
+  if (!IMPACT_CODES.includes(rule.code)) return [];
+  if (what === 'severity')
+    return [
+      "A severity counts only once it is on the base branch, as impact mode reads it from the baseline's config.",
+      '',
+    ];
+  return [
+    'An override counts only once it is on the base branch: impact mode reads the overrides and severities of its rules',
+    "from the baseline's config, so a pull request cannot accept or switch off its own check. No ignore comment accepts",
+    'its findings.',
     '',
   ];
 }
@@ -317,6 +337,7 @@ export function rulePage(
     `  # or: ${rule.name}: error`,
     '```',
     '',
+    ...baselineLines(rule, 'severity'),
     'Explain it in the terminal:',
     '',
     '```sh',

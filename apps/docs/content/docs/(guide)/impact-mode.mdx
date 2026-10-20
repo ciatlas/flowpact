@@ -244,7 +244,10 @@ impact:
 ```
 
 The impact settings are read from the **baseline**, so a pull request cannot relax its own check: changed settings apply
-once it is merged. `ignore` counts only where both sides match it ([above](#only-some-units)). A
+once it is merged. So are the severities and [overrides](/docs/configuration#overrides) of impact mode's rules
+(`FP810`–`FP814`): the pull request's own `rules:` cannot switch them off, its overrides cannot accept their findings,
+and no [ignore comment](/docs/configuration#ignore-comments) can. `ignore` counts only where both sides match it
+([above](#only-some-units)). A
 [base config](/docs/configuration#base-config) applies under the baseline's config too, and alone when the baseline has
 no valid config.
 

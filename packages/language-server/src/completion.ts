@@ -1,11 +1,12 @@
 import { type InputDecl, lookup, type ProjectIndex, type SecretDecl } from '@ciatlas/core';
-import { lockedRemote, type RemotesLock } from '@flowpact/lint';
+import { isPlainName, lockedRemote, type RemotesLock } from '@flowpact/lint';
 import {
   type CompletionItem,
   CompletionItemKind,
   InsertTextFormat,
   MarkupKind,
 } from 'vscode-languageserver/node';
+import { code, text } from './hover';
 import type { RemoteSources } from './sources';
 
 /** Where a key is being typed: in the `with:` or `secrets:` block of a call or step, and what that block has. */
@@ -182,8 +183,6 @@ export function offersFor(
     : remoteOffers(lock, sources, ctx.uses, ctx.block);
 }
 
-const code = (s: string) => `\`${s}\``;
-
 /** The completion items for the inputs or secrets the block does not pass yet: required ones first. */
 export function completionItems(offers: Offer[], ctx: KeyContext): CompletionItem[] {
   const present = new Set(ctx.present.map((k) => k.toLowerCase()));
@@ -192,27 +191,30 @@ export function completionItems(offers: Offer[], ctx: KeyContext): CompletionIte
     start: { line: ctx.range.line, character: ctx.range.start },
     end: { line: ctx.range.line, character: ctx.range.end },
   };
-  return offers
-    .filter((o) => !present.has(o.name.toLowerCase()))
-    .map((o) => {
-      const facts = [
-        o.required ? 'required' : 'optional',
-        o.type,
-        o.default !== undefined ? `default ${code(JSON.stringify(o.default))}` : undefined,
-        o.options?.length ? `one of ${o.options.map(code).join(', ')}` : undefined,
-      ].filter(Boolean);
-      return {
-        label: o.name,
-        kind: CompletionItemKind.Property,
-        detail: `${o.required ? 'required' : 'optional'} ${o.type ? `${o.type} ` : ''}${what} of ${ctx.uses}`,
-        documentation: {
-          kind: MarkupKind.Markdown,
-          value: [o.description, facts.join(' · ')].filter(Boolean).join('\n\n'),
-        },
-        sortText: `${o.required ? 0 : 1}${o.name}`,
-        filterText: o.name,
-        textEdit: { range, newText: `${o.name}: ` },
-        insertTextFormat: InsertTextFormat.PlainText,
-      };
-    });
+  return (
+    offers
+      // A name that is not plain could write other keys into the file (see `isPlainName`).
+      .filter((o) => isPlainName(o.name) && !present.has(o.name.toLowerCase()))
+      .map((o) => {
+        const facts = [
+          o.required ? 'required' : 'optional',
+          o.type,
+          o.default !== undefined ? `default ${code(JSON.stringify(o.default))}` : undefined,
+          o.options?.length ? `one of ${o.options.map(code).join(', ')}` : undefined,
+        ].filter(Boolean);
+        return {
+          label: o.name,
+          kind: CompletionItemKind.Property,
+          detail: `${o.required ? 'required' : 'optional'} ${o.type ? `${o.type} ` : ''}${what} of ${ctx.uses}`,
+          documentation: {
+            kind: MarkupKind.Markdown,
+            value: [o.description && text(o.description), facts.join(' · ')].filter(Boolean).join('\n\n'),
+          },
+          sortText: `${o.required ? 0 : 1}${o.name}`,
+          filterText: o.name,
+          textEdit: { range, newText: `${o.name}: ` },
+          insertTextFormat: InsertTextFormat.PlainText,
+        };
+      })
+  );
 }

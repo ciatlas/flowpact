@@ -158,7 +158,7 @@ listed under the override, and neither counts as unused.
 
 | Code | Severity | Reported when |
 | --- | --- | --- |
-| [`FP904`](/docs/rules/fp904) `ignore-comment-invalid` | warning | The comment names an unknown rule (a typo gets a suggestion) or one no comment can ignore (`FP9xx`), or it is not written as `ignore[<rules>]`. |
+| [`FP904`](/docs/rules/fp904) `ignore-comment-invalid` | warning | The comment names an unknown rule (a typo gets a suggestion) or one no comment can ignore (`FP9xx`, and impact mode's `FP810`–`FP814`, which grade the pull request itself), or it is not written as `ignore[<rules>]`. |
 | [`FP905`](/docs/rules/fp905) `ignore-comment-unused` | warning | A rule it names reports nothing on the line it accepts: the problem was fixed, or the comment is on another line than the finding. |
 
 A rule that is turned off, or left out by `--only`, does not make its comments unused. A comment that names a rule

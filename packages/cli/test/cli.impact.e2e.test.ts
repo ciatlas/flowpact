@@ -332,6 +332,54 @@ describe('flowpact impact baselines and policy', () => {
   });
 });
 
+describe("impact mode's own rules", () => {
+  const config = '.github/flowpact/flowpact.config.yml';
+  const override =
+    'overrides:\n  - rule: FP810\n    target: impact#major\n    reason: a cosmetic rename only\n';
+  const fix = (root: string) => flowpact(root, ['impact', '--base', 'main', '--title', 'fix: x']);
+
+  it("cannot be switched off or accepted by the pull request's own config", async () => {
+    for (const settings of [
+      'rules:\n  FP810: off\n',
+      'rules:\n  impact-under-declared: warning\n',
+      override,
+    ]) {
+      const root = repo({ [WF]: reusable('Test') }, { [WF]: reusable('Unit tests'), [config]: settings });
+      const r = await fix(root);
+      expect(r.exitCode, settings).toBe(1);
+      expect(r.stdout).toContain('FP810');
+      expect(r.stderr).toContain("changes the severities or overrides of impact mode's rules");
+    }
+  });
+
+  it('cannot be accepted by an ignore comment', async () => {
+    const commented = reusable('Unit tests').replace(
+      '    name:',
+      '    # flowpact: ignore[FP810] cosmetic\n    name:',
+    );
+    const root = repo({ [WF]: reusable('Test') }, { [WF]: commented });
+    const r = await fix(root);
+    expect(r.exitCode).toBe(1);
+    expect(r.stdout).toContain('FP810');
+    // `lint` says why the comment accepts nothing.
+    const lint = await flowpact(root, ['lint']);
+    expect(lint.stdout).toContain('FP904');
+    expect(lint.stdout).toContain('which grades the pull request itself');
+  });
+
+  it("takes the severities and overrides the baseline's config has", async () => {
+    for (const settings of ['rules:\n  FP810: warning\n', override]) {
+      const root = repo(
+        { [WF]: reusable('Test'), [config]: settings },
+        { [WF]: reusable('Unit tests'), [config]: settings },
+      );
+      const r = await fix(root);
+      expect(r.exitCode, settings).toBe(0);
+      expect(r.stderr).not.toContain("impact mode's rules");
+    }
+  });
+});
+
 describe('flowpact impact with paths', () => {
   const CONFIG = '.github/flowpact/flowpact.config.yml';
   const action = (name: string, input: boolean) =>

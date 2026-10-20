@@ -528,6 +528,54 @@ describe('impact rules', () => {
     expect(codes(run({ title: 'fix!: x' }, before))).toContain('FP812');
   });
 
+  it("take their severities and overrides from the baseline's config, never from the pull request's", () => {
+    const override = {
+      rule: 'impact-under-declared',
+      target: 'impact#major',
+      reason: 'a cosmetic rename only',
+    };
+    const judged = (
+      head: Record<string, unknown>,
+      baselineSettings: Record<string, unknown>,
+      files = after,
+    ) =>
+      analyze({
+        root: '/v',
+        fs: memoryFileSystem(files),
+        config: parseConfig(head),
+        validateSchema: false,
+        repository: 'a/b',
+        impact: {
+          base: index(before),
+          baseline: { kind: 'ref', ref: 'main', commit: 'abc' },
+          declared: { title: 'fix: x' },
+          policy: DEFAULT_IMPACT_POLICY,
+          baselineSettings: parseConfig(baselineSettings),
+        },
+      });
+    const errors = (r: ReturnType<typeof judged>) =>
+      r.findings.filter((f) => f.code === 'FP810').map((f) => f.severity);
+    expect(errors(judged({ rules: { FP810: 'off' } }, {}))).toEqual(['error']);
+    expect(errors(judged({ overrides: [override] }, {}))).toEqual(['error']);
+    expect(
+      errors(judged({}, { rules: { 'impact-under-declared': 'warning', 'unknwon-rule': 'off' } })),
+    ).toEqual(['warning']);
+    const accepted = judged({ overrides: [override] }, { overrides: [{ ...override, rule: 'FP810' }] });
+    expect(errors(accepted)).toEqual([]);
+    expect(accepted.suppressed.map((f) => f.code)).toEqual(['FP810']);
+    // Nor an ignore comment on the line of the change.
+    const commented = {
+      [`${WF}/r.yml`]: reusable(
+        job('test', '    # flowpact: ignore[FP810] cosmetic\n    name: Unit tests\n'),
+      ),
+    };
+    const r = judged({}, {}, commented);
+    expect(errors(r)).toEqual(['error']);
+    expect(r.findings.find((f) => f.code === 'FP904')?.message).toContain(
+      'which grades the pull request itself',
+    );
+  });
+
   it('has no impact findings without impact mode, and the result carries the verdict', () => {
     const r = analyze({ root: '/v', fs: memoryFileSystem(after), validateSchema: false, repository: 'a/b' });
     expect(codes(r).filter((c) => /^FP81/.test(c))).toEqual([]);
