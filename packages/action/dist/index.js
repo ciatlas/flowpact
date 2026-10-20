@@ -28172,20 +28172,15 @@ async function send(url2, accept, opts) {
 var ATTEMPTS = 3;
 var MAX_RETRY_AFTER_S = 60;
 async function withRetries(url2, accept, opts) {
+  const host = new URL(url2).host;
   for (let attempt = 1; ; attempt++) {
-    let answer;
-    try {
-      answer = await send(url2, accept, opts);
-    } catch (e) {
-      answer = e;
-    }
+    const down = opts.unreachableHosts?.get(host);
+    if (down) throw down;
+    const answer = await answerOf(url2, accept, opts);
     const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, opts) : void 0;
-    if (wait === void 0) {
-      if (answer instanceof Response) return answer;
-      throw answer;
-    }
+    if (wait === void 0) return lastAnswer(answer, host, opts);
     opts.onRetry?.({
-      host: new URL(url2).host,
+      host,
       attempt: attempt + 1,
       attempts: ATTEMPTS,
       why: answer instanceof Response ? statusOf(answer) : answer.brief,
@@ -28193,6 +28188,18 @@ async function withRetries(url2, accept, opts) {
     });
     await pause(wait);
   }
+}
+async function answerOf(url2, accept, opts) {
+  try {
+    return await send(url2, accept, opts);
+  } catch (e) {
+    return e;
+  }
+}
+function lastAnswer(answer, host, opts) {
+  if (answer instanceof Response) return answer;
+  if (answer.kind === "unreachable" || answer.kind === "timeout") opts.unreachableHosts?.set(host, answer);
+  throw answer;
 }
 var pause = (ms) => new Promise((done) => setTimeout(done, ms));
 var retryAfterOf = (res) => {
@@ -28337,6 +28344,12 @@ function hostOf(apiUrl) {
   const { hostname } = new URL(apiUrl);
   return hostname.startsWith("api.") ? hostname.slice(4) : hostname;
 }
+async function eachRef(refs, opts, work) {
+  const count = { done: 0, total: refs.length };
+  const run2 = opts.unreachableHosts ? opts : { ...opts, unreachableHosts: /* @__PURE__ */ new Map() };
+  opts.onStart?.(refs.length);
+  await eachLimited(refs, opts.concurrency ?? 8, (r) => work(r, run2, count));
+}
 async function eachLimited(items, limit, work) {
   let next = 0;
   const run2 = async () => {
@@ -28387,10 +28400,8 @@ async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
 }
 async function fetchRemoteEntries(refs, opts = {}) {
   const out = { remotes: {}, failed: [], unreadable: [] };
-  const count = { done: 0, total: refs.length };
-  opts.onStart?.(refs.length);
-  await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
-    const entry = await fetchCounted(r, opts, out, count);
+  await eachRef(refs, opts, async (r, run2, count) => {
+    const entry = await fetchCounted(r, run2, out, count);
     if (entry) out.remotes[r.raw] = entry;
   });
   out.failed.sort(byRef);

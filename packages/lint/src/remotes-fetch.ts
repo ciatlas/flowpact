@@ -64,6 +64,12 @@ export interface FetchRemotesOptions {
    */
   lockedCommit?: (r: RemoteRef) => string | undefined;
   /**
+   * The hosts that did not answer, shared by every request made with these options: once a request found a host
+   * unreachable (`unreachable` or `timeout`, after all its attempts), each later request to it fails the same way at
+   * once, instead of waiting as long. Each fetching function makes its own unless given one, which several can share.
+   */
+  unreachableHosts?: Map<string, Error>;
+  /**
    * The first wait before sending a request again (see `retryWait`): after a 404 for a commit or file, which GitHub's
    * API now and then answers for one it has, and, growing exponentially, after a failure that passes. Default: 300 ms.
    */
@@ -191,20 +197,16 @@ const MAX_RETRY_AFTER_S = 60;
 
 /** A request, sent again while it fails in a way that passes, at most `ATTEMPTS` times in all. */
 async function withRetries(url: string, accept: string, opts: FetchRemotesOptions): Promise<Response> {
+  const host = new URL(url).host;
   for (let attempt = 1; ; attempt++) {
-    let answer: Response | FetchError;
-    try {
-      answer = await send(url, accept, opts);
-    } catch (e) {
-      answer = e as FetchError;
-    }
+    // Another request found the host unreachable: this one would wait as long, to fail the same way.
+    const down = opts.unreachableHosts?.get(host);
+    if (down) throw down;
+    const answer = await answerOf(url, accept, opts);
     const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, opts) : undefined;
-    if (wait === undefined) {
-      if (answer instanceof Response) return answer;
-      throw answer;
-    }
+    if (wait === undefined) return lastAnswer(answer, host, opts);
     opts.onRetry?.({
-      host: new URL(url).host,
+      host,
       attempt: attempt + 1,
       attempts: ATTEMPTS,
       why: answer instanceof Response ? statusOf(answer) : answer.brief,
@@ -212,6 +214,29 @@ async function withRetries(url: string, accept: string, opts: FetchRemotesOption
     });
     await pause(wait);
   }
+}
+
+/** A request's response, or the network's error. */
+async function answerOf(
+  url: string,
+  accept: string,
+  opts: FetchRemotesOptions,
+): Promise<Response | FetchError> {
+  try {
+    return await send(url, accept, opts);
+  } catch (e) {
+    return e as FetchError;
+  }
+}
+
+/**
+ * The answer a request ends with: its response, or its error, thrown; a host that did not answer is kept as
+ * unreachable.
+ */
+function lastAnswer(answer: Response | FetchError, host: string, opts: FetchRemotesOptions): Response {
+  if (answer instanceof Response) return answer;
+  if (answer.kind === 'unreachable' || answer.kind === 'timeout') opts.unreachableHosts?.set(host, answer);
+  throw answer;
 }
 
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
@@ -445,6 +470,24 @@ export function hostOf(apiUrl: string): string {
   return hostname.startsWith('api.') ? hostname.slice(4) : hostname;
 }
 
+/** How many references of how many are done. */
+type Count = { done: number; total: number };
+
+/**
+ * Runs `work` on each reference, `concurrency` at a time, after `onStart`, with the options of one run: with a map of
+ * the hosts found unreachable, unless they have one. `count` counts the references done.
+ */
+async function eachRef(
+  refs: RemoteRef[],
+  opts: FetchRemotesOptions,
+  work: (r: RemoteRef, run: FetchRemotesOptions, count: Count) => Promise<void>,
+): Promise<void> {
+  const count = { done: 0, total: refs.length };
+  const run = opts.unreachableHosts ? opts : { ...opts, unreachableHosts: new Map() };
+  opts.onStart?.(refs.length);
+  await eachLimited(refs, opts.concurrency ?? 8, (r) => work(r, run, count));
+}
+
 /** Runs `work` on each item, `limit` at a time. */
 async function eachLimited<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
   let next = 0;
@@ -505,7 +548,7 @@ async function fetchCounted(
   r: RemoteRef,
   opts: FetchRemotesOptions,
   out: Problems,
-  count: { done: number; total: number },
+  count: Count,
 ): Promise<RemoteEntry | undefined> {
   const entry = await tryFetch(r, opts, out);
   count.done++;
@@ -548,11 +591,9 @@ export async function updateRemotesLock(
     failed: [],
     unreadable: [],
   };
-  const count = { done: 0, total: refs.length };
-  opts.onStart?.(refs.length);
-  await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
+  await eachRef(refs, opts, async (r, run, count) => {
     const old = before.get(remoteKey(r.raw));
-    const entry = await fetchCounted(r, opts, out, count);
+    const entry = await fetchCounted(r, run, out, count);
     if (entry) remotes[r.raw] = entry;
     else if (old) remotes[r.raw] = old;
     if (entry && !old) out.added.push(r.raw);
@@ -625,10 +666,8 @@ export async function fetchRemoteEntries(
   opts: FetchRemotesOptions = {},
 ): Promise<FetchedRemotes> {
   const out: FetchedRemotes = { remotes: {}, failed: [], unreadable: [] };
-  const count = { done: 0, total: refs.length };
-  opts.onStart?.(refs.length);
-  await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
-    const entry = await fetchCounted(r, opts, out, count);
+  await eachRef(refs, opts, async (r, run, count) => {
+    const entry = await fetchCounted(r, run, out, count);
     if (entry) out.remotes[r.raw] = entry;
   });
   out.failed.sort(byRef);
@@ -673,10 +712,8 @@ export async function downloadRemoteSources(
     failed: [],
     commits: [],
   };
-  const count = { done: 0, total: refs.length };
-  opts.onStart?.(refs.length);
-  await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
-    const done = await downloadOne(r, lock, dir, opts);
+  await eachRef(refs, opts, async (r, run, count) => {
+    const done = await downloadOne(r, lock, dir, run);
     if (done.list === 'downloaded' || done.list === 'cached') {
       touchCommit(dir, r, done.sha);
       out.commits.push(commitKey(r, done.sha));

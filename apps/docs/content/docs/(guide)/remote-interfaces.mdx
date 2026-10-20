@@ -124,9 +124,10 @@ token that includes them.
 | `no answer from … within 30 s` | The network or the API is slow: try again. |
 
 flowpact retries after no answer, a server error (5xx) or the secondary rate limit, three times at most and backing off
-(as long as the rate limit asks, up to a minute), and says why while it waits. It asks once more for a commit or file
-the API says is not there, which it now and then says of one it has. An invalid token, missing access and a used-up
-rate limit are not retried.
+(as long as the rate limit asks, up to a minute), and says why while it waits. Once a request cannot reach a host (no
+connection, or no answer) after its three attempts, the references left to read there fail at once, so an unreachable
+API costs one wait, not one per reference. It asks once more for a commit or file the API says is not there, which it
+now and then says of one it has. An invalid token, missing access and a used-up rate limit are not retried.
 
 When references cannot be fetched, the output ends with what to check: one hint per cause. When the API or the token may
 be the wrong one, it adds where to point flowpact. When `GITHUB_API_URL` is not set and the repository's `origin` is on

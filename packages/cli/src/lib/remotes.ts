@@ -178,6 +178,8 @@ export function fetchOptions(
       apiUrl: access.apiUrl,
       ...(access.token ? { token: access.token } : {}),
       ...(access.fallback ? { fallback: access.fallback } : {}),
+      // One for the run: lint and check fetch twice (what the lockfile lacks, then the version changes).
+      unreachableHosts: new Map(),
       onProgress: logProgress(
         logger,
         (p) => {

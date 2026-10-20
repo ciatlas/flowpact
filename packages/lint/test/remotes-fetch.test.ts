@@ -8,9 +8,11 @@ import {
   commitOf,
   downloadRemoteSources,
   type FetchedSource,
+  fetchRemoteEntries,
   hostOf,
   parseRemoteRef,
   type RemotesLock,
+  remoteRefsOf,
   serializeRemotesLock,
   updateRemotesLock,
 } from '@flowpact/lint';
@@ -389,6 +391,75 @@ describe('updateRemotesLock with paths', () => {
       fetch: api.fetch,
     });
     expect(u.lock.unreadable).toEqual({ 'octo/private@v1': 'not readable' });
+  });
+});
+
+describe('a host that cannot be reached', () => {
+  /** A workflow that uses twelve actions, one more than eight at a time can fetch together. */
+  const index = () =>
+    lint({
+      [`${WF}/ci.yml`]: `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n${Array.from(
+        { length: 12 },
+        (_, i) => `      - uses: octo/a${i}@v1\n`,
+      ).join('')}`,
+    }).index;
+  /** A fetch that always fails as `fail` says, counting the requests to each host. */
+  function always(fail: () => Response | Error) {
+    const sent = new Map<string, number>();
+    const fetch = (async (input: string | URL) => {
+      const { host } = new URL(input);
+      sent.set(host, (sent.get(host) ?? 0) + 1);
+      const answer = fail();
+      if (answer instanceof Error) throw answer;
+      return answer;
+    }) as typeof globalThis.fetch;
+    return { fetch, sent: (host = 'api.github.com') => sent.get(host) ?? 0 };
+  }
+  const refused = () => Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+
+  it('fails the references after the first that could not reach it at once, without sending them', async () => {
+    const api = always(refused);
+    const u = await updateRemotesLock(index(), undefined, { fetch: api.fetch, retryDelayMs: 0 });
+    expect(u.failed).toHaveLength(12);
+    expect(new Set(u.failed.map((f) => `${f.kind}: ${f.error}`))).toEqual(
+      new Set([
+        'unreachable: could not reach https://api.github.com (ECONNREFUSED): check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1',
+      ]),
+    );
+    // At most the first eight, three times each; twelve would be sent 36 times.
+    expect(api.sent()).toBeLessThanOrEqual(24);
+    // A timeout counts as well.
+    const slow = always(() => Object.assign(new Error('timed out'), { name: 'TimeoutError' }));
+    await updateRemotesLock(index(), undefined, { fetch: slow.fetch, retryDelayMs: 0 });
+    expect(slow.sent()).toBeLessThanOrEqual(24);
+  });
+
+  it('still sends each request to a host that answers, with errors', async () => {
+    const api = always(() => new Response('', { status: 503 }));
+    const u = await updateRemotesLock(index(), undefined, { fetch: api.fetch, retryDelayMs: 0 });
+    expect(u.failed.map((f) => f.kind)).toEqual(Array(12).fill('server'));
+    expect(api.sent()).toBe(36);
+  });
+
+  it('is remembered across the fetching functions given the same map, host by host', async () => {
+    const unreachableHosts = new Map<string, Error>();
+    const first = always(refused);
+    await updateRemotesLock(index(), undefined, { fetch: first.fetch, retryDelayMs: 0, unreachableHosts });
+    expect([...unreachableHosts.keys()]).toEqual(['api.github.com']);
+    const again = always(refused);
+    const refs = remoteRefsOf(index());
+    const r = await fetchRemoteEntries(refs, { fetch: again.fetch, retryDelayMs: 0, unreachableHosts });
+    expect(r.failed.map((f) => f.kind)).toEqual(Array(12).fill('unreachable'));
+    expect(again.sent()).toBe(0);
+    // Another host is asked as usual.
+    const elsewhere = always(refused);
+    await fetchRemoteEntries(refs.slice(0, 1), {
+      fetch: elsewhere.fetch,
+      retryDelayMs: 0,
+      apiUrl: 'https://gh.corp.example/api/v3',
+      unreachableHosts,
+    });
+    expect(elsewhere.sent('gh.corp.example')).toBe(3);
   });
 });
 
