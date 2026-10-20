@@ -1,15 +1,15 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:4bddc27f-1616-5df2-9593-222e9a604662",
+  "serialNumber": "urn:uuid:c1c847de-2247-5ff5-b813-12a189c7a7ef",
   "version": 1,
   "metadata": {
     "component": {
       "type": "application",
-      "bom-ref": "pkg:github/ciatlas/flowpact@v0.26.0",
+      "bom-ref": "pkg:github/ciatlas/flowpact@v0.27.0",
       "name": "flowpact-action",
-      "version": "0.26.0",
-      "purl": "pkg:github/ciatlas/flowpact@v0.26.0",
+      "version": "0.27.0",
+      "purl": "pkg:github/ciatlas/flowpact@v0.27.0",
       "licenses": [
         {
           "license": {
@@ -363,7 +363,7 @@
   ],
   "dependencies": [
     {
-      "ref": "pkg:github/ciatlas/flowpact@v0.26.0",
+      "ref": "pkg:github/ciatlas/flowpact@v0.27.0",
       "dependsOn": [
         "pkg:npm/%40actions/core@3.0.1",
         "pkg:npm/%40actions/exec@3.0.0",

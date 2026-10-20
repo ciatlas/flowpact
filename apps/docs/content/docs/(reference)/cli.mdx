@@ -28,7 +28,7 @@ The analysis commands (`lint`, `check`, `impact`, `generate`, `trace`) start by 
 version of every schema they read or write (to stderr, so JSON on stdout stays clean):
 
 ```text
- flowpact  v0.26.0  config schema v1 · contract schema v1 · report schema v1 · node v24.4.0
+ flowpact  v0.27.0  config schema v1 · contract schema v1 · report schema v1 · node v24.4.0
 root . · config .github/flowpact/flowpact.config.yml
 ```
 
@@ -103,7 +103,7 @@ The JSON report follows [`/schemas/report/v1.json`](/schemas/report/v1.json):
 ```json
 {
   "$schema": "https://ciatlas.github.io/flowpact/schemas/report/v1.json",
-  "meta": { "tool": "flowpact", "version": "0.26.0", "schemas": { "config": 1, "contract": 1, "report": 1 }, "node": "v24.4.0", "platform": "linux-x64", "root": "/home/runner/work/app/app", "durationMs": 31 },
+  "meta": { "tool": "flowpact", "version": "0.27.0", "schemas": { "config": 1, "contract": 1, "report": 1 }, "node": "v24.4.0", "platform": "linux-x64", "root": "/home/runner/work/app/app", "durationMs": 31 },
   "summary": { "errors": 1, "warnings": 0, "infos": 0, "suppressed": 0, "ignoredByComment": 0, "byCode": { "FP401": 1 } },
   "findings": [
     {

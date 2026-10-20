@@ -41,7 +41,7 @@ npm install --save-dev flowpact   # per project: npx flowpact lint
 Requires Node.js 22 or newer. Exit codes: `0` clean, `1` findings at or above `--fail-on`, `2` usage or
 configuration error, `3` internal error.
 
-In GitHub Actions, use the action instead: `uses: ciatlas/flowpact@v0.26` (job summary, annotations, SARIF and a
+In GitHub Actions, use the action instead: `uses: ciatlas/flowpact@v0.27` (job summary, annotations, SARIF and a
 downloadable patch when contracts drift).
 
 ## API
