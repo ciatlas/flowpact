@@ -9,12 +9,15 @@ import type {
   RemoteChangeGrade as EngineGrade,
   RuleContext as EngineRuleContext,
   RuleDefinition as EngineRuleDefinition,
+  FetchFailureKind,
+  FetchProblem,
   FetchProgress,
   JsonReport,
   RuleRegistry,
 } from '@flowpact/lint';
 import type { CallGraph as EngineCallGraph, GithubAnnotation, MarkdownOptions } from '@flowpact/reporters';
 import type * as Api from '../api';
+import type { GuideRow } from '../src/lib/github-access';
 import type {
   RemotesCleanOptions as EngineCleanOptions,
   RemotesDownloadOptions as EngineDownloadOptions,
@@ -46,6 +49,9 @@ const lintOptions = (o: Api.LintOptions): ReportOptions => o;
 
 // The remotes functions pass their options to the commands' code as they are, and report progress as it does.
 same<Api.RemoteProgress, FetchProgress>(true);
+same<Api.RemoteFailureKind, FetchFailureKind>(true);
+same<Api.RemoteProblem, FetchProblem>(true);
+same<Api.SetupGuideRow, GuideRow>(true);
 same<Api.RemoteChangeGrade, EngineGrade>(true);
 const updateOptions = (o: Api.RemotesUpdateOptions): EngineUpdateOptions => o;
 const downloadOptions = (o: Api.RemotesDownloadOptions): EngineDownloadOptions => o;

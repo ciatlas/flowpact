@@ -6,6 +6,7 @@ import {
   type AnalyzeOptions,
   contractPatch,
   exitCodeFor,
+  type FetchProblem,
   type FetchRemotesOptions,
   fetchMissingRemotes,
   followsPullRequest,
@@ -31,7 +32,8 @@ import {
   renderVersionChanges,
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
-import { checkFetchOptions, fetchOptions, timed } from './remotes';
+import type { GuideRow } from './github-access';
+import { adviceFor, checkFetchOptions, type FetchDisplay, fetchOptions, timed } from './remotes';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
 import { renderOptions, type TextOptions, versionChangesText } from './text';
@@ -96,7 +98,7 @@ export interface VersionChanges {
   /** One per change whose interfaces before and after could be read. */
   grades: RemoteChangeGrade[];
   /** References that could not be fetched, with why: their changes are not graded. */
-  failed: { ref: string; error: string }[];
+  failed: FetchProblem[];
 }
 
 export interface PrettyOptions extends TextOptions {
@@ -148,6 +150,13 @@ export interface ReportHooks {
   elsewhere?(path: string): string | undefined;
   /** With `fetchRemotes`, version changes are not graded: why, as a `version changes: …` note. */
   versionsNotGraded?(note: string): void;
+  /** With `fetchRemotes`, the CLI's display of the fetching: how the GitHub API is reached, then the progress. */
+  display?: FetchDisplay;
+  /**
+   * With `fetchRemotes`, references could not be fetched: what to check, each hint once a run, and the first time the
+   * API or the token may be the wrong one, where flowpact reads from with which token (see `fetchAdvice`).
+   */
+  fetchHints?(hints: string[], guide: GuideRow[] | undefined): void;
 }
 
 /** The baseline and the declaration for impact mode; read from the pull request when running in GitHub Actions. */
@@ -257,26 +266,54 @@ function commandOptions(
   };
 }
 
-/** How `fetchRemotes` reaches the GitHub API: with the token and API given, else those of the environment. */
-function fetchFor(session: Session, options: ReportOptions): FetchRemotesOptions {
+/**
+ * How `fetchRemotes` reaches the GitHub API: with the token and API given, else those of the environment; with what to
+ * tell when references cannot be fetched (`hint`).
+ */
+function fetchFor(session: Session, options: ReportOptions, hooks: ReportHooks): Fetching {
   const githubCom = bool('githubCom', options.githubCom);
-  return fetchOptions(session.logger, {
+  const { access, fetch } = fetchOptions(session.logger, {
     ...(options.token !== undefined ? { token: options.token } : {}),
     ...(options.apiUrl !== undefined ? { apiUrl: options.apiUrl } : {}),
     ...(githubCom ? { githubCom } : {}),
-  }).fetch;
+    ...(hooks.display ? { display: hooks.display } : {}),
+  });
+  const told = new Set<string>();
+  let guided = false;
+  const hint = (problems: FetchProblem[]) => {
+    const advice = adviceFor(session.root, access, problems);
+    const hints = advice.hints.filter((h) => !told.has(h));
+    if (!hints.length) return;
+    for (const h of hints) told.add(h);
+    const guide = guided ? undefined : advice.guide;
+    guided ||= Boolean(guide);
+    hooks.fetchHints?.(hints, guide);
+  };
+  return { fetch, display: hooks.display, hint };
+}
+
+/** How `fetchRemotes` fetches, the display of it, and what to tell about references it could not fetch. */
+interface Fetching {
+  fetch: FetchRemotesOptions;
+  display: FetchDisplay | undefined;
+  hint: (problems: FetchProblem[]) => void;
 }
 
 /** The remote interfaces the lockfile lacks, fetched for this run; a reference that cannot be fetched is a warning. */
 async function fetchRemotesFor(
   session: Session,
-  fetch: FetchRemotesOptions,
+  { fetch, display, hint }: Fetching,
 ): Promise<AnalyzeOptions['fetchedRemotes']> {
   const { root, logger } = session;
   const fs = nodeFileSystem(root);
-  const r = await timed(logger, () => fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, fetch));
+  const r = await timed(
+    logger,
+    () => fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, fetch),
+    display,
+  );
   for (const f of [...r.failed, ...r.unreadable])
     logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
+  hint([...r.failed, ...r.unreadable]);
   return r.remotes;
 }
 
@@ -306,7 +343,7 @@ function baseFiles(root: string, ref: string): ReturnType<typeof gitFileSystem> 
 async function versionChangesFor(
   session: Session,
   base: string | undefined,
-  fetch: FetchRemotesOptions,
+  { fetch, display, hint }: Fetching,
   notGraded: (note: string) => void,
 ): Promise<VersionChanges | undefined> {
   const ref = versionBase(base);
@@ -322,17 +359,18 @@ async function versionChangesFor(
     notGraded(`version changes: not graded: ${files.error}`);
     return undefined;
   }
-  const r = await gradeVersionChanges(
-    { root, config: loaded.config, logger, validateSchema: false },
-    files,
-    fetch,
+  const r = await timed(
+    logger,
+    () => gradeVersionChanges({ root, config: loaded.config, logger, validateSchema: false }, files, fetch),
+    display,
   );
   for (const f of r.failed) logger.warn(`version change not graded: ${f.ref}: ${f.error}`);
+  hint(r.failed);
   return {
     base: files.commit,
     changes: r.changes.map((c) => ({ ref: c.ref.raw, from: c.from.raw })),
     grades: r.grades,
-    failed: r.failed.map(({ ref, error }) => ({ ref, error })),
+    failed: r.failed.map(({ ref, error, kind }) => ({ ref, error, kind })),
   };
 }
 
@@ -386,7 +424,7 @@ export async function runReport(
     root,
     hooks.elsewhere,
   );
-  const fetch = bool('fetchRemotes', options.fetchRemotes) ? fetchFor(session, options) : undefined;
+  const fetch = bool('fetchRemotes', options.fetchRemotes) ? fetchFor(session, options, hooks) : undefined;
   const fetched = fetch && (await fetchRemotesFor(session, fetch));
   const result = await analyzeSession(
     session,

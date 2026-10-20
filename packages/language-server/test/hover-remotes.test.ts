@@ -2,11 +2,11 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { memoryFileSystem, SymbolLocator } from '@ciatlas/core';
-import { analyze, cacheSource, parseConfig } from '@flowpact/lint';
+import { analyze, cacheSource, hostOfGitUrl, originHost, parseConfig } from '@flowpact/lint';
 import { afterAll, describe, expect, it } from 'vitest';
 import { hoverMarkdown, remoteBindingMarkdown } from '../src/hover';
 import { RemoteBindings } from '../src/remotes';
-import { hostOfGitUrl, originHost, RemoteSources, remoteTarget, sourceLink, webHostOf } from '../src/sources';
+import { RemoteSources, remoteTarget, sourceLink, webHostOf } from '../src/sources';
 
 const CI = '.github/workflows/ci.yml';
 const LOCK = '.github/flowpact/remotes.lock.yaml';

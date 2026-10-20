@@ -3,7 +3,6 @@
  * the repository's calls, and the files read kept in the sources cache; `remotes download`: the sources of the locked
  * commits, into the cache.
  */
-import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { escapeControl, type Logger, nodeFileSystem } from '@ciatlas/core';
@@ -15,14 +14,16 @@ import {
   downloadRemoteSources,
   envCacheDir,
   type FetchedSource,
+  type FetchFailureKind,
   type FetchProgress,
   type FetchRemotesOptions,
+  type FetchRetry,
   gradeRemoteChanges,
-  hostOf,
   inCi,
   KEEP_COMMITS,
   lockedCommit,
   lockedRemote,
+  originHost,
   pruneCache,
   REMOTES_LOCK_FILES,
   type RemoteChange,
@@ -41,6 +42,7 @@ import {
   updateRemotesLock,
 } from '@flowpact/lint';
 import { attempt, usage } from './errors';
+import { describeToken, fetchAdvice, type GithubAccess, type GuideRow, githubAccess } from './github-access';
 import { analyzeSession, bool, type Session, stringList } from './session';
 import { checkTargets, protectedTrees } from './targets';
 
@@ -63,6 +65,8 @@ export interface RemotesUpdateOptions {
   githubCom?: boolean;
   /** Called as each reference is fetched (or not), after its debug log line; for a progress display. */
   onProgress?: (p: FetchProgress) => void;
+  /** The CLI's display of the fetching: how the API is reached, then the progress. */
+  display?: FetchDisplay;
   /**
    * flowpact's cache directory, whose `remotes` directory keeps the files read for the editor (`--cache-dir`, relative to
    * where flowpact runs); `false` keeps none. By default `FLOWPACT_CACHE_DIR`, else none in CI, else the platform's
@@ -93,8 +97,13 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
   /** Whether its text changes. */
   changes: boolean;
   dryRun: boolean;
+  /** The GitHub API it read from. */
+  apiUrl: string;
   /** Where the token came from (`GH_TOKEN`, `GITHUB_TOKEN`, `gh auth token`, the option), or undefined without one. */
   tokenSource?: string;
+  /** When references could not be fetched or read: what to check, and where flowpact reads from (see `fetchAdvice`). */
+  hints?: string[];
+  guide?: GuideRow[];
   /** The sources cache, unless none was kept: how many files were written to it, and why one could not be. */
   sources?: SourcesKept;
   /** Why no file was kept, when that was not asked for: in CI. */
@@ -118,73 +127,89 @@ export interface SourcesKept {
   failed?: string;
 }
 
-/** The GitHub API: `GITHUB_API_URL` (GitHub Enterprise Server), else github.com's. */
-const apiUrlFromEnv = () => process.env.GITHUB_API_URL || 'https://api.github.com';
-
-/** The GitHub CLI's token, when it is installed and signed in; never printed. */
-function ghToken(host: string): string | undefined {
-  const r = spawnSync('gh', ['auth', 'token', '--hostname', host], { encoding: 'utf8', timeout: 10_000 });
-  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : undefined;
+/**
+ * A display of the fetching (the CLI's): the API and the token before the first request, then the progress, until the
+ * fetching is over.
+ */
+export interface FetchDisplay {
+  /** Before the first request, with how many references there are; once per fetch with something to fetch. */
+  start(access: GithubAccess, total: number): void;
+  progress(p: FetchProgress): void;
+  retry(r: FetchRetry): void;
+  /** The fetching is over, also after an error. */
+  stop(): void;
 }
 
 /**
- * The token to read remote repositories with: the option, `GH_TOKEN`, `GITHUB_TOKEN`, or the GitHub CLI's for the
- * API's host (`gh auth token --hostname`, so a GitHub Enterprise Server sign-in works too).
+ * Runs the fetching, stops the display when it is over, and logs how long it took (`Logger.time` does not wait for a
+ * promise).
  */
-function tokenFor(apiUrl: string, given: string | undefined): { token?: string; source?: string } {
-  if (given) return { token: given, source: 'the token option' };
-  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN'] as const)
-    if (process.env[name]) return { token: process.env[name], source: name };
-  const host = hostOf(apiUrl);
-  const gh = ghToken(host);
-  return gh ? { token: gh, source: `\`gh auth token --hostname ${host}\`` } : {};
-}
-
-const GITHUB_COM_API = 'https://api.github.com';
-
-/**
- * With `githubCom`, on a GitHub Enterprise Server or GHE.com: look for the references the API lacks on github.com, as
- * the runner does through GitHub Connect, with `GITHUB_COM_TOKEN` or none (never the enterprise token).
- */
-function githubComFallback(apiUrl: string, githubCom: boolean | undefined, logger: Logger) {
-  if (!githubCom || hostOf(apiUrl) === 'github.com') return {};
-  const token = process.env.GITHUB_COM_TOKEN;
-  logger.debug(
-    `remote interfaces: also looking on github.com, with ${token ? 'GITHUB_COM_TOKEN' : 'no token'}`,
-  );
-  return { fallback: { apiUrl: GITHUB_COM_API, ...(token ? { token } : {}) } };
-}
-
-/** Where the token for remote interfaces comes from, for a log line; the token itself is never shown. */
-export const describeToken = (source: string | undefined) =>
-  source ?? 'none: public repositories only, at 60 requests an hour';
-
-/** Runs the fetching and logs how long it took once it is done (`Logger.time` does not wait for a promise). */
-export async function timed<T>(logger: Logger, run: () => Promise<T>): Promise<T> {
+export async function timed<T>(logger: Logger, run: () => Promise<T>, display?: FetchDisplay): Promise<T> {
   const t0 = performance.now();
-  const out = await run();
+  let out: T;
+  try {
+    out = await run();
+  } finally {
+    display?.stop();
+  }
   logger.debug('fetch remote interfaces finished', { ms: Math.round(performance.now() - t0) });
   return out;
 }
 
-/** How to fetch: the API, the token (and, for the output, where it came from), and the progress to report. */
+/**
+ * How to fetch: the API and the token (see `githubAccess`), and the progress to report, to the log, `onProgress` and
+ * the display; with how the API is reached, for the output.
+ */
 export function fetchOptions(
   logger: Logger,
-  options: Pick<RemotesUpdateOptions, 'apiUrl' | 'token' | 'githubCom' | 'onProgress'>,
+  options: Pick<RemotesUpdateOptions, 'apiUrl' | 'token' | 'githubCom' | 'onProgress' | 'display'>,
   what?: string,
-) {
-  const apiUrl = options.apiUrl ?? apiUrlFromEnv();
-  const { token, source } = tokenFor(apiUrl, options.token);
-  logger.debug(`remote interfaces: ${apiUrl}, token from ${describeToken(source)}`);
+): { access: GithubAccess; fetch: FetchRemotesOptions } {
+  const access = githubAccess(options);
+  const { display, onProgress } = options;
+  logger.debug(`remote interfaces: ${access.apiUrl}, token from ${describeToken(access.tokenSource)}`);
+  if (access.fallback)
+    logger.debug(
+      `remote interfaces: also looking on github.com, with ${access.fallback.token ? 'GITHUB_COM_TOKEN' : 'no token'}`,
+    );
   return {
-    source,
+    access,
     fetch: {
-      apiUrl,
-      ...(token ? { token } : {}),
-      ...githubComFallback(apiUrl, options.githubCom, logger),
-      onProgress: logProgress(logger, options.onProgress, what),
+      apiUrl: access.apiUrl,
+      ...(access.token ? { token: access.token } : {}),
+      ...(access.fallback ? { fallback: access.fallback } : {}),
+      onProgress: logProgress(
+        logger,
+        (p) => {
+          display?.progress(p);
+          onProgress?.(p);
+        },
+        what,
+      ),
+      onRetry: (r) => {
+        logger.debug(`${r.host}: ${r.why}; attempt ${r.attempt} of ${r.attempts} in ${r.waitMs} ms`);
+        display?.retry(r);
+      },
+      ...(display ? { onStart: (total: number) => display.start(access, total) } : {}),
     },
   };
+}
+
+/**
+ * What to check when references could not be fetched, and where flowpact reads from (see `fetchAdvice`): the host of
+ * the repository's `origin` names the API to try when it is not github.com's.
+ */
+export function adviceFor(
+  root: string,
+  access: GithubAccess,
+  problems: { kind?: FetchFailureKind }[],
+): ReturnType<typeof fetchAdvice> {
+  if (!problems.length) return { hints: [] };
+  return fetchAdvice(
+    access,
+    problems.map((p) => p.kind),
+    originHost(root),
+  );
 }
 
 /** Writes the lockfile, refusing a path that leaves the repository through a link. */
@@ -232,12 +257,14 @@ export async function runRemotesUpdate(
   const fs = nodeFileSystem(root);
   const read = readRemotesLock(fs);
   const file = read.file ?? REMOTES_LOCK_FILES[0];
-  const { fetch, source } = fetchOptions(logger, options);
+  const { fetch, access } = fetchOptions(logger, options);
   const dryRun = bool('dryRun', options.dryRun) ?? false;
   const keep = sourcesKeeper(dryRun ? {} : updateCacheDir(options.cacheDir), logger);
   const pinned = pinnedBy(readActionsLock(fs));
-  const update = await timed(logger, () =>
-    updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch, ...pinned.fetch }),
+  const update = await timed(
+    logger,
+    () => updateRemotesLock(result.index, read.lock, { ...fetch, ...keep.fetch, ...pinned.fetch }),
+    options.display,
   );
   keep.finish();
   const grades = gradeChanged(session, read.lock, update);
@@ -245,8 +272,19 @@ export async function runRemotesUpdate(
   const changes = fs.read(file) !== text;
   if (changes && !dryRun) writeLock(root, file, text);
   const { lock: _, ...rest } = update;
-  const extra = { ...(source ? { tokenSource: source } : {}), ...keep.result, ...pinned.result() };
+  const advice = adviceFor(root, access, [...update.failed, ...update.unreadable]);
+  const extra = { ...accessResult(access, advice), ...keep.result, ...pinned.result() };
   return { ...rest, file, changes, dryRun, grades, ...extra };
+}
+
+/** How a result says which API it read, with which token, and what to check when references could not be read. */
+function accessResult(access: GithubAccess, { hints, guide }: ReturnType<typeof fetchAdvice>) {
+  return {
+    apiUrl: access.apiUrl,
+    ...(access.tokenSource ? { tokenSource: access.tokenSource } : {}),
+    ...(hints.length ? { hints } : {}),
+    ...(guide ? { guide } : {}),
+  };
 }
 
 /**
@@ -369,7 +407,7 @@ function pruneUsed(dir: string, commits: Iterable<string>, logger: Logger): numb
 }
 
 export interface RemotesDownloadOptions
-  extends Pick<RemotesUpdateOptions, 'paths' | 'token' | 'apiUrl' | 'githubCom' | 'onProgress'> {
+  extends Pick<RemotesUpdateOptions, 'paths' | 'token' | 'apiUrl' | 'githubCom' | 'onProgress' | 'display'> {
   /**
    * flowpact's cache directory, whose `remotes` directory the sources go to (`--cache-dir`, relative to where flowpact
    * runs); by default `FLOWPACT_CACHE_DIR`, else the platform's per-user cache, also in CI: downloading is all it does.
@@ -383,7 +421,10 @@ export interface RemotesDownloadResult extends RemotesDownload {
   /** The lockfile, relative to the root, and the sources cache's directory. */
   file: string;
   dir: string;
+  apiUrl: string;
   tokenSource?: string;
+  hints?: string[];
+  guide?: GuideRow[];
 }
 
 /**
@@ -399,11 +440,21 @@ export async function runRemotesDownload(
   if (!dir) throw usage(`nowhere to download to: ${NO_CACHE_DIR}`);
   const { file, lock } = requireLock(root);
   const result = await analyzeTargets(session, options);
-  const { fetch, source } = fetchOptions(logger, options, 'remote source');
+  const { fetch, access } = fetchOptions(logger, options, 'remote source');
   logger.debug(`remote sources: ${dir}`);
-  const download = await timed(logger, () => downloadRemoteSources(result.index, lock, dir, fetch));
+  const download = await timed(
+    logger,
+    () => downloadRemoteSources(result.index, lock, dir, fetch),
+    options.display,
+  );
   const removed = pruneUsed(dir, download.commits, logger);
-  return { ...download, file, dir, removed, ...(source ? { tokenSource: source } : {}) };
+  // A failure to write the cache is local: nothing about the API or the token would help.
+  const advice = adviceFor(
+    root,
+    access,
+    download.failed.filter((f) => !f.cache),
+  );
+  return { ...download, file, dir, removed, ...accessResult(access, advice) };
 }
 
 export interface RemotesCleanOptions {

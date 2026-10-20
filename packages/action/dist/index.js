@@ -8681,9 +8681,9 @@ var require_cronstrue = __commonJS({
 
 // src/main.ts
 import { execFileSync as execFileSync3 } from "child_process";
-import { mkdirSync as mkdirSync3, mkdtempSync, readFileSync as readFileSync5, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
+import { mkdirSync as mkdirSync3, mkdtempSync, readFileSync as readFileSync6, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname5, isAbsolute as isAbsolute8, join as join7, relative as relative8, resolve as resolve8, sep as sep4 } from "path";
+import { dirname as dirname6, isAbsolute as isAbsolute9, join as join8, relative as relative8, resolve as resolve8, sep as sep4 } from "path";
 import { fileURLToPath } from "url";
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -27550,17 +27550,21 @@ function exitCodeFor(summary2, failOn) {
 // ../lint/src/contract-locate.ts
 var import_yaml12 = __toESM(require_dist(), 1);
 
+// ../lint/src/git-origin.ts
+import { readFileSync as readFileSync3 } from "fs";
+import { dirname as dirname3, isAbsolute as isAbsolute4, join as join5 } from "path";
+
 // ../lint/src/impact-run.ts
 import { execFileSync as execFileSync2 } from "child_process";
 import {
   existsSync as existsSync5,
   lstatSync as lstatSync3,
-  readFileSync as readFileSync3,
+  readFileSync as readFileSync4,
   readlinkSync,
   realpathSync as realpathSync3,
   statSync as statSync2
 } from "fs";
-import { basename as basename4, dirname as dirname3, isAbsolute as isAbsolute4, join as join5, relative as relative5, sep as sep2 } from "path";
+import { basename as basename4, dirname as dirname4, isAbsolute as isAbsolute5, join as join6, relative as relative5, sep as sep2 } from "path";
 var ImpactSetupError = class extends Error {
 };
 var followsPullRequest = (event) => event === "merge_group" || event === "push";
@@ -27568,7 +27572,7 @@ function githubEvent(env = process.env) {
   if (!env.GITHUB_EVENT_NAME) return void 0;
   let payload;
   try {
-    if (env.GITHUB_EVENT_PATH) payload = JSON.parse(readFileSync3(env.GITHUB_EVENT_PATH, "utf8"));
+    if (env.GITHUB_EVENT_PATH) payload = JSON.parse(readFileSync4(env.GITHUB_EVENT_PATH, "utf8"));
   } catch {
     payload = void 0;
   }
@@ -27628,7 +27632,7 @@ function baselineConfig(fs3, configPath, base, notes) {
 var workingTree = (root) => ({
   read: (p) => {
     try {
-      return readFileSync3(join5(root, p), "utf8");
+      return readFileSync4(join6(root, p), "utf8");
     } catch {
       return void 0;
     }
@@ -27775,7 +27779,7 @@ var sameFile = (a, b) => {
   const [x, y] = [statSync2(a, { throwIfNoEntry: false }), statSync2(b, { throwIfNoEntry: false })];
   return x !== void 0 && y !== void 0 && x.ino === y.ino && x.dev === y.dev;
 };
-var ignoresCase = (dir) => gitOutput(dir, ["config", "--bool", "core.ignorecase"])?.trim() === "true" || sameFile(join5(dir, ".git"), join5(dir, ".GIT"));
+var ignoresCase = (dir) => gitOutput(dir, ["config", "--bool", "core.ignorecase"])?.trim() === "true" || sameFile(join6(dir, ".git"), join6(dir, ".GIT"));
 var realpathOr = (p) => {
   try {
     return realpathSync3.native(p);
@@ -27785,12 +27789,12 @@ var realpathOr = (p) => {
 };
 function repositoryPathOf(top, file) {
   const dirs = [];
-  for (let dir = dirname3(file); dir !== dirname3(dir); dir = dirname3(dir)) dirs.unshift(dir);
+  for (let dir = dirname4(file); dir !== dirname4(dir); dir = dirname4(dir)) dirs.unshift(dir);
   const reals = dirs.map(realpathOr);
   const atTop = reals.indexOf(top);
   if (atTop >= 0) return toPosix2(relative5(dirs[atTop], file));
   const inside = reals.findIndex((real2) => real2 !== void 0 && pathInside(top, real2));
-  if (inside >= 0) return toPosix2(join5(relative5(top, reals[inside]), relative5(dirs[inside], file)));
+  if (inside >= 0) return toPosix2(join6(relative5(top, reals[inside]), relative5(dirs[inside], file)));
   const real = realpathOr(file);
   return real !== void 0 && pathInside(top, real) ? toPosix2(relative5(top, real)) : void 0;
 }
@@ -27814,13 +27818,13 @@ function leave(w, abs) {
 }
 function follow(w, target) {
   if (target === void 0 || ++w.links > MAX_LINKS3) return NONE;
-  if (isAbsolute4(target)) return leave(w, join5(target, ...w.todo));
+  if (isAbsolute5(target)) return leave(w, join6(target, ...w.todo));
   w.todo.unshift(...target.split("/"));
   return void 0;
 }
 function submodule(w, entry) {
   const path = [...w.at.map((a) => a.name), entry.name].join("/");
-  const dir = join5(w.dir, path);
+  const dir = join6(w.dir, path);
   if (!isCheckout2(dir) || !hasCommit(dir, entry.object)) {
     const at = `${w.shown}${path} at ${entry.object.slice(0, 7)}`;
     return { kind: "unread", submodule: at, path: [`${w.shown}${path}`, ...w.todo].join("/") };
@@ -27877,7 +27881,7 @@ function trackedIn(dir, commit, parts, ignoreCase) {
 function untracked(w, part) {
   const parent = w.at.map((a) => a.name);
   if (trackedAtHead(w, [...parent, part])) return NONE;
-  const full = join5(w.dir, ...parent, part);
+  const full = join6(w.dir, ...parent, part);
   let stat2;
   try {
     stat2 = lstatSync3(full);
@@ -27891,7 +27895,7 @@ function untracked(w, part) {
 }
 function step(w, part) {
   if (part === "" || part === ".") return void 0;
-  if (part === "..") return w.at.pop() ? void 0 : leave(w, join5(w.dir, "..", ...w.todo));
+  if (part === "..") return w.at.pop() ? void 0 : leave(w, join6(w.dir, "..", ...w.todo));
   const tree = w.at.length ? w.at[w.at.length - 1].tree : w.tree;
   const entries2 = tree === void 0 ? [] : treeEntries(gitOutput(w.dir, ["ls-tree", "-z", tree]));
   const entry = entryNamed(entries2, part, w.ignoreCase);
@@ -27919,7 +27923,7 @@ function locate2(top, commit, path) {
 }
 var textOf = (found) => {
   if (found.kind === "tracked") return gitOutput(found.dir, ["cat-file", "blob", found.object]);
-  return found.kind === "file" ? workingTree(dirname3(found.file)).read(basename4(found.file)) : void 0;
+  return found.kind === "file" ? workingTree(dirname4(found.file)).read(basename4(found.file)) : void 0;
 };
 function repositoryBaseConfig(root, commit, req) {
   const file = req.baseConfig ? req.baseConfigFile : void 0;
@@ -28002,7 +28006,7 @@ function pendingSettings(baseline, head, comparePolicy) {
   ];
 }
 function baselinePolicy(root, baseline, req, headConfig, notes) {
-  const configPath = req.configPath ? relative5(root, join5(root, req.configPath)).split("\\").join("/") : void 0;
+  const configPath = req.configPath ? relative5(root, join6(root, req.configPath)).split("\\").join("/") : void 0;
   const repositoryBase = repositoryBaseConfig(root, baseline.commit, req);
   if (repositoryBase) {
     notes.push(
@@ -28081,13 +28085,13 @@ var import_yaml13 = __toESM(require_dist(), 1);
 
 // ../lint/src/plugins.ts
 import { existsSync as existsSync6 } from "fs";
-import { isAbsolute as isAbsolute5, resolve as resolve5 } from "path";
+import { isAbsolute as isAbsolute6, resolve as resolve5 } from "path";
 import { pathToFileURL } from "url";
 var isRule = (v) => typeof v === "object" && v !== null && typeof v.code === "string" && typeof v.check === "function";
 async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   const loaded = [];
   for (const spec of config2.plugins) {
-    const abs = isAbsolute5(spec) ? spec : resolve5(root, spec);
+    const abs = isAbsolute6(spec) ? spec : resolve5(root, spec);
     if (!existsSync6(abs))
       throw new ConfigError(`Plugin not found: ${spec}`, void 0, [`plugins: ${abs} does not exist`]);
     let mod;
@@ -28128,16 +28132,21 @@ import {
   writeFileSync as writeFileSync2
 } from "fs";
 import { homedir } from "os";
-import { dirname as dirname4, isAbsolute as isAbsolute6, join as join6, relative as relative6, resolve as resolve6 } from "path";
+import { dirname as dirname5, isAbsolute as isAbsolute7, join as join7, relative as relative6, resolve as resolve6 } from "path";
 var sourceFiles = (r) => r.kind === "workflow" ? [r.path] : ["action.yml", "action.yaml"].map((n) => r.path ? `${r.path}/${n}` : n);
 
 // ../lint/src/remotes-fetch.ts
 var FetchError = class extends Error {
-  constructor(message, unreadable = false) {
+  constructor(message, kind = "other", brief = message) {
     super(message);
-    this.unreadable = unreadable;
+    this.kind = kind;
+    this.brief = brief;
   }
-  unreadable;
+  kind;
+  brief;
+  get unreadable() {
+    return this.kind === "not-found";
+  }
 };
 async function get2(url2, accept, opts) {
   const res = await withRetries(url2, accept, opts);
@@ -28175,6 +28184,13 @@ async function withRetries(url2, accept, opts) {
       if (answer instanceof Response) return answer;
       throw answer;
     }
+    opts.onRetry?.({
+      host: new URL(url2).host,
+      attempt: attempt + 1,
+      attempts: ATTEMPTS,
+      why: answer instanceof Response ? statusOf(answer) : answer.brief,
+      waitMs: Math.round(wait)
+    });
     await pause(wait);
   }
 }
@@ -28202,27 +28218,44 @@ function networkError(url2, e) {
   const host = new URL(url2).origin;
   if (e.name === "TimeoutError")
     return new FetchError(
-      `no answer from ${host} within ${TIMEOUT_MS / 1e3} s: check the network, or try again`
+      `no answer from ${host} within ${TIMEOUT_MS / 1e3} s: check the network, or try again`,
+      "timeout",
+      `no answer within ${TIMEOUT_MS / 1e3} s`
     );
   const cause = e.cause;
   const why = cause?.code ?? cause?.message ?? e.message;
   return new FetchError(
-    `could not reach ${host} (${why}): check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1`
+    `could not reach ${host} (${why}): check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1`,
+    "unreachable",
+    NETWORK_CODES[why] ?? `could not connect (${why})`
   );
 }
+var NETWORK_CODES = {
+  UND_ERR_CONNECT_TIMEOUT: "connection timed out",
+  ETIMEDOUT: "connection timed out",
+  ECONNREFUSED: "connection refused",
+  ECONNRESET: "connection reset",
+  ENOTFOUND: "host not found",
+  EAI_AGAIN: "host name lookup failed",
+  EHOSTUNREACH: "host unreachable",
+  ENETUNREACH: "network unreachable"
+};
+var statusOf = (res) => `${res.status}${res.statusText ? ` ${res.statusText}` : ""}`;
 function httpError(res, opts) {
-  const status = `${res.status}${res.statusText ? ` ${res.statusText}` : ""}`;
+  const status = statusOf(res);
   if (res.status === 401)
     return new FetchError(
-      `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\``
+      opts.token ? `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\`` : `the GitHub API asks for a token (${status}): set GH_TOKEN or GITHUB_TOKEN, or sign in with \`gh auth login\``,
+      "token"
     );
-  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts));
-  if (slowDown(res)) return new FetchError(slowDownMessage(res, status));
+  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts), "rate-limit");
+  if (slowDown(res)) return new FetchError(slowDownMessage(res, status), "rate-limit");
   if (res.status === 403)
     return new FetchError(
-      `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`
+      `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`,
+      "access"
     );
-  return new FetchError(`${status} from the GitHub API`);
+  return new FetchError(`${status} from the GitHub API`, res.status >= 500 ? "server" : "other");
 }
 var usedUpMessage = (status, opts) => `the GitHub API rate limit is used up (${status})${opts.token ? "; try again later" : ": without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`"}`;
 function slowDownMessage(res, status) {
@@ -28254,7 +28287,10 @@ async function shaOf(r, opts) {
     opts
   );
   if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
-    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`, true);
+    throw new FetchError(
+      `${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`,
+      "not-found"
+    );
   return sha.trim();
 }
 async function firstSource(r, sha, opts) {
@@ -28272,7 +28308,7 @@ async function sourceAt(r, sha, opts) {
     return found;
   }
   const what = r.kind === "workflow" ? `${r.path} not found` : `no action.yml in ${r.path || "the repository root"}`;
-  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, true);
+  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, "not-found");
 }
 async function fetchRemoteEntry(r, opts = {}) {
   const sha = await shaOf(r, opts);
@@ -28313,13 +28349,17 @@ async function tryFetch(r, opts, out) {
     return await fetchWithFallback(r, opts);
   } catch (e) {
     if (!isFetchFailure(e)) throw e;
-    const problem = { ref: r.raw, error: e.message };
-    if (e instanceof FetchError && e.unreadable) out.unreadable.push(problem);
+    const problem = { ref: r.raw, error: e.message, kind: kindOf(e) };
+    if (problem.kind === "not-found") out.unreadable.push(problem);
     else out.failed.push(problem);
     return void 0;
   }
 }
 var isFetchFailure = (e) => e instanceof FetchError || e instanceof TypeError || e.name === "TimeoutError";
+function kindOf(e) {
+  if (e instanceof FetchError) return e.kind;
+  return e.name === "TimeoutError" ? "timeout" : "unreachable";
+}
 async function fetchCounted(r, opts, out, count) {
   const entry = await tryFetch(r, opts, out);
   count.done++;
@@ -28348,6 +28388,7 @@ async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
 async function fetchRemoteEntries(refs, opts = {}) {
   const out = { remotes: {}, failed: [], unreadable: [] };
   const count = { done: 0, total: refs.length };
+  opts.onStart?.(refs.length);
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const entry = await fetchCounted(r, opts, out, count);
     if (entry) out.remotes[r.raw] = entry;
@@ -29691,8 +29732,8 @@ var import_yaml14 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
-import { readFileSync as readFileSync4, statSync as statSync4 } from "fs";
-import { isAbsolute as isAbsolute7, relative as relative7, resolve as resolve7, sep as sep3 } from "path";
+import { readFileSync as readFileSync5, statSync as statSync4 } from "fs";
+import { isAbsolute as isAbsolute8, relative as relative7, resolve as resolve7, sep as sep3 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
 var SERVICE = "github.actions.results.api.v1.ArtifactService";
@@ -29849,7 +29890,7 @@ async function blobRequest(http2, url2, body, headers, what, secrets) {
 }
 async function uploadBlob(signedUrl, zip2, secrets) {
   const http2 = new HttpClient(USER_AGENT, [], { socketTimeout: stallTimeout() });
-  const join8 = signedUrl.includes("?") ? "&" : "?";
+  const join9 = signedUrl.includes("?") ? "&" : "?";
   const prefix = randomUUID2();
   const ids = [];
   for (let at = 0; at < zip2.length; at += BLOCK_SIZE) {
@@ -29857,7 +29898,7 @@ async function uploadBlob(signedUrl, zip2, secrets) {
     ids.push(id);
     await blobRequest(
       http2,
-      `${signedUrl}${join8}comp=block&blockid=${encodeURIComponent(id)}`,
+      `${signedUrl}${join9}comp=block&blockid=${encodeURIComponent(id)}`,
       zip2.subarray(at, at + BLOCK_SIZE),
       { "Content-Type": "application/octet-stream" },
       "Put Block",
@@ -29868,7 +29909,7 @@ async function uploadBlob(signedUrl, zip2, secrets) {
   const list = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><BlockList>${latest}</BlockList>`;
   await blobRequest(
     http2,
-    `${signedUrl}${join8}comp=blocklist`,
+    `${signedUrl}${join9}comp=blocklist`,
     Buffer.from(list),
     { "Content-Type": "application/xml", "x-ms-blob-content-type": "application/zip" },
     "Put Block List",
@@ -29942,12 +29983,12 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
   const root = resolve7(rootDirectory);
   const entries2 = files.map((file) => {
     const path = relative7(root, resolve7(file));
-    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute7(path))
+    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute8(path))
       throw new Error(`${file} is not inside the artifact's root directory ${root}`);
     const entry = path.split(sep3).join("/");
     if (BAD_PATH.test(entry))
       throw new Error(`The path ${entry} contains one of " : < > | * ? or a line break`);
-    const data = readFileSync4(file);
+    const data = readFileSync5(file);
     const { mode, mtime } = statSync4(file);
     return { name: entry, data, mode, mtime };
   });
@@ -30010,7 +30051,7 @@ var DEFAULTS2 = {
   token: "${{ github.token }}",
   debug: "false"
 };
-var ACTION_DIR = resolve8(dirname5(fileURLToPath(import.meta.url)), "../../..");
+var ACTION_DIR = resolve8(dirname6(fileURLToPath(import.meta.url)), "../../..");
 var UNTRUSTED_EVENTS = /* @__PURE__ */ new Set(["pull_request_target", "workflow_run"]);
 var SUMMARY_LIMIT = 1e6;
 var PATCH_FILE = "flowpact-contracts.patch";
@@ -30038,11 +30079,11 @@ function int3(name) {
     throw new InputError(`Input ${name} must be a non-negative integer (got "${value}")`);
   return Number(value);
 }
-var fromActionDir = (p) => isAbsolute8(p) ? p : resolve8(ACTION_DIR, p);
+var fromActionDir = (p) => isAbsolute9(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml14.parse)(readFileSync5(actionYml, "utf8"));
+    const meta2 = (0, import_yaml14.parse)(readFileSync6(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
@@ -30055,7 +30096,7 @@ function declaredDefaultsOf(actionYml) {
 }
 var declaredDefaults;
 function declaredDefault(name) {
-  declaredDefaults ??= declaredDefaultsOf(join7(ACTION_DIR, "action.yml"));
+  declaredDefaults ??= declaredDefaultsOf(join8(ACTION_DIR, "action.yml"));
   return declaredDefaults[name]?.trim() || DEFAULTS2[name];
 }
 var orgInput = (name) => getInput(name).trim() || declaredDefault(name);
@@ -30271,7 +30312,7 @@ function annotate(f, prefix) {
 function writeReport(workspace, file, content) {
   const abs = resolve8(workspace, file);
   assertSafeWritePath(abs, [workspace]);
-  mkdirSync3(dirname5(abs), { recursive: true });
+  mkdirSync3(dirname6(abs), { recursive: true });
   writeFileSync3(abs, content);
   const shown = toPosix3(relative8(workspace, abs));
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
@@ -30305,24 +30346,24 @@ async function driftArtifact(plan, prefix, inputs, runId) {
   const runnerTemp = process.env.RUNNER_TEMP;
   let dir;
   if (runnerTemp) {
-    dir = join7(runnerTemp, name);
+    dir = join8(runnerTemp, name);
     rmSync3(dir, { recursive: true, force: true });
     mkdirSync3(dir, { recursive: true });
   } else {
-    dir = mkdtempSync(join7(tmpdir(), `${name}-`));
+    dir = mkdtempSync(join8(tmpdir(), `${name}-`));
   }
   const repoPlan = {
     ...plan,
     entries: plan.entries.map((e) => ({ ...e, file: inRepository(e.file, prefix) }))
   };
-  const patch = join7(dir, PATCH_FILE);
+  const patch = join8(dir, PATCH_FILE);
   writeFileSync3(patch, contractPatch(repoPlan));
-  const contracts = writeContracts(dir, repoPlan, join7(dir, ARTIFACT_DIR));
-  writeFileSync3(join7(dir, ARTIFACT_DIR, "README.md"), artifactReadme(plan, inputs.artifactName, runId));
+  const contracts = writeContracts(dir, repoPlan, join8(dir, ARTIFACT_DIR));
+  writeFileSync3(join8(dir, ARTIFACT_DIR, "README.md"), artifactReadme(plan, inputs.artifactName, runId));
   const files = [
     patch,
-    join7(dir, ARTIFACT_DIR, "README.md"),
-    ...contracts.map((f) => join7(dir, ARTIFACT_DIR, f))
+    join8(dir, ARTIFACT_DIR, "README.md"),
+    ...contracts.map((f) => join8(dir, ARTIFACT_DIR, f))
   ];
   info(`wrote ${PATCH_FILE} and ${plural2(contracts.length, "contract file")} to ${dir}`);
   const out = { dir, patch };

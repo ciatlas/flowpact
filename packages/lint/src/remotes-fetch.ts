@@ -44,8 +44,12 @@ export interface FetchRemotesOptions {
   fetch?: typeof fetch;
   /** Requests at a time. */
   concurrency?: number;
+  /** Called before the first request with how many references there are, for a progress display. */
+  onStart?: (total: number) => void;
   /** Called as each reference is done, for a progress display or a log line. */
   onProgress?: (p: FetchProgress) => void;
+  /** Called before a request that failed in a way that passes is sent again (see `retryWait`), to say why it waits. */
+  onRetry?: (r: FetchRetry) => void;
   /**
    * Where to look for a reference the API does not have, as GitHub Enterprise Server's runner does through GitHub
    * Connect: github.com's API, with its own token (never `token`). Opt-in: it sends the names of the references the
@@ -85,6 +89,38 @@ export interface FetchProgress {
   detail: string;
 }
 
+/** A request sent again: to which host, the attempt about to be made (of how many at most), why, and after how long. */
+export interface FetchRetry {
+  host: string;
+  attempt: number;
+  attempts: number;
+  /** Short: `503 Service Unavailable`, `no answer within 30 s`, `could not connect (ECONNREFUSED)`. */
+  why: string;
+  waitMs: number;
+}
+
+/**
+ * Why a reference could not be fetched, for what to check: `unreachable` (no connection to the API), `timeout` (no
+ * answer), `token` (401: the API refused the token, or wants one), `access` (403: the token may not read it),
+ * `rate-limit`, `server` (5xx), `not-found` (it does not exist, or the token cannot read it), or `other`.
+ */
+export type FetchFailureKind =
+  | 'unreachable'
+  | 'timeout'
+  | 'token'
+  | 'access'
+  | 'rate-limit'
+  | 'server'
+  | 'not-found'
+  | 'other';
+
+/** A reference that could not be fetched, why, and what kind of failure that is. */
+export interface FetchProblem {
+  ref: string;
+  error: string;
+  kind: FetchFailureKind;
+}
+
 export interface RemotesUpdate {
   lock: RemotesLock;
   /** References whose entry is new, changed (another commit or interface), or gone because nothing uses them. */
@@ -92,21 +128,29 @@ export interface RemotesUpdate {
   changed: string[];
   removed: string[];
   /** References that could not be fetched (the network, the API or the file), with why; previous entries are kept. */
-  failed: { ref: string; error: string }[];
+  failed: FetchProblem[];
   /**
    * References that do not exist or the token cannot read, with why. One without a previous entry is recorded under
    * the lockfile's `unreadable`, so it is accounted for.
    */
-  unreadable: { ref: string; error: string }[];
+  unreadable: FetchProblem[];
 }
 
-/** Why a reference could not be fetched: `unreadable` when it does not exist or the token cannot read it. */
+/**
+ * Why a reference could not be fetched, its kind (`not-found`: it does not exist or the token cannot read it), and for
+ * a retry's notice, a short `brief` of it.
+ */
 class FetchError extends Error {
   constructor(
     message: string,
-    readonly unreadable = false,
+    readonly kind: FetchFailureKind = 'other',
+    readonly brief = message,
   ) {
     super(message);
+  }
+
+  get unreadable(): boolean {
+    return this.kind === 'not-found';
   }
 }
 
@@ -159,6 +203,13 @@ async function withRetries(url: string, accept: string, opts: FetchRemotesOption
       if (answer instanceof Response) return answer;
       throw answer;
     }
+    opts.onRetry?.({
+      host: new URL(url).host,
+      attempt: attempt + 1,
+      attempts: ATTEMPTS,
+      why: answer instanceof Response ? statusOf(answer) : answer.brief,
+      waitMs: Math.round(wait),
+    });
     await pause(wait);
   }
 }
@@ -215,28 +266,51 @@ function networkError(url: string, e: unknown): FetchError {
   if ((e as Error).name === 'TimeoutError')
     return new FetchError(
       `no answer from ${host} within ${TIMEOUT_MS / 1000} s: check the network, or try again`,
+      'timeout',
+      `no answer within ${TIMEOUT_MS / 1000} s`,
     );
   const cause = (e as { cause?: { code?: string; message?: string } }).cause;
   const why = cause?.code ?? cause?.message ?? (e as Error).message;
   return new FetchError(
     `could not reach ${host} (${why}): check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1`,
+    'unreachable',
+    NETWORK_CODES[why] ?? `could not connect (${why})`,
   );
 }
 
+/** The network's error codes a retry's notice puts in words. */
+const NETWORK_CODES: Record<string, string> = {
+  UND_ERR_CONNECT_TIMEOUT: 'connection timed out',
+  ETIMEDOUT: 'connection timed out',
+  ECONNREFUSED: 'connection refused',
+  ECONNRESET: 'connection reset',
+  ENOTFOUND: 'host not found',
+  EAI_AGAIN: 'host name lookup failed',
+  EHOSTUNREACH: 'host unreachable',
+  ENETUNREACH: 'network unreachable',
+};
+
+/** A response's status, as `503 Service Unavailable`. */
+const statusOf = (res: Response) => `${res.status}${res.statusText ? ` ${res.statusText}` : ''}`;
+
 /** Why the GitHub API refused a request, and what to do about it. */
 function httpError(res: Response, opts: FetchRemotesOptions): FetchError {
-  const status = `${res.status}${res.statusText ? ` ${res.statusText}` : ''}`;
+  const status = statusOf(res);
   if (res.status === 401)
     return new FetchError(
-      `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\``,
+      opts.token
+        ? `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\``
+        : `the GitHub API asks for a token (${status}): set GH_TOKEN or GITHUB_TOKEN, or sign in with \`gh auth login\``,
+      'token',
     );
-  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts));
-  if (slowDown(res)) return new FetchError(slowDownMessage(res, status));
+  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts), 'rate-limit');
+  if (slowDown(res)) return new FetchError(slowDownMessage(res, status), 'rate-limit');
   if (res.status === 403)
     return new FetchError(
       `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`,
+      'access',
     );
-  return new FetchError(`${status} from the GitHub API`);
+  return new FetchError(`${status} from the GitHub API`, res.status >= 500 ? 'server' : 'other');
 }
 
 /** The primary rate limit is used up: wait, or (without a token, at 60 requests an hour) set one. */
@@ -291,7 +365,10 @@ async function shaOf(r: RemoteRef, opts: FetchRemotesOptions): Promise<string> {
     opts,
   );
   if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
-    throw new FetchError(`${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`, true);
+    throw new FetchError(
+      `${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`,
+      'not-found',
+    );
   return sha.trim();
 }
 
@@ -328,7 +405,7 @@ async function sourceAt(
   }
   const what =
     r.kind === 'workflow' ? `${r.path} not found` : `no action.yml in ${r.path || 'the repository root'}`;
-  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, true);
+  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, 'not-found');
 }
 
 /** The lockfile entry of a remote reference, fetched. */
@@ -406,8 +483,8 @@ async function tryFetch(
     return await fetchWithFallback(r, opts);
   } catch (e) {
     if (!isFetchFailure(e)) throw e;
-    const problem = { ref: r.raw, error: (e as Error).message };
-    if (e instanceof FetchError && e.unreadable) out.unreadable.push(problem);
+    const problem = { ref: r.raw, error: (e as Error).message, kind: kindOf(e) };
+    if (problem.kind === 'not-found') out.unreadable.push(problem);
     else out.failed.push(problem);
     return undefined;
   }
@@ -416,6 +493,12 @@ async function tryFetch(
 /** An error fetching is expected to raise: the API's or the file's (`FetchError`), the network's, a timeout. */
 const isFetchFailure = (e: unknown) =>
   e instanceof FetchError || e instanceof TypeError || (e as Error).name === 'TimeoutError';
+
+/** The kind of an error fetching raised (see `isFetchFailure`): a `TypeError` is the network's, from reading a body. */
+function kindOf(e: unknown): FetchFailureKind {
+  if (e instanceof FetchError) return e.kind;
+  return (e as Error).name === 'TimeoutError' ? 'timeout' : 'unreachable';
+}
 
 /** `tryFetch`, then `onProgress` with the outcome; `count.done` counts the references finished so far. */
 async function fetchCounted(
@@ -466,6 +549,7 @@ export async function updateRemotesLock(
     unreadable: [],
   };
   const count = { done: 0, total: refs.length };
+  opts.onStart?.(refs.length);
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const old = before.get(remoteKey(r.raw));
     const entry = await fetchCounted(r, opts, out, count);
@@ -508,8 +592,8 @@ export interface FetchedRemotes {
   /** Entries for the references the lockfile lacks, by reference. */
   remotes: RemotesLock['remotes'];
   /** References that could not be fetched, and those that do not exist or the token cannot read, with why. */
-  failed: { ref: string; error: string }[];
-  unreadable: { ref: string; error: string }[];
+  failed: FetchProblem[];
+  unreadable: FetchProblem[];
 }
 
 /**
@@ -542,6 +626,7 @@ export async function fetchRemoteEntries(
 ): Promise<FetchedRemotes> {
   const out: FetchedRemotes = { remotes: {}, failed: [], unreadable: [] };
   const count = { done: 0, total: refs.length };
+  opts.onStart?.(refs.length);
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const entry = await fetchCounted(r, opts, out, count);
     if (entry) out.remotes[r.raw] = entry;
@@ -559,8 +644,11 @@ export interface RemotesDownload {
   notLocked: string[];
   /** References not downloaded, with why: on a host this run does not read, or a path the cache cannot hold. */
   skipped: { ref: string; reason: string }[];
-  /** References whose source could not be downloaded or cached, with why; `cache` when writing the cache failed. */
-  failed: { ref: string; error: string; cache?: true }[];
+  /**
+   * References whose source could not be downloaded or cached, with why: the kind of failure when it was fetching's
+   * (see `FetchFailureKind`), `cache` when writing the cache failed.
+   */
+  failed: { ref: string; error: string; kind?: FetchFailureKind; cache?: true }[];
   /** The cached commits this run uses (`commitKey`), marked as just used: what a prune keeps. */
   commits: string[];
 }
@@ -586,6 +674,7 @@ export async function downloadRemoteSources(
     commits: [],
   };
   const count = { done: 0, total: refs.length };
+  opts.onStart?.(refs.length);
   await eachLimited(refs, opts.concurrency ?? 8, async (r) => {
     const done = await downloadOne(r, lock, dir, opts);
     if (done.list === 'downloaded' || done.list === 'cached') {
@@ -608,7 +697,7 @@ type Downloaded =
   | { list: 'downloaded' | 'cached'; sha: string }
   | { list: 'notLocked' }
   | { list: 'skipped'; reason: string }
-  | { list: 'failed'; error: string; cache?: true };
+  | { list: 'failed'; error: string; kind?: FetchFailureKind; cache?: true };
 
 /** One reference's source into the cache, unless the cache has it or this run cannot read it. */
 async function downloadOne(
@@ -632,7 +721,7 @@ async function downloadOne(
       reason: `on ${entry.host}, which this run does not read: look there with --github-com`,
     };
   const source = await sourceOrError(r, sha, api);
-  return 'error' in source ? { list: 'failed', error: source.error } : keepSource(dir, r, sha, source);
+  return 'error' in source ? { list: 'failed', ...source } : keepSource(dir, r, sha, source);
 }
 
 /** A reference's file at a commit, or why it could not be read; any other error is a bug and is thrown. */
@@ -640,15 +729,14 @@ async function sourceOrError(
   r: RemoteRef,
   sha: string,
   api: FetchRemotesOptions,
-): Promise<{ file: string; text: string } | { error: string }> {
+): Promise<{ file: string; text: string } | { error: string; kind: FetchFailureKind }> {
   try {
     return await sourceAt(r, sha, { ...api, onSource: undefined });
   } catch (e) {
     if (!isFetchFailure(e)) throw e;
-    const unreadable = e instanceof FetchError && e.unreadable;
-    return {
-      error: unreadable ? `${(e as Error).message}, or not readable with this token` : (e as Error).message,
-    };
+    const kind = kindOf(e);
+    const { message } = e as Error;
+    return { error: kind === 'not-found' ? `${message}, or not readable with this token` : message, kind };
   }
 }
 
@@ -682,7 +770,12 @@ function record(out: RemotesDownload, ref: string, d: Downloaded): Pick<FetchPro
       out.skipped.push({ ref, reason: d.reason });
       return { outcome: 'skipped', detail: d.reason };
     case 'failed':
-      out.failed.push({ ref, error: d.error, ...(d.cache ? { cache: true as const } : {}) });
+      out.failed.push({
+        ref,
+        error: d.error,
+        ...(d.kind ? { kind: d.kind } : {}),
+        ...(d.cache ? { cache: true as const } : {}),
+      });
       return { outcome: 'failed', detail: d.error };
   }
 }

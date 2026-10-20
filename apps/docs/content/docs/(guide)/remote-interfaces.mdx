@@ -96,11 +96,17 @@ reference, with its commit or why it was not fetched. From a program, use
 | --- | --- |
 | `GH_TOKEN` | first, when set |
 | `GITHUB_TOKEN` | when `GH_TOKEN` is not set |
-| the GitHub CLI's (`gh auth token`) | when neither is set, for github.com |
+| the GitHub CLI's (`gh auth token --hostname <host>`) | when neither is set, for the API's host |
 | none | public repositories only, at GitHub's 60 requests an hour for anonymous reads |
 
-The output names the source (`token: GH_TOKEN`), never the token, which goes only to the GitHub API (`GITHUB_API_URL`
-on GitHub Enterprise Server). Public repositories need no permission. Private and internal ones need read access to
+Before fetching, flowpact says which API it reads and which token it uses, never the token itself:
+
+```text
+GitHub API: https://api.github.com (github.com: GITHUB_API_URL is not set)
+token: `gh auth token --hostname github.com`, an OAuth token (GH_TOKEN and GITHUB_TOKEN are not set)
+```
+
+The token goes only to the GitHub API (`GITHUB_API_URL` on GitHub Enterprise Server). Public repositories need no permission. Private and internal ones need read access to
 their contents: a fine-grained token with **Contents: read**, a classic token with `repo`, or a GitHub App installation
 token that includes them.
 
@@ -109,7 +115,8 @@ token that includes them.
 | Message | What to do |
 | --- | --- |
 | `not found, or not readable with this token` | The reference does not exist, or the token cannot read it. It is recorded under `unreadable:`; give a token that can read it to check it. |
-| `the GitHub API rejected the token (401)` | The token is invalid or expired: check `GH_TOKEN` or `GITHUB_TOKEN`, or run `gh auth status`. |
+| `the GitHub API rejected the token (401)` | The token is invalid or expired, or for another host: check `GH_TOKEN` or `GITHUB_TOKEN`, or run `gh auth status`. |
+| `the GitHub API asks for a token (401)` | The API reads nothing without a token, as a GitHub Enterprise Server in private mode: set `GH_TOKEN`, or run `gh auth login --hostname <host>`. |
 | `the GitHub API rate limit is used up` | Without a token GitHub allows 60 requests an hour: set a token, or wait. |
 | `the GitHub API asks to slow down` | GitHub's secondary rate limit, for many requests at once: try again when it says. |
 | `the GitHub API refused the request (403)` | The token lacks read access to that repository's contents. |
@@ -117,8 +124,25 @@ token that includes them.
 | `no answer from … within 30 s` | The network or the API is slow: try again. |
 
 flowpact retries after no answer, a server error (5xx) or the secondary rate limit, three times at most and backing off
-(as long as the rate limit asks, up to a minute). It asks once more for a commit or file the API says is not there,
-which it now and then says of one it has. An invalid token, missing access and a used-up rate limit are not retried.
+(as long as the rate limit asks, up to a minute), and says why while it waits. It asks once more for a commit or file
+the API says is not there, which it now and then says of one it has. An invalid token, missing access and a used-up
+rate limit are not retried.
+
+When references cannot be fetched, the output ends with what to check: one hint per cause. When the API or the token may
+be the wrong one, it adds where to point flowpact. When `GITHUB_API_URL` is not set and the repository's `origin` is on
+another host, the hint names that host's API:
+
+```text
+what to check:
+  • some references are not on github.com, or not readable: this repository's origin is on
+    gh.example.com: if that is a GitHub Enterprise Server or GHE.com, set
+    GITHUB_API_URL=https://gh.example.com/api/v3; private and internal repositories need a token
+    that can read their contents
+  where flowpact reads remote repositories, and with which token:
+    github.com                GITHUB_API_URL not set                         token: GH_TOKEN, else `gh auth login`
+    GitHub Enterprise Server  GITHUB_API_URL=https://gh.example.com/api/v3   token: GH_TOKEN, else `gh auth login --hostname gh.example.com`
+    GHE.com                   GITHUB_API_URL=https://api.<name>.ghe.com      token: GH_TOKEN, else `gh auth login --hostname <name>.ghe.com`
+```
 
 ## Sources for the editor
 
@@ -180,7 +204,8 @@ the host from the references.
 - **In CI**, the runner sets `GITHUB_API_URL` (`https://<host>/api/v3` on GitHub Enterprise Server,
   `https://api.<subdomain>.ghe.com` on GHE.com), so the action reads from your enterprise with `token`.
 - **On your machine**, set it yourself: `export GITHUB_API_URL=https://<host>/api/v3`. The token is `GH_TOKEN`,
-  `GITHUB_TOKEN`, or the GitHub CLI's for that host (`gh auth login --hostname <host>`).
+  `GITHUB_TOKEN`, or the GitHub CLI's for that host (`gh auth login --hostname <host>`). A `GH_TOKEN` left over from
+  github.com comes first, and the server rejects it: unset it, or set it to a token from the server.
 
 **Actions from github.com.** With GitHub Connect, a runner of GitHub Enterprise Server looks for an action on the
 enterprise server first, then on github.com. flowpact asks only the enterprise server unless you opt in, so an action

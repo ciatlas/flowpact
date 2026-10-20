@@ -192,7 +192,10 @@ if (result.changes) {
   keep none (`--no-cache`); by default it is `FLOWPACT_CACHE_DIR`, else none in CI, else the per-user cache.
   `onProgress(progress)` is called as each reference is done, with `done`, `total`, `ref`, `outcome` and `detail`.
   The result has `file` (the lockfile), `changes`, `added`, `changed` and `removed`, `failed` and `unreadable` (each
-  `{ ref, error }`), `tokenSource` (where the token came from, never the token), and `sources` (the cache's `dir`, and
+  `{ ref, error, kind }`, `kind` being `unreachable`, `timeout`, `token`, `access`, `rate-limit`, `server`, `not-found`
+  or `other`), `apiUrl` (the API it read), `tokenSource` (where the token came from, never the token), `hints` (what to
+  check, when references could not be read) with `guide` (where to point flowpact, when the API or the token may be the
+  wrong one), and `sources` (the cache's `dir`, and
   files `written`, older commits `removed`, files `notKept` with why) or `sourcesNotKept`. `grades` has each changed
   entry graded against the repository's calls: its `ref`, `commits`, `verdict` (`breaks`, `unchecked` or `fits`), the
   interface `changes`, and its `calls`, each with `call` (where it is), `verdict`, the findings it `added` and
@@ -201,8 +204,9 @@ if (result.changes) {
   GitHub's `actions.lock`, has its `file`, how many references were read at the commits it `pinned`, or the `error`
   that kept it from being used.
 - `remotesDownload(options)`: the same options but `dryRun`, with `cacheDir` a directory. The result has `downloaded`,
-  `cached`, `notLocked`, `skipped` (`{ ref, reason }`), `failed` (`{ ref, error }`, with `cache: true` when writing the
-  cache failed), the cache's `dir` and the older commits `removed`. Without a lockfile, or with one it cannot use, it
+  `cached`, `notLocked`, `skipped` (`{ ref, reason }`), `failed` (`{ ref, error }`, with `kind` when downloading failed
+  and `cache: true` when writing the cache did), the cache's `dir`, the older commits `removed`, and `apiUrl`,
+  `tokenSource`, `hints` and `guide` as `remotesUpdate`'s. Without a lockfile, or with one it cannot use, it
   throws a usage error.
 - `remotesClean({ cacheDir, keep })`: removes the cached commits, or keeps the `keep` most recently used of each
   repository. The result has `dir`, `keep`, `removed`, and `failed` when a commit could not be removed.

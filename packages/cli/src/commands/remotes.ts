@@ -1,8 +1,8 @@
 import { jsonSafe } from '@ciatlas/core';
 import { type ArgsDef, defineCommand } from 'citty';
 import {
+  type FetchDisplay,
   failsOn,
-  type RemotesAction,
   type RemotesDownloadOptions,
   type RemotesFailOn,
   type RemotesUpdateOptions,
@@ -14,6 +14,7 @@ import {
   runRemotesUpdate,
 } from '../lib/remotes';
 import { remotesCleanText, remotesDownloadText, remotesText } from '../lib/text';
+import { fetchDisplay } from '../progress';
 import {
   type CliContext,
   commonArgs,
@@ -92,28 +93,27 @@ export const remotesCommand = defineCommand({
       const out = output(ctx, args.format === 'json');
       if (action === 'clean') return clean(out, flags.keep, args['cache-dir']);
       printBanner(ctx, `root ${displayPath(ctx.root)}`);
-      const counter = counterFor(ctx.level, action);
-      const options = optionsOf(args, action, ctx.root, counter?.update);
-      try {
-        return action === 'download' ? await download(out, options) : await update(out, options, flags);
-      } finally {
-        counter?.clear();
-      }
+      const display = fetchDisplay(
+        ctx,
+        action === 'update' ? 'fetching remote interfaces' : 'downloading remote sources',
+      );
+      const options = optionsOf(args, action, ctx.root, display);
+      return action === 'download' ? await download(out, options) : await update(out, options, flags);
     }),
 });
 
-/** The options both `update` and `download` take, from the command line. */
+/** The options both `update` and `download` take, from the command line, with the display of the fetching. */
 function optionsOf(
   args: { _: string[]; 'github-com'?: boolean; 'cache-dir'?: string },
   action: string,
   root: string,
-  onProgress: ((p: { done: number; total: number }) => void) | undefined,
+  display: FetchDisplay | undefined,
 ) {
   return {
     paths: pathArgs(remotesPaths(args._, action), 'remotes', root),
     githubCom: Boolean(args['github-com']),
     ...(args['cache-dir'] !== undefined ? { cacheDir: args['cache-dir'] } : {}),
-    ...(onProgress ? { onProgress } : {}),
+    ...(display ? { display } : {}),
   };
 }
 
@@ -153,24 +153,4 @@ async function download({ ctx, print }: Output, options: RemotesDownloadOptions)
   const r = await runRemotesDownload(ctx.session, options);
   print(r, remotesDownloadText);
   return r.failed.length ? EXIT.findings : EXIT.ok;
-}
-
-/** A live count in a terminal at the default level; -v and -d log a line per reference instead, -q nothing. */
-const counterFor = (level: string, action: RemotesAction) =>
-  level === 'warn' && process.stderr.isTTY
-    ? progressCounter(action === 'update' ? 'remote interfaces' : 'remote sources')
-    : undefined;
-
-/** A one-line count of the references done so far, rewritten in place on stderr, and cleared when done. */
-function progressCounter(what: string) {
-  let shown = false;
-  return {
-    update: (p: { done: number; total: number }) => {
-      process.stderr.write(`\r\x1b[2Kfetching ${what} ${p.done}/${p.total}`);
-      shown = true;
-    },
-    clear: () => {
-      if (shown) process.stderr.write('\r\x1b[2K');
-    },
-  };
 }

@@ -15,7 +15,7 @@ import {
 import { lockedCommit, readActionsLock } from './actions-lock';
 import type { AnalyzeOptions } from './analyze';
 import { lockedRemote, type RemoteEntry, type RemoteRef, readRemotesLock, remoteRefsOf } from './remotes';
-import { type FetchRemotesOptions, fetchRemoteEntries } from './remotes-fetch';
+import { type FetchProblem, type FetchRemotesOptions, fetchRemoteEntries } from './remotes-fetch';
 import { gradeRemoteChanges, type RemoteChange, type RemoteChangeGrade } from './remotes-grade';
 
 /** A remote reference of the head that replaced one of the base: the same workflow or action at another `@ref`. */
@@ -62,7 +62,7 @@ export interface VersionGrading {
   /** One per change whose interfaces before and after could be read. */
   grades: RemoteChangeGrade[];
   /** References that could not be fetched, with why: their changes are not graded. */
-  failed: { ref: string; error: string }[];
+  failed: FetchProblem[];
 }
 
 /** The references, once each. */

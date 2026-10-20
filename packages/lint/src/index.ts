@@ -3,6 +3,7 @@ export * from './analyze';
 export * from './config';
 export * from './contract-locate';
 export * from './contracts';
+export * from './git-origin';
 export * from './ignore-comments';
 export * from './impact';
 export * from './impact-run';

@@ -60,7 +60,7 @@ flowpact lint [paths…] [options]
 | `--include-graph` | Add the data-flow graph to JSON output and the call graph (Mermaid) to Markdown output. |
 | `--dump-graph <file>` | Write the data-flow graph as JSON (debugging). |
 | `--no-schema` | Skip validation against GitHub's workflow schema. |
-| `--fetch-remotes` | Fetch the interfaces of the remote workflows and actions the [remote interfaces lockfile](/docs/remote-interfaces) lacks, for this run only (nothing is written), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. A reference that cannot be fetched is a warning. On a pull request in GitHub Actions, or with `--base <ref>`, it also grades the remote references the change moves to another version ([On a pull request](/docs/remote-interfaces#on-a-pull-request)). |
+| `--fetch-remotes` | Fetch the interfaces of the remote workflows and actions the [remote interfaces lockfile](/docs/remote-interfaces) lacks, for this run only (nothing is written), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. It says which API and token it uses and shows its progress on stderr, as [`remotes update`](#flowpact-remotes-update) does. A reference that cannot be fetched is a warning, followed by what to check. On a pull request in GitHub Actions, or with `--base <ref>`, it also grades the remote references the change moves to another version ([On a pull request](/docs/remote-interfaces#on-a-pull-request)). |
 | `--impact` | Also check the release impact of the changes against the declared impact, with `--base <ref>`, `--expect none\|patch\|minor\|major`, `--title <text>` and `--labels <a,b>`. See [`flowpact impact`](#flowpact-impact). |
 | `-d, --debug` | Debug logging (see below). |
 | `-v` / `-vv` | Verbose / trace logging. |
@@ -248,11 +248,13 @@ of the reference in the repository, also with paths: under the reference, the ou
 each call the change breaks or leaves partly unchecked, with why (see
 [When a version changes](/docs/remote-interfaces#when-a-version-changes)).
 
-The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`); the output names the source it
-used (`token: GH_TOKEN`), never the token, which is sent only to the GitHub API (`GITHUB_API_URL` on GitHub Enterprise
-Server). Public repositories can be read without one, at GitHub's 60 requests an hour for anonymous reads; private and
-internal ones need read access to their contents (fine-grained: **Contents: read** on them; classic: `repo`). In a
-terminal it shows a count as it fetches; `-v` or `-d` logs each reference instead. Each failure says why and what to do:
+The token is `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's for the API's host (`gh auth token --hostname`);
+the output names the source it used (`token: GH_TOKEN`), never the token, which is sent only to the GitHub API
+(`GITHUB_API_URL` on GitHub Enterprise Server). Public repositories can be read without one, at GitHub's 60 requests an
+hour for anonymous reads; private and internal ones need read access to their contents (fine-grained: **Contents: read**
+on them; classic: `repo`). Before the first request it says on stderr which API it reads, and where the token came from
+and what kind it is (or why there is none). In a terminal a spinner then shows the count, the time so far and any retry;
+`-d` logs each reference instead, and `-q` shows neither. Each failure says why, and the output ends with what to check:
 see [Remote interfaces](/docs/remote-interfaces#when-a-reference-is-not-fetched).
 
 The files it reads go to the [sources cache](/docs/remote-interfaces#sources-for-the-editor), for the editor; the

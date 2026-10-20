@@ -22,18 +22,14 @@ import {
   renderTrace,
   VERDICT_LABEL,
   verdictLine,
+  wrap,
 } from '@flowpact/reporters';
 import pc from 'picocolors';
 import { usage } from './errors';
 import type { ContractGeneration } from './generate';
+import { describeToken, type GuideRow } from './github-access';
 import type { RuleDocs, RuleInfo, TraceResult } from './inspect';
-import {
-  describeToken,
-  type RemotesCleanResult,
-  type RemotesDownloadResult,
-  type RemotesUpdateResult,
-  type SourcesKept,
-} from './remotes';
+import type { RemotesCleanResult, RemotesDownloadResult, RemotesUpdateResult, SourcesKept } from './remotes';
 import type { VersionChanges } from './report';
 import { oneOf } from './session';
 
@@ -177,7 +173,40 @@ const shown = (s: string) => escapeControl(s);
 export function remotesText(r: RemotesUpdateResult, opts: RenderOptions): string {
   const c = opts.color ? pc : { bold: (s: string) => s, red: (s: string) => s, dim: (s: string) => s };
   const lines = [...entryLines(r, c, opts.ascii ? '->' : '→'), ...problemLines(r, c)];
-  return safe(`${[...updateHead(r, c), ...lines].join('\n')}\n`);
+  const hints = hintLines(r.hints, r.guide, c, opts);
+  return safe(`${[...updateHead(r, c), ...lines, ...hints].join('\n')}\n`);
+}
+
+/**
+ * What to check when references could not be fetched, each hint wrapped to the width, then, when given, where flowpact
+ * reads remote repositories, and with which token (see `setupGuide`).
+ */
+function hintLines(
+  hints: string[] | undefined,
+  guide: GuideRow[] | undefined,
+  c: { bold: (s: string) => string; dim: (s: string) => string },
+  opts: RenderOptions,
+): string[] {
+  if (!hints?.length) return [];
+  const bullet = opts.ascii ? '-' : '•';
+  const hanging = (h: string) =>
+    wrap(shown(h), opts.width - 4).map((line, i) => `  ${i ? ' ' : bullet} ${line}`);
+  const lines = [c.bold('what to check:'), ...hints.flatMap(hanging)];
+  if (!guide) return lines;
+  const width = (col: 'github' | 'api') => Math.max(...guide.map((row) => row[col].length));
+  const rows = guide.map((g) =>
+    c.dim(shown(`    ${g.github.padEnd(width('github'))}  ${g.api.padEnd(width('api'))}  token: ${g.token}`)),
+  );
+  return [...lines, c.dim('  where flowpact reads remote repositories, and with which token:'), ...rows];
+}
+
+/**
+ * `lint` and `check` with `--fetch-remotes`, on stderr: what to check when references could not be fetched, and, when
+ * given, where flowpact reads remote repositories, and with which token.
+ */
+export function fetchHintsText(hints: string[], guide: GuideRow[] | undefined, opts: RenderOptions): string {
+  const c = opts.color ? pc : { bold: (s: string) => s, dim: (s: string) => s };
+  return safe(`${hintLines(hints, guide, c, opts).join('\n')}\n`);
 }
 
 /** The entries `remotes update` added, changed (each with its grade) and removed. */
@@ -191,12 +220,11 @@ function entryLines(r: RemotesUpdateResult, c: Paint, arrow: string): string[] {
   return [...list('new    ', r.added), ...changed, ...list('removed', r.removed)];
 }
 
-/** The references `remotes update` could not read or fetch, with why, and what to do without a token. */
+/** The references `remotes update` could not read or fetch, with why. */
 function problemLines(r: RemotesUpdateResult, c: Paint): string[] {
   return [
     ...r.unreadable.map((u) => `  ${c.dim('unread ')} ${shown(u.ref)}: ${shown(u.error)}`),
     ...r.failed.map((f) => `  ${c.red('failed ')} ${shown(f.ref)}: ${shown(f.error)}`),
-    ...((r.failed.length || r.unreadable.length) && !r.tokenSource ? [c.dim(NO_TOKEN)] : []),
   ];
 }
 
@@ -270,9 +298,6 @@ function actionsLockLine(a: NonNullable<RemotesUpdateResult['actionsLock']>): st
   return `${a.file}: ${n} read at the commit${a.pinned === 1 ? '' : 's'} it pins`;
 }
 
-const NO_TOKEN =
-  '  No token was used: set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`. It needs read access to the contents of the private repositories.';
-
 /** Where `remotes update` kept the files it read, for the editor, and how many it could not keep, and why. */
 function sourcesLine(s: SourcesKept): string {
   const counts = [
@@ -306,8 +331,7 @@ export function remotesDownloadText(r: RemotesDownloadResult, opts: RenderOption
     lines.push(`  ${c.dim('unlocked')} ${shown(ref)}: not in ${r.file}; \`flowpact remotes update\` adds it`);
   for (const s of r.skipped) lines.push(`  ${c.dim('skipped ')} ${shown(s.ref)}: ${shown(s.reason)}`);
   for (const f of r.failed) lines.push(`  ${c.red('failed  ')} ${shown(f.ref)}: ${shown(f.error)}`);
-  // A failure to write the cache is local: no token would help.
-  if (r.failed.some((f) => !f.cache) && !r.tokenSource) lines.push(c.dim(NO_TOKEN));
+  lines.push(...hintLines(r.hints, r.guide, c, opts));
   return safe(`${lines.join('\n')}\n`);
 }
 

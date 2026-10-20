@@ -23,6 +23,7 @@ import { FlowpactError, toFlowpactError } from './lib/errors';
 import { openSession, type Session } from './lib/session';
 import { displayPath, protectedTrees } from './lib/targets';
 import { colorEnabled, terminalRender } from './lib/text';
+import { clearStatus } from './progress';
 
 export { displayPath };
 
@@ -235,11 +236,13 @@ function stderrSink(color: boolean) {
   return {
     write(r: LogRecord) {
       const data = r.data && Object.keys(r.data).length ? ` ${c.dim(JSON.stringify(r.data))}` : '';
+      clearStatus();
       process.stderr.write(
         `${'  '.repeat(depth)}${tag[r.level]} ${c.dim(r.scope.padEnd(14))} ${r.message}${data}\n`,
       );
     },
     group(title: string) {
+      clearStatus();
       process.stderr.write(`${c.bold(title)}\n`);
       depth++;
     },
@@ -288,7 +291,10 @@ export function createContext(flags: CommonFlags, rawArgs: string[], def: ArgsDe
     loaded,
     session,
     stdout: (s) => process.stdout.write(s.endsWith('\n') ? s : `${s}\n`),
-    stderr: (s) => process.stderr.write(s.endsWith('\n') ? s : `${s}\n`),
+    stderr: (s) => {
+      clearStatus();
+      process.stderr.write(s.endsWith('\n') ? s : `${s}\n`);
+    },
   };
 }
 

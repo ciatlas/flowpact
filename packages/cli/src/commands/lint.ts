@@ -2,8 +2,10 @@ import { jsonSafe } from '@ciatlas/core';
 import type { ImpactLevel } from '@flowpact/lint';
 import type { MarkdownOptions } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
+import type { GuideRow } from '../lib/github-access';
 import { type FailOn, runReport as runAnalysis } from '../lib/report';
-import { versionChangesText } from '../lib/text';
+import { fetchHintsText, versionChangesText } from '../lib/text';
+import { fetchDisplay } from '../progress';
 import {
   commonArgs,
   createContext,
@@ -258,6 +260,17 @@ function printVersionChanges(analysis: Analysis, ctx: Context, format: string): 
   if (text) ctx.stderr(text);
 }
 
+/** With `--fetch-remotes`: the display of the fetching, and what to check when references could not be fetched. */
+function fetchHooks(ctx: Context) {
+  const display = fetchDisplay(ctx, 'fetching remote interfaces');
+  return {
+    ...(display ? { display } : {}),
+    fetchHints: (hints: string[], guide: GuideRow[] | undefined) => {
+      if (ctx.level !== 'error') ctx.stderr(fetchHintsText(hints, guide, ctx.render));
+    },
+  };
+}
+
 /**
  * Shared implementation of `flowpact lint`, `flowpact check` and `flowpact impact`: the API's `lint`, `check` and
  * `impact`, with the banner, the `impact:` notes and the reports printed and written as the flags ask.
@@ -289,6 +302,7 @@ export async function runReportCommand(
     },
     elsewhere: (path) => cwdPath(path, ctx.root),
     versionsNotGraded: (note) => ctx.stderr(note),
+    ...(args['fetch-remotes'] ? fetchHooks(ctx) : {}),
   });
   if (!analysis) return 0;
   writeReports(analysis, ctx, args, files);

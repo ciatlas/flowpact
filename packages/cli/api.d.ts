@@ -503,11 +503,38 @@ export interface ContractGeneration {
   patch(): string | undefined;
 }
 
-/** A remote reference and why it could not be fetched. */
+/** A remote reference, why it could not be fetched, and what kind of failure that is. */
 export interface RemoteProblem {
   ref: string;
   error: string;
+  kind: RemoteFailureKind;
 }
+
+/**
+ * A kind of GitHub (github.com, GitHub Enterprise Server, GHE.com), how to point flowpact at it, and the token it reads
+ * with.
+ */
+export interface SetupGuideRow {
+  github: string;
+  /** `GITHUB_API_URL not set`, or `GITHUB_API_URL=…` with the enterprise host when one is known. */
+  api: string;
+  token: string;
+}
+
+/**
+ * What kind of failure kept a remote reference from being fetched, for what to check: `unreachable` (no connection to
+ * the API), `timeout` (no answer), `token` (401: the API refused the token, or wants one), `access` (403: the token may
+ * not read it), `rate-limit`, `server` (5xx), `not-found` (it does not exist, or the token cannot read it), or `other`.
+ */
+export type RemoteFailureKind =
+  | 'unreachable'
+  | 'timeout'
+  | 'token'
+  | 'access'
+  | 'rate-limit'
+  | 'server'
+  | 'not-found'
+  | 'other';
 
 /** What `remotesUpdate` wrote to the remote interfaces lockfile, or with `dryRun` would write. */
 export interface RemotesUpdateResult {
@@ -524,8 +551,17 @@ export interface RemotesUpdateResult {
   failed: RemoteProblem[];
   /** References that do not exist, or the token cannot read; recorded under the lockfile's `unreadable`. */
   unreadable: RemoteProblem[];
+  /** The GitHub API it read from: the `apiUrl` option, else `GITHUB_API_URL`, else `https://api.github.com`. */
+  apiUrl: string;
   /** Where the token came from (`GH_TOKEN`, `GITHUB_TOKEN`, the GitHub CLI, the option); undefined without one. */
   tokenSource?: string;
+  /**
+   * When references could not be fetched or read: what to check, one hint per cause (the API cannot be reached, the
+   * token is refused or missing, the references are on another server, …).
+   */
+  hints?: string[];
+  /** With hints, when the API or the token may be the wrong one: where flowpact reads remote repositories, and how. */
+  guide?: SetupGuideRow[];
   /** The sources cache, unless none was kept. */
   sources?: {
     dir: string;
@@ -618,12 +654,20 @@ export interface RemotesDownloadResult {
   notLocked: string[];
   /** References not downloaded, with why: recorded as unreadable, on a host this run does not read, an unsafe path. */
   skipped: { ref: string; reason: string }[];
-  /** References whose source could not be downloaded or cached; `cache` when writing the cache failed. */
-  failed: { ref: string; error: string; cache?: true }[];
+  /**
+   * References whose source could not be downloaded or cached: the kind of failure when downloading failed, `cache`
+   * when writing the cache did.
+   */
+  failed: { ref: string; error: string; kind?: RemoteFailureKind; cache?: true }[];
   /** The cached commits this run used (`owner/repo/sha`), and older commits removed afterwards. */
   commits: string[];
   removed: number;
+  /** The GitHub API it read from, and where the token came from (see `RemotesUpdateResult`). */
+  apiUrl: string;
   tokenSource?: string;
+  /** When sources could not be downloaded: what to check, and where flowpact reads from (see `RemotesUpdateResult`). */
+  hints?: string[];
+  guide?: SetupGuideRow[];
 }
 
 /** What `remotesClean` removed from the sources cache. */

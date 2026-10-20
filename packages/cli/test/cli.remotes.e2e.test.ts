@@ -86,6 +86,8 @@ describe('flowpact remotes update', () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain(`wrote ${LOCK}`);
     expect(r.stdout).toContain('token: GH_TOKEN');
+    // Before fetching: which API, and where the token came from.
+    expect(r.stderr).toContain(`GitHub API: ${api} (GITHUB_API_URL)\ntoken: GH_TOKEN`);
     expect(r.stdout).toContain('new     octo/setup@v2');
     expect(r.stdout).toContain(
       'unread  octo/missing@v1: octo/missing@v1 not found, or not readable with this token',
@@ -138,9 +140,41 @@ describe('flowpact remotes update', () => {
       'Step #1 uses octo/setup@v2 without required input "version" — GitHub will run it with an empty value',
     ]);
     expect(r.stderr).toContain('remote interface not fetched: octo/missing@v1');
+    expect(r.stderr).toContain(`GitHub API: ${api} (GITHUB_API_URL)`);
+    expect(r.stderr).toContain(
+      'what to check:\n  • some references are not on 127.0.0.1, or not readable: actions from github.com',
+    );
+    expect(r.stderr).toContain('GitHub Enterprise Server  GITHUB_API_URL=https://127.0.0.1/api/v3');
     expect(() => readFileSync(join(root, LOCK))).toThrow();
     // Fetched for this run only: nothing goes to the sources cache either.
     expect(existsSync(cache)).toBe(false);
+  });
+
+  it('says what to check when the API cannot be reached, after saying why it tries again', async () => {
+    const root = repo();
+    // A port nothing listens on any more.
+    const closed = createServer();
+    await new Promise<void>((r) => closed.listen(0, '127.0.0.1', r));
+    const down = `http://127.0.0.1:${(closed.address() as AddressInfo).port}`;
+    await new Promise<void>((r) => closed.close(() => r()));
+    const r = await run(root, ['update', '--dry-run'], { GH_TOKEN: 's3cr3t', GITHUB_API_URL: down });
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain(`${down.slice(7)}: connection refused; trying again (attempt 2 of 3)`);
+    expect(r.stdout).toContain(
+      `what to check:\n  • could not reach ${down} (GITHUB_API_URL): check that it is the API`,
+    );
+    expect(r.stdout).toContain('where flowpact reads remote repositories, and with which token:');
+    expect(r.stdout).toContain('github.com                GITHUB_API_URL not set');
+    expect(`${r.stdout}${r.stderr}`).not.toContain('s3cr3t');
+    const json = await run(root, ['update', '--dry-run', '--format', 'json'], {
+      GH_TOKEN: 's3cr3t',
+      GITHUB_API_URL: down,
+    });
+    const result = JSON.parse(json.stdout);
+    expect(result.apiUrl).toBe(down);
+    expect(result.failed.map((f: { kind: string }) => f.kind)).toEqual(['unreachable', 'unreachable']);
+    expect(result.hints).toHaveLength(1);
+    expect(result.guide).toHaveLength(3);
   });
 
   it('fetches only what the given paths use, and refuses a path that does not exist', async () => {
