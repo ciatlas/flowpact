@@ -26,6 +26,10 @@ Nothing to change. What is new:
   (`permissions`, `jobPermissions`), and FP613 checks your calls of it too. The first `remotes update` lists those
   entries as `changed`, though their commits are the same, and grades no call on what they now record. flowpact 0.21
   and later ignore keys a later version adds, so an older pin of the action or the CLI keeps reading the lockfile.
+- **From 0.26.1, impact mode's own rules are judged by the baseline:** the severities and overrides of FP810–FP814
+  come from the baseline's config, like the impact policy. A pull request that turns one off or accepts its finding in
+  its own config is still graded, with a note that the change applies once merged, and an ignore comment naming one is
+  invalid ([FP904](/docs/rules/fp904)). Settings already on the base branch keep working.
 
 ## 0.24 → 0.25
 

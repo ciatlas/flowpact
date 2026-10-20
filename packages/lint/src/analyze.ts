@@ -111,6 +111,12 @@ export interface AnalyzeOptions {
      */
     ignoreAfterMerge?: readonly string[];
     /**
+     * The baseline config's severities and overrides. Impact mode's own rules (FP810–FP814) grade the pull request, so
+     * they take their severities and overrides from it, as the policy does: the pull request's config can neither switch
+     * them off nor accept their findings, and no ignore comment accepts them. Without it, the config's apply.
+     */
+    baselineSettings?: Pick<FlowpactConfig, 'rules' | 'overrides'>;
+    /**
      * Run only when the paths hold a published unit that `ignore` does not leave out, in the baseline or the working
      * tree (the action's `impact: auto`). Without paths, the caller decides that beforehand.
      */
@@ -433,11 +439,14 @@ function expandMatrices(
 function selectRules(
   registry: RuleRegistry,
   config: FlowpactConfig,
-  only: string[] | undefined,
+  opts: Pick<AnalyzeOptions, 'only' | 'impact'>,
   unloaded: string[],
 ): { severities: Map<string, SeveritySetting>; only: string[] | undefined } {
+  const { only } = opts;
   // Warned about once, with the overrides' entries, after the rules ran.
   const severities = resolveSeverities(registry, config, { unloaded });
+  const baseline = opts.impact?.baselineSettings;
+  if (baseline) for (const [code, s] of impactSeverities(registry, baseline.rules)) severities.set(code, s);
   const unknownOnly = (only ?? []).filter((o) => !registry.get(o));
   if (unknownOnly.length) {
     const names = registry.all().flatMap((r) => [r.code, r.name]);
@@ -451,6 +460,39 @@ function selectRules(
     );
   }
   return { severities, only: only?.map((o) => registry.get(o)!.code) };
+}
+
+/** Whether a rule (by code or name) is one of impact mode's own, which grade the pull request itself. */
+const isImpactRule = (registry: RuleRegistry, key: string) =>
+  IMPACT_CODES.includes(registry.get(key)?.code ?? '');
+
+/** The severity of each of impact mode's rules that the baseline config's `rules` set, else its default. */
+function impactSeverities(
+  registry: RuleRegistry,
+  rules: FlowpactConfig['rules'],
+): Map<string, SeveritySetting> {
+  const out = new Map<string, SeveritySetting>();
+  for (const code of IMPACT_CODES) {
+    const rule = registry.get(code);
+    if (rule) out.set(code, rule.defaultSeverity);
+  }
+  for (const [key, setting] of Object.entries(rules))
+    if (isImpactRule(registry, key)) out.set(registry.get(key)!.code, setting);
+  return out;
+}
+
+/**
+ * Whether an override counts in impact mode: one of impact mode's rules only when the baseline config has the same
+ * override (rule, target, file and expiry), so a pull request cannot accept its own check (see `baselineSettings`).
+ */
+function honoredIn(
+  registry: RuleRegistry,
+  baseline: Pick<FlowpactConfig, 'overrides'> | undefined,
+): ((o: Override) => boolean) | undefined {
+  if (!baseline) return undefined;
+  const key = (o: Override) => JSON.stringify([registry.get(o.rule)?.code, o.target, o.file, o.expires]);
+  const onBaseline = new Set(baseline.overrides.map(key));
+  return (o) => !isImpactRule(registry, o.rule) || onBaseline.has(key(o));
 }
 
 /** What paths narrow the report to. */
@@ -748,6 +790,11 @@ function resolveIgnored(registry: RuleRegistry, key: string): IgnoredRuleResolut
       invalid: `Ignore comment names ${rule.code} ${rule.name}, which runs once overrides and ignore comments are applied: no comment can ignore it`,
     };
   }
+  if (rule && IMPACT_CODES.includes(rule.code)) {
+    return {
+      invalid: `Ignore comment names ${rule.code} ${rule.name}, which grades the pull request itself: no comment can ignore it, only an override the baseline's config has`,
+    };
+  }
   if (rule) return { code: rule.code };
   const { typo, rule: guess } = typoOf(registry, key);
   if (!typo) return { unloaded: true };
@@ -932,7 +979,7 @@ function prepareRules(
   unloaded: string[],
 ): { run: RuleRun; scope: ReportScope } {
   const { registry, index, config } = base;
-  const { severities, only } = selectRules(registry, config, opts.only, unloaded);
+  const { severities, only } = selectRules(registry, config, opts, unloaded);
   const ruleLog = logger.child('rules');
   // Generated files (gh-aw lock files, `DO NOT EDIT` headers) are checked as callers and callees, but rules about their
   // internals (`generatedFiles: 'skip'`) stay quiet: nobody can act on them in the file itself.
@@ -979,13 +1026,14 @@ function runPhases(
   const findings = dedupe(runRules(run, 'main', {}));
   // Overrides are matched against the whole repository, so linting a subset of files does not make
   // overrides for other files look unused; the scope filter is applied afterwards.
+  const honored = honoredIn(run.registry, opts.impact?.baselineSettings);
   const applied = applyOverrides(
     findings,
     config,
     run.registry,
     opts.overrideLocs ?? [],
     opts.now ?? new Date(),
-    { unloaded },
+    { unloaded, ...(honored ? { honored } : {}) },
   );
   if (unloaded.length)
     logger.warn(`ignoring config entries for rules that are not loaded: ${unloaded.join('; ')}`);
@@ -1196,6 +1244,13 @@ export function overrideMatches(o: Override, code: string, f: Finding): boolean 
   return true;
 }
 
+/** Whether an override's `expires` date has passed, and the days left until it (none without one). */
+function expiryOf(override: Override, today: number): Pick<OverrideUsage, 'expired' | 'daysLeft'> {
+  if (!override.expires) return { expired: false };
+  const daysLeft = Math.round((Date.parse(`${override.expires}T00:00:00Z`) - today) / DAY);
+  return { expired: daysLeft < 0, daysLeft };
+}
+
 /** Splits findings into kept and suppressed, and records how each override was used. */
 export function applyOverrides(
   findings: Finding[],
@@ -1203,24 +1258,22 @@ export function applyOverrides(
   registry: RuleRegistry,
   locs: Loc[],
   now: Date,
-  opts: { unloaded?: string[] } = {},
+  opts: { unloaded?: string[]; honored?: (o: Override) => boolean } = {},
 ): { kept: Finding[]; suppressed: SuppressedFinding[]; usage: OverrideUsage[] } {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const unknown = { hard: [] as string[], tolerated: [] as string[] };
   const usage: (OverrideUsage & { code: string })[] = config.overrides.map((override, index) => {
     const rule = registry.get(override.rule);
     if (!rule) triageUnknown(registry, override.rule, `overrides.${index}.rule`, unknown);
-    const daysLeft = override.expires
-      ? Math.round((Date.parse(`${override.expires}T00:00:00Z`) - today) / DAY)
-      : undefined;
     return {
       index,
       override,
       code: rule?.code ?? '',
       ...(locs[index] ? { loc: locs[index] } : {}),
       matched: 0,
-      expired: daysLeft !== undefined && daysLeft < 0,
-      ...(daysLeft !== undefined ? { daysLeft } : {}),
+      ...expiryOf(override, today),
+      // Not applied here (see `honored`), so whether it is used cannot be judged.
+      ...(opts.honored && !opts.honored(override) ? { inactive: true } : {}),
     };
   });
   if (unknown.hard.length)
@@ -1229,7 +1282,7 @@ export function applyOverrides(
   const kept: Finding[] = [];
   const suppressed: SuppressedFinding[] = [];
   for (const f of findings) {
-    const matching = usage.filter((u) => overrideMatches(u.override, u.code, f));
+    const matching = usage.filter((u) => !u.inactive && overrideMatches(u.override, u.code, f));
     for (const u of matching) u.matched++;
     const active = matching.find((u) => !u.expired);
     if (!active) {
