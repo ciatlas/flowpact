@@ -1,4 +1,5 @@
 /** `flowpact remotes update` against a local stand-in for the GitHub API (#152). */
+import { execFileSync } from 'node:child_process';
 import {
   existsSync,
   mkdirSync,
@@ -19,12 +20,17 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const BIN = join(fileURLToPath(new URL('../../../', import.meta.url)), 'packages/cli/dist/index.js');
 const SHA = 'a'.repeat(40);
+/** octo/setup@v3, which renames v2's `version` input to `node-version`. */
+const SHA3 = 'c'.repeat(40);
 const LOCK = '.github/flowpact/remotes.lock.yaml';
 
+const setupAction = (input: string) =>
+  `name: s\ndescription: d\ninputs:\n  ${input}: { description: v, required: true }\nruns:\n  using: composite\n  steps: []\n`;
 const files: Record<string, string> = {
   '/repos/octo/setup/commits/v2': SHA,
-  [`/repos/octo/setup/contents/action.yml?ref=${SHA}`]:
-    'name: s\ndescription: d\ninputs:\n  version: { description: v, required: true }\nruns:\n  using: composite\n  steps: []\n',
+  [`/repos/octo/setup/contents/action.yml?ref=${SHA}`]: setupAction('version'),
+  '/repos/octo/setup/commits/v3': SHA3,
+  [`/repos/octo/setup/contents/action.yml?ref=${SHA3}`]: setupAction('node-version'),
 };
 const auth: (string | undefined)[] = [];
 /** A HOME of its own: the CLI asks `gh` for a token, which writes its state under HOME (or the working directory). */
@@ -450,5 +456,105 @@ describe('what a changed entry does to the calls', () => {
     const refused = await run(root, ['download', '--fail-on', 'breaks']);
     expect(refused.exitCode).toBe(2);
     expect(refused.stderr).toContain('--fail-on is for `flowpact remotes update`');
+  });
+});
+
+describe('lint --fetch-remotes on a pull request', () => {
+  /**
+   * A repository whose branch moves octo/setup from v2 to v3 and records v3 in its lockfile with v2's interface: the
+   * analysis, which reads the lockfile, sees no break, while the version change, always fetched, does.
+   */
+  function bumped(): { root: string; base: string } {
+    const root = mkdtempSync(join(tmpdir(), 'flowpact-remotes-versions-'));
+    const git = (...args: string[]) =>
+      execFileSync('git', args, { cwd: root, stdio: 'pipe' }).toString().trim();
+    const ci = (v: string) =>
+      `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@${v}\n        with: { version: '1' }\n`;
+    mkdirSync(join(root, '.github/workflows'), { recursive: true });
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 't@example.com');
+    git('config', 'user.name', 't');
+    git('config', 'commit.gpgsign', 'false');
+    writeFileSync(join(root, '.github/workflows/ci.yml'), ci('v2'));
+    git('add', '-A');
+    git('commit', '-q', '-m', 'base');
+    const base = git('rev-parse', 'HEAD');
+    git('checkout', '-q', '-b', 'bump');
+    writeFileSync(join(root, '.github/workflows/ci.yml'), ci('v3'));
+    mkdirSync(join(root, '.github/flowpact'));
+    writeFileSync(
+      join(root, LOCK),
+      `version: 1\nremotes:\n  octo/setup@v3:\n    sha: ${SHA3}\n    kind: action\n    using: composite\n    inputs:\n      version: { required: true }\n`,
+    );
+    git('add', '-A');
+    git('commit', '-q', '-m', 'bump');
+    return { root, base };
+  }
+
+  const lint = (root: string, args: string[], env: Record<string, string> = {}) =>
+    execa('node', [BIN, 'lint', '--root', root, '--fetch-remotes', ...args], {
+      reject: false,
+      extendEnv: false,
+      env: {
+        PATH: process.env.PATH ?? '',
+        HOME: home,
+        NO_COLOR: '1',
+        GITHUB_API_URL: api,
+        GH_TOKEN: 't',
+        ...env,
+      },
+    });
+
+  it('grades the references the branch moves to another version, and fails when one breaks a call', async () => {
+    const { root, base } = bumped();
+    const r = await lint(root, ['--base', 'main']);
+    expect(r.stdout).toContain('No problems found');
+    expect(r.stdout).toContain(
+      [
+        `version changes from ${base.slice(0, 7)}: 1 call broken`,
+        `  octo/setup@v3 (from octo/setup@v2): aaaaaaa → ccccccc, breaks 1 of 1 call`,
+        `    input "version" was removed — steps that pass it get a warning, and their value is ignored`,
+        `    input "node-version" was added and must be passed — existing callers do not pass it`,
+        `    breaks .github/workflows/ci.yml:6 jobs.b step #1`,
+        `      FP101 Step #1 uses octo/setup@v3 without required input "node-version" — GitHub will run it with an empty value`,
+        `      FP102 octo/setup@v3 has no input "version"`,
+      ].join('\n'),
+    );
+    expect(r.exitCode).toBe(1);
+    expect((await lint(root, ['--base', 'main', '--fail-on', 'never'])).exitCode).toBe(0);
+    // Beside a data format on stdout, the grades go to stderr; the report itself stays as it was.
+    const json = await lint(root, ['--base', 'main', '--format', 'json']);
+    expect(JSON.parse(json.stdout).findings).toEqual([]);
+    expect(json.stderr).toContain(`version changes from ${base.slice(0, 7)}: 1 call broken`);
+    expect(json.exitCode).toBe(1);
+    // In the Markdown report, as the action's job summary has them.
+    const markdown = await lint(root, ['--base', 'main', '--format', 'markdown']);
+    expect(markdown.stdout).toContain('### Version changes');
+    expect(markdown.stderr).not.toContain('version changes from');
+    // Without a base, nothing is graded.
+    expect(await lint(root, [])).toMatchObject({
+      exitCode: 0,
+      stderr: expect.not.stringContaining('version changes'),
+    });
+  });
+
+  it('grades from the pull request base in GitHub Actions, but not on pull_request_target', async () => {
+    const { root, base } = bumped();
+    const event = join(mkdtempSync(join(tmpdir(), 'flowpact-remotes-event-')), 'event.json');
+    writeFileSync(event, JSON.stringify({ pull_request: { base: { sha: base } } }));
+    const actions = (name: string) => ({
+      GITHUB_ACTIONS: 'true',
+      GITHUB_EVENT_NAME: name,
+      GITHUB_EVENT_PATH: event,
+    });
+    const pr = await lint(root, [], actions('pull_request'));
+    expect(pr.stdout).toContain(`version changes from ${base.slice(0, 7)}: 1 call broken`);
+    expect(pr.exitCode).toBe(1);
+    const target = await lint(root, [], actions('pull_request_target'));
+    expect(target.stdout).not.toContain('version changes');
+    expect(target.stderr).toContain(
+      'version changes: not graded on pull_request_target, whose checkout may be untrusted',
+    );
+    expect(target.exitCode).toBe(0);
   });
 });

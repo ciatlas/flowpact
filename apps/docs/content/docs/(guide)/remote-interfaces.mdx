@@ -304,8 +304,24 @@ With `remotes: fetch`, the [action](/docs/action) also grades the references a p
 (`octo/setup@v2` → `@v3`) and adds a **Version changes** section to the job summary. The interface before is the base
 commit's; the one after is always fetched, never read from the pull request's own lockfile, which could hide a break.
 A version change that breaks a call fails the step (unless `fail-on` is `never`), and the `version-verdict` output says
-`breaks`, `unchecked` or `fits`. For your own action, [`lint()` and `check()`](/docs/api#version-changes) grade them
-with `fetchRemotes`; the CLI does not.
+`breaks`, `unchecked` or `fits`.
+
+`flowpact lint --fetch-remotes` (or `check`) does the same on a pull request in GitHub Actions, or with `--base <ref>`,
+whose commit must be in the clone. It prints the grades after the report, or on stderr when the report is `json`,
+`sarif` or `github`, and exits `1` when one breaks a call, unless `--fail-on never`:
+
+```text
+version changes from 5ea36fb: 1 call broken
+  octo/setup@v3 (from octo/setup@v2): 3f2a9c1 → 9d4e2f1, breaks 1 of 1 call
+    input "version" was removed — steps that pass it get a warning, and their value is ignored
+    input "node-version" was added and must be passed — existing callers do not pass it
+    breaks .github/workflows/ci.yml:6 jobs.b step #1
+      FP101 Step #1 uses octo/setup@v3 without required input "node-version" — GitHub will run it with an empty value
+      FP102 octo/setup@v3 has no input "version"
+```
+
+Neither grades on `pull_request_target` or `workflow_run`. For your own action,
+[`lint()` and `check()`](/docs/api#version-changes) return the grades with `fetchRemotes`.
 
 ## Renovate and Dependabot
 

@@ -455,10 +455,13 @@ export interface Analysis {
    * (`octo/setup@v2` → `@v3`), graded against the repository's calls, as the action's `remotes: fetch` grades them.
    * The base is `base`, else in GitHub Actions the pull request's base commit; it must be in the clone, and `notes`
    * says when it is not. Undefined without a base, and on `pull_request_target` and `workflow_run`, whose checkout may
-   * be untrusted. `exitCode()` and the annotations are about the findings only: fail on a grade yourself.
+   * be untrusted. `exitCode()`, `pretty()` and `markdown()` include them; the other reports are about the findings.
    */
   readonly versionChanges?: VersionChanges;
-  /** The CLI's exit code for `--fail-on` (default `error`): 1 when there are findings at that level. */
+  /**
+   * The CLI's exit code for `--fail-on` (default `error`): 1 when there are findings at that level, or, unless it is
+   * `never`, when a version change breaks a call.
+   */
   exitCode(failOn?: FailOn): 0 | 1;
   annotations(options?: PathPrefixOptions): Annotation[];
   /**
@@ -475,7 +478,10 @@ export interface Analysis {
   markdown(options?: MarkdownOptions): string;
   /** The JSON report as `--format json` prints it; `includeGraph` adds the data-flow graph. */
   json(options?: { includeGraph?: boolean }): string;
-  /** The terminal report (`--format pretty`). */
+  /**
+   * The terminal report (`--format pretty`); with the version changes after it when `versionChanges` graded a change or
+   * could not fetch one.
+   */
   pretty(options?: PrettyOptions): string;
 }
 

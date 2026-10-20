@@ -95,13 +95,13 @@ then reports nothing.
 | Member | Description |
 | --- | --- |
 | `report` | The [JSON report](/docs/cli#json-report): what `--format json` prints, as an object. |
-| `exitCode(failOn?)` | The CLI's exit code for `--fail-on` (`'error'` by default, `'warning'` or `'never'`): `1` when there are findings at that level, else `0`. |
+| `exitCode(failOn?)` | The CLI's exit code for `--fail-on` (`'error'` by default, `'warning'` or `'never'`): `1` when there are findings at that level, or unless it is `'never'`, when a [version change](#version-changes) breaks a call; else `0`. |
 | `annotations({ pathPrefix }?)` | One [annotation](/docs/action#annotations) per finding, for `@actions/core`'s `error()`, `warning()` and `notice()`: `level`, `message`, `title`, `file`, `startLine`, `endLine`, and for a finding on one line `startColumn` and `endColumn`. |
 | `github({ pathPrefix }?)` | The annotations as GitHub workflow commands (`--format github`), one line each: printed in a GitHub Actions step, they annotate the run and the pull request, without `@actions/core`. |
 | `sarif({ pathPrefix }?)` | SARIF 2.1.0 for code scanning, as text. |
 | `markdown(options?)` | The Markdown report, for job summaries and pull request comments. Options: `title`, `maxFindings` (default 50), `repoUrl` and `sha` (to link locations to the files at that commit), `includeGraph`. When a [version change](#version-changes) was graded or could not be fetched, it ends with the Version changes section of the action's job summary. |
 | `json({ includeGraph }?)` | The JSON report as `--format json` prints it. |
-| `pretty(options?)` | The terminal report. Options: `color`, `width` (default 100), `ascii`, `hideInfo`, `hyperlinks`. |
+| `pretty(options?)` | The terminal report, followed by the [version changes](#version-changes) when one was graded or could not be fetched. Options: `color`, `width` (default 100), `ascii`, `hideInfo`, `hyperlinks`. |
 | `contracts` | `check` only: `drift`, `breaking`, and `patch()`, the regenerated contracts as a patch for `git apply` when they drifted (`--patch`). |
 | `impact` | Impact mode's verdict, as in the report: `required`, `declared`, `ok`, `changes` and `baseline`, with `paths`, `scope`, and when `ignore` left out published units, `ignored`. |
 | `versionChanges` | `lint` and `check` with `fetchRemotes`: the remote references the change moves to another version, graded ([Version changes](#version-changes)). |
@@ -114,21 +114,17 @@ to print in a GitHub Actions log, like the [text](#text) of the other commands.
 ### Version changes
 
 With `fetchRemotes`, `lint` and `check` also grade the remote references the change moves to another version
-(`octo/setup@v2` → `@v3`) against the repository's calls, as the action's `remotes: fetch` does
-([On a pull request](/docs/remote-interfaces#on-a-pull-request)). The CLI does not grade them. The base is `base`, else
-in GitHub Actions the pull request's base commit. The API fetches no commits, so the base must be in the clone (check out
-with `fetch-depth: 0`); when it is not, `notes` says so. Without a base, and on `pull_request_target` and
-`workflow_run`, whose checkout may be untrusted, nothing is graded.
+(`octo/setup@v2` → `@v3`) against the repository's calls, as `--fetch-remotes` and the action's `remotes: fetch` do
+([On a pull request](/docs/remote-interfaces#on-a-pull-request)). The base is `base`, else in GitHub Actions the pull
+request's base commit. The API fetches no commits, so the base must be in the clone (check out with `fetch-depth: 0`);
+when it is not, `notes` says so. Without a base, and on `pull_request_target` and `workflow_run`, whose checkout may be
+untrusted, nothing is graded.
 
 `versionChanges` has the `base` commit, the `changes` (each `{ ref, from }`), their `grades` (the `grades` of
 [`remotesUpdate()`](#remotesupdate-remotesdownload-and-remotesclean)), and `failed`, the references that could not be
-fetched. `exitCode()` and the annotations are about the findings only. To fail on a version change that breaks a call,
-as the action does:
-
-```js
-const broken = (analysis.versionChanges?.grades ?? []).flatMap((g) => g.calls).filter((c) => c.verdict === 'breaks');
-if (broken.length) process.exitCode = 1;
-```
+fetched. As the CLI and the action fail on a version change that breaks a call, `exitCode()` returns `1` for one,
+unless `failOn` is `'never'`. `pretty()` and `markdown()` list the grades; the other reports are about the findings
+only.
 
 ## generate
 
@@ -435,15 +431,13 @@ try {
     core.setOutput('patch', file);
   }
 
-  const failOn = core.getInput('fail-on');
   const { errors, warnings } = analysis.report.summary;
   core.setOutput('errors', errors);
   core.setOutput('warnings', warnings);
-  // exitCode() is about the findings. A version change that breaks a call fails the step too, as in flowpact's action.
-  const broken = (analysis.versionChanges?.grades ?? []).flatMap((g) => g.calls).filter((c) => c.verdict === 'breaks');
-  if (analysis.exitCode(failOn) === 1) core.setFailed(`flowpact found ${errors} error(s) and ${warnings} warning(s)`);
-  else if (broken.length && failOn !== 'never')
-    core.setFailed(`flowpact: a version change breaks ${broken.length} call(s) (see the job summary)`);
+  // Findings at fail-on fail the step, and so does a version change that breaks a call, unless fail-on is never.
+  const breaks = analysis.versionChanges?.grades.some((g) => g.verdict === 'breaks');
+  if (analysis.exitCode(core.getInput('fail-on')) === 1)
+    core.setFailed(`flowpact found ${errors} error(s) and ${warnings} warning(s)${breaks ? '; a version change breaks a call' : ''}`);
 } catch (err) {
   // A config, plugin or path problem: its message and each issue. Anything else is a bug, with its stack.
   if (!(err instanceof FlowpactError)) throw err;

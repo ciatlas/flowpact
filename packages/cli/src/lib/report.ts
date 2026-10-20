@@ -34,7 +34,7 @@ import { attempt, usage } from './errors';
 import { checkFetchOptions, fetchOptions, timed } from './remotes';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
-import { renderOptions, type TextOptions } from './text';
+import { renderOptions, type TextOptions, versionChangesText } from './text';
 
 export type ReportCommand = 'lint' | 'check' | 'impact';
 export type FailOn = 'error' | 'warning' | 'never';
@@ -85,11 +85,6 @@ export interface ReportOptions extends ImpactFlags {
   token?: string;
   /** With `fetchRemotes`, the GitHub API. Default: `GITHUB_API_URL`, else `https://api.github.com`. */
   apiUrl?: string;
-  /**
-   * With `fetchRemotes`, also grade the remote references the change moves to another version (`versionChanges`). The
-   * API's `lint` and `check` ask for it; the CLI does not, as it prints no such grades.
-   */
-  versionChanges?: boolean;
 }
 
 /** The remote references the change moves to another version, graded against the repository's calls. */
@@ -123,6 +118,7 @@ export interface Analysis {
   readonly impact?: JsonReport['impact'];
   /** With `fetchRemotes` and a base, the remote references the change moves to another version, graded. */
   readonly versionChanges?: VersionChanges;
+  /** 1 on findings at `failOn`, or unless it is `never`, on a version change that breaks a call. */
   exitCode(failOn?: FailOn): 0 | 1;
   annotations(options?: { pathPrefix?: string }): GithubAnnotation[];
   /** The annotations as workflow commands (`--format github`), every value escaped. */
@@ -150,6 +146,8 @@ export interface ReportHooks {
    * takes it from there when the baseline has a workflow or action within it there and not under the root.
    */
   elsewhere?(path: string): string | undefined;
+  /** With `fetchRemotes`, version changes are not graded: why, as a `version changes: …` note. */
+  versionsNotGraded?(note: string): void;
 }
 
 /** The baseline and the declaration for impact mode; read from the pull request when running in GitHub Actions. */
@@ -303,25 +301,25 @@ function baseFiles(root: string, ref: string): ReturnType<typeof gitFileSystem> 
  * With `fetchRemotes`, the remote references the change moves to another version, graded against the repository's
  * calls as the action's `remotes: fetch` grades them (see `gradeVersionChanges`); undefined without a base. The base
  * must be in the clone. Not on events whose checkout may be untrusted: the pull request would choose which repositories
- * the token reads. Why none were graded goes to `notes`.
+ * the token reads. Why none were graded goes to `notGraded`.
  */
 async function versionChangesFor(
   session: Session,
   base: string | undefined,
   fetch: FetchRemotesOptions,
-  notes: string[],
+  notGraded: (note: string) => void,
 ): Promise<VersionChanges | undefined> {
   const ref = versionBase(base);
   if (!ref) return undefined;
   const event = process.env.GITHUB_EVENT_NAME ?? '';
   if (UNTRUSTED_EVENTS.has(event)) {
-    notes.push(`version changes: not graded on ${event}, whose checkout may be untrusted`);
+    notGraded(`version changes: not graded on ${event}, whose checkout may be untrusted`);
     return undefined;
   }
   const { root, loaded, logger } = session;
   const files = baseFiles(root, ref);
   if ('error' in files) {
-    notes.push(`version changes: not graded: ${files.error}`);
+    notGraded(`version changes: not graded: ${files.error}`);
     return undefined;
   }
   const r = await gradeVersionChanges(
@@ -402,11 +400,25 @@ export async function runReport(
   checkTargets(result.project, paths, root, accepted.paths);
   if (command !== 'impact') checkNotEmpty(result.summary, root);
   if (result.impactSkipped && skipped(result.impactSkipped, notes, hooks)) return undefined;
+  const notGraded = (note: string) => {
+    notes.push(note);
+    hooks.versionsNotGraded?.(note);
+  };
   const versions =
-    fetch && options.versionChanges
-      ? await versionChangesFor(session, options.base, fetch, notes)
+    fetch && command !== 'impact'
+      ? await versionChangesFor(session, options.base, fetch, notGraded)
       : undefined;
   return analysisOf(result, notes, versions);
+}
+
+/** Whether a version change breaks a call. */
+const breaksACall = (versions: VersionChanges | undefined) =>
+  Boolean(versions?.grades.some((g) => g.verdict === 'breaks'));
+
+/** The exit code for `failOn`: findings at that level, or unless it is `never`, a version change that breaks a call. */
+function exitCodeOf(result: AnalysisResult, versions: VersionChanges | undefined, failOn: unknown): 0 | 1 {
+  const level = oneOf('failOn', failOn, FAIL_ON) ?? 'error';
+  return exitCodeFor(result.summary, level) || (level !== 'never' && breaksACall(versions)) ? 1 : 0;
 }
 
 /** The Version changes section of the action's job summary; empty when nothing was graded or failed. */
@@ -440,8 +452,7 @@ function analysisOf(result: AnalysisResult, notes: string[], versions?: VersionC
       return this.report.impact;
     },
     ...(versions ? { versionChanges: versions } : {}),
-    exitCode: (failOn = 'error') =>
-      exitCodeFor(result.summary, oneOf('failOn', failOn, FAIL_ON) ?? 'error') as 0 | 1,
+    exitCode: (failOn = 'error') => exitCodeOf(result, versions, failOn),
     annotations: ({ pathPrefix } = {}) =>
       result.findings.map((f) => githubAnnotation(f, pathPrefix ? { pathPrefix } : {})),
     // Workflow commands on purpose: every value in them is escaped, so a finding cannot start a command of its own.
@@ -452,9 +463,12 @@ function analysisOf(result: AnalysisResult, notes: string[], versions?: VersionC
     markdown: (options = {}) =>
       neutralizeWorkflowCommands(`${renderMarkdown(result, options)}${versionsMarkdown(versions, options)}`),
     json: ({ includeGraph } = {}) => renderJson(result, { includeGraph: Boolean(includeGraph) }),
-    pretty: (options = {}) =>
-      neutralizeWorkflowCommands(
-        renderPretty(result, { ...renderOptions(options), hideInfo: Boolean(options.hideInfo) }),
-      ),
+    pretty: (options = {}) => {
+      const render = renderOptions(options);
+      const text = renderPretty(result, { ...render, hideInfo: Boolean(options.hideInfo) });
+      const versionsText = versionChangesText(versions, render);
+      // Like the report, without a final newline.
+      return neutralizeWorkflowCommands(versionsText ? `${text}\n${versionsText.replace(/\n$/, '')}` : text);
+    },
   };
 }

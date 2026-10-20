@@ -29,10 +29,8 @@ export const VERSION: typeof Api.VERSION = ENGINE_VERSION;
 export const FlowpactError: typeof Api.FlowpactError = FlowpactErrorClass;
 
 async function report(command: ReportCommand, options: Api.LintOptions | Api.ImpactOptions = {}) {
-  // Without hooks, nothing stops the run before the analysis. With fetchRemotes, lint and check grade version changes
-  // too, as the action does; the CLI prints no such grades, so it does not ask for them.
-  const versionChanges = command !== 'impact';
-  return (await runReport(openSession(options), command, { ...options, versionChanges }))!;
+  // Without hooks, nothing stops the run before the analysis.
+  return (await runReport(openSession(options), command, options))!;
 }
 
 export const lint: typeof Api.lint = (options) => report('lint', options);

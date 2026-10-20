@@ -34,6 +34,7 @@ import {
   type RemotesUpdateResult,
   type SourcesKept,
 } from './remotes';
+import type { VersionChanges } from './report';
 import { oneOf } from './session';
 
 /** How text is rendered: what `--no-color`, `--ascii` and the terminal decide in the CLI. */
@@ -213,17 +214,41 @@ function callLines(g: RemoteCallGrade, c: Paint): string[] {
 }
 
 /**
- * A changed entry: its commits and verdict, the interface diff (what breaks in red), then each call that does not
- * simply fit, and how many others do.
+ * A changed entry (`head`): its commits and verdict, the interface diff (what breaks in red), then each call that does
+ * not simply fit, and how many others do.
  */
-function gradeLines(g: RemoteChangeGrade, c: Paint, arrow: string): string[] {
+function gradeLines(
+  g: RemoteChangeGrade,
+  c: Paint,
+  arrow: string,
+  head = `changed ${shown(g.ref)}`,
+): string[] {
   const { listed, others } = listedCalls(g);
   return [
-    `  changed ${shown(g.ref)}: ${commitMove(g, arrow)}, ${verdictLine(g)}`,
+    `  ${head}: ${commitMove(g, arrow)}, ${verdictLine(g)}`,
     ...g.changes.map((ch) => `    ${(ch.breaking ? c.red : c.dim)(shown(ch.message))}`),
     ...listed.flatMap((k) => callLines(k, c)),
     ...(others ? [c.dim(`    ${others}`)] : []),
   ];
+}
+
+/**
+ * `lint` and `check` with `--fetch-remotes`: the remote references the change moves to another version, each graded as
+ * `remotes update` prints a changed entry, then those that could not be fetched. Empty when nothing was graded or failed.
+ */
+export function versionChangesText(v: VersionChanges | undefined, opts: RenderOptions): string {
+  if (!v || (!v.grades.length && !v.failed.length)) return '';
+  const c = opts.color ? pc : { bold: (s: string) => s, red: (s: string) => s, dim: (s: string) => s };
+  const from = new Map(v.changes.map((ch) => [ch.ref, ch.from]));
+  const head = (ref: string) => `${shown(ref)} (from ${shown(from.get(ref) ?? '?')})`;
+  const broken = v.grades.reduce((n, g) => n + g.calls.filter((k) => k.verdict === 'breaks').length, 0);
+  const verdict = broken ? `: ${c.red(`${broken} call${broken === 1 ? '' : 's'} broken`)}` : '';
+  const lines = [
+    `${c.bold(`version changes from ${v.base.slice(0, 7)}`)}${verdict}`,
+    ...v.grades.flatMap((g) => gradeLines(g, c, opts.ascii ? '->' : '→', head(g.ref))),
+    ...v.failed.map((f) => `  ${c.red('not graded')} ${shown(f.ref)}: ${shown(f.error)}`),
+  ];
+  return safe(`${lines.join('\n')}\n`);
 }
 
 /** What `remotes update` wrote (or would), the token it used, and where it kept the files it read. */

@@ -3,6 +3,7 @@ import type { ImpactLevel } from '@flowpact/lint';
 import type { MarkdownOptions } from '@flowpact/reporters';
 import { type ArgsDef, defineCommand } from 'citty';
 import { type FailOn, runReport as runAnalysis } from '../lib/report';
+import { versionChangesText } from '../lib/text';
 import {
   commonArgs,
   createContext,
@@ -46,7 +47,8 @@ export const reportArgs = {
     type: 'enum',
     options: ['error', 'warning', 'never'],
     default: 'error',
-    description: 'Exit 1 when findings at this level exist',
+    description:
+      'Exit 1 when findings at this level exist, or (unless never) when a version change that lint or check graded with --fetch-remotes breaks a call',
   },
   'hide-info': { type: 'boolean', description: 'Do not list info-level findings (still counted)' },
   only: {
@@ -71,7 +73,7 @@ export const reportArgs = {
   'fetch-remotes': {
     type: 'boolean',
     description:
-      'Fetch the interfaces of remote workflows and actions the remote interfaces lockfile lacks, for this run only. Token: GH_TOKEN, GITHUB_TOKEN or `gh auth token`; private repositories need read access to their contents',
+      'Fetch the interfaces of remote workflows and actions the remote interfaces lockfile lacks, for this run only; in lint and check, on a pull request (or with --base), also grade the remote references it moves to another version. Token: GH_TOKEN, GITHUB_TOKEN or `gh auth token`; private repositories need read access to their contents',
   },
   'github-com': {
     type: 'boolean',
@@ -85,6 +87,11 @@ export const reportArgs = {
       'Also check the release impact of changes to published workflows and actions (with paths, those within them) against the declared impact',
   },
   ...impactArgs(),
+  base: {
+    ...impactArgs().base,
+    description:
+      'Baseline ref for impact mode (default: the pull request base in GitHub Actions, else origin/HEAD), and for the version changes lint and check grade with --fetch-remotes (default: the pull request base in GitHub Actions)',
+  },
 } satisfies ArgsDef;
 
 /** Flags of impact mode (`--impact` on lint/check, and `flowpact impact`). */
@@ -244,6 +251,13 @@ function writeReports(
   if (args.patch && patch !== undefined) writeOutput(args.patch, patch, ctx, 'data');
 }
 
+/** The version changes on stderr when the report on stdout is data (json, sarif, github): pretty and Markdown list them. */
+function printVersionChanges(analysis: Analysis, ctx: Context, format: string): void {
+  if (format === 'pretty' || format === 'markdown') return;
+  const text = versionChangesText(analysis.versionChanges, ctx.render);
+  if (text) ctx.stderr(text);
+}
+
 /**
  * Shared implementation of `flowpact lint`, `flowpact check` and `flowpact impact`: the API's `lint`, `check` and
  * `impact`, with the banner, the `impact:` notes and the reports printed and written as the flags ask.
@@ -274,9 +288,11 @@ export async function runReportCommand(
       for (const note of notes) ctx.stderr(note);
     },
     elsewhere: (path) => cwdPath(path, ctx.root),
+    versionsNotGraded: (note) => ctx.stderr(note),
   });
   if (!analysis) return 0;
   writeReports(analysis, ctx, args, files);
+  printVersionChanges(analysis, ctx, args.format);
   return analysis.exitCode(args['fail-on'] as FailOn);
 }
 

@@ -54,13 +54,13 @@ flowpact lint [paths…] [options]
 | `--plugin <file>` | Also load this plugin, relative to the working directory; repeatable, and not affected by `--no-plugins`. See [organization rules](/docs/integrating#organization-rules). |
 | `--format pretty\|json\|markdown\|sarif\|github` | Output on stdout (default `pretty`). See [output formats](#output-formats). |
 | `-o, --output <file>` | Also write the report to a file, replacing it; format by extension: `.sarif` / `.sarif.json` → SARIF, `.json` → JSON, `.md` → Markdown, anything else → plain text. Name the format for other names, as in `-o markdown:"$GITHUB_STEP_SUMMARY"`. Repeat it to write several reports from one run. |
-| `--fail-on error\|warning\|never` | Exit `1` when findings at this level exist (default `error`). |
+| `--fail-on error\|warning\|never` | Exit `1` when findings at this level exist (default `error`), and unless `never`, when a version change that `--fetch-remotes` grades breaks a call. |
 | `--only <codes>` | Comma-separated codes or names to run, e.g. `FP401,unused-input`. |
 | `--hide-info` | Pretty terminal output only: do not list info findings (they are still counted). JSON, Markdown and SARIF always include them. |
 | `--include-graph` | Add the data-flow graph to JSON output and the call graph (Mermaid) to Markdown output. |
 | `--dump-graph <file>` | Write the data-flow graph as JSON (debugging). |
 | `--no-schema` | Skip validation against GitHub's workflow schema. |
-| `--fetch-remotes` | Fetch the interfaces of the remote workflows and actions the [remote interfaces lockfile](/docs/remote-interfaces) lacks, for this run only (nothing is written), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. A reference that cannot be fetched is a warning. |
+| `--fetch-remotes` | Fetch the interfaces of the remote workflows and actions the [remote interfaces lockfile](/docs/remote-interfaces) lacks, for this run only (nothing is written), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. A reference that cannot be fetched is a warning. On a pull request in GitHub Actions, or with `--base <ref>`, it also grades the remote references the change moves to another version ([On a pull request](/docs/remote-interfaces#on-a-pull-request)). |
 | `--impact` | Also check the release impact of the changes against the declared impact, with `--base <ref>`, `--expect none\|patch\|minor\|major`, `--title <text>` and `--labels <a,b>`. See [`flowpact impact`](#flowpact-impact). |
 | `-d, --debug` | Debug logging (see below). |
 | `-v` / `-vv` | Verbose / trace logging. |

@@ -944,26 +944,40 @@ out({ download, text, clean });`,
     expect(r.clean).toEqual({ dir: join(cache, 'remotes'), keep: 0, removed: 1 });
   });
 
-  /** A repository whose branch moves octo/setup from v2 to v3, which renames the input its step passes. */
-  const bumped = () => {
+  /**
+   * A repository whose branch moves octo/setup from v2 to v3, which renames the input its step passes. With `hidden`,
+   * the branch's lockfile records v3 with v2's interface, so only the version change shows the break.
+   */
+  const bumped = (hidden = false) => {
     const ci = (version: string) =>
       `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@${version}\n        with: { version: '1' }\n`;
     const { root, git } = gitRepo('flowpact-api-versions-', { '.github/workflows/ci.yml': ci('v2') });
     const base = git('rev-parse', 'HEAD');
     git('checkout', '-q', '-b', 'bump');
     write(root, { '.github/workflows/ci.yml': ci('v3') });
-    git('commit', '-q', '-am', 'bump');
+    if (hidden)
+      write(root, {
+        '.github/flowpact/remotes.lock.yaml': `version: 1\nremotes:\n  octo/setup@v3:\n    sha: ${SHA3}\n    kind: action\n    using: composite\n    inputs:\n      version: { required: true }\n`,
+      });
+    git('add', '-A');
+    git('commit', '-q', '-m', 'bump');
     return { root, base };
   };
 
   it('lint and check fetch with the token given, sent only to the API, and grade the version changes', async () => {
     const { root, base } = bumped();
     auth.length = 0;
-    const r = await api<{ lint: Record<string, unknown>; check: unknown; notes: string[]; markdown: string }>(
+    const r = await api<{
+      lint: Record<string, unknown>;
+      check: unknown;
+      notes: string[];
+      markdown: string;
+      pretty: string;
+    }>(
       `const options = { root: ${JSON.stringify(root)}, fetchRemotes: true, base: 'main', token: 'api-token' };
 const lint = await flowpact.lint(options);
 const check = await flowpact.check(options);
-out({ lint: lint.versionChanges, check: check.versionChanges, notes: lint.notes, markdown: lint.markdown() });`,
+out({ lint: lint.versionChanges, check: check.versionChanges, notes: lint.notes, markdown: lint.markdown(), pretty: lint.pretty() });`,
       { ...env, GH_TOKEN: 'env-token' },
     );
     expect(r.lint).toEqual({
@@ -984,13 +998,26 @@ out({ lint: lint.versionChanges, check: check.versionChanges, notes: lint.notes,
     // The job summary's section, as the action writes it.
     expect(r.markdown).toContain('### Version changes');
     expect(r.markdown).toContain('**`octo/setup@v3`** (from `octo/setup@v2`');
+    expect(r.pretty).toContain('version changes from');
     expect(new Set(auth)).toEqual(new Set(['Bearer api-token']));
-    // The CLI prints no such grades.
-    const printed = await cli(
-      ['lint', '--root', root, '--fetch-remotes', '--base', 'main', '--format', 'markdown'],
+    // The CLI prints the same.
+    const args = ['lint', '--root', root, '--fetch-remotes', '--base', 'main'];
+    const pretty = await cli(args, env);
+    expect(untimed(pretty.stdout)).toBe(untimed(r.pretty).replace(/\n$/, ''));
+    const markdown = await cli([...args, '--format', 'markdown'], env);
+    expect(untimed(markdown.stdout)).toBe(untimed(r.markdown).replace(/\n$/, ''));
+  });
+
+  it('exits 1 on a version change that breaks a call, unless failOn is never', async () => {
+    const { root } = bumped(true);
+    const r = await api<{ codes: string[]; exit: number[] }>(
+      `const a = await flowpact.lint({ root: ${JSON.stringify(root)}, fetchRemotes: true, base: 'main' });
+out({ codes: a.report.findings.map((f) => f.code), exit: [a.exitCode(), a.exitCode('warning'), a.exitCode('never')] });`,
       env,
     );
-    expect(printed.stdout).not.toContain('Version changes');
+    // The lockfile hides the break from the analysis; the version change, read from the API, shows it.
+    expect(r.codes).toEqual([]);
+    expect(r.exit).toEqual([1, 1, 0]);
   });
 
   it('grades from the pull request base in GitHub Actions, never where the checkout may be untrusted', async () => {
