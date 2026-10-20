@@ -4,6 +4,20 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.27.0](https://github.com/ciatlas/flowpact/compare/v0.26.0...v0.27.0) (2026-10-20)
+
+
+### Features
+
+* **api:** token for fetchRemotes, and version changes graded by lint and check ([#242](https://github.com/ciatlas/flowpact/issues/242)) ([04dbdfe](https://github.com/ciatlas/flowpact/commit/04dbdfee479124e7161811795ad0e5d2f8bf7cdd))
+* **cli:** grade version changes with --fetch-remotes ([#243](https://github.com/ciatlas/flowpact/issues/243)) ([36fa03f](https://github.com/ciatlas/flowpact/commit/36fa03f0b3dc6b4fac997f7d4e0e96ae5cdd24da))
+
+
+### Bug Fixes
+
+* **lint:** impact mode's own rules take their severities and overrides from the baseline ([#239](https://github.com/ciatlas/flowpact/issues/239)) ([0fbd259](https://github.com/ciatlas/flowpact/commit/0fbd25932bf545f2dc26e6dda3e70e88792b37bd))
+* **lint:** quick fixes and completion write only names that need no quoting ([#240](https://github.com/ciatlas/flowpact/issues/240)) ([3d54ae8](https://github.com/ciatlas/flowpact/commit/3d54ae866b7e54bf10a9469de61314840b0e9260))
+
 ## [0.26.0](https://github.com/ciatlas/flowpact/compare/v0.25.1...v0.26.0) (2026-10-20)
 
 
