@@ -2,7 +2,7 @@
   "name": "vscode-flowpact",
   "displayName": "flowpact: data-flow linter for GitHub Actions",
   "description": "Checks GitHub Actions workflows as you type: what you pass to reusable workflows and actions, here and in other repositories, and where a value arrives empty. Works alongside GitHub's Actions extension.",
-  "version": "0.25.1",
+  "version": "0.26.0",
   "private": true,
   "publisher": "flowpact",
   "license": "MIT",

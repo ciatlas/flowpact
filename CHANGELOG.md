@@ -4,6 +4,19 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.26.0](https://github.com/ciatlas/flowpact/compare/v0.25.1...v0.26.0) (2026-10-20)
+
+
+### Features
+
+* **rules:** FP613 checks remote reusable workflows against the lockfile ([#237](https://github.com/ciatlas/flowpact/issues/237)) ([78bd743](https://github.com/ciatlas/flowpact/commit/78bd7434a014c1e8bfd2bf3a1bf4bd3204857d04))
+* **rules:** FP613 reports a called job that requests permissions the call does not grant ([#235](https://github.com/ciatlas/flowpact/issues/235)) ([554b53e](https://github.com/ciatlas/flowpact/commit/554b53ea1e4711242a2c279bfc4ebdeb471ca997))
+
+
+### Bug Fixes
+
+* **lint:** impact mode grades a calling job's permissions as GitHub checks them ([#238](https://github.com/ciatlas/flowpact/issues/238)) ([4671b5f](https://github.com/ciatlas/flowpact/commit/4671b5f52ae0bf4c350fd59a4c3aab82366a1009))
+
 ## [0.25.1](https://github.com/ciatlas/flowpact/compare/v0.25.0...v0.25.1) (2026-10-19)
 
 
