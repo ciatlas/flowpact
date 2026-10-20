@@ -195,9 +195,19 @@ function writeLock(root: string, file: string, text: string): void {
   writeFileSync(abs, text);
 }
 
+/** Refuses a `token` or `apiUrl` option that is not a string. */
+export function checkFetchOptions(options: Pick<RemotesUpdateOptions, 'token' | 'apiUrl'>): void {
+  for (const name of ['token', 'apiUrl'] as const)
+    if (options[name] !== undefined && typeof options[name] !== 'string')
+      throw usage(`${name} must be a string`);
+}
+
 /** The analysis `remotes` works on: the repository, or what the given paths reach; a bad option or path is refused. */
-async function analyzeTargets(session: Session, options: Pick<RemotesUpdateOptions, 'paths' | 'token'>) {
-  if (options.token !== undefined && typeof options.token !== 'string') throw usage('token must be a string');
+async function analyzeTargets(
+  session: Session,
+  options: Pick<RemotesUpdateOptions, 'paths' | 'token' | 'apiUrl'>,
+) {
+  checkFetchOptions(options);
   const paths = stringList('paths', options.paths) ?? [];
   const result = await analyzeSession(withoutRules(session), { paths, only: [], validateSchema: false });
   checkTargets(result.project, paths, session.root);

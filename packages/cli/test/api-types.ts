@@ -20,7 +20,11 @@ import type {
   RemotesDownloadOptions as EngineDownloadOptions,
   RemotesUpdateOptions as EngineUpdateOptions,
 } from '../src/lib/remotes';
-import type { Analysis as EngineAnalysis } from '../src/lib/report';
+import type {
+  Analysis as EngineAnalysis,
+  VersionChanges as EngineVersionChanges,
+  ReportOptions,
+} from '../src/lib/report';
 
 /** True when A and B are the same type, property for property (optional and readonly included). */
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -35,8 +39,10 @@ same<Api.MarkdownOptions, MarkdownOptions>(true);
 same<Api.CallGraph, EngineCallGraph>(true);
 same<Api.Severity, EngineFinding['severity']>(true);
 
-// What the API returns is what the CLI renders from.
+// What the API returns is what the CLI renders from, and lint's options reach the commands' code as they are.
 const analysis = (a: EngineAnalysis): Api.Analysis => a;
+same<Api.VersionChanges, EngineVersionChanges>(true);
+const lintOptions = (o: Api.LintOptions): ReportOptions => o;
 
 // The remotes functions pass their options to the commands' code as they are, and report progress as it does.
 same<Api.RemoteProgress, FetchProgress>(true);
@@ -54,6 +60,7 @@ const builtIn = (rule: EngineRuleDefinition): Api.RuleDefinition => rule;
 
 export const checks = [
   analysis,
+  lintOptions,
   register,
   context,
   index,

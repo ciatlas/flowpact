@@ -79,6 +79,12 @@ const analysis = await check({ paths: ['.github/workflows/deploy.yml'], only: ['
 | `impact` | `--impact` | `lint` and `check`: also check the [release impact](/docs/impact-mode) of the changes. |
 | `base`, `expect`, `title`, `labels` | `--base`, `--expect`, `--title`, `--labels` | Impact mode's baseline and declared impact; `labels` is an array. In GitHub Actions, impact mode reads them from the pull request, as the CLI does. |
 | `now` | `FLOWPACT_NOW` | The current time, a `Date`, for the expiry of [overrides](/docs/configuration#overrides). |
+| `fetchRemotes` | `--fetch-remotes` | `lint` and `check`: fetch the interfaces of the remote workflows and actions the [remote interfaces lockfile](/docs/remote-interfaces) lacks, for this run only, and grade the [version changes](#version-changes). A reference that cannot be fetched is a warning in the log. |
+| `token`, `apiUrl` | `GH_TOKEN`, `GITHUB_API_URL` | With `fetchRemotes`: the token to read the remote repositories with, sent only to `apiUrl`. Default: `GH_TOKEN`, else `GITHUB_TOKEN`, else the GitHub CLI's; the API is `GITHUB_API_URL`, else github.com's. |
+| `githubCom` | `--github-com` | With `fetchRemotes` on GitHub Enterprise Server or GHE.com: also look on github.com for the references the enterprise server lacks, with `GITHUB_COM_TOKEN` or none, never `token`. |
+
+`impact()` runs only the impact rules, without the schema validation, as `flowpact impact` does. For lint's findings and
+the release impact in one run, call `lint({ impact: true })` (or `check`).
 
 Impact mode compares with the baseline commit, which must be in the clone: check out with `fetch-depth: 0`. On
 `merge_group` it is skipped (`notes` says so), and so it is when there is nothing to grade or to report on; `impact()`
@@ -93,16 +99,36 @@ then reports nothing.
 | `annotations({ pathPrefix }?)` | One [annotation](/docs/action#annotations) per finding, for `@actions/core`'s `error()`, `warning()` and `notice()`: `level`, `message`, `title`, `file`, `startLine`, `endLine`, and for a finding on one line `startColumn` and `endColumn`. |
 | `github({ pathPrefix }?)` | The annotations as GitHub workflow commands (`--format github`), one line each: printed in a GitHub Actions step, they annotate the run and the pull request, without `@actions/core`. |
 | `sarif({ pathPrefix }?)` | SARIF 2.1.0 for code scanning, as text. |
-| `markdown(options?)` | The Markdown report, for job summaries and pull request comments. Options: `title`, `maxFindings` (default 50), `repoUrl` and `sha` (to link locations to the files at that commit), `includeGraph`. |
+| `markdown(options?)` | The Markdown report, for job summaries and pull request comments. Options: `title`, `maxFindings` (default 50), `repoUrl` and `sha` (to link locations to the files at that commit), `includeGraph`. When a [version change](#version-changes) was graded or could not be fetched, it ends with the Version changes section of the action's job summary. |
 | `json({ includeGraph }?)` | The JSON report as `--format json` prints it. |
 | `pretty(options?)` | The terminal report. Options: `color`, `width` (default 100), `ascii`, `hideInfo`, `hyperlinks`. |
 | `contracts` | `check` only: `drift`, `breaking`, and `patch()`, the regenerated contracts as a patch for `git apply` when they drifted (`--patch`). |
 | `impact` | Impact mode's verdict, as in the report: `required`, `declared`, `ok`, `changes` and `baseline`, with `paths`, `scope`, and when `ignore` left out published units, `ignored`. |
-| `notes` | What the CLI prints as `impact: …` lines: impact mode skipped, notes about its baseline and how it graded, and the paths it does not refuse though they name no workflow or action. |
+| `versionChanges` | `lint` and `check` with `fetchRemotes`: the remote references the change moves to another version, graded ([Version changes](#version-changes)). |
+| `notes` | What the CLI prints as `impact: …` lines: impact mode skipped, notes about its baseline and how it graded, and the paths it does not refuse though they name no workflow or action. With `fetchRemotes`, also `version changes: …` lines: why they were not graded. |
 
 `pathPrefix` is the root relative to the repository, when the root is a subdirectory of it. GitHub resolves annotation
 and SARIF paths against the repository; flowpact reports them relative to the root. `pretty()` and `markdown()` are safe
 to print in a GitHub Actions log, like the [text](#text) of the other commands.
+
+### Version changes
+
+With `fetchRemotes`, `lint` and `check` also grade the remote references the change moves to another version
+(`octo/setup@v2` → `@v3`) against the repository's calls, as the action's `remotes: fetch` does
+([On a pull request](/docs/remote-interfaces#on-a-pull-request)). The CLI does not grade them. The base is `base`, else
+in GitHub Actions the pull request's base commit. The API fetches no commits, so the base must be in the clone (check out
+with `fetch-depth: 0`); when it is not, `notes` says so. Without a base, and on `pull_request_target` and
+`workflow_run`, whose checkout may be untrusted, nothing is graded.
+
+`versionChanges` has the `base` commit, the `changes` (each `{ ref, from }`), their `grades` (the `grades` of
+[`remotesUpdate()`](#remotesupdate-remotesdownload-and-remotesclean)), and `failed`, the references that could not be
+fetched. `exitCode()` and the annotations are about the findings only. To fail on a version change that breaks a call,
+as the action does:
+
+```js
+const broken = (analysis.versionChanges?.grades ?? []).flatMap((g) => g.calls).filter((c) => c.verdict === 'breaks');
+if (broken.length) process.exitCode = 1;
+```
 
 ## generate
 
@@ -319,13 +345,21 @@ inputs:
   command:
     description: lint, or check when the repository commits contracts
     default: lint
+  impact:
+    description: Also check the release impact of changes to published workflows and actions
+    default: 'false'
   fail-on:
     description: Fail the step on findings at this level (error, warning or never)
     default: error
+  token:
+    description: Reads the remote workflows and actions the remote interfaces lockfile lacks
+    default: ${{ github.token }}
   sarif:
     description: Write SARIF for code scanning (its path is the sarif output)
     default: 'true'
 outputs:
+  report-json:
+    description: The JSON report, for actions/upload-artifact
   sarif:
     description: The SARIF file, for github/codeql-action/upload-sarif
   errors:
@@ -347,19 +381,30 @@ import { check, FlowpactError, lint } from 'flowpact';
 
 // This file runs as dist/index.mjs; the defaults and rules ship next to it, in the action's directory.
 const action = join(import.meta.dirname, '..');
-// The repository's own plugins run its code: not on events that run a fork's code with secrets.
+// Events that run a fork's code with secrets: the repository's own plugins would run its code, and fetching would let
+// it choose which repositories the token reads.
 const UNTRUSTED = ['pull_request_target', 'workflow_run'];
 
 try {
   const workspace = process.env.GITHUB_WORKSPACE ?? process.cwd();
+  const trusted = !UNTRUSTED.includes(process.env.GITHUB_EVENT_NAME ?? '');
+  // lint (or check) with impact: lint's rules and the release impact in one run. impact() runs only the impact rules.
   const run = core.getInput('command') === 'check' ? check : lint;
   const analysis = await run({
     root: workspace,
     baseConfig: join(action, 'acme.base.yml'),
     plugins: [join(action, 'rules/acme.mjs')],
-    repositoryPlugins: !UNTRUSTED.includes(process.env.GITHUB_EVENT_NAME ?? ''),
+    repositoryPlugins: trusted,
+    impact: core.getBooleanInput('impact'),
+    // The interfaces the remote interfaces lockfile lacks, read with the token for this run; on a pull request, the
+    // references it moves to another version are graded too (analysis.versionChanges).
+    fetchRemotes: trusted,
+    token: core.getInput('token'),
     log: { level: 'warn', write: (record) => core.info(`${record.level}: ${record.message}`) },
   });
+
+  // Why impact mode was skipped, its baseline, and why version changes were not graded.
+  for (const note of analysis.notes) core.info(note);
 
   // An annotation on the file and line of each finding.
   for (const { level, message, ...properties } of analysis.annotations()) {
@@ -368,13 +413,16 @@ try {
     else core.notice(message, properties);
   }
 
-  // The Markdown report as the job summary, linking to the files at this commit.
+  // The Markdown report as the job summary, with the version changes, linking to the files at this commit.
   const { GITHUB_SERVER_URL, GITHUB_REPOSITORY, GITHUB_SHA } = process.env;
   const repoUrl = `${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}`;
   await core.summary.addRaw(analysis.markdown({ title: 'Acme flowpact', repoUrl, sha: GITHUB_SHA })).write();
 
-  // SARIF for code scanning, and the regenerated contracts as a patch when they drifted (check). Both go to
-  // RUNNER_TEMP, not the checkout, where a pull request could have committed a symlink in their place.
+  // The JSON report, SARIF for code scanning, and the regenerated contracts as a patch when they drifted (check). They
+  // go to RUNNER_TEMP, not the checkout, where a pull request could have committed a symlink in their place.
+  const json = join(process.env.RUNNER_TEMP, 'flowpact.json');
+  writeFileSync(json, analysis.json());
+  core.setOutput('report-json', json);
   if (core.getBooleanInput('sarif')) {
     const file = join(process.env.RUNNER_TEMP, 'flowpact.sarif');
     writeFileSync(file, analysis.sarif());
@@ -387,11 +435,15 @@ try {
     core.setOutput('patch', file);
   }
 
+  const failOn = core.getInput('fail-on');
   const { errors, warnings } = analysis.report.summary;
   core.setOutput('errors', errors);
   core.setOutput('warnings', warnings);
-  if (analysis.exitCode(core.getInput('fail-on')) === 1)
-    core.setFailed(`flowpact found ${errors} error(s) and ${warnings} warning(s)`);
+  // exitCode() is about the findings. A version change that breaks a call fails the step too, as in flowpact's action.
+  const broken = (analysis.versionChanges?.grades ?? []).flatMap((g) => g.calls).filter((c) => c.verdict === 'breaks');
+  if (analysis.exitCode(failOn) === 1) core.setFailed(`flowpact found ${errors} error(s) and ${warnings} warning(s)`);
+  else if (broken.length && failOn !== 'never')
+    core.setFailed(`flowpact: a version change breaks ${broken.length} call(s) (see the job summary)`);
 } catch (err) {
   // A config, plugin or path problem: its message and each issue. Anything else is a bug, with its stack.
   if (!(err instanceof FlowpactError)) throw err;
@@ -415,9 +467,36 @@ await build({
 });
 ```
 
-From one run, this gives the annotations, the job summary, the SARIF file for `github/codeql-action/upload-sarif` (its
-path is the `sarif` output), a failed step at `fail-on`, the patch when contracts drifted, and the counts as outputs. Repositories use it after
-`actions/checkout`, as `uses: acme/flowpact-action@<commit-sha>`.
+From one run, this gives the annotations, the job summary with the version changes, the JSON report for
+`actions/upload-artifact` (the `report-json` output), the SARIF file for `github/codeql-action/upload-sarif` (the
+`sarif` output), a failed step at `fail-on` or on a version change that breaks a call, the patch when contracts
+drifted, and the counts as outputs. Repositories use it after `actions/checkout`:
+
+```yaml title=".github/workflows/flowpact.yml"
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  flowpact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7                       # pin to a commit SHA
+        with:
+          fetch-depth: 0                                # the base, for impact mode and version changes
+          persist-credentials: false
+      - uses: acme/flowpact-action@<commit-sha>
+        id: flowpact
+        with:
+          impact: true
+      - uses: actions/upload-artifact@v7                # pin to a commit SHA
+        if: ${{ !cancelled() && steps.flowpact.outputs.report-json != '' }}
+        with:
+          name: flowpact-report
+          path: ${{ steps.flowpact.outputs.report-json }}
+```
+
+The token reads public repositories; private and internal ones need a token that can read them, such as a GitHub App
+installation token passed as `token` ([Which token](/docs/remote-interfaces#which-token)).
 
 - [`@vercel/ncc`](https://github.com/vercel/ncc) works as well when the action's `package.json` has `"type": "module"`
   (`npm init` writes `"commonjs"`, and ncc then fails with `'import' and 'export' may appear only with 'sourceType:

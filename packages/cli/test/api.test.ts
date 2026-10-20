@@ -109,6 +109,21 @@ function write(root: string, files: Record<string, string>) {
   }
 }
 
+/** A git repository on `main` with `files` committed, and a function that runs git in it. */
+function gitRepo(prefix: string, files: Record<string, string>) {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  const git = (...args: string[]) =>
+    execFileSync('git', args, { cwd: root, stdio: 'pipe' }).toString().trim();
+  git('init', '-q', '-b', 'main');
+  git('config', 'user.email', 't@example.com');
+  git('config', 'user.name', 't');
+  git('config', 'commit.gpgsign', 'false');
+  write(root, files);
+  git('add', '-A');
+  git('commit', '-q', '-m', 'base');
+  return { root, git };
+}
+
 const plugin = (code: string, name: string) =>
   `export default { code: '${code}', name: '${name}', category: 'structure', defaultSeverity: 'error',
   docsUrl: 'https://example.com/${code}', docs: { summary: 'A plugin rule.', why: 'Why.', fix: 'Fix.' },
@@ -562,15 +577,9 @@ describe('impact', () => {
 
   /** A repository whose branch renames the check of a published reusable workflow: a major change. */
   function renamed(): string {
-    const root = mkdtempSync(join(tmpdir(), 'flowpact-api-impact-'));
-    const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
-    git('init', '-q', '-b', 'main');
-    git('config', 'user.email', 't@example.com');
-    git('config', 'user.name', 't');
-    git('config', 'commit.gpgsign', 'false');
-    write(root, { '.github/workflows/ci-reusable.yml': reusable('Test') });
-    git('add', '-A');
-    git('commit', '-q', '-m', 'base');
+    const { root, git } = gitRepo('flowpact-api-impact-', {
+      '.github/workflows/ci-reusable.yml': reusable('Test'),
+    });
     git('checkout', '-q', '-b', 'change');
     write(root, { '.github/workflows/ci-reusable.yml': reusable('Unit tests') });
     git('commit', '-q', '-am', 'change');
@@ -737,6 +746,8 @@ describe('errors', () => {
         noSymbol: await failure(flowpact.trace({ root: clean, symbol: 'nope.yml:x' })),
         depth: await failure(flowpact.trace({ root: clean, symbol: 'test.yml', depth: 0 })),
         failOn: await failure(flowpact.lint({ root: clean }).then((a) => a.exitCode('sometimes'))),
+        token: await failure(flowpact.lint({ root: clean, fetchRemotes: true, token: 1 })),
+        apiUrl: await failure(flowpact.check({ root: clean, apiUrl: ['https://ghes.example/api/v3'] })),
         ok: await failure(flowpact.lint({ root: clean })),
       });`);
     expect(r.config).toMatchObject({
@@ -785,6 +796,8 @@ describe('errors', () => {
     });
     expect(r.depth).toMatchObject({ kind: 'usage', message: 'depth must be a positive integer (got 0)' });
     expect(r.failOn).toMatchObject({ kind: 'usage', message: expect.stringContaining('failOn') });
+    expect(r.token).toMatchObject({ kind: 'usage', message: 'token must be a string' });
+    expect(r.apiUrl).toMatchObject({ kind: 'usage', message: 'apiUrl must be a string' });
     expect(r.ok).toBeNull();
   });
 });
@@ -845,16 +858,23 @@ process.stdout.write(JSON.stringify({ rules: a.report.rules.map((r) => r.code).f
 
 describe('remotes', () => {
   const SHA = 'a'.repeat(40);
-  const ACTION =
-    'name: Setup\ninputs:\n  version: { required: true }\nruns:\n  using: composite\n  steps: []\n';
+  const SHA3 = 'b'.repeat(40);
+  const setup = (input: string) =>
+    `name: Setup\ninputs:\n  ${input}: { required: true }\nruns:\n  using: composite\n  steps: []\n`;
   const routes: Record<string, string> = {
     '/repos/octo/setup/commits/v2': SHA,
-    [`/repos/octo/setup/contents/action.yml?ref=${SHA}`]: ACTION,
+    [`/repos/octo/setup/contents/action.yml?ref=${SHA}`]: setup('version'),
+    // v3 renames the input.
+    '/repos/octo/setup/commits/v3': SHA3,
+    [`/repos/octo/setup/contents/action.yml?ref=${SHA3}`]: setup('node-version'),
   };
+  /** The authorization header of each request. */
+  const auth: string[] = [];
   let server: Server;
   let env: Record<string, string>;
   beforeAll(async () => {
     server = createServer((req, res) => {
+      auth.push(req.headers.authorization ?? '');
       const body = routes[req.url ?? ''];
       res.writeHead(body === undefined ? 404 : 200).end(body ?? '');
     });
@@ -924,6 +944,92 @@ out({ download, text, clean });`,
     expect(r.clean).toEqual({ dir: join(cache, 'remotes'), keep: 0, removed: 1 });
   });
 
+  /** A repository whose branch moves octo/setup from v2 to v3, which renames the input its step passes. */
+  const bumped = () => {
+    const ci = (version: string) =>
+      `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@${version}\n        with: { version: '1' }\n`;
+    const { root, git } = gitRepo('flowpact-api-versions-', { '.github/workflows/ci.yml': ci('v2') });
+    const base = git('rev-parse', 'HEAD');
+    git('checkout', '-q', '-b', 'bump');
+    write(root, { '.github/workflows/ci.yml': ci('v3') });
+    git('commit', '-q', '-am', 'bump');
+    return { root, base };
+  };
+
+  it('lint and check fetch with the token given, sent only to the API, and grade the version changes', async () => {
+    const { root, base } = bumped();
+    auth.length = 0;
+    const r = await api<{ lint: Record<string, unknown>; check: unknown; notes: string[]; markdown: string }>(
+      `const options = { root: ${JSON.stringify(root)}, fetchRemotes: true, base: 'main', token: 'api-token' };
+const lint = await flowpact.lint(options);
+const check = await flowpact.check(options);
+out({ lint: lint.versionChanges, check: check.versionChanges, notes: lint.notes, markdown: lint.markdown() });`,
+      { ...env, GH_TOKEN: 'env-token' },
+    );
+    expect(r.lint).toEqual({
+      base,
+      changes: [{ ref: 'octo/setup@v3', from: 'octo/setup@v2' }],
+      grades: [
+        expect.objectContaining({
+          ref: 'octo/setup@v3',
+          commits: { before: SHA, after: SHA3 },
+          verdict: 'breaks',
+          calls: [expect.objectContaining({ verdict: 'breaks' })],
+        }),
+      ],
+      failed: [],
+    });
+    expect(r.check).toEqual(r.lint);
+    expect(r.notes).toEqual([]);
+    // The job summary's section, as the action writes it.
+    expect(r.markdown).toContain('### Version changes');
+    expect(r.markdown).toContain('**`octo/setup@v3`** (from `octo/setup@v2`');
+    expect(new Set(auth)).toEqual(new Set(['Bearer api-token']));
+    // The CLI prints no such grades.
+    const printed = await cli(
+      ['lint', '--root', root, '--fetch-remotes', '--base', 'main', '--format', 'markdown'],
+      env,
+    );
+    expect(printed.stdout).not.toContain('Version changes');
+  });
+
+  it('grades from the pull request base in GitHub Actions, never where the checkout may be untrusted', async () => {
+    const { root, base } = bumped();
+    const events = mkdtempSync(join(tmpdir(), 'flowpact-api-events-'));
+    const run = (event: string, sha: string) => {
+      const path = join(events, `${event}-${sha}.json`);
+      writeFileSync(path, JSON.stringify({ pull_request: { base: { sha } } }));
+      return api<{ versions: { base: string; grades: unknown[] } | null; notes: string[] }>(
+        `const a = await flowpact.lint({ root: ${JSON.stringify(root)}, fetchRemotes: true });
+out({ versions: a.versionChanges ?? null, notes: a.notes });`,
+        { ...env, GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: event, GITHUB_EVENT_PATH: path },
+      );
+    };
+    const pr = await run('pull_request', base);
+    expect(pr.versions).toMatchObject({ base, grades: [expect.objectContaining({ verdict: 'breaks' })] });
+    expect(await run('pull_request_target', base)).toEqual({
+      versions: null,
+      notes: ['version changes: not graded on pull_request_target, whose checkout may be untrusted'],
+    });
+    // A shallow checkout has no base commit, and the API fetches none.
+    const missing = 'c'.repeat(40);
+    expect(await run('pull_request', missing)).toEqual({
+      versions: null,
+      notes: [
+        expect.stringContaining(`version changes: not graded: ${missing} is not available in this clone`),
+      ],
+    });
+    // Without a base, or without fetchRemotes, nothing is graded.
+    const none = await api<{ local: unknown; unfetched: unknown }>(
+      `const root = ${JSON.stringify(root)};
+const local = await flowpact.lint({ root, fetchRemotes: true });
+const unfetched = await flowpact.lint({ root, base: 'main' });
+out({ local: [local.versionChanges ?? null, local.notes], unfetched: unfetched.versionChanges ?? null });`,
+      env,
+    );
+    expect(none).toEqual({ local: [null, []], unfetched: null });
+  });
+
   it('throws a usage error for remotesDownload without a lockfile, and for a remotesClean keep below 0', async () => {
     const r = await api<{ download: { kind: string; message: string }; clean: { kind: string } }>(
       `out({ download: await failure(flowpact.remotesDownload({ root: ${JSON.stringify(remoteRepo())} })),
@@ -963,7 +1069,7 @@ describe('the declarations', () => {
   formatGeneration, formatGraph, formatRules, formatTrace, generate, graph, impact, lint, type Loc, type Report,
   type RuleContext, rules, type Severity, terminalOptions, type TextOptions, trace, VERSION,
   remotesUpdate, remotesDownload, remotesClean, formatRemotesUpdate, formatRemotesDownload, formatRemotesClean,
-  type RemotesUpdateResult, type RemoteProgress,
+  type RemotesUpdateResult, type RemoteProgress, type VersionChanges,
 } from 'flowpact';
 
 const log: string[] = [];
@@ -979,6 +1085,11 @@ const code: 0 | 1 = a.exitCode('warning');
 const outputs: string[] = [a.json({ includeGraph: true }), a.sarif(), a.markdown({ title: 't', maxFindings: 5 }),
   a.pretty({ color: false, width: 80, ascii: true, hideInfo: true })];
 const patch: string | undefined = (await check()).contracts?.patch();
+const fetched: Analysis = await lint({ impact: true, fetchRemotes: true, token: 't', apiUrl: 'https://ghes.example/api/v3',
+  githubCom: true });
+const versions: VersionChanges | undefined = fetched.versionChanges;
+const breaks: number = (versions?.grades ?? []).filter((g) => g.verdict === 'breaks').length;
+const moved: string[] = (versions?.changes ?? []).map((c) => \`\${c.from} → \${c.ref}\`);
 const required = (await impact({ base: 'main', expect: 'patch', title: 'fix: x', labels: ['a'] })).impact?.required;
 const graded: string[] | undefined = (await impact({ paths: ['actions/deploy'] })).impact?.scope?.units;
 const written: string[] = (await generate({ dryRun: true, out: 'x' })).written;
@@ -1042,7 +1153,7 @@ a.exitCode('sometimes');
 // @ts-expect-error: the report is read-only
 a.report = report;
 
-export { VERSION, code, outputs, patch, required, graded, written, nodes, drawn, traced, listed, why, rule, where, severity, annotations, texts, unit, preview, kept, downloaded, cleaned, remoteTexts };
+export { VERSION, code, outputs, patch, breaks, moved, required, graded, written, nodes, drawn, traced, listed, why, rule, where, severity, annotations, texts, unit, preview, kept, downloaded, cleaned, remoteTexts };
 `,
     });
     const tsc = join(dirname(require.resolve('typescript/package.json')), 'bin/tsc');

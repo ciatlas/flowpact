@@ -1,19 +1,22 @@
 /** `lint`, `check` and `impact`: the analysis, and the reports rendered from it. */
 import { resolve } from 'node:path';
-import { neutralizeWorkflowCommands, nodeFileSystem } from '@ciatlas/core';
+import { gitFileSystem, neutralizeWorkflowCommands, nodeFileSystem, resolveCommit } from '@ciatlas/core';
 import {
   type AnalysisResult,
   type AnalyzeOptions,
   contractPatch,
   exitCodeFor,
+  type FetchRemotesOptions,
   fetchMissingRemotes,
   followsPullRequest,
   githubEvent,
+  gradeVersionChanges,
   IMPACT_CODES,
   type ImpactLevel,
   type JsonReport,
   type PreparedImpact,
   prepareImpact,
+  type RemoteChangeGrade,
   readRemotesLock,
 } from '@flowpact/lint';
 import {
@@ -25,9 +28,10 @@ import {
   renderMarkdown,
   renderPretty,
   renderSarif,
+  renderVersionChanges,
 } from '@flowpact/reporters';
 import { attempt, usage } from './errors';
-import { fetchOptions, timed } from './remotes';
+import { checkFetchOptions, fetchOptions, timed } from './remotes';
 import { analyzeSession, bool, oneOf, type Session, stringList } from './session';
 import { checkNotEmpty, checkTargets, removedElsewhere } from './targets';
 import { renderOptions, type TextOptions } from './text';
@@ -74,6 +78,30 @@ export interface ReportOptions extends ImpactFlags {
    * as GitHub Connect does (`--github-com`). Default: false.
    */
   githubCom?: boolean;
+  /**
+   * With `fetchRemotes`, the token to read the remote repositories with, sent only to `apiUrl`. Default: `GH_TOKEN`,
+   * `GITHUB_TOKEN` or `gh auth token`.
+   */
+  token?: string;
+  /** With `fetchRemotes`, the GitHub API. Default: `GITHUB_API_URL`, else `https://api.github.com`. */
+  apiUrl?: string;
+  /**
+   * With `fetchRemotes`, also grade the remote references the change moves to another version (`versionChanges`). The
+   * API's `lint` and `check` ask for it; the CLI does not, as it prints no such grades.
+   */
+  versionChanges?: boolean;
+}
+
+/** The remote references the change moves to another version, graded against the repository's calls. */
+export interface VersionChanges {
+  /** The base commit they are compared with. */
+  base: string;
+  /** Each reference of the working tree that replaced another version (`from`) of the same workflow or action. */
+  changes: { ref: string; from: string }[];
+  /** One per change whose interfaces before and after could be read. */
+  grades: RemoteChangeGrade[];
+  /** References that could not be fetched, with why: their changes are not graded. */
+  failed: { ref: string; error: string }[];
 }
 
 export interface PrettyOptions extends TextOptions {
@@ -93,6 +121,8 @@ export interface Analysis {
   readonly contracts?: { drift: boolean; breaking: number; patch(): string | undefined };
   /** Impact mode's verdict, as in the JSON report, when it ran. */
   readonly impact?: JsonReport['impact'];
+  /** With `fetchRemotes` and a base, the remote references the change moves to another version, graded. */
+  readonly versionChanges?: VersionChanges;
   exitCode(failOn?: FailOn): 0 | 1;
   annotations(options?: { pathPrefix?: string }): GithubAnnotation[];
   /** The annotations as workflow commands (`--format github`), every value escaped. */
@@ -229,23 +259,89 @@ function commandOptions(
   };
 }
 
+/** How `fetchRemotes` reaches the GitHub API: with the token and API given, else those of the environment. */
+function fetchFor(session: Session, options: ReportOptions): FetchRemotesOptions {
+  const githubCom = bool('githubCom', options.githubCom);
+  return fetchOptions(session.logger, {
+    ...(options.token !== undefined ? { token: options.token } : {}),
+    ...(options.apiUrl !== undefined ? { apiUrl: options.apiUrl } : {}),
+    ...(githubCom ? { githubCom } : {}),
+  }).fetch;
+}
+
 /** The remote interfaces the lockfile lacks, fetched for this run; a reference that cannot be fetched is a warning. */
 async function fetchRemotesFor(
   session: Session,
-  githubCom: boolean | undefined,
+  fetch: FetchRemotesOptions,
 ): Promise<AnalyzeOptions['fetchedRemotes']> {
   const { root, logger } = session;
   const fs = nodeFileSystem(root);
-  const { fetch } = fetchOptions(logger, { ...(githubCom ? { githubCom } : {}) });
   const r = await timed(logger, () => fetchMissingRemotes(root, fs, readRemotesLock(fs).lock, fetch));
   for (const f of [...r.failed, ...r.unreadable])
     logger.warn(`remote interface not fetched: ${f.ref}: ${f.error}`);
   return r.remotes;
 }
 
-/** The options `runReport` checks before it runs: paths, rules, labels, the declared impact and the clock. */
+/** Events whose checkout may be untrusted while the token is privileged. */
+const UNTRUSTED_EVENTS = new Set(['pull_request_target', 'workflow_run']);
+
+/** The base to grade version changes from: `base`, else in GitHub Actions the pull request's base commit. */
+const versionBase = (base: string | undefined): string | undefined =>
+  base ??
+  (process.env.GITHUB_ACTIONS === 'true' ? githubEvent()?.payload?.pull_request?.base?.sha : undefined);
+
+/** The base's files, read from git, or why they cannot be (a shallow clone lacks the base commit). */
+function baseFiles(root: string, ref: string): ReturnType<typeof gitFileSystem> | { error: string } {
+  try {
+    return gitFileSystem(root, resolveCommit(root, ref));
+  } catch (err) {
+    return { error: (err as Error).message };
+  }
+}
+
+/**
+ * With `fetchRemotes`, the remote references the change moves to another version, graded against the repository's
+ * calls as the action's `remotes: fetch` grades them (see `gradeVersionChanges`); undefined without a base. The base
+ * must be in the clone. Not on events whose checkout may be untrusted: the pull request would choose which repositories
+ * the token reads. Why none were graded goes to `notes`.
+ */
+async function versionChangesFor(
+  session: Session,
+  base: string | undefined,
+  fetch: FetchRemotesOptions,
+  notes: string[],
+): Promise<VersionChanges | undefined> {
+  const ref = versionBase(base);
+  if (!ref) return undefined;
+  const event = process.env.GITHUB_EVENT_NAME ?? '';
+  if (UNTRUSTED_EVENTS.has(event)) {
+    notes.push(`version changes: not graded on ${event}, whose checkout may be untrusted`);
+    return undefined;
+  }
+  const { root, loaded, logger } = session;
+  const files = baseFiles(root, ref);
+  if ('error' in files) {
+    notes.push(`version changes: not graded: ${files.error}`);
+    return undefined;
+  }
+  const r = await gradeVersionChanges(
+    { root, config: loaded.config, logger, validateSchema: false },
+    files,
+    fetch,
+  );
+  for (const f of r.failed) logger.warn(`version change not graded: ${f.ref}: ${f.error}`);
+  return {
+    base: files.commit,
+    changes: r.changes.map((c) => ({ ref: c.ref.raw, from: c.from.raw })),
+    grades: r.grades,
+    failed: r.failed.map(({ ref, error }) => ({ ref, error })),
+  };
+}
+
+/** The options `runReport` checks before it runs: paths, rules, labels, the declared impact, the clock and the API. */
 function reportInputs(options: ReportOptions) {
   if (options.now !== undefined && !(options.now instanceof Date)) throw usage('now must be a Date');
+  checkFetchOptions(options);
   return {
     given: stringList('paths', options.paths) ?? [],
     only: stringList('only', options.only),
@@ -292,9 +388,8 @@ export async function runReport(
     root,
     hooks.elsewhere,
   );
-  const fetched = bool('fetchRemotes', options.fetchRemotes)
-    ? await fetchRemotesFor(session, bool('githubCom', options.githubCom))
-    : undefined;
+  const fetch = bool('fetchRemotes', options.fetchRemotes) ? fetchFor(session, options) : undefined;
+  const fetched = fetch && (await fetchRemotesFor(session, fetch));
   const result = await analyzeSession(
     session,
     commandOptions(command, options, paths, only, impact, fetched),
@@ -307,11 +402,22 @@ export async function runReport(
   checkTargets(result.project, paths, root, accepted.paths);
   if (command !== 'impact') checkNotEmpty(result.summary, root);
   if (result.impactSkipped && skipped(result.impactSkipped, notes, hooks)) return undefined;
-  return analysisOf(result, notes);
+  const versions =
+    fetch && options.versionChanges
+      ? await versionChangesFor(session, options.base, fetch, notes)
+      : undefined;
+  return analysisOf(result, notes, versions);
+}
+
+/** The Version changes section of the action's job summary; empty when nothing was graded or failed. */
+function versionsMarkdown(versions: VersionChanges | undefined, options: MarkdownOptions): string {
+  if (!versions || (!versions.grades.length && !versions.failed.length)) return '';
+  const from = Object.fromEntries(versions.changes.map((c) => [c.ref, c.from]));
+  return `\n${renderVersionChanges({ grades: versions.grades, failed: versions.failed, from }, options)}`;
 }
 
 /** The result of an analysis, and every report rendered from it. */
-function analysisOf(result: AnalysisResult, notes: string[]): Analysis {
+function analysisOf(result: AnalysisResult, notes: string[], versions?: VersionChanges): Analysis {
   let report: JsonReport | undefined;
   const plan = result.contracts;
   return {
@@ -333,6 +439,7 @@ function analysisOf(result: AnalysisResult, notes: string[]): Analysis {
     get impact() {
       return this.report.impact;
     },
+    ...(versions ? { versionChanges: versions } : {}),
     exitCode: (failOn = 'error') =>
       exitCodeFor(result.summary, oneOf('failOn', failOn, FAIL_ON) ?? 'error') as 0 | 1,
     annotations: ({ pathPrefix } = {}) =>
@@ -342,7 +449,8 @@ function analysisOf(result: AnalysisResult, notes: string[]): Analysis {
     sarif: ({ pathPrefix } = {}) => renderSarif(result, pathPrefix ? { pathPrefix } : {}),
     // Text embeds names from the analyzed YAML: none of it may become a workflow command in a CI log (the CLI's
     // stdout and report files guarantee the same).
-    markdown: (options = {}) => neutralizeWorkflowCommands(renderMarkdown(result, options)),
+    markdown: (options = {}) =>
+      neutralizeWorkflowCommands(`${renderMarkdown(result, options)}${versionsMarkdown(versions, options)}`),
     json: ({ includeGraph } = {}) => renderJson(result, { includeGraph: Boolean(includeGraph) }),
     pretty: (options = {}) =>
       neutralizeWorkflowCommands(

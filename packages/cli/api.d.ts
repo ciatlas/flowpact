@@ -90,12 +90,20 @@ export interface LintOptions extends CommonOptions, PluginOptions, ImpactModeOpt
   now?: Date;
   /**
    * Fetch the interfaces of the remote workflows and actions the remote interfaces lockfile lacks, for this run only
-   * (`--fetch-remotes`), with `GH_TOKEN`, `GITHUB_TOKEN` or the GitHub CLI's token. Default: false.
+   * (`--fetch-remotes`), with `token`. With a base, also grade the remote references the change moves to another
+   * version, as the action's `remotes: fetch` does: see {@link Analysis.versionChanges}. Default: false.
    */
   fetchRemotes?: boolean;
   /**
-   * With `fetchRemotes` on GitHub Enterprise Server or GHE.com (`GITHUB_API_URL`), also look on github.com for the
-   * references the enterprise server lacks, as GitHub Connect does, with `GITHUB_COM_TOKEN` or none (`--github-com`).
+   * With `fetchRemotes`, the token to read the remote repositories with, sent only to `apiUrl`. Default: `GH_TOKEN`,
+   * else `GITHUB_TOKEN`, else the GitHub CLI's (`gh auth token`); none for public repositories only.
+   */
+  token?: string;
+  /** With `fetchRemotes`, the GitHub API. Default: `GITHUB_API_URL`, else `https://api.github.com`. */
+  apiUrl?: string;
+  /**
+   * With `fetchRemotes` on GitHub Enterprise Server or GHE.com, also look on github.com for the references the
+   * enterprise server lacks, as GitHub Connect does, with `GITHUB_COM_TOKEN` or none, never `token` (`--github-com`).
    * It sends their names to github.com. Default: false.
    */
   githubCom?: boolean;
@@ -429,7 +437,8 @@ export interface Analysis {
   readonly report: Report;
   /**
    * What the CLI prints as `impact: …` lines: impact mode skipped, notes about its baseline and how it graded, and the
-   * paths it does not refuse though they name no workflow or action.
+   * paths it does not refuse though they name no workflow or action. With `fetchRemotes`, also `version changes: …`
+   * lines: why they were not graded.
    */
   readonly notes: string[];
   /** `check` only: the comparison with the locked contracts. */
@@ -441,6 +450,14 @@ export interface Analysis {
   };
   /** Impact mode's verdict, as in the report, when it ran. */
   readonly impact?: ImpactVerdict;
+  /**
+   * `lint` and `check` with `fetchRemotes`: the remote references the change moves to another version
+   * (`octo/setup@v2` → `@v3`), graded against the repository's calls, as the action's `remotes: fetch` grades them.
+   * The base is `base`, else in GitHub Actions the pull request's base commit; it must be in the clone, and `notes`
+   * says when it is not. Undefined without a base, and on `pull_request_target` and `workflow_run`, whose checkout may
+   * be untrusted. `exitCode()` and the annotations are about the findings only: fail on a grade yourself.
+   */
+  readonly versionChanges?: VersionChanges;
   /** The CLI's exit code for `--fail-on` (default `error`): 1 when there are findings at that level. */
   exitCode(failOn?: FailOn): 0 | 1;
   annotations(options?: PathPrefixOptions): Annotation[];
@@ -451,7 +468,10 @@ export interface Analysis {
   github(options?: PathPrefixOptions): string;
   /** SARIF 2.1.0, for code scanning. */
   sarif(options?: PathPrefixOptions): string;
-  /** The Markdown report, for job summaries and pull request comments. */
+  /**
+   * The Markdown report, for job summaries and pull request comments; with a Version changes section, as the action's
+   * job summary has, when `versionChanges` graded a change or could not fetch one.
+   */
   markdown(options?: MarkdownOptions): string;
   /** The JSON report as `--format json` prints it; `includeGraph` adds the data-flow graph. */
   json(options?: { includeGraph?: boolean }): string;
@@ -519,6 +539,22 @@ export interface RemotesUpdateResult {
    * run whatever their tag points at now), or why it is not used.
    */
   actionsLock?: { file: string; pinned: number; error?: string };
+}
+
+/**
+ * The remote references the change moves to another version, graded against every call of the repository. The
+ * interface before is the base's lockfile entry, else the replaced reference fetched; the one after is always fetched,
+ * never read from the working tree's lockfile, which could hide a break.
+ */
+export interface VersionChanges {
+  /** The base commit they are compared with. */
+  base: string;
+  /** Each reference of the working tree that replaced another version (`from`) of the same workflow or action. */
+  changes: { ref: string; from: string }[];
+  /** One per change whose interfaces before and after could be read. */
+  grades: RemoteChangeGrade[];
+  /** References that could not be fetched: their changes are not graded. */
+  failed: RemoteProblem[];
 }
 
 /**

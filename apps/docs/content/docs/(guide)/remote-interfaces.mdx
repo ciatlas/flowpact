@@ -304,7 +304,8 @@ With `remotes: fetch`, the [action](/docs/action) also grades the references a p
 (`octo/setup@v2` → `@v3`) and adds a **Version changes** section to the job summary. The interface before is the base
 commit's; the one after is always fetched, never read from the pull request's own lockfile, which could hide a break.
 A version change that breaks a call fails the step (unless `fail-on` is `never`), and the `version-verdict` output says
-`breaks`, `unchecked` or `fits`.
+`breaks`, `unchecked` or `fits`. For your own action, [`lint()` and `check()`](/docs/api#version-changes) grade them
+with `fetchRemotes`; the CLI does not.
 
 ## Renovate and Dependabot
 
