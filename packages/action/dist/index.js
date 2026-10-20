@@ -9792,8 +9792,8 @@ var Summary = class {
    *
    * @returns {Summary} summary instance
    */
-  addHeading(text2, level) {
-    const tag = `h${level}`;
+  addHeading(text2, level2) {
+    const tag = `h${level2}`;
     const allowedTag = ["h1", "h2", "h3", "h4", "h5", "h6"].includes(tag) ? tag : "h1";
     const element = this.wrap(allowedTag, text2);
     return this.addRaw(element).addEOL();
@@ -13223,23 +13223,23 @@ function compareLoc(a, b) {
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
-  const level = options.level ?? "info";
+  const level2 = options.level ?? "info";
   const sink = options.sink ?? { write() {
   } };
   const scope = options.scope ?? DEFAULTS.scope;
   const log = (lvl, message, data) => {
-    if (ORDER[lvl] > ORDER[level]) return;
+    if (ORDER[lvl] > ORDER[level2]) return;
     sink.write({ level: lvl, scope, message, ...data ? { data } : {}, time: Date.now() });
   };
   const logger = {
-    level,
-    enabled: (lvl) => ORDER[lvl] <= ORDER[level],
+    level: level2,
+    enabled: (lvl) => ORDER[lvl] <= ORDER[level2],
     error: (m, d) => log("error", m, d),
     warn: (m, d) => log("warn", m, d),
     info: (m, d) => log("info", m, d),
     debug: (m, d) => log("debug", m, d),
     trace: (m, d) => log("trace", m, d),
-    child: (child) => createLogger({ level, sink, scope: `${scope}:${child}` }),
+    child: (child) => createLogger({ level: level2, sink, scope: `${scope}:${child}` }),
     time(label, fn) {
       const start = performance.now();
       log("trace", `${label} started`);
@@ -22135,9 +22135,68 @@ function applyIgnoreComments(findings, files, resolve9) {
 
 // ../lint/src/impact.ts
 var import_yaml9 = __toESM(require_dist(), 1);
+
+// ../lint/src/job-chains.ts
+function byJobChain(index, wf, pick2, stopAt, depth = 0, seen = /* @__PURE__ */ new Set()) {
+  const out = /* @__PURE__ */ new Map();
+  for (const job of Object.values(wf.jobs)) {
+    if (!job.uses) {
+      out.set(job.id, pick2(job, wf));
+      continue;
+    }
+    const stop = stopAt?.(job, wf);
+    if (stop !== void 0) {
+      out.set(job.id, stop);
+      continue;
+    }
+    const callee = index.calleeOf(job);
+    if (!callee || depth >= 10 || seen.has(callee.path)) continue;
+    for (const [chain, v] of byJobChain(index, callee, pick2, stopAt, depth + 1, /* @__PURE__ */ new Set([...seen, wf.path])))
+      out.set(`${job.id} > ${chain}`, v);
+  }
+  return out;
+}
+
+// ../lint/src/permissions.ts
+var RANK = { none: 0, read: 1, write: 2 };
+var LEVEL_NAMES = ["none", "read", "write"];
+var SCOPES = [
+  "actions",
+  "attestations",
+  "checks",
+  "contents",
+  "deployments",
+  "discussions",
+  "id-token",
+  "issues",
+  "models",
+  "packages",
+  "pages",
+  "pull-requests",
+  "security-events",
+  "statuses"
+];
+function levelOf(p, scope) {
+  if (p === "write-all") return 2;
+  if (p === "read-all") return scope === "id-token" ? 0 : 1;
+  return Object.hasOwn(p, scope) ? RANK[p[scope]] ?? 0 : 0;
+}
+function levelsOf(p) {
+  if (p === "read-all" || p === "write-all") return Object.fromEntries(SCOPES.map((s) => [s, levelOf(p, s)]));
+  return Object.fromEntries(Object.entries(p).map(([k, v]) => [k, RANK[v] ?? 0]));
+}
+var scopesOf = (p) => p === void 0 ? "inherit" : levelsOf(p);
+function shortScopes(granted, requested) {
+  return Object.entries(requested).flatMap(([scope, level2]) => {
+    const has = levelOf(granted, scope);
+    return level2 > has ? [{ scope, requested: level2, granted: has }] : [];
+  });
+}
+
+// ../lint/src/impact.ts
 var IMPACT_LEVELS = ["none", "patch", "minor", "major"];
 var levelRank = (l) => IMPACT_LEVELS.indexOf(l);
-var maxLevel = (levels) => levels.reduce((a, b) => levelRank(b) > levelRank(a) ? b : a, "none");
+var maxLevel = (levels2) => levels2.reduce((a, b) => levelRank(b) > levelRank(a) ? b : a, "none");
 function isPublished(unit, policy) {
   if (policy.publish)
     return policy.publish.some((p) => matchesPattern(unit.file, p) || matchesPattern(unit.path, p));
@@ -22210,7 +22269,7 @@ function checkNameChanges(base, head, b, h) {
   const d = {
     headNames: new Set([...after.values()].flatMap((j) => j.names.map((n) => n.name))),
     baseNames: new Set([...before.values()].flatMap((j) => j.names.map((n) => n.name))),
-    add: (level, certain, message, loc) => out.push({ unit: h.path, kind: "check-name", level, certain, message, loc }),
+    add: (level2, certain, message, loc) => out.push({ unit: h.path, kind: "check-name", level: level2, certain, message, loc }),
     jobLoc: (chain) => {
       const id = chain.split(" > ")[0];
       const job = h.jobs[id];
@@ -22257,56 +22316,16 @@ function interfaceDecls(h, kind) {
 function interfaceChanges(base, head, b, h) {
   const out = [];
   for (const c of diffContracts(buildContract(base, b), buildContract(head, h))) {
-    const level = contractLevel(c.path, c.breaking, c.message);
-    if (level === "none") continue;
+    const level2 = contractLevel(c.path, c.breaking, c.message);
+    if (level2 === "none") continue;
     out.push({
       unit: h.path,
       kind: "interface",
-      level,
+      level: level2,
       certain: true,
       message: c.message,
       loc: interfaceLoc(h, c.path)
     });
-  }
-  return out;
-}
-var RANK = { none: 0, read: 1, write: 2 };
-var LEVEL_NAMES = ["none", "read", "write"];
-var SCOPES = [
-  "actions",
-  "attestations",
-  "checks",
-  "contents",
-  "deployments",
-  "discussions",
-  "id-token",
-  "issues",
-  "models",
-  "packages",
-  "pages",
-  "pull-requests",
-  "security-events",
-  "statuses"
-];
-function scopesOf(p) {
-  if (p === void 0) return "inherit";
-  if (p === "read-all" || p === "write-all") {
-    const level = p === "read-all" ? 1 : 2;
-    return Object.fromEntries(SCOPES.map((s) => [s, s === "id-token" && level === 1 ? 0 : level]));
-  }
-  return Object.fromEntries(Object.entries(p).map(([k, v]) => [k, RANK[v] ?? 0]));
-}
-function byJobChain(index, wf, pick2, depth = 0, seen = /* @__PURE__ */ new Set()) {
-  const out = /* @__PURE__ */ new Map();
-  for (const job of Object.values(wf.jobs)) {
-    const callee = job.uses ? index.calleeOf(job) : void 0;
-    if (callee) {
-      if (depth >= 10 || seen.has(callee.path)) continue;
-      for (const [chain, v] of byJobChain(index, callee, pick2, depth + 1, /* @__PURE__ */ new Set([...seen, wf.path])))
-        out.set(`${job.id} > ${chain}`, v);
-      continue;
-    }
-    if (!job.uses) out.set(job.id, pick2(job, wf));
   }
   return out;
 }
@@ -22720,15 +22739,15 @@ function declaredSources(input2, policy) {
   const sources2 = [];
   if (input2.explicit) sources2.push({ kind: "explicit", value: input2.explicit, level: input2.explicit });
   if (input2.release) {
-    const level = levelFromVersions(input2.release.previous, input2.release.version, input2.release);
-    sources2.push({ kind: "version", value: `${input2.release.previous} \u2192 ${input2.release.version}`, level });
+    const level2 = levelFromVersions(input2.release.previous, input2.release.version, input2.release);
+    sources2.push({ kind: "version", value: `${input2.release.previous} \u2192 ${input2.release.version}`, level: level2 });
   } else if (input2.title !== void 0) {
-    const level = levelFromTitle(input2.title, policy.types);
-    if (level) sources2.push({ kind: "title", value: input2.title, level });
+    const level2 = levelFromTitle(input2.title, policy.types);
+    if (level2) sources2.push({ kind: "title", value: input2.title, level: level2 });
   }
   if (input2.labels?.length) {
-    const level = levelFromLabels(input2.labels, policy.labels);
-    if (level) sources2.push({ kind: "labels", value: input2.labels.join(", "), level });
+    const level2 = levelFromLabels(input2.labels, policy.labels);
+    if (level2) sources2.push({ kind: "labels", value: input2.labels.join(", "), level: level2 });
   }
   return sources2;
 }
@@ -23583,7 +23602,7 @@ var verdictLoc = (impact, changes) => changes[0]?.loc ?? impact.changes[0]?.loc 
   endLine: 1,
   endColumn: 1
 };
-var driving = (impact, level) => countedChanges(impact.changes, impact.policy).filter((c) => c.level === level);
+var driving = (impact, level2) => countedChanges(impact.changes, impact.policy).filter((c) => c.level === level2);
 var impactUnderDeclared = defineRule({
   code: "FP810",
   name: "impact-under-declared",
@@ -23828,9 +23847,16 @@ function editable(index, file) {
   if (!source || source.text.includes("\r")) return void 0;
   return { source, doc: documentOf(source) };
 }
-function addKeys(index, file, path, keys, after = []) {
+var addKeys = (index, file, path, keys, after = []) => addPairs(
+  index,
+  file,
+  path,
+  keys.map((k) => `${k}: `),
+  after
+);
+function addPairs(index, file, path, pairs2, after = []) {
   const at = editable(index, file);
-  if (!at || keys.length === 0) return void 0;
+  if (!at || pairs2.length === 0) return void 0;
   const { source, doc } = at;
   const map = nodeAt(doc, path);
   if (map !== void 0) {
@@ -23840,7 +23866,7 @@ function addKeys(index, file, path, keys, after = []) {
     return insertAfter(
       source,
       last2,
-      keys.map((k) => `${indent2}${k}: `)
+      pairs2.map((p) => `${indent2}${p}`)
     );
   }
   const own2 = path.at(-1);
@@ -23849,7 +23875,23 @@ function addKeys(index, file, path, keys, after = []) {
   const anchor2 = after.map((k) => pairOf(parent, k)).find((p) => p !== void 0) ?? parent.items.at(-1);
   const indent = " ".repeat(keyStart(source, anchor2).column - 1);
   const [, last] = pairLines(source, anchor2);
-  return insertAfter(source, last, [`${indent}${own2}:`, ...keys.map((k) => `${indent}  ${k}: `)]);
+  return insertAfter(source, last, [`${indent}${own2}:`, ...pairs2.map((p) => `${indent}  ${p}`)]);
+}
+function replaceValue(index, file, path, newText) {
+  const at = editable(index, file);
+  const node = at && nodeAt(at.doc, path);
+  if (!at || !((0, import_yaml11.isScalar)(node) || ((0, import_yaml11.isMap)(node) || (0, import_yaml11.isSeq)(node)) && node.flow) || !node.range)
+    return void 0;
+  const loc = at.source.loc(node.range[0], node.range[1]);
+  return loc.line === loc.endLine ? { loc, newText } : void 0;
+}
+function keyLoc(index, file, path) {
+  const source = sourceOf(index, file);
+  const own2 = path.at(-1);
+  const parent = source && nodeAt(documentOf(source), path.slice(0, -1));
+  const pair = typeof own2 === "string" && (0, import_yaml11.isMap)(parent) ? pairOf(parent, own2) : void 0;
+  const range = pair?.key?.range;
+  return source && range ? source.loc(range[0], range[1]) : void 0;
 }
 function removeKey(index, file, path, key, line) {
   const at = editable(index, file);
@@ -25465,6 +25507,121 @@ var overrideRules = [
   ignoreCommentUnused
 ];
 
+// ../lint/src/rules/permissions.ts
+var ungrantedPermissions = defineRule({
+  code: "FP613",
+  name: "ungranted-permissions",
+  category: "structure",
+  defaultSeverity: "error",
+  docs: {
+    summary: "A job of a called workflow requests a permission the call does not grant.",
+    why: "A called workflow's jobs run with the caller's `GITHUB_TOKEN` and can only keep or lower its permissions. GitHub refuses the whole run when it starts (\"The nested job \u2026 is requesting 'contents: write', but is only allowed 'contents: read'\").",
+    fix: "Grant the permission in the calling job's `permissions:`; a job's `permissions:` replaces the workflow's for that job only. If the called job does not need it, lower its `permissions:` instead.",
+    scope: "What a call grants is the calling job's `permissions:`, else its workflow's. With neither, it gets the repository's or organization's default, which flowpact cannot see, so the call is not checked; when the calling workflow is itself called, the workflows it calls are checked against what its callers grant instead. What a called job requests is its `permissions:`, else its workflow's (reported once for every job that uses them); a job with neither gets what the call grants. A called job that calls another workflow requests its permissions for all of it, and the jobs of that workflow are checked against them at that call. Jobs are checked whatever their `if:`, as GitHub checks them before any job starts. A remote reusable workflow is not checked: the remote interfaces lockfile does not record what its jobs request. Whether a job requests more than it needs is not checked.",
+    examples: {
+      bad: `permissions:
+  contents: read
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml   # its job publish requests contents: write`,
+      good: `jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write`
+    }
+  },
+  check(ctx) {
+    for (const call of ctx.index.callSites) {
+      const grant = grantOf(call);
+      if (!grant) continue;
+      for (const r of requestsOf(ctx.index, call.callee)) {
+        const short = shortScopes(grant.permissions, r.scopes);
+        if (short.length) reportShort(ctx, call, grant, r, short);
+      }
+    }
+  }
+});
+function grantOf(call) {
+  if (call.job.permissions)
+    return { permissions: call.job.permissions, path: ["jobs", call.job.id, "permissions"] };
+  if (call.caller.permissions) return { permissions: call.caller.permissions, path: ["permissions"] };
+  return void 0;
+}
+var askedBy = (job, wf) => job.permissions ? { own: true, scopes: levelsOf(job.permissions) } : wf.permissions ? { own: false, scopes: levelsOf(wf.permissions) } : null;
+function requestsOf(index, wf) {
+  const out = /* @__PURE__ */ new Map();
+  for (const [chain, asked] of byJobChain(index, wf, askedBy, (job, w) => askedBy(job, w) ?? void 0)) {
+    if (!asked) continue;
+    const via = chain.split(" > ");
+    const job = via.pop();
+    const r = asked.own ? { via, job, scopes: asked.scopes } : { via, scopes: asked.scopes };
+    out.set(JSON.stringify([r.via, r.job]), r);
+  }
+  return [...out.values()];
+}
+var level = (s, which2) => `${escapeControl(s.scope)}: ${LEVEL_NAMES[s[which2]]}`;
+var levels = (short, which2) => short.map((s) => level(s, which2)).join(", ");
+function reportShort(ctx, call, grant, r, short) {
+  const file = call.caller.source.path;
+  const callLoc = call.job.uses?.loc ?? call.job.loc;
+  const wanted = levels(short, "requested");
+  const { where, related: related2 } = describeRequest(ctx.index, call.callee, r, wanted);
+  ctx.report({
+    message: `${where} requests ${wanted}, but jobs.${call.job.id} grants ${levels(short, "granted")}`,
+    loc: keyLoc(ctx.index, file, grant.path) ?? callLoc,
+    symbol: `${call.caller.path}#jobs.${call.job.id}.permissions`,
+    related: [{ loc: callLoc, message: `jobs.${call.job.id} calls ${call.callee.path}` }, ...related2],
+    suggestions: [raiseGrant(ctx.index, call, grant, short)]
+  });
+}
+function describeRequest(index, callee, r, wanted) {
+  const parts = [callee.path];
+  const related2 = [];
+  let wf = callee;
+  for (const id of r.via) {
+    const job2 = wf.jobs[id];
+    const next = index.calleeOf(job2);
+    related2.push({ loc: job2.uses?.loc ?? job2.loc, message: `jobs.${id} calls ${next.path}` });
+    parts.push(`jobs.${id}`, next.path);
+    wf = next;
+  }
+  const job = r.job === void 0 ? void 0 : wf.jobs[r.job];
+  if (job) parts.push(`jobs.${job.id}`);
+  const loc = keyLoc(index, wf.source.path, job ? ["jobs", job.id, "permissions"] : ["permissions"]);
+  if (loc) related2.push({ loc, message: `${job ? `jobs.${job.id}` : wf.path} requests ${wanted}` });
+  return { where: parts.join(" \u203A "), related: related2 };
+}
+var SCOPE_NAME = /^[a-z][a-z-]*$/;
+function raiseGrant(index, call, grant, short) {
+  const map = grant.permissions;
+  if (typeof map === "string") return void 0;
+  const raised = Object.fromEntries(short.map((s) => [s.scope, LEVEL_NAMES[s.requested]]));
+  const merged2 = Object.entries({ ...map, ...raised });
+  if (!merged2.every(([k]) => SCOPE_NAME.test(k))) return void 0;
+  const pairs2 = merged2.map(([k, v]) => `${k}: ${v}`);
+  const title = `Grant ${levels(short, "requested")} to jobs.${call.job.id}`;
+  const file = call.caller.source.path;
+  if (!call.job.permissions)
+    return suggestion(title, [addPairs(index, file, ["jobs", call.job.id, "permissions"], pairs2)]);
+  const flow = replaceValue(index, file, grant.path, `{ ${pairs2.join(", ")} }`);
+  if (flow) return suggestion(title, [flow]);
+  const listed2 = short.filter((s) => Object.hasOwn(map, s.scope));
+  const missing = short.filter((s) => !listed2.includes(s));
+  return suggestion(title, [
+    ...listed2.map((s) => replaceValue(index, file, [...grant.path, s.scope], LEVEL_NAMES[s.requested])),
+    ...missing.length ? [
+      addPairs(
+        index,
+        file,
+        grant.path,
+        missing.map((s) => level(s, "requested"))
+      )
+    ] : []
+  ]);
+}
+var permissionRules = [ungrantedPermissions];
+
 // ../lint/src/rules/registry.ts
 var CODE_PATTERN = /^([A-Z][A-Z0-9]{1,9}?)(\d)(\d{2})$/;
 var NAME_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
@@ -26591,6 +26748,7 @@ var builtinRules = [
   ...matrixRules,
   ...expressionRules,
   ...structureRules,
+  ...permissionRules,
   ...contractRules,
   ...impactRules,
   ...overrideRules
@@ -29925,9 +30083,9 @@ function actionsSink(runnerDebug, groups) {
 var toPosix3 = (p) => p.split(sep4).join("/");
 var plural2 = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function annotate(f, prefix) {
-  const { level, message, ...props } = githubAnnotation(f, { pathPrefix: prefix });
-  if (level === "error") error(message, props);
-  else if (level === "warning") warning(message, props);
+  const { level: level2, message, ...props } = githubAnnotation(f, { pathPrefix: prefix });
+  if (level2 === "error") error(message, props);
+  else if (level2 === "warning") warning(message, props);
   else notice(message, props);
 }
 function writeReport(workspace, file, content) {
@@ -30035,9 +30193,9 @@ The report is too large for a job summary. Use the \`report-json\` or \`report-s
 `;
 }
 function logging(debug2, envLevel) {
-  const level = debug2 ? envLevel === "trace" ? "trace" : "debug" : "info";
+  const level2 = debug2 ? envLevel === "trace" ? "trace" : "debug" : "info";
   const groups = { depth: 0 };
-  const logger = createLogger({ level, sink: actionsSink(isDebug(), groups) });
+  const logger = createLogger({ level: level2, sink: actionsSink(isDebug(), groups) });
   const group2 = async (title, fn) => {
     groups.depth++;
     try {

@@ -185,15 +185,31 @@ function editable(
  * it is created in its parent mapping, after the first of the keys `after` the parent has (else its last pair). None
  * for a flow mapping (`{ … }`), an empty or computed value, or a file with CRLF line endings.
  */
-export function addKeys(
+export const addKeys = (
   index: ProjectIndex,
   file: string,
   path: YamlPath,
   keys: string[],
   after: string[] = [],
+) =>
+  addPairs(
+    index,
+    file,
+    path,
+    keys.map((k) => `${k}: `),
+    after,
+  );
+
+/** Adds `pairs`, each `<key>: <value>` as written, to the block mapping at `path`, the way `addKeys` adds keys. */
+export function addPairs(
+  index: ProjectIndex,
+  file: string,
+  path: YamlPath,
+  pairs: string[],
+  after: string[] = [],
 ): SuggestedEdit | undefined {
   const at = editable(index, file);
-  if (!at || keys.length === 0) return undefined;
+  if (!at || pairs.length === 0) return undefined;
   const { source, doc } = at;
   const map = nodeAt(doc, path);
   if (map !== undefined) {
@@ -203,7 +219,7 @@ export function addKeys(
     return insertAfter(
       source,
       last,
-      keys.map((k) => `${indent}${k}: `),
+      pairs.map((p) => `${indent}${p}`),
     );
   }
   const own = path.at(-1);
@@ -212,7 +228,35 @@ export function addKeys(
   const anchor = after.map((k) => pairOf(parent, k)).find((p) => p !== undefined) ?? parent.items.at(-1)!;
   const indent = ' '.repeat(keyStart(source, anchor).column - 1);
   const [, last] = pairLines(source, anchor);
-  return insertAfter(source, last, [`${indent}${own}:`, ...keys.map((k) => `${indent}  ${k}: `)]);
+  return insertAfter(source, last, [`${indent}${own}:`, ...pairs.map((p) => `${indent}  ${p}`)]);
+}
+
+/**
+ * Replaces the value at `path`, a scalar or a flow collection on one line, with `newText`. None for a block value, a
+ * value that is not there, or a file with CRLF line endings.
+ */
+export function replaceValue(
+  index: ProjectIndex,
+  file: string,
+  path: YamlPath,
+  newText: string,
+): SuggestedEdit | undefined {
+  const at = editable(index, file);
+  const node = at && nodeAt(at.doc, path);
+  if (!at || !(isScalar(node) || ((isMap(node) || isSeq(node)) && node.flow)) || !node.range)
+    return undefined;
+  const loc = at.source.loc(node.range[0], node.range[1]);
+  return loc.line === loc.endLine ? { loc, newText } : undefined;
+}
+
+/** Where the key of the pair at `path` is written; none when it is not there. */
+export function keyLoc(index: ProjectIndex, file: string, path: YamlPath): Loc | undefined {
+  const source = sourceOf(index, file);
+  const own = path.at(-1);
+  const parent = source && nodeAt(documentOf(source), path.slice(0, -1));
+  const pair = typeof own === 'string' && isMap(parent) ? pairOf(parent, own) : undefined;
+  const range = (pair?.key as Scalar | undefined)?.range;
+  return source && range ? source.loc(range[0], range[1]) : undefined;
 }
 
 /**

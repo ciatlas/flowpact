@@ -505,4 +505,75 @@ describe('suggestions', () => {
       }
     });
   });
+
+  describe('raising a permission grant', () => {
+    const files = (ci: string) => ({
+      [`${WF}/r.yml`]:
+        'on: workflow_call\njobs:\n  release:\n    runs-on: x\n    permissions:\n      contents: write\n      packages: write\n    steps: [{ run: x }]\n',
+      [`${WF}/ci.yml`]: ci,
+    });
+
+    it("gives the calling job permissions of its own that copy the workflow's, so its other jobs keep theirs", () => {
+      const r = fixes(
+        files(
+          'on: push\npermissions:\n  contents: read\n  issues: write\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n  other:\n    runs-on: x\n    steps: [{ run: x }]\n',
+        ),
+        'FP613',
+      );
+      expect(r).toMatchObject({
+        title: 'Grant contents: write, packages: write to jobs.call',
+        gone: true,
+        errors: [],
+      });
+      expect(r.files[`${WF}/ci.yml`]).toContain(
+        '    uses: ./.github/workflows/r.yml\n    permissions:\n      contents: write\n      issues: write\n      packages: write\n  other:\n',
+      );
+      expect(r.files[`${WF}/ci.yml`]).toMatch(/^on: push\npermissions:\n {2}contents: read\n/);
+    });
+
+    it('grants only what is requested under a workflow that grants nothing', () => {
+      const r = fixes(
+        files('on: push\npermissions: {}\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n'),
+        'FP613',
+      );
+      expect(r).toMatchObject({ gone: true, errors: [] });
+      expect(r.files[`${WF}/ci.yml`]).toContain(
+        '    uses: ./.github/workflows/r.yml\n    permissions:\n      contents: write\n      packages: write',
+      );
+    });
+
+    it("raises the calling job's own permissions: the scopes it lists, then the ones it leaves out", () => {
+      const r = fixes(
+        files(
+          'on: push\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n    permissions:\n      contents: read # for the checkout\n      id-token: write\n',
+        ),
+        'FP613',
+      );
+      expect(r).toMatchObject({ gone: true, errors: [] });
+      expect(r.files[`${WF}/ci.yml`]).toContain(
+        '    permissions:\n      contents: write # for the checkout\n      id-token: write\n      packages: write',
+      );
+    });
+
+    it("rewrites the calling job's permissions on one line", () => {
+      const r = fixes(
+        files(
+          'on: push\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n    permissions: { contents: read }\n',
+        ),
+        'FP613',
+      );
+      expect(r).toMatchObject({ gone: true, errors: [] });
+      expect(r.files[`${WF}/ci.yml`]).toContain('    permissions: { contents: write, packages: write }\n');
+    });
+
+    it('suggests nothing for read-all, which no list of scopes can raise, or to copy a scope name needing quotes', () => {
+      for (const grant of ['read-all', '\n  "con tents": read']) {
+        const [f] = lint(
+          files(`on: push\npermissions: ${grant}\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n`),
+        ).findings.filter((x) => x.code === 'FP613');
+        expect(f, grant).toBeDefined();
+        expect(f!.suggestions, grant).toBeUndefined();
+      }
+    });
+  });
 });

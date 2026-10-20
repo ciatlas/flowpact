@@ -15,7 +15,6 @@ import {
   type Loc,
   type LocatedRef,
   matchesPattern,
-  type PermissionsDecl,
   type ProjectIndex,
   type RunsOnDecl,
   refsOf,
@@ -27,6 +26,8 @@ import {
 } from '@ciatlas/core';
 import { parse as parseYaml } from 'yaml';
 import { buildContract, diffContracts, pathHolds } from './contracts';
+import { byJobChain } from './job-chains';
+import { LEVEL_NAMES, scopesOf } from './permissions';
 
 export const IMPACT_LEVELS = ['none', 'patch', 'minor', 'major'] as const;
 export type ImpactLevel = (typeof IMPACT_LEVELS)[number];
@@ -265,60 +266,6 @@ function interfaceChanges(base: ProjectIndex, head: ProjectIndex, b: UnitDecl, h
       message: c.message,
       loc: interfaceLoc(h, c.path),
     });
-  }
-  return out;
-}
-
-type Scopes = Record<string, number> | 'inherit';
-const RANK: Record<string, number> = { none: 0, read: 1, write: 2 };
-const LEVEL_NAMES = ['none', 'read', 'write'];
-const SCOPES = [
-  'actions',
-  'attestations',
-  'checks',
-  'contents',
-  'deployments',
-  'discussions',
-  'id-token',
-  'issues',
-  'models',
-  'packages',
-  'pages',
-  'pull-requests',
-  'security-events',
-  'statuses',
-];
-
-function scopesOf(p: PermissionsDecl | undefined): Scopes {
-  if (p === undefined) return 'inherit';
-  if (p === 'read-all' || p === 'write-all') {
-    const level = p === 'read-all' ? 1 : 2;
-    return Object.fromEntries(SCOPES.map((s) => [s, s === 'id-token' && level === 1 ? 0 : level]));
-  }
-  return Object.fromEntries(Object.entries(p).map(([k, v]) => [k, RANK[v] ?? 0]));
-}
-
-/**
- * `pick` of each job that runs steps, by chain of job ids, including the jobs of called workflows: they run in the
- * caller's run, so GitHub checks their permissions against what the caller grants, and on the caller's runners.
- */
-function byJobChain<T>(
-  index: ProjectIndex,
-  wf: WorkflowDecl,
-  pick: (job: JobDecl, wf: WorkflowDecl) => T,
-  depth = 0,
-  seen = new Set<string>(),
-): Map<string, T> {
-  const out = new Map<string, T>();
-  for (const job of Object.values(wf.jobs)) {
-    const callee = job.uses ? index.calleeOf(job) : undefined;
-    if (callee) {
-      if (depth >= 10 || seen.has(callee.path)) continue;
-      for (const [chain, v] of byJobChain(index, callee, pick, depth + 1, new Set([...seen, wf.path])))
-        out.set(`${job.id} > ${chain}`, v);
-      continue;
-    }
-    if (!job.uses) out.set(job.id, pick(job, wf));
   }
   return out;
 }

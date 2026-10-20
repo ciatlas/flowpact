@@ -5,6 +5,7 @@ import { inputRules } from './inputs';
 import { matrixRules } from './matrix';
 import { outputRules } from './outputs';
 import { overrideRules } from './overrides';
+import { permissionRules } from './permissions';
 import { RuleRegistry } from './registry';
 import { secretRules } from './secrets';
 import { structureRules } from './structure';
@@ -17,6 +18,7 @@ export const builtinRules: RuleDefinition[] = [
   ...matrixRules,
   ...expressionRules,
   ...structureRules,
+  ...permissionRules,
   ...contractRules,
   ...impactRules,
   ...overrideRules,

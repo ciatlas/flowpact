@@ -1,0 +1,10 @@
+name: Publish
+on: workflow_call
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - run: npm publish

@@ -11,6 +11,12 @@ exports[`fixture repositories > broken: findings snapshot 1`] = `
 ]
 `;
 
+exports[`fixture repositories > call-permissions: findings snapshot 1`] = `
+[
+  "error FP613 .github/workflows/release.yml:5:1 .github/workflows/publish.yml › jobs.npm requests contents: write, packages: write, but jobs.publish grants contents: read, packages: none",
+]
+`;
+
 exports[`fixture repositories > checknames-lab: findings snapshot 1`] = `[]`;
 
 exports[`fixture repositories > clean: findings snapshot 1`] = `[]`;

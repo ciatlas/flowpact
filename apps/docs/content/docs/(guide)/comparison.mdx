@@ -20,6 +20,7 @@ What each tool reports, from small test repositories and the tools' own document
 | An output arrives empty: its step never writes it, or a nested workflow no longer has it | — | nested workflow only | ✓ [`FP304`](/docs/rules/fp304), [`FP301`](/docs/rules/fp301) |
 | A matrix built with `fromJSON` is read with a key it never has | — | — | ✓ once you declare its keys ([`FP403`](/docs/rules/fp403), [`FP404`](/docs/rules/fp404)) |
 | GitHub rejects the run: a call cycle, a call chain of more than 10 workflows, more than 256 matrix jobs | — | — | ✓ [`FP601`](/docs/rules/fp601), [`FP602`](/docs/rules/fp602), [`FP406`](/docs/rules/fp406) |
+| GitHub rejects the run: a job of a called workflow, or of a workflow it calls, requests a `GITHUB_TOKEN` permission the call does not grant | — | — | ✓ names the job and each scope, and raises the grant in a quick fix ([`FP613`](/docs/rules/fp613)) |
 | Inputs, outputs and secrets nothing reads, and which secrets a `secrets: inherit` call actually needs | — | — | ✓ [`FP104`](/docs/rules/fp104), [`FP106`](/docs/rules/fp106), [`FP203`](/docs/rules/fp203), [`FP303`](/docs/rules/fp303), [`FP204`](/docs/rules/fp204) |
 | A published workflow changes an input, an output or a check name that consumers in other repositories may depend on | — | — | ✓ against the committed [contract](/docs/contracts) (`FP803`) or the pull request's base in [impact mode](/docs/impact-mode) (`FP810`); it does not read the consumers |
 | Where a value comes from and where it goes, across files | — | — (no go to definition or references) | ✓ `flowpact trace`, hover, go to definition, references |
@@ -35,7 +36,7 @@ What each tool reports, from small test repositories and the tools' own document
 | A cron schedule that is invalid (hour 25) or runs more often than every 5 minutes | ✓ | ✓ | — |
 | A runner label that does not exist, such as `ubuntu-latst`, or was retired, such as `ubuntu-18.04` | ✓ | — | — |
 | Bugs in `run:` scripts, such as an unquoted variable | ✓ runs shellcheck when it is installed | — | — |
-| Security: script injection, permissions, pinning ([zizmor](https://github.com/zizmorcore/zizmor) covers these) | script injection and hard-coded credentials | not compared | — |
+| Security: script injection, excessive permissions, pinning ([zizmor](https://github.com/zizmorcore/zizmor) covers these) | script injection and hard-coded credentials | not compared | — |
 
 ¹ GitHub Actions extension 0.31.5 through its language server; for calls into other repositories, language server 0.3.60
 from extension 0.32.3 (2026-10-15). It checks calls to reusable workflows and remote actions only when you are signed
@@ -704,6 +705,7 @@ The repositories under [`fixtures/`](https://github.com/ciatlas/flowpact/tree/ma
 | `incident-matrix` — one include entry without `config` | **0 findings** | `FP401` naming `{ name: windows }`, the include entry and the receiving input |
 | `deep-nesting` — a workflow that calls three levels of reusable workflows | 4 findings | the same 4 at identical positions **plus 9**: optional→required forwarding, dropped pass-throughs, unused inputs/outputs/secrets, an output never written by its step, inherited secrets, an undefined env var |
 | `composite-actions` | 4 findings | the same 4 at identical positions plus unused action inputs/outputs |
+| `call-permissions` — a release workflow grants `contents: read` to a publish workflow whose job requests write | **0 findings** | `FP613` naming the job and the scopes it lacks |
 | `clean` | 0 | 0 |
 
 ## Use them together
@@ -712,7 +714,7 @@ The repositories under [`fixtures/`](https://github.com/ciatlas/flowpact/tree/ma
 | --- | --- | --- |
 | [actionlint](https://github.com/rhysd/actionlint) | Each file in depth: expression types, shell scripts (shellcheck), runner labels, cron syntax, script injection, inputs of popular actions | Direct calls to local reusable workflows and local actions, the inputs of popular actions, `needs` outputs, matrix keys no combination defines, and undeclared secrets in a workflow that declares some |
 | [GitHub Actions extension](https://marketplace.visualstudio.com/items?itemName=GitHub.vscode-github-actions) (VS Code) | Writing workflows: completion, documentation on hover, validation (including cron schedules and properties of built-in contexts); runs and logs | Direct calls to local reusable workflows and calls into other repositories (when signed in), missing outputs, `env` variables nothing sets, matrix keys no combination defines; YAML, schema and expression errors (`FP502`–`FP505`) |
-| [zizmor](https://github.com/zizmorcore/zizmor), ghalint | Security: injection, permissions, pinning | `secrets: inherit`, which zizmor's `secrets-inherit` audit and ghalint's `deny_inherit_secrets` policy flag; flowpact's `FP204` lists the secrets the callee reads |
+| [zizmor](https://github.com/zizmorcore/zizmor), ghalint | Security: injection, excessive permissions, pinning | `secrets: inherit`, which zizmor's `secrets-inherit` audit and ghalint's `deny_inherit_secrets` policy flag; flowpact's `FP204` lists the secrets the callee reads |
 | gh-actions-lockfile, ghasum, actionspack, GitHub's `dependencies:` lock | Pin action and workflow **versions** (SHAs, hashes) | None — they lock *what code runs*, flowpact checks *what data flows* |
 | [CodeQL for GitHub Actions](https://github.blog/security/application-security/how-to-secure-your-github-actions-workflows-with-codeql/) | Security: untrusted data followed through steps, jobs, composite actions and reusable workflows to sinks such as code injection and cache poisoning | Both follow data across files: CodeQL to where it is unsafe, flowpact to where a value arrives empty |
 | [ravelact](https://github.com/wadackel/ravelact) | Exploring the graph: what an event runs, who calls a workflow, which entry points a change affects; permissions and required secrets down chains of local reusable workflows | Inputs and outputs nothing reads (`FP104`, `FP303`) and a required secret a caller leaves out (`FP201`); it leaves `with:` checks to actionlint and does not evaluate matrices |

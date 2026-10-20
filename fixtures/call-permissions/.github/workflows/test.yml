@@ -1,0 +1,9 @@
+name: Test
+on: workflow_call
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - run: npm test
