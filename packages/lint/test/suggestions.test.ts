@@ -450,6 +450,33 @@ describe('suggestions', () => {
       expect(r.files[`${WF}/ci.yml`]).not.toContain('with:');
     });
 
+    it('writes no name that is not plain: from a lockfile, one could add `secrets: inherit` to the call', () => {
+      const ref = 'acme/x/.github/workflows/y.yml@v1';
+      const lockfile = (name: string) => ({
+        '.github/flowpact/remotes.lock.yaml': JSON.stringify({
+          version: 1,
+          remotes: {
+            [ref]: { sha: 'a'.repeat(40), kind: 'workflow', inputs: { [name]: { required: true } } },
+          },
+        }),
+      });
+      const call = {
+        [`${WF}/ci.yml`]: `on: push\njobs:\n  call:\n    uses: ${ref}\n    with:\n      a: 1\n`,
+      };
+      for (const name of ['x\n    secrets: inherit\n    y', 'evil: x', "it's"]) {
+        const f = lint({ ...call, ...lockfile(name) }).findings.find((x) => x.code === 'FP101');
+        expect(f, name).toBeDefined();
+        expect(f!.suggestions, name).toBeUndefined();
+      }
+      // Nor a rename to one: the callee declares `conf:ig`, quoted, and the call passes `config`.
+      const [guess] = lint({
+        [`${WF}/r.yml`]: `on:\n  workflow_call:\n    inputs:\n      'conf:ig': { type: string }\njobs:\n  j:\n    runs-on: x\n    steps: [{ run: x }]\n`,
+        [`${WF}/ci.yml`]: `on: push\njobs:\n  call:\n    uses: ./.github/workflows/r.yml\n    with:\n      config: x\n`,
+      }).findings.filter((x) => x.code === 'FP102');
+      expect(guess?.message).toContain('did you mean "conf:ig"');
+      expect(guess?.suggestions).toBeUndefined();
+    });
+
     it('suggests no structural change that is not certain', () => {
       const published = {
         [`${WF}/r.yml`]: yaml`

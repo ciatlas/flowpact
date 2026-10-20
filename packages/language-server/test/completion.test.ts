@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keyContext } from '../src/completion';
+import { completionItems, keyContext } from '../src/completion';
 
 /** The context where `|` is (removed from the text). */
 function at(typed: string) {
@@ -78,5 +78,32 @@ describe('keyContext', () => {
 
   it("does not take the next step's uses: for this one", () => {
     expect(at(['steps:', '  - with:', '      |', '  - uses: octo/b@v1', ''].join('\n'))).toBeUndefined();
+  });
+});
+
+describe('completionItems', () => {
+  const ctx = {
+    block: 'with' as const,
+    uses: 'acme/x/.github/workflows/y.yml@v1',
+    present: [],
+    range: { line: 4, start: 6, end: 6 },
+  };
+
+  it('offers only names it can write as they are, and shows descriptions as text', () => {
+    const items = completionItems(
+      [
+        { name: 'config', required: true, description: 'See [docs](https://example.com) **now**' },
+        // From a lockfile a pull request edited: it would add `secrets: inherit` to the call.
+        { name: 'x\n    secrets: inherit\n    y', required: true },
+        { name: 'evil: x', required: false },
+      ],
+      ctx,
+    );
+    expect(items.map((i) => i.textEdit && 'newText' in i.textEdit && i.textEdit.newText)).toEqual([
+      'config: ',
+    ]);
+    expect((items[0]!.documentation as { value: string }).value).toContain(
+      'See \\[docs\\]\\(https://example\\.com\\) \\*\\*now\\*\\*',
+    );
   });
 });

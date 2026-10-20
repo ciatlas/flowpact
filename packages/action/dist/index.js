@@ -23804,7 +23804,9 @@ function textAt(source, loc) {
   return source.lines[loc.line - 1]?.slice(loc.column - 1, loc.endColumn - 1);
 }
 var quoted = (q) => q === "'" ? "'" : '"';
+var PLAIN_NAME = /^\w[\w.-]*$/;
 function renameAt(index, loc, from, to) {
+  if (!PLAIN_NAME.test(to)) return void 0;
   const source = sourceOf(index, loc.file);
   const text2 = source && textAt(source, loc);
   if (text2 === void 0) return void 0;
@@ -23817,7 +23819,7 @@ function renameAt(index, loc, from, to) {
 function renameSegment(index, loc, segment, from, to) {
   const source = sourceOf(index, loc.file);
   const text2 = source && textAt(source, loc);
-  if (text2 === void 0 || !/^[\w.-]+$/.test(text2)) return void 0;
+  if (text2 === void 0 || !/^[\w.-]+$/.test(text2) || !PLAIN_NAME.test(to)) return void 0;
   const parts = text2.split(".");
   if (parts[segment]?.toLowerCase() !== from.toLowerCase()) return void 0;
   const column = loc.column + parts.slice(0, segment).reduce((n, p) => n + p.length + 1, 0);
@@ -23891,16 +23893,16 @@ function editable(index, file) {
   if (!source || source.text.includes("\r")) return void 0;
   return { source, doc: documentOf(source) };
 }
-var addKeys = (index, file, path, keys, after = []) => addPairs(
+var addKeys = (index, file, path, keys, after = []) => keys.every((k) => PLAIN_NAME.test(k)) ? addPairs(
   index,
   file,
   path,
   keys.map((k) => `${k}: `),
   after
-);
+) : void 0;
 function addPairs(index, file, path, pairs2, after = []) {
   const at = editable(index, file);
-  if (!at || pairs2.length === 0) return void 0;
+  if (!at || pairs2.length === 0 || pairs2.some(hasLineBreak)) return void 0;
   const { source, doc } = at;
   const map = nodeAt(doc, path);
   if (map !== void 0) {
@@ -23921,13 +23923,14 @@ function addPairs(index, file, path, pairs2, after = []) {
   const [, last] = pairLines(source, anchor2);
   return insertAfter(source, last, [`${indent}${own2}:`, ...pairs2.map((p) => `${indent}  ${p}`)]);
 }
+var hasLineBreak = (text2) => /[\r\n\u0085\u2028\u2029]/.test(text2);
 function replaceValue(index, file, path, newText) {
   const at = editable(index, file);
   const node = at && nodeAt(at.doc, path);
   if (!at || !((0, import_yaml11.isScalar)(node) || ((0, import_yaml11.isMap)(node) || (0, import_yaml11.isSeq)(node)) && node.flow) || !node.range)
     return void 0;
   const loc = at.source.loc(node.range[0], node.range[1]);
-  return loc.line === loc.endLine ? { loc, newText } : void 0;
+  return loc.line === loc.endLine && !hasLineBreak(newText) ? { loc, newText } : void 0;
 }
 function keyLoc(index, file, path) {
   const source = sourceOf(index, file);
