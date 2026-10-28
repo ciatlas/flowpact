@@ -20483,14 +20483,17 @@ function described(schema3, description) {
 var ACTIONS_LOCK_FILE = ".github/workflows/actions.lock";
 var actionsLockSchema = looseObject({
   version: string2(),
-  /** Each covered workflow's file, with the pins (`owner/repo@ref`) it uses, its actions' own included. */
+  /**
+   * Each covered workflow's file, with the pins (`owner/repo@ref`) it uses directly; transitive ones are under
+   * `dependencies.*.uses`, which is not read.
+   */
   workflows: optional(record(string2(), array(string2()))),
   dependencies: optional(record(string2(), looseObject({ commit: optional(string2()) })))
 });
 var KNOWN_VERSION = /^v0\.0\.\d+$/;
-var pinKey = (owner, repo, ref) => `${owner.toLowerCase()}/${repo.toLowerCase()}@${ref}`;
+var pinKey = (owner, repo, ref) => `${owner.toLowerCase()}/${repo.toLowerCase()}@${/^[0-9a-f]{40}$/i.test(ref) ? ref.toLowerCase() : ref}`;
 function keyOf(pin) {
-  const m = /^([^/@:]+)\/([^/@:]+)@([^:]+)$/.exec(pin);
+  const m = /^([^/@:]+)\/([^/@:]+)@([^:]+)(?::sha(?:1|256)-[0-9a-f]+)?$/.exec(pin);
   return m ? pinKey(m[1], m[2], m[3]) : void 0;
 }
 var commitOfPin = (commit) => /^sha1-([0-9a-f]{40})$/.exec(commit ?? "")?.[1];
@@ -20518,7 +20521,7 @@ function readActionsLock(fs3) {
   }
   return { file, commits };
 }
-var lockedCommit = (read2, r) => read2?.commits?.get(pinKey(r.owner, r.repo, r.ref));
+var lockedCommit = (read2, r) => r.kind === "workflow" ? void 0 : read2?.commits?.get(pinKey(r.owner, r.repo, r.ref));
 
 // ../lint/src/analyze.ts
 import { createHash } from "crypto";

@@ -36,6 +36,10 @@ the upgrade. What is new:
   (`x != ''`, `x == ''`), which an `if:` already does by itself. Turn it on with `FP507: info`: the editor then fades
   the comparison and removes it in a quick fix (`x`, `!x`). It reports nothing under `env:`, `with:`, `outputs:` or
   `continue-on-error:`, where the comparison is what makes the value `true` or `false`.
+- **GitHub's [`actions.lock`](/docs/remote-interfaces#githubs-actionslock) pins actions only:** a reusable workflow
+  call is read where its ref points, as GitHub runs it, even when an action of the same repository and ref is pinned.
+  [FP612](/docs/rules/fp612) no longer reports such a call's entry as recording another commit than `actions.lock`,
+  and the first `remotes update` may list it as `changed`. A v0.0.1 `actions.lock` is now read.
 
 ## 0.25 → 0.26
 

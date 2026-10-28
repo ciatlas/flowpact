@@ -129,8 +129,8 @@ check remote calls without the network.
 
 ### actions.lock
 
-GitHub's own lockfile, `.github/workflows/actions.lock`, which pins the commit each remote reference runs. flowpact reads
-it, to check a reference at the commit that runs (see
+GitHub's own lockfile, `.github/workflows/actions.lock`, which pins the commit each remote action runs; GitHub does not
+lock reusable workflow calls. flowpact reads it, to check an action at the commit that runs (see
 [GitHub's actions.lock](/docs/remote-interfaces#githubs-actionslock)).
 
 ### Version change and verdict

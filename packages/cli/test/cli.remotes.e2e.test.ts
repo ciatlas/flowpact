@@ -215,13 +215,24 @@ describe('flowpact remotes update', () => {
     const D = 'd'.repeat(40);
     files[`/repos/octo/setup/contents/action.yml?ref=${D}`] =
       'name: s\ndescription: d\ninputs:\n  version: { description: v }\nruns:\n  using: composite\n  steps: []\n';
+    files[`/repos/octo/setup/contents/.github/workflows/deploy.yml?ref=${SHA}`] =
+      'on: workflow_call\njobs:\n  d:\n    runs-on: x\n    steps:\n      - run: echo\n';
     const root = repo();
+    // A reusable workflow of the same repository and ref: actions.lock does not pin it, so it is read where v2 points.
+    const ci = join(root, '.github/workflows/ci.yml');
+    writeFileSync(
+      ci,
+      `${readFileSync(ci, 'utf8')}  d:\n    uses: octo/setup/.github/workflows/deploy.yml@v2\n`,
+    );
     const pin = (version: string) =>
       `version: '${version}'\nworkflows:\n  '.github/workflows/ci.yml':\n    - 'octo/setup@v2'\ndependencies:\n  'octo/setup@v2':\n    ref: 'v2'\n    commit: 'sha1-${D}'\n    owner_id: 1\n    repo_id: 2\n`;
     writeFileSync(join(root, '.github/workflows/actions.lock'), pin('v0.0.3'));
     const r = await run(root, ['update']);
     expect(r.stdout).toContain('.github/workflows/actions.lock: 1 reference read at the commit it pins');
     expect(readFileSync(join(root, LOCK), 'utf8')).toContain(`octo/setup@v2:\n    sha: ${D}`);
+    expect(readFileSync(join(root, LOCK), 'utf8')).toContain(
+      `octo/setup/.github/workflows/deploy.yml@v2:\n    sha: ${SHA}`,
+    );
     writeFileSync(join(root, '.github/workflows/actions.lock'), pin('v9'));
     const unknown = await run(root, ['update', '--dry-run']);
     expect(unknown.stdout).toContain(
