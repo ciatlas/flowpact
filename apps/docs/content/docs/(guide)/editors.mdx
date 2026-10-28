@@ -154,6 +154,7 @@ A finding that flowpact knows how to fix offers it as a quick fix (**Ctrl+.** or
 | Add the missing key to the `include` entries that lack it | a matrix value that is empty in some combinations ([`FP401`](/docs/rules/fp401), [`FP402`](/docs/rules/fp402)) |
 | Remove the unused input, and what local callers pass for it | [`FP104`](/docs/rules/fp104), in a workflow or action no other repository uses |
 | Regenerate the contracts, every file as `flowpact generate` writes it | a contract finding ([`FP801`](/docs/rules/fp801)–[`FP805`](/docs/rules/fp805)) |
+| Remove a comparison with `''` from a condition: `x != ''` becomes `x`, `x == ''` becomes `!x` | [`FP507`](/docs/rules/fp507), when it is turned on |
 
 An added key gets an empty value for you to fill in. A quick fix is offered only when the change is certain: none in a
 flow mapping (`{ … }`) or a file with CRLF line endings, and no removal from a

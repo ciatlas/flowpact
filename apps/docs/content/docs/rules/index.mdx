@@ -60,6 +60,7 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP503`](/docs/rules/fp503) | `schema-violation` | 🔴 error | The file does not match GitHub’s workflow / action schema (validated with GitHub’s own parser). |
 | [`FP504`](/docs/rules/fp504) | `yaml-syntax-error` | 🔴 error | The file is not valid YAML. |
 | [`FP505`](/docs/rules/fp505) | `context-not-available` | 🔴 error | An expression uses a context or function that GitHub does not allow in that field (e.g. `env` in a reusable workflow call’s `with:`). |
+| [`FP507`](/docs/rules/fp507) | `redundant-empty-comparison` | ⚪ off (opt-in) | A condition compares a value with `''` (`!= ''`, `== ''`), which `if:` already does by itself. |
 
 ## Graph structure (`FP6xx`)
 

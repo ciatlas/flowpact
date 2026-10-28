@@ -1,7 +1,7 @@
 /** The fixes findings suggest: applying one makes its finding go away, and nothing is suggested that is not certain. */
-import { type Finding, reportSchema, type SuggestedEdit, toJsonReport } from '@flowpact/lint';
+import { type Finding, reportSchema, toJsonReport } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
-import { lint, yaml } from './helpers';
+import { lint, withEdits, yaml } from './helpers';
 
 const WF = '.github/workflows';
 
@@ -13,22 +13,7 @@ function apply(files: Record<string, string>, f: Finding, fill?: string): Record
   const edits = (f.suggestions?.[0]?.edits ?? []).map((e) =>
     fill ? { ...e, newText: e.newText.replace(/: (?=\n|$)/g, `: ${fill}`) } : e,
   );
-  const out = { ...files };
-  for (const file of new Set(edits.map((e) => e.loc.file))) {
-    const lines = out[file]!.split('\n');
-    const offset = (line: number, column: number) =>
-      lines.slice(0, line - 1).reduce((n, l) => n + l.length + 1, 0) + column - 1;
-    const mine = edits.filter((e) => e.loc.file === file);
-    mine.sort((a, b) => offset(b.loc.line, b.loc.column) - offset(a.loc.line, a.loc.column));
-    let text = out[file]!;
-    for (const e of mine as SuggestedEdit[])
-      text =
-        text.slice(0, offset(e.loc.line, e.loc.column)) +
-        e.newText +
-        text.slice(offset(e.loc.endLine, e.loc.endColumn));
-    out[file] = text;
-  }
-  return out;
+  return withEdits(files, edits);
 }
 
 /** The only finding of `code`, its first suggestion's title, and whether applying it leaves no finding of `code`. */

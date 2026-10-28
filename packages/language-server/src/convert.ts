@@ -31,8 +31,8 @@ const SEVERITY: Record<Finding['severity'], DiagnosticSeverity> = {
   info: DiagnosticSeverity.Information,
 };
 
-/** Rules about declarations nothing uses; editors fade them out. */
-const UNNECESSARY = new Set(['FP104', 'FP203', 'FP303', 'FP405', 'FP902']);
+/** Rules about declarations nothing uses, or text that changes nothing (FP507's `!= ''`); editors fade them out. */
+const UNNECESSARY = new Set(['FP104', 'FP203', 'FP303', 'FP405', 'FP507', 'FP902']);
 
 /** Matrix combinations listed in a message before the rest are counted. */
 const MAX_COMBOS = 5;

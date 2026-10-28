@@ -348,6 +348,10 @@ importers:
       zod:
         specifier: ^4.6.5
         version: 4.6.6
+    devDependencies:
+      '@actions/expressions':
+        specifier: ^0.3.61
+        version: 0.3.61
 
   packages/reporters:
     dependencies:

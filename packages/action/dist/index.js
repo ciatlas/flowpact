@@ -23085,54 +23085,6 @@ function fallsBack(fallbacks, ref, resolvers) {
   const fallback = fallbacks.get(ref.start);
   return !!fallback && !resolvers.some((resolve9) => isEmptyValue(evaluate(fallback, resolve9)));
 }
-function shapeOf2(source, e) {
-  try {
-    return e.accept({
-      visitLiteral: () => ({ kind: "value", inner: [] }),
-      visitUnary: (u) => ({ kind: "not", inner: [u.expr] }),
-      visitBinary: (b) => ({ kind: "value", inner: [b.left, b.right] }),
-      visitLogical: (l) => ({ kind: "logical", inner: l.args }),
-      visitGrouping: (g) => ({ kind: "grouping", inner: [g.group] }),
-      visitContextAccess: (c) => ({
-        kind: "value",
-        inner: [],
-        start: tokenOffset(source, c.name.range.start)
-      }),
-      visitIndexAccess: (i) => ({ kind: "value", inner: [i.expr, i.index] }),
-      visitFunctionCall: (f) => ({ kind: "value", inner: f.args })
-    });
-  } catch {
-    return { kind: "value", inner: [] };
-  }
-}
-function tokenOffset(source, pos) {
-  let lineStart = 0;
-  let newlines = 0;
-  let inString = false;
-  for (let i = 0; i < source.length && newlines < pos.line; i++) {
-    if (source[i] === "'") inString = !inString;
-    else if (source[i] === "\n") {
-      newlines++;
-      if (!inString) lineStart = i + 1;
-    }
-  }
-  return lineStart + pos.column;
-}
-function booleanTermOf(expr, start) {
-  const find = (e, found, negated, open2) => {
-    const shape = shapeOf2(expr.source, e);
-    if (shape.start !== void 0) return shape.start === start ? found : void 0;
-    const inverts = open2 && shape.kind === "not";
-    const stays = open2 && shape.kind !== "value";
-    for (const inner of shape.inner) {
-      const term = open2 && shape.kind === "logical" ? { term: inner, negated } : found;
-      const result = find(inner, term, negated !== inverts, stays);
-      if (result) return result;
-    }
-    return void 0;
-  };
-  return expr.ast && find(expr.ast, { term: expr.ast, negated: false }, false, true);
-}
 function stepsInScope(unit, jobId) {
   if (unit.kind === "action") return unit.steps;
   return jobId ? unit.jobs[jobId]?.steps ?? [] : [];
@@ -23383,468 +23335,6 @@ var contractRules = [
   contractInvalid
 ];
 
-// ../lint/src/rules/expressions.ts
-var GITHUB_ENV_HINTS = {
-  GITHUB_SHA: "github.sha",
-  GITHUB_REF: "github.ref",
-  GITHUB_REF_NAME: "github.ref_name",
-  GITHUB_REPOSITORY: "github.repository",
-  GITHUB_RUN_ID: "github.run_id",
-  GITHUB_RUN_NUMBER: "github.run_number",
-  GITHUB_ACTOR: "github.actor",
-  GITHUB_WORKSPACE: "github.workspace",
-  GITHUB_EVENT_NAME: "github.event_name",
-  GITHUB_HEAD_REF: "github.head_ref",
-  GITHUB_BASE_REF: "github.base_ref",
-  RUNNER_OS: "runner.os",
-  RUNNER_TEMP: "runner.temp",
-  RUNNER_ARCH: "runner.arch"
-};
-var undefinedEnvRef = defineRule({
-  code: "FP501",
-  name: "undefined-env-ref",
-  category: "expressions",
-  defaultSeverity: "warning",
-  docs: {
-    summary: "`${{ env.NAME }}` reads a variable that is not defined at workflow, job or step level, nor written to `$GITHUB_ENV` earlier.",
-    why: "The `env` context only contains variables set by the workflow itself \u2014 not runner defaults like `GITHUB_SHA`. Reads of anything else evaluate to an empty string.",
-    fix: "Define the variable under `env:`, write it to `$GITHUB_ENV` in an earlier step, or use the matching context (e.g. `github.sha`).",
-    examples: {
-      bad: `run: echo \${{ env.GITHUB_SHA }}`,
-      good: `run: echo \${{ github.sha }}   # or "$GITHUB_SHA" in the shell`
-    }
-  },
-  check(ctx) {
-    for (const wf of ctx.index.project.workflows.values()) {
-      for (const site of wf.sites) {
-        if (site.field === "workflow.env" || site.field === "input.default") continue;
-        checkEnvReads(ctx, wf, site);
-      }
-    }
-  }
-});
-function siteScope(wf, site) {
-  const job = site.job ? wf.jobs[site.job] : void 0;
-  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return { job, step: step2 };
-}
-function checkEnvReads(ctx, wf, site) {
-  const { job, step: step2 } = siteScope(wf, site);
-  for (const seg of site.segments) {
-    for (const ref of seg.refs) {
-      const name = ref.path[0];
-      if (ref.context !== "env" || !namesKey2(name)) continue;
-      if (envEntry(wf, job, step2, name) || maybeWrittenEarlier(job, site, name)) continue;
-      reportUndefinedEnv(ctx, wf, site, ref, name);
-    }
-  }
-}
-function envEntry(wf, job, step2, name) {
-  return lookup(wf.env, name) || job && lookup(job.env, name) || step2 && lookup(step2.env, name);
-}
-function maybeWrittenEarlier(job, site, name) {
-  if (!job) return false;
-  const earlier = site.step === void 0 ? job.steps : job.steps.slice(0, site.step);
-  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
-  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
-  return earlier.some((s) => s.uses && s.uses.kind !== "docker");
-}
-function reportUndefinedEnv(ctx, wf, site, ref, name) {
-  const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
-  ctx.report({
-    message: `env.${name} is not defined in this scope${hint ? ` \u2014 runner variables are not in the env context; use ${hint}` : ""}`,
-    loc: ref.loc,
-    symbol: sym.env(wf.path, site.job, name),
-    ...hint ? { fix: `Replace \`env.${name}\` with \`${hint}\`.` } : {}
-  });
-}
-var expressionParseError = defineRule({
-  code: "FP502",
-  name: "expression-parse-error",
-  category: "expressions",
-  defaultSeverity: "error",
-  docs: {
-    summary: "A `${{ }}` expression (or an `if:` condition) cannot be parsed.",
-    why: "GitHub rejects the workflow when it is triggered, or fails the step that contains the expression.",
-    fix: "Fix the syntax: strings use single quotes, `==` for equality, and every `${{` needs a closing `}}`.",
-    examples: {
-      bad: `if: \${{ inputs.mode = "release" }}`,
-      good: `if: \${{ inputs.mode == 'release' }}`
-    }
-  },
-  check(ctx) {
-    for (const unit of ctx.index.units()) {
-      for (const site of unit.sites) {
-        for (const seg of site.segments) if (seg.expr.error) reportParseError(ctx, seg, seg.expr.error);
-      }
-    }
-  }
-});
-function reportParseError(ctx, seg, error3) {
-  const loc = { ...seg.loc };
-  if (seg.loc.line === seg.loc.endLine) {
-    loc.column = seg.loc.column + error3.offset;
-    loc.endColumn = Math.max(loc.column + 1, seg.loc.endColumn);
-  }
-  ctx.report({
-    message: `Invalid expression ${quote(seg.expr.source.length > 60 ? `${seg.expr.source.slice(0, 57)}...` : seg.expr.source)}: ${error3.message}`,
-    loc
-  });
-}
-var schemaViolation = defineRule({
-  code: "FP503",
-  name: "schema-violation",
-  category: "expressions",
-  defaultSeverity: "error",
-  docs: {
-    summary: "The file does not match GitHub\u2019s workflow / action schema (validated with GitHub\u2019s own parser).",
-    why: "GitHub refuses to run a workflow or action with schema errors, often only when the trigger fires. Some keys it accepts and ignores instead, such as a top-level `env:` in action.yml, a filter the event does not support or a YAML merge key under an event. Those are reported as warnings: the file runs, but without the setting. The configured severity caps both kinds, so `FP503: warning` also reports schema errors as warnings, and ignored keys are never reported above warning.",
-    fix: "Correct the key or value reported. Most messages come from @actions/workflow-parser, the parser GitHub\u2019s tooling uses; for a key GitHub ignores, the warning says what is lost and how to fix it.",
-    examples: {
-      bad: `# action.yml
-env:
-  UV_VERSION: 0.9.0   # ignored: actions have no top-level env
-runs:
-  using: composite
-  steps:
-    - uses: astral-sh/setup-uv@v7
-      with:
-        version: \${{ env.UV_VERSION }}`,
-      good: `# action.yml
-inputs:
-  uv-version:
-    default: 0.9.0
-runs:
-  using: composite
-  steps:
-    - uses: astral-sh/setup-uv@v7
-      with:
-        version: \${{ inputs.uv-version }}`
-    }
-  },
-  check(ctx) {
-    for (const unit of ctx.index.units()) {
-      const fp502 = ctx.runs("FP502");
-      for (const e of unit.schemaErrors) {
-        if (e.kind === "context" || e.kind === "expression" && e.siteError && fp502) continue;
-        ctx.report({
-          message: e.message,
-          loc: e.loc,
-          ...e.fix ? { fix: e.fix } : {},
-          // GitHub runs the file without the key: worth fixing, but not a failed run.
-          ...e.kind === "ignored" ? { severity: "warning" } : {}
-        });
-      }
-    }
-  }
-});
-var contextNotAvailable = defineRule({
-  code: "FP505",
-  name: "context-not-available",
-  category: "expressions",
-  defaultSeverity: "error",
-  docs: {
-    summary: "An expression uses a context or function that GitHub does not allow in that field (e.g. `env` in a reusable workflow call\u2019s `with:`).",
-    why: "GitHub only makes some contexts available per field. `env` is not passed to reusable workflows and cannot be used in `jobs.<id>.with` or `jobs.<id>.if`; `secrets` cannot be used in `if:`. GitHub rejects the whole workflow when it is triggered \u2014 often only on the branch or event that reaches it. Reported by GitHub\u2019s own parser.",
-    fix: "Use a context that is available there: pass values through `inputs`/`vars`, compute them in an earlier job and read `needs.<job>.outputs`, or move the check into a step (`if: env.X == ...` works in steps).",
-    examples: {
-      bad: `env:
-  TARGET: prod
-jobs:
-  deploy:
-    uses: ./.github/workflows/deploy.yml
-    with:
-      target: \${{ env.TARGET }}   # env is not available here`,
-      good: `jobs:
-  deploy:
-    uses: ./.github/workflows/deploy.yml
-    with:
-      target: \${{ vars.TARGET }}`
-    }
-  },
-  check(ctx) {
-    for (const unit of ctx.index.units()) {
-      for (const e of unit.schemaErrors) if (e.kind === "context") reportParserContextError(ctx, unit, e);
-      for (const site of unit.sites) checkBareCondition(ctx, unit, site);
-    }
-  }
-});
-var rejection = (unit) => unit.kind === "workflow" ? "GitHub rejects the workflow" : "GitHub fails the step using the action";
-function reportParserContextError(ctx, unit, e) {
-  const name = /'([^']+)'/.exec(e.message)?.[1];
-  ctx.report({
-    message: `${name ? `\`${name}\`` : "This context"} is not available here \u2014 ${rejection(unit)} ("${e.message}")`,
-    loc: refLocFor(unit.sites, e, name) ?? e.loc
-  });
-}
-function checkBareCondition(ctx, unit, site) {
-  if (!site.isCondition || site.text.includes("${{")) return;
-  const table = CONDITION_TABLES[`${unit.kind}:${site.field}`];
-  if (!table) return;
-  const rejects = rejection(unit);
-  for (const seg of site.segments) {
-    for (const ref of seg.refs) {
-      if (table.contexts.has(ref.context)) continue;
-      ctx.report({
-        message: `\`${ref.context}\` is not available in ${table.label} \u2014 ${rejects} ("Unrecognized named-value: '${ref.context}'")`,
-        loc: ref.loc
-      });
-    }
-    if (table.functions) checkConditionFunctions(ctx, seg, table.label, table.functions, rejects);
-  }
-}
-function checkConditionFunctions(ctx, seg, label, allowed, rejects) {
-  for (const fn of functionCalls(seg.expr.source)) {
-    const name = fn.name.toLowerCase();
-    if (STANDARD_FUNCTIONS.has(name) || allowed.has(name)) continue;
-    ctx.report({
-      message: `\`${fn.name}()\` is not available in ${label} \u2014 ${rejects} ("Unrecognized function: '${fn.name}'")`,
-      loc: seg.expr.source.includes("\n") ? seg.loc : {
-        ...seg.loc,
-        column: seg.loc.column + fn.offset,
-        endLine: seg.loc.line,
-        endColumn: seg.loc.column + fn.offset + fn.name.length
-      }
-    });
-  }
-}
-function functionCalls(source) {
-  const blanked = source.replace(/'(?:[^']|'')*'/g, (m) => " ".repeat(m.length));
-  return [...blanked.matchAll(/(?<![\w.-])([A-Za-z_]\w*)\s*\(/g)].map((m) => ({
-    name: m[1],
-    offset: m.index
-  }));
-}
-var STANDARD_FUNCTIONS = /* @__PURE__ */ new Set([
-  "case",
-  "contains",
-  "startswith",
-  "endswith",
-  "format",
-  "join",
-  "tojson",
-  "fromjson"
-]);
-var STATUS_FUNCTIONS2 = ["always", "success", "failure", "cancelled"];
-var CONDITION_TABLES = {
-  "workflow:job.if": {
-    label: "a job's `if:`",
-    contexts: /* @__PURE__ */ new Set(["github", "needs", "vars", "inputs"]),
-    functions: new Set(STATUS_FUNCTIONS2)
-  },
-  "workflow:step.if": {
-    label: "a step's `if:`",
-    contexts: /* @__PURE__ */ new Set([
-      "github",
-      "needs",
-      "strategy",
-      "matrix",
-      "job",
-      "runner",
-      "env",
-      "vars",
-      "steps",
-      "inputs"
-    ])
-  },
-  "action:step.if": {
-    label: "a composite action step's `if:`",
-    contexts: /* @__PURE__ */ new Set(["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env"])
-  },
-  "action:action.runs-if": {
-    label: "an action's `pre-if:`/`post-if:`",
-    contexts: /* @__PURE__ */ new Set(["runner", "github", "job", "strategy", "matrix", "env", "inputs"])
-  }
-};
-function refLocFor(sites, e, name) {
-  if (!e.at || !name) return void 0;
-  const site = siteAt(sites, e.at);
-  for (const seg of site?.segments ?? [])
-    for (const r of seg.refs) if (r.context === name.toLowerCase()) return r.loc;
-  return site?.loc;
-}
-var yamlSyntaxError = defineRule({
-  code: "FP504",
-  name: "yaml-syntax-error",
-  category: "expressions",
-  defaultSeverity: "error",
-  docs: {
-    summary: "The file is not valid YAML.",
-    why: "Nothing in the file can run, and every analysis of it is incomplete.",
-    fix: "Fix the YAML syntax at the reported position (indentation, a `: ` inside an unquoted value, duplicate keys).",
-    examples: {
-      bad: `steps:
-  - run: echo Deploying to: production   # a second ": " in an unquoted value`,
-      good: `steps:
-  - run: 'echo Deploying to: production'`
-    }
-  },
-  check(ctx) {
-    for (const unit of ctx.index.units()) {
-      for (const e of unit.parseErrors) ctx.report({ message: e.message, loc: e.loc });
-    }
-  }
-});
-var expressionRules = [
-  contextNotAvailable,
-  undefinedEnvRef,
-  expressionParseError,
-  schemaViolation,
-  yamlSyntaxError
-];
-
-// ../lint/src/rules/impact.ts
-var describeSource = (s) => s.kind === "explicit" ? "the explicit impact" : s.kind === "version" ? `the version bump ${s.value}` : `the ${s.kind === "title" ? "title" : "labels"} "${s.value}"`;
-var related = (changes) => changes.slice(0, 20).map((c) => ({ loc: c.loc, message: `${c.level}: ${c.message}` }));
-var verdictLoc = (impact, changes) => changes[0]?.loc ?? impact.changes[0]?.loc ?? {
-  file: impact.narrowed?.anchor ?? impact.publishedFiles[0] ?? "action.yml",
-  line: 1,
-  column: 1,
-  endLine: 1,
-  endColumn: 1
-};
-var driving = (impact, level2) => countedChanges(impact.changes, impact.policy).filter((c) => c.level === level2);
-var impactUnderDeclared = defineRule({
-  code: "FP810",
-  name: "impact-under-declared",
-  category: "contracts",
-  defaultSeverity: "error",
-  docs: {
-    summary: "The changes to published workflows or actions need a bigger release than the pull request declares.",
-    why: "Consumers pin a floating tag (`@v1`) or a version range and take every release in it, and read the version to judge an update. A change released at a lower level than it needs reaches them without warning: a breaking one released as a minor or patch leaves their required status check waiting forever or fails their run, and a new environment or check released as a patch changes their runs where they expected fixes only.",
-    fix: "Declare the required impact (for example retitle the pull request `feat!: \u2026` for a major release), or keep the published interface and check names compatible.",
-    examples: {
-      bad: `# PR title: "fix: tidy the test job"
-jobs:
-  test:
-    name: Unit tests   # was "Test": consumers' required check "\u2026 / Test" never reports`,
-      good: `# PR title: "fix!: rename the test job's check to Unit tests"`
-    }
-  },
-  check(ctx) {
-    const v = ctx.impact?.verdict;
-    if (!v?.declared || levelRank(v.required) <= levelRank(v.declared.level) || levelRank(v.required) < levelRank("minor"))
-      return;
-    const changes = driving(ctx.impact, v.required);
-    ctx.report({
-      message: `Declared ${v.declared.level} (${describeSource(v.declared)}), but the changes require ${v.required}: ${changes[0]?.message ?? ""}${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`,
-      loc: verdictLoc(ctx.impact, changes),
-      related: related(changes),
-      symbol: `impact#${v.required}`
-    });
-  }
-});
-var impactConflict = defineRule({
-  code: "FP811",
-  name: "impact-declaration-conflict",
-  category: "contracts",
-  defaultSeverity: "error",
-  docs: {
-    summary: "Another source declares a bigger impact than the one the release tool reads.",
-    why: "Release tools read one thing \u2014 usually the squashed commit title. A `semver:major` label on a `fix:` pull request looks right in review, but the release is cut as a patch.",
-    fix: "Make the authoritative source (`impact.declaredBy`, the title by default) declare the impact, for example `feat!: \u2026`.",
-    examples: {
-      bad: `# PR title: "fix: rename the deploy output"   (the release tool reads this: a patch)
-# PR label: semver:major`,
-      good: `# PR title: "fix!: rename the deploy output"`
-    }
-  },
-  check(ctx) {
-    const v = ctx.impact?.verdict;
-    if (!v?.declared || !v.conflict) return;
-    ctx.report({
-      message: `${describeSource(v.conflict)} declares ${v.conflict.level}, but ${describeSource(v.declared)} \u2014 what the release tool reads \u2014 declares ${v.declared.level}`,
-      loc: verdictLoc(ctx.impact, []),
-      symbol: "impact#conflict"
-    });
-  }
-});
-var impactOverDeclared = defineRule({
-  code: "FP812",
-  name: "impact-over-declared",
-  category: "contracts",
-  defaultSeverity: "info",
-  docs: {
-    summary: "The pull request declares a bigger impact than its workflow and action changes require.",
-    why: "Not a problem: the release may contain changes flowpact does not grade. Reported so the declaration is visible.",
-    fix: "Nothing to fix if the release has other changes; otherwise declare the smaller impact.",
-    examples: {
-      bad: `# PR title: "feat!: tidy the deploy workflow"   (declares major)
-# the only change to a published workflow is a step's command: a patch`,
-      good: `# PR title: "fix: tidy the deploy workflow"`
-    }
-  },
-  check(ctx) {
-    const v = ctx.impact?.verdict;
-    if (!v?.declared || levelRank(v.declared.level) <= levelRank(v.required)) return;
-    ctx.report({
-      message: `Declared ${v.declared.level} (${describeSource(v.declared)}); the workflow and action changes require ${v.required}`,
-      loc: verdictLoc(ctx.impact, []),
-      symbol: "impact#over"
-    });
-  }
-});
-var impactUndeclared = defineRule({
-  code: "FP813",
-  name: "impact-undeclared",
-  category: "contracts",
-  defaultSeverity: "info",
-  docs: {
-    summary: "No release impact is declared; flowpact reports the impact the changes require.",
-    why: "Without a declaration there is nothing to check against. The required impact is still useful when cutting a release.",
-    fix: "Declare the impact: a Conventional Commits pull request title (`feat: \u2026`, `fix!: \u2026`), a `semver:*` label, or `--expect`.",
-    examples: {
-      bad: `# PR title: "Update the deploy workflow"   (no Conventional Commits type: nothing declared)`,
-      good: `# PR title: "fix: update the deploy workflow"`
-    }
-  },
-  check(ctx) {
-    const v = ctx.impact?.verdict;
-    if (!v || v.declared) return;
-    const changes = driving(ctx.impact, v.required);
-    ctx.report({
-      message: `No impact declared; the changes to published workflows and actions require ${v.required}`,
-      loc: verdictLoc(ctx.impact, changes),
-      related: related(changes),
-      symbol: "impact#undeclared"
-    });
-  }
-});
-var impactUncertain = defineRule({
-  code: "FP814",
-  name: "impact-uncertain",
-  category: "contracts",
-  defaultSeverity: "warning",
-  docs: {
-    summary: "A change to a published unit depends on something flowpact cannot evaluate statically.",
-    why: "For example a check name built from the triggering event, `needs` outputs or `vars`, a matrix computed at runtime, or an output that is now set only when an `if:` holds. flowpact cannot tell whether consumers see a different check name, or run where the output is `''`, so it does not count the change (`impact.uncertain: fail` counts it).",
-    fix: "Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.",
-    examples: {
-      bad: `# in a published reusable workflow
-jobs:
-  test:
-    runs-on: \${{ inputs.runner }}   # was ubuntu-latest: which runners callers need is known only at run time`,
-      good: `jobs:
-  test:
-    runs-on: ubuntu-latest   # or keep the change, and declare it major (feat!: \u2026)`
-    }
-  },
-  check(ctx) {
-    for (const c of ctx.impact?.changes ?? []) {
-      if (c.certain) continue;
-      ctx.report({ message: `Possibly ${c.level}: ${c.message}`, loc: c.loc, symbol: `${c.unit}#impact` });
-    }
-  }
-});
-var impactRules = [
-  impactUnderDeclared,
-  impactConflict,
-  impactOverDeclared,
-  impactUndeclared,
-  impactUncertain
-];
-var IMPACT_CODES = impactRules.map((r) => r.code);
-
 // ../lint/src/suggestions.ts
 var import_yaml11 = __toESM(require_dist(), 1);
 var sources = /* @__PURE__ */ new WeakMap();
@@ -24015,6 +23505,156 @@ var stepWithPath = (job, step2) => job === void 0 ? ["runs", "steps", step2, "wi
 function suggestion(title, edits) {
   if (edits.length === 0 || edits.some((e) => e === void 0)) return void 0;
   return { title, edits };
+}
+
+// ../lint/src/expr-ast.ts
+var KINDS = {
+  visitLiteral: (node) => ({ kind: "literal", node }),
+  visitUnary: (node) => ({ kind: "unary", node }),
+  visitBinary: (node) => ({ kind: "binary", node }),
+  visitLogical: (node) => ({ kind: "logical", node }),
+  visitGrouping: (node) => ({ kind: "grouping", node }),
+  visitContextAccess: (node) => ({ kind: "context", node }),
+  visitIndexAccess: (node) => ({ kind: "index", node }),
+  visitFunctionCall: (node) => ({ kind: "call", node })
+};
+function nodeOf(e) {
+  try {
+    return e.accept(KINDS);
+  } catch {
+    return { kind: "star" };
+  }
+}
+var isEmptyString = (e) => {
+  const n = nodeOf(e);
+  return n.kind === "literal" && n.node.token.lexeme === "''";
+};
+function tokenOffset(source, pos) {
+  let lineStart = 0;
+  let newlines = 0;
+  let inString = false;
+  for (let i = 0; i < source.length && newlines < pos.line; i++) {
+    if (source[i] === "'") inString = !inString;
+    else if (source[i] === "\n") {
+      newlines++;
+      if (!inString) lineStart = i + 1;
+    }
+  }
+  return lineStart + pos.column;
+}
+var tokenSpan = (source, tok) => ({
+  start: tokenOffset(source, tok.range.start),
+  end: tokenOffset(source, tok.range.end)
+});
+var isSpace = (ch) => ch === " " || ch === "	" || ch === "\r" || ch === "\n";
+function skipSpace2(source, i) {
+  while (i < source.length && isSpace(source[i])) i++;
+  return i;
+}
+function skipSpaceBack(source, i) {
+  while (i > 0 && isSpace(source[i - 1])) i--;
+  return i;
+}
+function exprSpan(source, e) {
+  const n = nodeOf(e);
+  switch (n.kind) {
+    case "literal":
+      return tokenSpan(source, n.node.token);
+    case "context":
+      return tokenSpan(source, n.node.name);
+    case "unary":
+      return {
+        start: tokenOffset(source, n.node.operator.range.start),
+        end: exprSpan(source, n.node.expr).end
+      };
+    case "binary":
+      return { start: exprSpan(source, n.node.left).start, end: exprSpan(source, n.node.right).end };
+    case "logical":
+      return {
+        start: exprSpan(source, n.node.args[0]).start,
+        end: exprSpan(source, n.node.args.at(-1)).end
+      };
+    case "grouping": {
+      const inner = exprSpan(source, n.node.group);
+      return { start: skipSpaceBack(source, inner.start) - 1, end: skipSpace2(source, inner.end) + 1 };
+    }
+    case "call":
+      return callSpan(source, n.node);
+    case "index":
+      return indexSpan(source, n.node);
+    case "star":
+      throw new Error("a `*` index has no span of its own");
+  }
+}
+function callSpan(source, call) {
+  const name = tokenSpan(source, call.functionName);
+  const last = call.args.at(-1);
+  let close;
+  if (last) {
+    close = skipSpace2(source, exprSpan(source, last).end);
+    if (source[close] === ",") close = skipSpace2(source, close + 1);
+  } else close = skipSpace2(source, skipSpace2(source, name.end) + 1);
+  return { start: name.start, end: close + 1 };
+}
+function indexSpan(source, access2) {
+  const base = exprSpan(source, access2.expr);
+  const open2 = skipSpace2(source, base.end);
+  const star = nodeOf(access2.index).kind === "star";
+  if (source[open2] === ".")
+    return {
+      start: base.start,
+      end: star ? skipSpace2(source, open2 + 1) + 1 : exprSpan(source, access2.index).end
+    };
+  const inner = star ? skipSpace2(source, open2 + 1) + 1 : exprSpan(source, access2.index).end;
+  return { start: base.start, end: skipSpace2(source, inner) + 1 };
+}
+function conditionRoot(site) {
+  return site.isCondition && isWholeExpression(site) ? site.segments[0]?.expr.ast : void 0;
+}
+function truthinessNodes(root) {
+  const out = [];
+  const visit2 = (expr, ancestors) => {
+    out.push({ expr, ancestors });
+    const n = nodeOf(expr);
+    const inner = n.kind === "grouping" ? [n.node.group] : n.kind === "logical" ? n.node.args : n.kind === "unary" && n.node.operator.lexeme === "!" ? [n.node.expr] : [];
+    for (const child of inner) visit2(child, [...ancestors, expr]);
+  };
+  visit2(root, []);
+  return out;
+}
+function booleanTermOf(expr, start) {
+  if (!expr.ast) return void 0;
+  const around = truthinessNodes(expr.ast).filter(({ expr: e }) => {
+    const span = exprSpan(expr.source, e);
+    return span.start <= start && start < span.end;
+  });
+  const found = around.findLast(({ ancestors }) => {
+    const parent = ancestors.at(-1);
+    return !parent || nodeOf(parent).kind === "logical";
+  });
+  if (!found) return void 0;
+  const nots = found.ancestors.filter((a) => nodeOf(a).kind === "unary").length;
+  return { term: found.expr, negated: nots % 2 === 1 };
+}
+function segmentLoc(index, seg, span) {
+  const { loc } = seg;
+  const line = loc.line === loc.endLine ? sourceOf(index, loc.file)?.lines[loc.line - 1] : void 0;
+  if (line?.slice(loc.column - 1, loc.endColumn - 1) !== seg.expr.source) return void 0;
+  return { ...loc, column: loc.column + span.start, endColumn: loc.column + span.end };
+}
+function applyEdits(source, edits) {
+  return [...edits].sort((a, b) => b.span.start - a.span.start).reduce((s, e) => s.slice(0, e.span.start) + e.newText + s.slice(e.span.end), source);
+}
+function segmentEdits(index, seg, edits) {
+  if (sourceOf(index, seg.loc.file)?.text.includes("\r") || edits.some((e) => /[\r\n]/.test(e.newText)))
+    return void 0;
+  const out = [];
+  for (const e of edits) {
+    const loc = segmentLoc(index, seg, e.span);
+    if (!loc) return void 0;
+    out.push({ loc, newText: e.newText });
+  }
+  return out;
 }
 
 // ../lint/src/rules/inputs.ts
@@ -24663,6 +24303,616 @@ var inputRules = [
   optionalForwardedToRequired,
   undefinedInputRef
 ];
+
+// ../lint/src/rules/expressions.ts
+var GITHUB_ENV_HINTS = {
+  GITHUB_SHA: "github.sha",
+  GITHUB_REF: "github.ref",
+  GITHUB_REF_NAME: "github.ref_name",
+  GITHUB_REPOSITORY: "github.repository",
+  GITHUB_RUN_ID: "github.run_id",
+  GITHUB_RUN_NUMBER: "github.run_number",
+  GITHUB_ACTOR: "github.actor",
+  GITHUB_WORKSPACE: "github.workspace",
+  GITHUB_EVENT_NAME: "github.event_name",
+  GITHUB_HEAD_REF: "github.head_ref",
+  GITHUB_BASE_REF: "github.base_ref",
+  RUNNER_OS: "runner.os",
+  RUNNER_TEMP: "runner.temp",
+  RUNNER_ARCH: "runner.arch"
+};
+var undefinedEnvRef = defineRule({
+  code: "FP501",
+  name: "undefined-env-ref",
+  category: "expressions",
+  defaultSeverity: "warning",
+  docs: {
+    summary: "`${{ env.NAME }}` reads a variable that is not defined at workflow, job or step level, nor written to `$GITHUB_ENV` earlier.",
+    why: "The `env` context only contains variables set by the workflow itself \u2014 not runner defaults like `GITHUB_SHA`. Reads of anything else evaluate to an empty string.",
+    fix: "Define the variable under `env:`, write it to `$GITHUB_ENV` in an earlier step, or use the matching context (e.g. `github.sha`).",
+    examples: {
+      bad: `run: echo \${{ env.GITHUB_SHA }}`,
+      good: `run: echo \${{ github.sha }}   # or "$GITHUB_SHA" in the shell`
+    }
+  },
+  check(ctx) {
+    for (const wf of ctx.index.project.workflows.values()) {
+      for (const site of wf.sites) {
+        if (site.field === "workflow.env" || site.field === "input.default") continue;
+        checkEnvReads(ctx, wf, site);
+      }
+    }
+  }
+});
+function siteScope(wf, site) {
+  const job = site.job ? wf.jobs[site.job] : void 0;
+  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return { job, step: step2 };
+}
+function checkEnvReads(ctx, wf, site) {
+  const { job, step: step2 } = siteScope(wf, site);
+  for (const seg of site.segments) {
+    for (const ref of seg.refs) {
+      const name = ref.path[0];
+      if (ref.context !== "env" || !namesKey2(name)) continue;
+      if (envEntry(wf, job, step2, name) || maybeWrittenEarlier(job, site, name)) continue;
+      reportUndefinedEnv(ctx, wf, site, ref, name);
+    }
+  }
+}
+function envEntry(wf, job, step2, name) {
+  return lookup(wf.env, name) || job && lookup(job.env, name) || step2 && lookup(step2.env, name);
+}
+function maybeWrittenEarlier(job, site, name) {
+  if (!job) return false;
+  const earlier = site.step === void 0 ? job.steps : job.steps.slice(0, site.step);
+  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
+  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
+  return earlier.some((s) => s.uses && s.uses.kind !== "docker");
+}
+function reportUndefinedEnv(ctx, wf, site, ref, name) {
+  const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
+  ctx.report({
+    message: `env.${name} is not defined in this scope${hint ? ` \u2014 runner variables are not in the env context; use ${hint}` : ""}`,
+    loc: ref.loc,
+    symbol: sym.env(wf.path, site.job, name),
+    ...hint ? { fix: `Replace \`env.${name}\` with \`${hint}\`.` } : {}
+  });
+}
+var expressionParseError = defineRule({
+  code: "FP502",
+  name: "expression-parse-error",
+  category: "expressions",
+  defaultSeverity: "error",
+  docs: {
+    summary: "A `${{ }}` expression (or an `if:` condition) cannot be parsed.",
+    why: "GitHub rejects the workflow when it is triggered, or fails the step that contains the expression.",
+    fix: "Fix the syntax: strings use single quotes, `==` for equality, and every `${{` needs a closing `}}`.",
+    examples: {
+      bad: `if: \${{ inputs.mode = "release" }}`,
+      good: `if: \${{ inputs.mode == 'release' }}`
+    }
+  },
+  check(ctx) {
+    for (const unit of ctx.index.units()) {
+      for (const site of unit.sites) {
+        for (const seg of site.segments) if (seg.expr.error) reportParseError(ctx, seg, seg.expr.error);
+      }
+    }
+  }
+});
+function reportParseError(ctx, seg, error3) {
+  const loc = { ...seg.loc };
+  if (seg.loc.line === seg.loc.endLine) {
+    loc.column = seg.loc.column + error3.offset;
+    loc.endColumn = Math.max(loc.column + 1, seg.loc.endColumn);
+  }
+  ctx.report({
+    message: `Invalid expression ${quote(seg.expr.source.length > 60 ? `${seg.expr.source.slice(0, 57)}...` : seg.expr.source)}: ${error3.message}`,
+    loc
+  });
+}
+var schemaViolation = defineRule({
+  code: "FP503",
+  name: "schema-violation",
+  category: "expressions",
+  defaultSeverity: "error",
+  docs: {
+    summary: "The file does not match GitHub\u2019s workflow / action schema (validated with GitHub\u2019s own parser).",
+    why: "GitHub refuses to run a workflow or action with schema errors, often only when the trigger fires. Some keys it accepts and ignores instead, such as a top-level `env:` in action.yml, a filter the event does not support or a YAML merge key under an event. Those are reported as warnings: the file runs, but without the setting. The configured severity caps both kinds, so `FP503: warning` also reports schema errors as warnings, and ignored keys are never reported above warning.",
+    fix: "Correct the key or value reported. Most messages come from @actions/workflow-parser, the parser GitHub\u2019s tooling uses; for a key GitHub ignores, the warning says what is lost and how to fix it.",
+    examples: {
+      bad: `# action.yml
+env:
+  UV_VERSION: 0.9.0   # ignored: actions have no top-level env
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v7
+      with:
+        version: \${{ env.UV_VERSION }}`,
+      good: `# action.yml
+inputs:
+  uv-version:
+    default: 0.9.0
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v7
+      with:
+        version: \${{ inputs.uv-version }}`
+    }
+  },
+  check(ctx) {
+    for (const unit of ctx.index.units()) {
+      const fp502 = ctx.runs("FP502");
+      for (const e of unit.schemaErrors) {
+        if (e.kind === "context" || e.kind === "expression" && e.siteError && fp502) continue;
+        ctx.report({
+          message: e.message,
+          loc: e.loc,
+          ...e.fix ? { fix: e.fix } : {},
+          // GitHub runs the file without the key: worth fixing, but not a failed run.
+          ...e.kind === "ignored" ? { severity: "warning" } : {}
+        });
+      }
+    }
+  }
+});
+var contextNotAvailable = defineRule({
+  code: "FP505",
+  name: "context-not-available",
+  category: "expressions",
+  defaultSeverity: "error",
+  docs: {
+    summary: "An expression uses a context or function that GitHub does not allow in that field (e.g. `env` in a reusable workflow call\u2019s `with:`).",
+    why: "GitHub only makes some contexts available per field. `env` is not passed to reusable workflows and cannot be used in `jobs.<id>.with` or `jobs.<id>.if`; `secrets` cannot be used in `if:`. GitHub rejects the whole workflow when it is triggered \u2014 often only on the branch or event that reaches it. Reported by GitHub\u2019s own parser.",
+    fix: "Use a context that is available there: pass values through `inputs`/`vars`, compute them in an earlier job and read `needs.<job>.outputs`, or move the check into a step (`if: env.X == ...` works in steps).",
+    examples: {
+      bad: `env:
+  TARGET: prod
+jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      target: \${{ env.TARGET }}   # env is not available here`,
+      good: `jobs:
+  deploy:
+    uses: ./.github/workflows/deploy.yml
+    with:
+      target: \${{ vars.TARGET }}`
+    }
+  },
+  check(ctx) {
+    for (const unit of ctx.index.units()) {
+      for (const e of unit.schemaErrors) if (e.kind === "context") reportParserContextError(ctx, unit, e);
+      for (const site of unit.sites) checkBareCondition(ctx, unit, site);
+    }
+  }
+});
+var rejection = (unit) => unit.kind === "workflow" ? "GitHub rejects the workflow" : "GitHub fails the step using the action";
+function reportParserContextError(ctx, unit, e) {
+  const name = /'([^']+)'/.exec(e.message)?.[1];
+  ctx.report({
+    message: `${name ? `\`${name}\`` : "This context"} is not available here \u2014 ${rejection(unit)} ("${e.message}")`,
+    loc: refLocFor(unit.sites, e, name) ?? e.loc
+  });
+}
+function checkBareCondition(ctx, unit, site) {
+  if (!site.isCondition || site.text.includes("${{")) return;
+  const table = CONDITION_TABLES[`${unit.kind}:${site.field}`];
+  if (!table) return;
+  const rejects = rejection(unit);
+  for (const seg of site.segments) {
+    for (const ref of seg.refs) {
+      if (table.contexts.has(ref.context)) continue;
+      ctx.report({
+        message: `\`${ref.context}\` is not available in ${table.label} \u2014 ${rejects} ("Unrecognized named-value: '${ref.context}'")`,
+        loc: ref.loc
+      });
+    }
+    if (table.functions) checkConditionFunctions(ctx, seg, table.label, table.functions, rejects);
+  }
+}
+function checkConditionFunctions(ctx, seg, label, allowed, rejects) {
+  for (const fn of functionCalls(seg.expr.source)) {
+    const name = fn.name.toLowerCase();
+    if (STANDARD_FUNCTIONS.has(name) || allowed.has(name)) continue;
+    ctx.report({
+      message: `\`${fn.name}()\` is not available in ${label} \u2014 ${rejects} ("Unrecognized function: '${fn.name}'")`,
+      loc: seg.expr.source.includes("\n") ? seg.loc : {
+        ...seg.loc,
+        column: seg.loc.column + fn.offset,
+        endLine: seg.loc.line,
+        endColumn: seg.loc.column + fn.offset + fn.name.length
+      }
+    });
+  }
+}
+function functionCalls(source) {
+  const blanked = source.replace(/'(?:[^']|'')*'/g, (m) => " ".repeat(m.length));
+  return [...blanked.matchAll(/(?<![\w.-])([A-Za-z_]\w*)\s*\(/g)].map((m) => ({
+    name: m[1],
+    offset: m.index
+  }));
+}
+var STANDARD_FUNCTIONS = /* @__PURE__ */ new Set([
+  "case",
+  "contains",
+  "startswith",
+  "endswith",
+  "format",
+  "join",
+  "tojson",
+  "fromjson"
+]);
+var STATUS_FUNCTIONS2 = ["always", "success", "failure", "cancelled"];
+var CONDITION_TABLES = {
+  "workflow:job.if": {
+    label: "a job's `if:`",
+    contexts: /* @__PURE__ */ new Set(["github", "needs", "vars", "inputs"]),
+    functions: new Set(STATUS_FUNCTIONS2)
+  },
+  "workflow:step.if": {
+    label: "a step's `if:`",
+    contexts: /* @__PURE__ */ new Set([
+      "github",
+      "needs",
+      "strategy",
+      "matrix",
+      "job",
+      "runner",
+      "env",
+      "vars",
+      "steps",
+      "inputs"
+    ])
+  },
+  "action:step.if": {
+    label: "a composite action step's `if:`",
+    contexts: /* @__PURE__ */ new Set(["github", "inputs", "strategy", "matrix", "steps", "job", "runner", "env"])
+  },
+  "action:action.runs-if": {
+    label: "an action's `pre-if:`/`post-if:`",
+    contexts: /* @__PURE__ */ new Set(["runner", "github", "job", "strategy", "matrix", "env", "inputs"])
+  }
+};
+function refLocFor(sites, e, name) {
+  if (!e.at || !name) return void 0;
+  const site = siteAt(sites, e.at);
+  for (const seg of site?.segments ?? [])
+    for (const r of seg.refs) if (r.context === name.toLowerCase()) return r.loc;
+  return site?.loc;
+}
+var yamlSyntaxError = defineRule({
+  code: "FP504",
+  name: "yaml-syntax-error",
+  category: "expressions",
+  defaultSeverity: "error",
+  docs: {
+    summary: "The file is not valid YAML.",
+    why: "Nothing in the file can run, and every analysis of it is incomplete.",
+    fix: "Fix the YAML syntax at the reported position (indentation, a `: ` inside an unquoted value, duplicate keys).",
+    examples: {
+      bad: `steps:
+  - run: echo Deploying to: production   # a second ": " in an unquoted value`,
+      good: `steps:
+  - run: 'echo Deploying to: production'`
+    }
+  },
+  check(ctx) {
+    for (const unit of ctx.index.units()) {
+      for (const e of unit.parseErrors) ctx.report({ message: e.message, loc: e.loc });
+    }
+  }
+});
+var redundantEmptyComparison = defineRule({
+  code: "FP507",
+  name: "redundant-empty-comparison",
+  category: "expressions",
+  defaultSeverity: "off",
+  generatedFiles: "skip",
+  docs: {
+    summary: "A condition compares a value with `''` (`!= ''`, `== ''`), which `if:` already does by itself.",
+    why: "An `if:` treats `''`, `null`, `0` and `false` as false and every other value as true, so `x != ''` decides it the same way as `x`, and `x == ''` as `!x`. Outside a condition the comparison matters: under `env:`, `with:` or `outputs:` it turns the value into `true` or `false`, and `continue-on-error:` accepts only a boolean.",
+    fix: "Remove the comparison: `x != ''` becomes `x`, and `x == ''` becomes `!x`. The editor offers it as a quick fix where the change is certain.",
+    scope: "Only a comparison with the string `''` that decides the condition: the whole `if:`, or an operand of `!`, `&&` or `||` in it. Not `!= null`, `!= 0` or `!= false`, which differ for `'0'`; not inside a comparison, a function's arguments (`case()` requires real booleans) or an `if:` with text around its `${{ }}`, which is always true; not under `env:`, `with:`, `outputs:` or `continue-on-error:`. While FP105 runs, not for an optional input without a default: FP105 reports one decided by its truthiness, and counts `!= ''` as handling the omitted case. Nor a condition that a YAML alias shares with another key (`if: *flag`), whose text may be a value. Off by default: the comparison is harmless, and some prefer it written out; turn it on with `FP507: info`. The quick fix is offered for a condition written on one line, not in a single-quoted YAML string, in a file with LF line endings; not for a value in parentheses (`(a || b) != ''`) or a matrix value (YAML's `.nan` compares otherwise), nor when the condition would then start with `!` without `${{ }}`, which YAML reads as a tag.",
+    examples: {
+      bad: "if: ${{ steps.patch.outputs.file != '' && steps.check.outputs.skip == '' }}",
+      good: "if: ${{ steps.patch.outputs.file && !steps.check.outputs.skip }}"
+    }
+  },
+  check(ctx) {
+    const shared = sharedText(ctx);
+    for (const unit of ctx.index.units()) {
+      const found = unit.sites.flatMap(emptyComparisons).filter((f) => !shared.has(locKey(f.site.loc)));
+      if (found.length === 0) continue;
+      const skipped = fp105Reads(ctx, unit);
+      for (const f of found) if (!readsAny(f.site, f.other, skipped)) reportEmptyComparison(ctx, f);
+    }
+  }
+});
+var locKey = (loc) => `${loc.file}:${loc.line}:${loc.column}`;
+function sharedText(ctx) {
+  const seen = /* @__PURE__ */ new Set();
+  const shared = /* @__PURE__ */ new Set();
+  for (const unit of ctx.index.units())
+    for (const site of unit.sites) {
+      const key = locKey(site.loc);
+      if (seen.has(key)) shared.add(key);
+      seen.add(key);
+    }
+  return shared;
+}
+function emptyComparisons(site) {
+  const root = conditionRoot(site);
+  if (!root) return [];
+  return truthinessNodes(root).flatMap((node) => emptyComparison(site, node) ?? []);
+}
+function emptyComparison(site, node) {
+  const source = site.segments[0].expr.source;
+  const n = nodeOf(node.expr);
+  if (n.kind !== "binary" || !["!=", "=="].includes(n.node.operator.lexeme)) return void 0;
+  const { left, right, operator } = n.node;
+  const other = isEmptyString(right) ? left : isEmptyString(left) ? right : void 0;
+  if (!other || !comparable(other)) return void 0;
+  const op = tokenSpan(source, operator);
+  const literal2 = exprSpan(source, other === left ? right : left);
+  return {
+    site,
+    source,
+    node,
+    binary: n.node,
+    operator: operator.lexeme,
+    other: exprSpan(source, other),
+    comparison: other === left ? { start: op.start, end: literal2.end } : { start: literal2.start, end: op.end },
+    grouped: nodeOf(other).kind === "grouping"
+  };
+}
+function comparable(e) {
+  const n = nodeOf(e);
+  switch (n.kind) {
+    case "context":
+    case "index":
+      return true;
+    case "call":
+      return n.node.functionName.lexeme.toLowerCase() !== "case";
+    case "grouping":
+      return !mayBeNaN(n.node.group);
+    default:
+      return false;
+  }
+}
+function mayBeNaN(e) {
+  const n = nodeOf(e);
+  if (n.kind === "literal") return n.node.token.lexeme === "NaN";
+  if (n.kind === "call") return n.node.functionName.lexeme.toLowerCase() === "case";
+  if (n.kind === "grouping") return mayBeNaN(n.node.group);
+  if (n.kind === "logical") return n.node.args.some(mayBeNaN);
+  return false;
+}
+function fp105Reads(ctx, unit) {
+  const reads = /* @__PURE__ */ new Set();
+  if (!ctx.runs("FP105")) return reads;
+  for (const input2 of Object.values(declaredInputs(unit))) {
+    if (!emptyWhenOmitted(input2)) continue;
+    for (const u of ctx.index.usagesOf(sym.input(unit.path, input2.name)))
+      reads.add(`${u.site.id}:${u.ref.start}`);
+  }
+  return reads;
+}
+var readsAny = (site, span, reads) => site.segments[0].refs.some(
+  (r) => r.start >= span.start && r.start < span.end && reads.has(`${site.id}:${r.start}`)
+);
+function reportEmptyComparison(ctx, found) {
+  const { site } = found;
+  const seg = site.segments[0];
+  const readsMatrix = seg.refs.some(
+    (r) => r.context === "matrix" && r.start >= found.other.start && r.start < found.other.end
+  );
+  const fix = found.grouped || readsMatrix ? void 0 : emptyComparisonFix(found);
+  const edits = fix && !startsTag(ctx, site, applyEdits(found.source, fix.edits)) ? segmentEdits(ctx.index, seg, fix.edits) : void 0;
+  ctx.report({
+    message: found.operator === "==" ? "`== ''` is a negation in a condition, which already treats '' as false" : "`!= ''` is redundant in a condition, which already treats '' as false",
+    loc: segmentLoc(ctx.index, seg, found.comparison) ?? seg.loc,
+    ...fix && edits ? { suggestions: [{ title: fix.title, edits }] } : {}
+  });
+}
+function emptyComparisonFix({ source, node, binary, operator, other }) {
+  const whole = exprSpan(source, binary);
+  const otherFirst = whole.start === other.start;
+  const removed = otherFirst ? { start: other.end, end: whole.end } : { start: whole.start, end: other.start };
+  if (operator === "!=") return { title: "Remove `!= ''`", edits: [{ span: removed, newText: "" }] };
+  const negation = negationOf(node);
+  if (negation) {
+    const outer = exprSpan(source, negation);
+    return {
+      title: "Remove `!(\u2026 == '')`",
+      edits: [
+        { span: { start: outer.start, end: other.start }, newText: "" },
+        { span: { start: other.end, end: outer.end }, newText: "" }
+      ]
+    };
+  }
+  return {
+    title: "Replace `== ''` with `!`",
+    edits: otherFirst ? [
+      { span: { start: other.start, end: other.start }, newText: "!" },
+      { span: removed, newText: "" }
+    ] : [{ span: removed, newText: "!" }]
+  };
+}
+function negationOf(node) {
+  const { ancestors } = node;
+  let i = ancestors.length - 1;
+  while (i >= 0 && nodeOf(ancestors[i]).kind === "grouping") i--;
+  return i >= 0 && i < ancestors.length - 1 && nodeOf(ancestors[i]).kind === "unary" ? ancestors[i] : void 0;
+}
+function startsTag(ctx, site, edited) {
+  if (!edited.startsWith("!") || site.text.includes("${{")) return false;
+  const first = sourceOf(ctx.index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1];
+  return !['"', "'", "|", ">"].includes(first ?? "");
+}
+var expressionRules = [
+  contextNotAvailable,
+  undefinedEnvRef,
+  expressionParseError,
+  schemaViolation,
+  yamlSyntaxError,
+  redundantEmptyComparison
+];
+
+// ../lint/src/rules/impact.ts
+var describeSource = (s) => s.kind === "explicit" ? "the explicit impact" : s.kind === "version" ? `the version bump ${s.value}` : `the ${s.kind === "title" ? "title" : "labels"} "${s.value}"`;
+var related = (changes) => changes.slice(0, 20).map((c) => ({ loc: c.loc, message: `${c.level}: ${c.message}` }));
+var verdictLoc = (impact, changes) => changes[0]?.loc ?? impact.changes[0]?.loc ?? {
+  file: impact.narrowed?.anchor ?? impact.publishedFiles[0] ?? "action.yml",
+  line: 1,
+  column: 1,
+  endLine: 1,
+  endColumn: 1
+};
+var driving = (impact, level2) => countedChanges(impact.changes, impact.policy).filter((c) => c.level === level2);
+var impactUnderDeclared = defineRule({
+  code: "FP810",
+  name: "impact-under-declared",
+  category: "contracts",
+  defaultSeverity: "error",
+  docs: {
+    summary: "The changes to published workflows or actions need a bigger release than the pull request declares.",
+    why: "Consumers pin a floating tag (`@v1`) or a version range and take every release in it, and read the version to judge an update. A change released at a lower level than it needs reaches them without warning: a breaking one released as a minor or patch leaves their required status check waiting forever or fails their run, and a new environment or check released as a patch changes their runs where they expected fixes only.",
+    fix: "Declare the required impact (for example retitle the pull request `feat!: \u2026` for a major release), or keep the published interface and check names compatible.",
+    examples: {
+      bad: `# PR title: "fix: tidy the test job"
+jobs:
+  test:
+    name: Unit tests   # was "Test": consumers' required check "\u2026 / Test" never reports`,
+      good: `# PR title: "fix!: rename the test job's check to Unit tests"`
+    }
+  },
+  check(ctx) {
+    const v = ctx.impact?.verdict;
+    if (!v?.declared || levelRank(v.required) <= levelRank(v.declared.level) || levelRank(v.required) < levelRank("minor"))
+      return;
+    const changes = driving(ctx.impact, v.required);
+    ctx.report({
+      message: `Declared ${v.declared.level} (${describeSource(v.declared)}), but the changes require ${v.required}: ${changes[0]?.message ?? ""}${changes.length > 1 ? ` (+${changes.length - 1} more)` : ""}`,
+      loc: verdictLoc(ctx.impact, changes),
+      related: related(changes),
+      symbol: `impact#${v.required}`
+    });
+  }
+});
+var impactConflict = defineRule({
+  code: "FP811",
+  name: "impact-declaration-conflict",
+  category: "contracts",
+  defaultSeverity: "error",
+  docs: {
+    summary: "Another source declares a bigger impact than the one the release tool reads.",
+    why: "Release tools read one thing \u2014 usually the squashed commit title. A `semver:major` label on a `fix:` pull request looks right in review, but the release is cut as a patch.",
+    fix: "Make the authoritative source (`impact.declaredBy`, the title by default) declare the impact, for example `feat!: \u2026`.",
+    examples: {
+      bad: `# PR title: "fix: rename the deploy output"   (the release tool reads this: a patch)
+# PR label: semver:major`,
+      good: `# PR title: "fix!: rename the deploy output"`
+    }
+  },
+  check(ctx) {
+    const v = ctx.impact?.verdict;
+    if (!v?.declared || !v.conflict) return;
+    ctx.report({
+      message: `${describeSource(v.conflict)} declares ${v.conflict.level}, but ${describeSource(v.declared)} \u2014 what the release tool reads \u2014 declares ${v.declared.level}`,
+      loc: verdictLoc(ctx.impact, []),
+      symbol: "impact#conflict"
+    });
+  }
+});
+var impactOverDeclared = defineRule({
+  code: "FP812",
+  name: "impact-over-declared",
+  category: "contracts",
+  defaultSeverity: "info",
+  docs: {
+    summary: "The pull request declares a bigger impact than its workflow and action changes require.",
+    why: "Not a problem: the release may contain changes flowpact does not grade. Reported so the declaration is visible.",
+    fix: "Nothing to fix if the release has other changes; otherwise declare the smaller impact.",
+    examples: {
+      bad: `# PR title: "feat!: tidy the deploy workflow"   (declares major)
+# the only change to a published workflow is a step's command: a patch`,
+      good: `# PR title: "fix: tidy the deploy workflow"`
+    }
+  },
+  check(ctx) {
+    const v = ctx.impact?.verdict;
+    if (!v?.declared || levelRank(v.declared.level) <= levelRank(v.required)) return;
+    ctx.report({
+      message: `Declared ${v.declared.level} (${describeSource(v.declared)}); the workflow and action changes require ${v.required}`,
+      loc: verdictLoc(ctx.impact, []),
+      symbol: "impact#over"
+    });
+  }
+});
+var impactUndeclared = defineRule({
+  code: "FP813",
+  name: "impact-undeclared",
+  category: "contracts",
+  defaultSeverity: "info",
+  docs: {
+    summary: "No release impact is declared; flowpact reports the impact the changes require.",
+    why: "Without a declaration there is nothing to check against. The required impact is still useful when cutting a release.",
+    fix: "Declare the impact: a Conventional Commits pull request title (`feat: \u2026`, `fix!: \u2026`), a `semver:*` label, or `--expect`.",
+    examples: {
+      bad: `# PR title: "Update the deploy workflow"   (no Conventional Commits type: nothing declared)`,
+      good: `# PR title: "fix: update the deploy workflow"`
+    }
+  },
+  check(ctx) {
+    const v = ctx.impact?.verdict;
+    if (!v || v.declared) return;
+    const changes = driving(ctx.impact, v.required);
+    ctx.report({
+      message: `No impact declared; the changes to published workflows and actions require ${v.required}`,
+      loc: verdictLoc(ctx.impact, changes),
+      related: related(changes),
+      symbol: "impact#undeclared"
+    });
+  }
+});
+var impactUncertain = defineRule({
+  code: "FP814",
+  name: "impact-uncertain",
+  category: "contracts",
+  defaultSeverity: "warning",
+  docs: {
+    summary: "A change to a published unit depends on something flowpact cannot evaluate statically.",
+    why: "For example a check name built from the triggering event, `needs` outputs or `vars`, a matrix computed at runtime, or an output that is now set only when an `if:` holds. flowpact cannot tell whether consumers see a different check name, or run where the output is `''`, so it does not count the change (`impact.uncertain: fail` counts it).",
+    fix: "Review the change by hand. Make a check name static (a literal `name:` or one built only from `matrix` and `inputs`); give an output a value on every run (no `if:` on its source, or a fallback such as `${{ steps.m.outputs.v || 'none' }}`), or declare the change as major.",
+    examples: {
+      bad: `# in a published reusable workflow
+jobs:
+  test:
+    runs-on: \${{ inputs.runner }}   # was ubuntu-latest: which runners callers need is known only at run time`,
+      good: `jobs:
+  test:
+    runs-on: ubuntu-latest   # or keep the change, and declare it major (feat!: \u2026)`
+    }
+  },
+  check(ctx) {
+    for (const c of ctx.impact?.changes ?? []) {
+      if (c.certain) continue;
+      ctx.report({ message: `Possibly ${c.level}: ${c.message}`, loc: c.loc, symbol: `${c.unit}#impact` });
+    }
+  }
+});
+var impactRules = [
+  impactUnderDeclared,
+  impactConflict,
+  impactOverDeclared,
+  impactUndeclared,
+  impactUncertain
+];
+var IMPACT_CODES = impactRules.map((r) => r.code);
 
 // ../lint/src/rules/matrix.ts
 var hasMatrixRef = (site) => site.segments.some((s) => s.refs.some((r) => r.context === "matrix"));

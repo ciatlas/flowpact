@@ -1,5 +1,12 @@
 import { createLogger, memoryFileSystem, memorySink } from '@ciatlas/core';
-import { type AnalysisResult, type AnalyzeOptions, analyze, type Finding, parseConfig } from '@flowpact/lint';
+import {
+  type AnalysisResult,
+  type AnalyzeOptions,
+  analyze,
+  type Finding,
+  parseConfig,
+  type SuggestedEdit,
+} from '@flowpact/lint';
 
 /** Strips the common leading indentation so YAML can be written inline in tests. */
 export function yaml(strings: TemplateStringsArray, ...values: unknown[]): string {
@@ -42,3 +49,23 @@ export const byCode = (r: { findings: Finding[] }, code: string) => r.findings.f
 export const at = (f: Finding) => `${f.loc.file}:${f.loc.line}:${f.loc.column}`;
 
 export const WF = '.github/workflows';
+
+/** The files with edits made (edits in one file apply from the last to the first). */
+export function withEdits(files: Record<string, string>, edits: SuggestedEdit[]): Record<string, string> {
+  const out = { ...files };
+  for (const file of new Set(edits.map((e) => e.loc.file))) {
+    const lines = out[file]!.split('\n');
+    const offset = (line: number, column: number) =>
+      lines.slice(0, line - 1).reduce((n, l) => n + l.length + 1, 0) + column - 1;
+    const mine = edits.filter((e) => e.loc.file === file);
+    mine.sort((a, b) => offset(b.loc.line, b.loc.column) - offset(a.loc.line, a.loc.column));
+    let text = out[file]!;
+    for (const e of mine)
+      text =
+        text.slice(0, offset(e.loc.line, e.loc.column)) +
+        e.newText +
+        text.slice(offset(e.loc.endLine, e.loc.endColumn));
+    out[file] = text;
+  }
+  return out;
+}

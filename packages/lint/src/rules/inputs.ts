@@ -26,6 +26,7 @@ import {
   type Usage,
   usageReadsCallerEvent,
 } from '@ciatlas/core';
+import { booleanTermOf } from '../expr-ast';
 import { isPublished } from '../impact';
 import { interfaceCalls, interfaceUses, isExternal } from '../remotes';
 import {
@@ -40,7 +41,6 @@ import {
 } from '../suggestions';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import {
-  booleanTermOf,
   chainRelated,
   didYouMeanNote,
   fallsBack,
@@ -124,7 +124,7 @@ function eventInputsRead(ref: LocatedRef, every: string[]): string[] {
   return every.includes(input) ? [input] : [];
 }
 
-function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {
+export function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {
   if (unit.kind === 'action') return unit.inputs;
   return { ...(unit.dispatch?.inputs ?? {}), ...(unit.call?.inputs ?? {}) };
 }
@@ -133,7 +133,7 @@ function declaredInputs(unit: UnitDecl): Record<string, InputDecl> {
  * Whether an omitted input is '': it is optional, and has no default or an empty one (see `emptyDefault`). GitHub
  * substitutes false for booleans and 0 for numbers; only strings become ''.
  */
-function emptyWhenOmitted(input: InputDecl): boolean {
+export function emptyWhenOmitted(input: InputDecl): boolean {
   if (input.required || input.type === 'boolean' || input.type === 'number') return false;
   return !input.hasDefault || emptyDefault(input);
 }

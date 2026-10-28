@@ -5,7 +5,7 @@ description: What flowpact protects, where untrusted data and code cross into it
 
 This is the security assessment of flowpact 0.26.0 and the changes on `main` since (the two fixes this review led to:
 impact mode's own rules judged by the baseline, and suggested edits that write only plain names), built on
-`@ciatlas/core` 2.3.0, as of 2026-10-20. It names what
+`@ciatlas/core` 2.3.0, as of 2026-10-20, revisited on 2026-10-28 for the quick fix of FP507. It names what
 flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
@@ -345,7 +345,11 @@ link out of the repository.
 - **Mitigation.** A suggestion writes a name only when it needs no quoting, and no edit over several lines
   (`PLAIN_NAME` and `hasLineBreak` in `packages/lint/src/suggestions.ts`); otherwise the finding has no fix, and its
   message names the key escaped. A rule attaches a fix only when the change is certain, and FP613's writes only scope
-  names of `[a-z-]` and the levels it knows (`raiseGrant` in `packages/lint/src/rules/permissions.ts`). Completion
+  names of `[a-z-]` and the levels it knows (`raiseGrant` in `packages/lint/src/rules/permissions.ts`). FP507's fix
+  only deletes text of a condition or writes `!`, never text from the files, and only where the expression is written
+  on one line as it reads, in a file with LF line endings (`segmentEdits` in `packages/lint/src/expr-ast.ts`); it is
+  left out when a plain YAML scalar would then start with `!`, which YAML reads as a tag, and FP507 does not report a
+  condition whose text a YAML alias shares with another key, which may be a value. Completion
   offers no other name (`completionItems` in `packages/language-server/src/completion.ts`, with `isPlainName`). A
   rename writes the name the user types, and only a valid one (`packages/language-server/src/rename.ts`). The
   override the editor adds is written as quoted YAML strings (`packages/lint/src/override-entry.ts`), an ignore
@@ -355,6 +359,8 @@ link out of the repository.
   editor applies when the user picks one (`packages/language-server/src/actions.ts`).
 - **Tests.** `packages/lint/test/suggestions.test.ts` (applying each fix removes its finding and adds no error; no fix
   that would write a name from the lockfile or a quoted key that is not plain);
+  `packages/lint/test/rules/expressions.test.ts` (FP507's fixes decide each condition as before, for every value class
+  under GitHub's own evaluator; none in single-quoted, multi-line or CRLF text, or where YAML would read a tag);
   `packages/language-server/test/completion.test.ts` (names that are not plain left out, descriptions shown as text);
   `packages/language-server/test/server.test.ts` (quick fixes, an override added with the reason the user gives,
   rename, regenerated contracts); `packages/lint/test/review-round3.test.ts` (contracts not written through symlinks).

@@ -9,6 +9,7 @@ import {
   createConnection,
   createProtocolConnection,
   type Diagnostic,
+  DiagnosticTag,
   DidChangeConfigurationNotification,
   DidChangeTextDocumentNotification,
   DidChangeWatchedFilesNotification,
@@ -626,6 +627,28 @@ describe('code actions', () => {
     const [rename] = await actionsFor(client, dir);
     expect(rename).toMatchObject({ title: 'Rename "nmae" to "name"', isPreferred: true });
     expect(edited(REPO[CALLER]!, rename!.edit!.changes![uri(dir, CALLER)]!)).toBe(FIXED);
+  });
+
+  it("fades a redundant `!= ''` and removes it with the quick fix", async () => {
+    const WF = '.github/workflows/w.yml';
+    const text =
+      "on: push\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n      - id: s\n        run: echo\n      - if: ${{ steps.s.outputs.o != '' }}\n        run: echo\n";
+    const dir = repo({ [WF]: text, [CONFIG]: 'rules:\n  FP507: info\n' });
+    const client = await start(dir);
+    const [d] = (await client.diagnosticsOf(dir, WF)).filter((x) => x.code === 'FP507');
+    expect(d).toMatchObject({
+      tags: [DiagnosticTag.Unnecessary],
+      range: { start: { line: 7, character: 34 }, end: { line: 7, character: 39 } },
+    });
+    const [fix] = (await client.conn.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: uri(dir, WF) },
+      range: d!.range,
+      context: { diagnostics: [d] },
+    })) as { title: string; isPreferred?: boolean; edit?: WorkspaceEdit }[];
+    expect(fix).toMatchObject({ title: "Remove `!= ''`", isPreferred: true });
+    expect(edited(text, fix!.edit!.changes![uri(dir, WF)]!)).toBe(
+      text.replace("steps.s.outputs.o != ''", 'steps.s.outputs.o'),
+    );
   });
 
   it('accepts a finding with an override in a new config file, with a reason to replace', async () => {

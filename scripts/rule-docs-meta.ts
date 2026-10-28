@@ -33,6 +33,7 @@ export const RELATED: Record<string, string[]> = {
   FP503: ['FP502', 'FP504'],
   FP504: ['FP503'],
   FP505: ['FP502'],
+  FP507: ['FP105'],
   FP601: ['FP602'],
   FP602: ['FP601'],
   FP603: ['FP612', 'FP611'],

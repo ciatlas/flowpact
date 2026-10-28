@@ -58,6 +58,14 @@ A value known only when the job runs, such as `github.sha` or another job's outp
 guesses it. A matrix key that a combination lacks is not unknown: it is empty, and flowpact follows it into every value
 it reaches (see [How it works](/docs/how-it-works#4-expand-matrices--the-part-that-catches-silent-empties)).
 
+### Condition and value
+
+An expression in an `if:` is a *condition*: GitHub treats `''`, `0`, `false` and `null` as false and every other value as
+true, so `if: steps.patch.outputs.file` and `if: steps.patch.outputs.file != ''` decide the same way. Under `env:`,
+`with:` or `outputs:`, an expression is a *value*, passed on as it is: `a || b` gives the first operand that is true, not
+`true`, and only a comparison such as `x != ''` gives `true` or `false`. An `if:` with text around its `${{ }}` is a
+string, which is always true. [FP507](/docs/rules/fp507) reports a comparison with `''` that a condition does not need.
+
 ## Findings
 
 ### Finding

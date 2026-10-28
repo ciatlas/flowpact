@@ -216,7 +216,7 @@ use the language server, `flowpact lsp` ([editors](https://ciatlas.github.io/flo
 
 ## Status
 
-Shipped: the engine, 56 rules, contracts (`flowpact generate` / `flowpact check`), impact mode, the remote interfaces
+Shipped: the engine, 57 rules, contracts (`flowpact generate` / `flowpact check`), impact mode, the remote interfaces
 lockfile (`flowpact remotes update`, read at the commits GitHub's `actions.lock` pins) with a grade of every version
 change against your calls (a drift check, and a verdict on pull requests in the action), overrides with reason and
 expiry, ignore comments, plugins, the CLI (pretty, JSON, Markdown and SARIF output; `flowpact graph`, `trace`), a JavaScript API, the

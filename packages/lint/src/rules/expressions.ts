@@ -1,3 +1,4 @@
+import type { Binary, Expr } from '@actions/expressions/ast';
 import {
   type Binding,
   type Diagnostic,
@@ -13,6 +14,22 @@ import {
   type UnitDecl,
   type WorkflowDecl,
 } from '@ciatlas/core';
+import {
+  applyEdits,
+  conditionRoot,
+  exprSpan,
+  isEmptyString,
+  nodeOf,
+  type SourceEdit,
+  type Span,
+  segmentEdits,
+  segmentLoc,
+  type TruthinessNode,
+  tokenSpan,
+  truthinessNodes,
+} from '../expr-ast';
+import { sourceOf } from '../suggestions';
+import { declaredInputs, emptyWhenOmitted } from './inputs';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
 import { namesKey, quote } from './util';
 
@@ -400,10 +417,251 @@ const yamlSyntaxError = defineRule({
   },
 });
 
+const redundantEmptyComparison = defineRule({
+  code: 'FP507',
+  name: 'redundant-empty-comparison',
+  category: 'expressions',
+  defaultSeverity: 'off',
+  generatedFiles: 'skip',
+  docs: {
+    summary: "A condition compares a value with `''` (`!= ''`, `== ''`), which `if:` already does by itself.",
+    why:
+      "An `if:` treats `''`, `null`, `0` and `false` as false and every other value as true, so `x != ''` decides it " +
+      "the same way as `x`, and `x == ''` as `!x`. Outside a condition the comparison matters: under `env:`, `with:` " +
+      'or `outputs:` it turns the value into `true` or `false`, and `continue-on-error:` accepts only a boolean.',
+    fix: "Remove the comparison: `x != ''` becomes `x`, and `x == ''` becomes `!x`. The editor offers it as a quick fix where the change is certain.",
+    scope:
+      "Only a comparison with the string `''` that decides the condition: the whole `if:`, or an operand of `!`, `&&` " +
+      "or `||` in it. Not `!= null`, `!= 0` or `!= false`, which differ for `'0'`; not inside a comparison, a function's " +
+      'arguments (`case()` requires real booleans) or an `if:` with text around its `${{ }}`, which is always true; ' +
+      'not under `env:`, `with:`, `outputs:` or `continue-on-error:`. While FP105 runs, not for an optional input ' +
+      "without a default: FP105 reports one decided by its truthiness, and counts `!= ''` as handling the omitted case. " +
+      'Nor a condition that a YAML alias shares with another key (`if: *flag`), whose text may be a value. Off by ' +
+      'default: the comparison is harmless, and some prefer it written out; turn it on with `FP507: info`. The quick ' +
+      'fix is offered for a condition written on one line, not in a single-quoted YAML string, in a file with LF line ' +
+      "endings; not for a value in parentheses (`(a || b) != ''`) or a matrix value (YAML's `.nan` compares " +
+      'otherwise), nor when the condition would then start with `!` without `${{ }}`, which YAML reads as a tag.',
+    examples: {
+      bad: "if: ${{ steps.patch.outputs.file != '' && steps.check.outputs.skip == '' }}",
+      good: 'if: ${{ steps.patch.outputs.file && !steps.check.outputs.skip }}',
+    },
+  },
+  check(ctx) {
+    const shared = sharedText(ctx);
+    for (const unit of ctx.index.units()) {
+      const found = unit.sites.flatMap(emptyComparisons).filter((f) => !shared.has(locKey(f.site.loc)));
+      if (found.length === 0) continue;
+      const skipped = fp105Reads(ctx, unit);
+      for (const f of found) if (!readsAny(f.site, f.other, skipped)) reportEmptyComparison(ctx, f);
+    }
+  },
+});
+
+const locKey = (loc: Loc) => `${loc.file}:${loc.line}:${loc.column}`;
+
+/**
+ * Where a YAML alias shares a scalar with its anchor (`if: *flag`): the sites of both point at the anchored text, which
+ * may be a value (`env: { FLAG: &flag ${{ x != '' }} }`). The comparison decides the value there, so it is not FP507's.
+ */
+function sharedText(ctx: RuleContext): Set<string> {
+  const seen = new Set<string>();
+  const shared = new Set<string>();
+  for (const unit of ctx.index.units())
+    for (const site of unit.sites) {
+      const key = locKey(site.loc);
+      if (seen.has(key)) shared.add(key);
+      seen.add(key);
+    }
+  return shared;
+}
+
+/** The comparisons with `''` that decide a site's condition. */
+function emptyComparisons(site: ExprSite): EmptyComparison[] {
+  const root = conditionRoot(site);
+  if (!root) return [];
+  return truthinessNodes(root).flatMap((node) => emptyComparison(site, node) ?? []);
+}
+
+/** A comparison with `''` that decides a condition: FP507's finding. */
+interface EmptyComparison {
+  /** A whole-expression condition. */
+  site: ExprSite;
+  /** Its expression's source. */
+  source: string;
+  node: TruthinessNode;
+  binary: Binary;
+  /** `!=` or `==`. */
+  operator: string;
+  /** The value compared: a reference, a call or a grouping. */
+  other: Span;
+  /** The operator and the `''`, where the finding points (the editor fades it). */
+  comparison: Span;
+  /** The value is a grouping, which has no suggestion. */
+  grouped: boolean;
+}
+
+/**
+ * A node that compares a value with `''` by `!=` or `==`, when the comparison has the value's truthiness: the value is
+ * a reference, a call other than `case()`, or a grouping that cannot be `NaN`. Only `NaN` compares otherwise, which a
+ * literal or `case()` can return, and a matrix written in YAML (`.nan`); other contexts are JSON.
+ */
+function emptyComparison(site: ExprSite, node: TruthinessNode): EmptyComparison | undefined {
+  const source = site.segments[0]!.expr.source;
+  const n = nodeOf(node.expr);
+  if (n.kind !== 'binary' || !['!=', '=='].includes(n.node.operator.lexeme)) return undefined;
+  const { left, right, operator } = n.node;
+  const other = isEmptyString(right) ? left : isEmptyString(left) ? right : undefined;
+  if (!other || !comparable(other)) return undefined;
+  const op = tokenSpan(source, operator);
+  const literal = exprSpan(source, other === left ? right : left);
+  return {
+    site,
+    source,
+    node,
+    binary: n.node,
+    operator: operator.lexeme,
+    other: exprSpan(source, other),
+    comparison:
+      other === left ? { start: op.start, end: literal.end } : { start: literal.start, end: op.end },
+    grouped: nodeOf(other).kind === 'grouping',
+  };
+}
+
+/** Whether a value compares with `''` as its truthiness decides (see `emptyComparison`). */
+function comparable(e: Expr): boolean {
+  const n = nodeOf(e);
+  switch (n.kind) {
+    case 'context':
+    case 'index':
+      return true;
+    case 'call':
+      return n.node.functionName.lexeme.toLowerCase() !== 'case';
+    case 'grouping':
+      return !mayBeNaN(n.node.group);
+    default:
+      return false;
+  }
+}
+
+/** Whether an expression may be `NaN`: only through a `NaN` literal or `case()`, which returns an operand as it is. */
+function mayBeNaN(e: Expr): boolean {
+  const n = nodeOf(e);
+  if (n.kind === 'literal') return n.node.token.lexeme === 'NaN';
+  if (n.kind === 'call') return n.node.functionName.lexeme.toLowerCase() === 'case';
+  if (n.kind === 'grouping') return mayBeNaN(n.node.group);
+  if (n.kind === 'logical') return n.node.args.some(mayBeNaN);
+  return false;
+}
+
+/**
+ * The reads, as `<site id>:<offset>`, of a unit's optional inputs without a default, while FP105 runs: FP105 counts
+ * `inputs.x != ''` as handling the omitted case and reports `inputs.x` alone, so removing the comparison would trade
+ * one finding for another.
+ */
+function fp105Reads(ctx: RuleContext, unit: UnitDecl): Set<string> {
+  const reads = new Set<string>();
+  if (!ctx.runs('FP105')) return reads;
+  for (const input of Object.values(declaredInputs(unit))) {
+    if (!emptyWhenOmitted(input)) continue;
+    for (const u of ctx.index.usagesOf(sym.input(unit.path, input.name)))
+      reads.add(`${u.site.id}:${u.ref.start}`);
+  }
+  return reads;
+}
+
+/** Whether a span of a whole-expression site reads one of `reads` (see `fp105Reads`). */
+const readsAny = (site: ExprSite, span: Span, reads: Set<string>) =>
+  site.segments[0]!.refs.some(
+    (r) => r.start >= span.start && r.start < span.end && reads.has(`${site.id}:${r.start}`),
+  );
+
+/** FP507's report, at the operator and the `''`, with the edits that remove them when the change is certain. */
+function reportEmptyComparison(ctx: RuleContext, found: EmptyComparison): void {
+  const { site } = found;
+  const seg = site.segments[0]!;
+  // YAML reads `.nan` as NaN, the one value that compares otherwise, and a matrix can list it.
+  const readsMatrix = seg.refs.some(
+    (r) => r.context === 'matrix' && r.start >= found.other.start && r.start < found.other.end,
+  );
+  const fix = found.grouped || readsMatrix ? undefined : emptyComparisonFix(found);
+  const edits =
+    fix && !startsTag(ctx, site, applyEdits(found.source, fix.edits))
+      ? segmentEdits(ctx.index, seg, fix.edits)
+      : undefined;
+  ctx.report({
+    message:
+      found.operator === '=='
+        ? "`== ''` is a negation in a condition, which already treats '' as false"
+        : "`!= ''` is redundant in a condition, which already treats '' as false",
+    loc: segmentLoc(ctx.index, seg, found.comparison) ?? seg.loc,
+    ...(fix && edits ? { suggestions: [{ title: fix.title, edits }] } : {}),
+  });
+}
+
+/**
+ * The edits that remove a comparison with `''`: `x != ''` becomes `x`, `x == ''` becomes `!x`, and `!(x == '')`
+ * becomes `x` rather than `!(!x)`. Each deletes text or writes `!`, never text from the file. Removing `!= ''` needs no
+ * parentheses: the value binds at least as tightly as the comparison, and its parent is `&&`, `||`, `!` or a grouping;
+ * nor does writing `!` before a reference or a call, which binds tighter than any operator.
+ */
+function emptyComparisonFix({ source, node, binary, operator, other }: EmptyComparison): {
+  title: string;
+  edits: SourceEdit[];
+} {
+  const whole = exprSpan(source, binary);
+  const otherFirst = whole.start === other.start;
+  // `x != ''`: from the end of `x`; `'' != x`: up to its start. The spaces around the operator go with it.
+  const removed: Span = otherFirst
+    ? { start: other.end, end: whole.end }
+    : { start: whole.start, end: other.start };
+  if (operator === '!=') return { title: "Remove `!= ''`", edits: [{ span: removed, newText: '' }] };
+  const negation = negationOf(node);
+  if (negation) {
+    const outer = exprSpan(source, negation);
+    return {
+      title: "Remove `!(… == '')`",
+      edits: [
+        { span: { start: outer.start, end: other.start }, newText: '' },
+        { span: { start: other.end, end: outer.end }, newText: '' },
+      ],
+    };
+  }
+  return {
+    title: "Replace `== ''` with `!`",
+    edits: otherFirst
+      ? [
+          { span: { start: other.start, end: other.start }, newText: '!' },
+          { span: removed, newText: '' },
+        ]
+      : [{ span: removed, newText: '!' }],
+  };
+}
+
+/** The `!` of `!(x == '')`: the ancestor `!` whose operand is the comparison, inside one grouping or more. */
+function negationOf(node: TruthinessNode): Expr | undefined {
+  const { ancestors } = node;
+  let i = ancestors.length - 1;
+  while (i >= 0 && nodeOf(ancestors[i]!).kind === 'grouping') i--;
+  return i >= 0 && i < ancestors.length - 1 && nodeOf(ancestors[i]!).kind === 'unary'
+    ? ancestors[i]
+    : undefined;
+}
+
+/**
+ * Whether an edited condition would start with `!` in a plain YAML scalar without `${{ }}`, which YAML reads as a tag
+ * (GitHub's docs: use `${{ }}` "or escape with '', "", or () when the expression starts with `!`").
+ */
+function startsTag(ctx: RuleContext, site: ExprSite, edited: string): boolean {
+  if (!edited.startsWith('!') || site.text.includes('${{')) return false;
+  const first = sourceOf(ctx.index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1];
+  return !['"', "'", '|', '>'].includes(first ?? '');
+}
+
 export const expressionRules: RuleDefinition[] = [
   contextNotAvailable,
   undefinedEnvRef,
   expressionParseError,
   schemaViolation,
   yamlSyntaxError,
+  redundantEmptyComparison,
 ];

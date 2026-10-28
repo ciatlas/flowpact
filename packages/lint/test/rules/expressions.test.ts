@@ -1,5 +1,7 @@
+import { data, Evaluator, Lexer, Parser } from '@actions/expressions';
+import { truthy } from '@actions/expressions/result';
 import { describe, expect, it } from 'vitest';
-import { at, byCode, codes, lint, WF, yaml } from '../helpers';
+import { at, byCode, codes, lint, WF, withEdits, yaml } from '../helpers';
 
 describe('FP501 undefined-env-ref', () => {
   it('resolves env through step, job and workflow scope and earlier $GITHUB_ENV writes', () => {
@@ -734,5 +736,309 @@ describe('FP503 steps and jobs that mix two shapes', () => {
         `,
       }),
     ).toHaveLength(2);
+  });
+});
+
+describe('FP507 redundant-empty-comparison', () => {
+  const on = { config: { rules: { FP507: 'info' } } };
+  const S = 'steps.s.outputs.o';
+  const P = 'steps.s.outputs.p';
+  /** A workflow whose second step runs `if:` the condition, written as it is after `if: `. */
+  const step = (cond: string) => ({
+    [`${WF}/w.yml`]: `on: push\njobs:\n  j:\n    runs-on: x\n    steps:\n      - id: s\n        run: echo\n      - if: ${cond}\n        run: echo\n`,
+  });
+  /** The condition on line 8 of `step`'s workflow. */
+  const condition = (files: Record<string, string>) =>
+    files[`${WF}/w.yml`]!.split('\n')[7]!.slice('      - if: '.length);
+  const fp507 = (files: Record<string, string>) => byCode(lint(files, on), 'FP507');
+  /** Each finding's column and message, and the condition with its suggestion applied (or `null` without one). */
+  const report = (cond: string) =>
+    fp507(step(cond)).map((f) => ({
+      at: f.loc.column,
+      message: f.message.slice(0, 8),
+      fixed: f.suggestions ? condition(withEdits(step(cond), f.suggestions[0]!.edits)) : null,
+    }));
+  /** The condition with every finding's suggestion applied. */
+  const fixedAll = (cond: string) =>
+    condition(
+      withEdits(
+        step(cond),
+        fp507(step(cond)).flatMap((f) => f.suggestions?.[0]?.edits ?? []),
+      ),
+    );
+
+  it('is off by default', () => {
+    expect(byCode(lint(step(`\${{ ${S} != '' }}`)), 'FP507')).toEqual([]);
+  });
+
+  it('leaves out a condition whose text a YAML alias shares with a value, in either direction', () => {
+    const job = (env: string, ifs: string, envAgain = '') =>
+      fp507({
+        [`${WF}/w.yml`]: `on: push\njobs:\n  j:\n    runs-on: x\n    env:\n      IS_PR: ${env}\n    steps:\n      - if: ${ifs}\n        run: echo\n${envAgain}`,
+      });
+    expect(job(`&pr \${{ github.head_ref != '' }}`, '*pr')).toEqual([]);
+    expect(
+      job('x', `&pr \${{ github.head_ref != '' }}`, '      - env: { IS_PR: *pr }\n        run: echo\n'),
+    ).toEqual([]);
+    // An anchor nothing else reads is the condition's own text
+    expect(job('x', `&pr \${{ github.head_ref != '' }}`)).toHaveLength(1);
+  });
+
+  it('offers no fix for a matrix value, which YAML can write as `.nan`', () => {
+    const [f] = fp507({
+      [`${WF}/w.yml`]: `on: push\njobs:\n  j:\n    runs-on: x\n    strategy:\n      matrix:\n        x: [a, .nan]\n    steps:\n      - if: \${{ matrix.x != '' }}\n        run: echo\n`,
+    });
+    expect(f).toBeDefined();
+    expect(f!.suggestions).toBeUndefined();
+  });
+
+  it('removes `!= ` with its value first or last, and points at the operator and the empty string', () => {
+    expect(report(`\${{ ${S} != '' }}`)).toEqual([{ at: 35, message: "`!= ''` ", fixed: `\${{ ${S} }}` }]);
+    expect(report(`\${{ '' != ${S} }}`)).toEqual([{ at: 17, message: "`!= ''` ", fixed: `\${{ ${S} }}` }]);
+    expect(report(`\${{ ${S}!='' }}`)).toEqual([{ at: 34, message: "`!= ''` ", fixed: `\${{ ${S} }}` }]);
+    const [f] = fp507(step(`\${{ ${S} != '' }}`));
+    expect(f).toMatchObject({
+      severity: 'info',
+      message: "`!= ''` is redundant in a condition, which already treats '' as false",
+      loc: { line: 8, column: 35, endLine: 8, endColumn: 40 },
+      suggestions: [{ title: "Remove `!= ''`" }],
+    });
+  });
+
+  it('turns `== ` into a `!` before the value', () => {
+    expect(report(`\${{ ${S} == '' }}`)).toEqual([{ at: 35, message: "`== ''` ", fixed: `\${{ !${S} }}` }]);
+    expect(report(`\${{ ''  ==   ${S} }}`)).toEqual([
+      { at: 17, message: "`== ''` ", fixed: `\${{ !${S} }}` },
+    ]);
+    expect(fp507(step(`\${{ ${S} == '' }}`))[0]).toMatchObject({
+      message: "`== ''` is a negation in a condition, which already treats '' as false",
+      suggestions: [{ title: "Replace `== ''` with `!`" }],
+    });
+  });
+
+  it('removes a negated `== ` whole, rather than writing `!(!x)`', () => {
+    expect(report(`\${{ !(${S} == '') }}`)[0]!.fixed).toBe(`\${{ ${S} }}`);
+    expect(report(`\${{ ! ( '' == ${S} ) }}`)[0]!.fixed).toBe(`\${{ ${S} }}`);
+    expect(report(`\${{ !((${S} == '')) }}`)[0]!.fixed).toBe(`\${{ ${S} }}`);
+    expect(report(`\${{ !!(${S} == '') }}`)[0]!.fixed).toBe(`\${{ !${S} }}`);
+    expect(fp507(step(`\${{ !(${S} == '') }}`))[0]!.suggestions![0]!.title).toBe("Remove `!(… == '')`");
+    // A grouping without a `!` keeps its parentheses, and so does a negated `!=`.
+    expect(report(`\${{ (${S} == '') }}`)[0]!.fixed).toBe(`\${{ (!${S}) }}`);
+    expect(report(`\${{ !(${S} != '') }}`)[0]!.fixed).toBe(`\${{ !(${S}) }}`);
+  });
+
+  it('fixes every operand of `&&` and `||`, each on its own', () => {
+    const cond = `${S} != '' && ${P} == '' || (${S} == '' && !(${P} == ''))`;
+    expect(report(cond).map((r) => r.fixed)).toEqual([
+      `${S} && ${P} == '' || (${S} == '' && !(${P} == ''))`,
+      `${S} != '' && !${P} || (${S} == '' && !(${P} == ''))`,
+      `${S} != '' && ${P} == '' || (!${S} && !(${P} == ''))`,
+      `${S} != '' && ${P} == '' || (${S} == '' && ${P})`,
+    ]);
+    expect(fixedAll(cond)).toBe(`${S} && !${P} || (!${S} && ${P})`);
+  });
+
+  it('fixes comparisons of calls and indexes', () => {
+    expect(fixedAll(`\${{ format('{0}', ${S}) != '' && toJSON(github.event) == '' }}`)).toBe(
+      `\${{ format('{0}', ${S}) && !toJSON(github.event) }}`,
+    );
+    expect(fixedAll(`\${{ github.event.inputs['x'] != '' && fromJSON(${S})[0] == '' }}`)).toBe(
+      `\${{ github.event.inputs['x'] && !fromJSON(${S})[0] }}`,
+    );
+    expect(fixedAll(`\${{ github.event.commits.*.id != '' && github.event.commits[*].id == '' }}`)).toBe(
+      `\${{ github.event.commits.*.id && !github.event.commits[*].id }}`,
+    );
+    expect(fixedAll(`\${{ always ( ) != '' || hashFiles('a', ) == '' }}`)).toBe(
+      `\${{ always ( ) || !hashFiles('a', ) }}`,
+    );
+  });
+
+  it('reports a grouped value without a fix, and not one that may be NaN', () => {
+    expect(report(`\${{ (${S} || ${P}) != '' }}`)).toEqual([{ at: 58, message: "`!= ''` ", fixed: null }]);
+    expect(report(`\${{ (${S} || NaN) != '' }}`)).toEqual([]);
+    expect(report(`\${{ (case(${S} == 'a', ${P}, 'b')) != '' }}`)).toEqual([]);
+    expect(report(`\${{ (1 || ${P}) != '' }}`)).toHaveLength(1);
+  });
+
+  it('reports only a comparison with the string `` that decides the condition', () => {
+    for (const cond of [
+      `\${{ ${S} != null }}`,
+      `\${{ ${S} != 0 }}`,
+      `\${{ ${S} != false }}`,
+      `\${{ ${S} != 'x' }}`,
+      `\${{ ${S} > '' }}`,
+      `\${{ '' != '' }}`,
+      `\${{ !${S} != '' }}`,
+      `\${{ case(${S} == 'a', ${P}, '') != '' }}`,
+      `\${{ case(${S} != '', true, false) }}`,
+      `\${{ contains(format('{0}', ${S} != ''), 'true') }}`,
+      `\${{ (${S} != '') == true }}`,
+      `\${{ fromJSON('[true]')[${S} != ''] }}`,
+      `\${{ ${S} != '' }} and more`,
+      `\${{ ${S} != '' }}\${{ ${P} }}`,
+    ])
+      expect(report(cond), cond).toEqual([]);
+  });
+
+  it('leaves value positions alone: env, with, outputs and continue-on-error', () => {
+    const r = lint(
+      {
+        [`${WF}/w.yml`]: yaml`
+          on: push
+          jobs:
+            j:
+              runs-on: x
+              outputs:
+                ok: \${{ steps.s.outputs.o != '' }}
+              steps:
+                - id: s
+                  run: echo
+                - uses: some/action@v1
+                  continue-on-error: \${{ steps.s.outputs.o != '' }}
+                  env:
+                    OK: \${{ steps.s.outputs.o != '' }}
+                  with:
+                    ok: \${{ steps.s.outputs.o != '' }}
+        `,
+      },
+      on,
+    );
+    expect(byCode(r, 'FP507')).toEqual([]);
+  });
+
+  it('checks bare conditions, and fixes them unless a plain scalar would start with `!`', () => {
+    expect(report(`${S} != '' && ${P}`)).toEqual([{ at: 31, message: "`!= ''` ", fixed: `${S} && ${P}` }]);
+    expect(report(`${P} && ${S} == ''`)[0]!.fixed).toBe(`${P} && !${S}`);
+    // YAML would read `!steps.s.outputs.o` as a tag.
+    expect(report(`${S} == '' || ${P}`)).toEqual([{ at: 31, message: "`== ''` ", fixed: null }]);
+    expect(report(`"${S} == '' || ${P}"`)[0]!.fixed).toBe(`"!${S} || ${P}"`);
+    expect(report(`\${{ ${S} == '' || ${P} }}`)[0]!.fixed).toBe(`\${{ !${S} || ${P} }}`);
+    // A negation removed whole leaves no `!` at the start.
+    expect(report(`(!(${S} == ''))`)[0]!.fixed).toBe(`(${S})`);
+    // A block scalar may start with `!`.
+    const block = step(`>-\n          ${S} == ''`);
+    const [f] = fp507(block);
+    expect(withEdits(block, f!.suggestions![0]!.edits)[`${WF}/w.yml`]).toContain(`if: >-\n          !${S}\n`);
+  });
+
+  it('reports without a fix where the source is not written as the expression reads', () => {
+    // A single-quoted scalar doubles each quote: reported at the expression.
+    expect(report(`'\${{ ${S} != '''' }}'`)).toEqual([{ at: 18, message: "`!= ''` ", fixed: null }]);
+    // Over several lines.
+    const multi = {
+      [`${WF}/w.yml`]: `on: push\njobs:\n  j:\n    runs-on: x\n    steps:\n      - id: s\n        run: echo\n      - if: >-\n          ${S} != ''\n          && ${P}\n        run: echo\n`,
+    };
+    expect(fp507(multi).map((f) => [f.loc.line, f.loc.endLine, f.suggestions])).toEqual([[9, 10, undefined]]);
+    // CRLF line endings: pointed at, not fixed.
+    const crlf = { [`${WF}/w.yml`]: step(`\${{ ${S} != '' }}`)[`${WF}/w.yml`]!.replaceAll('\n', '\r\n') };
+    expect(fp507(crlf).map((f) => [f.loc.column, f.suggestions])).toEqual([[35, undefined]]);
+  });
+
+  it('leaves optional inputs without a default to FP105 while it runs', () => {
+    const files = {
+      [`${WF}/r.yml`]: yaml`
+        on:
+          workflow_call:
+            inputs:
+              optional: { type: string, required: false }
+              given: { type: string, required: false, default: x }
+              required: { type: string, required: true }
+              flag: { type: boolean, required: false }
+          workflow_dispatch:
+            inputs:
+              picked: { type: string, required: false }
+        jobs:
+          j:
+            if: inputs.optional != '' && inputs.given != '' && inputs.required != '' && inputs.flag != ''
+            runs-on: x
+            steps:
+              - if: \${{ (inputs.optional || inputs.given) != '' && github.event.inputs.picked != '' }}
+                run: echo
+      `,
+    };
+    const messages = (r: ReturnType<typeof lint>) =>
+      byCode(r, 'FP507').map((f) => `${f.loc.line}:${f.loc.column}`);
+    expect(messages(lint(files, on))).toEqual(['13:47', '13:72', '13:93']);
+    expect(messages(lint(files, { config: { rules: { FP507: 'info', FP105: 'off' } } }))).toEqual([
+      '13:25',
+      '13:47',
+      '13:72',
+      '13:93',
+      '16:51',
+      '16:87',
+    ]);
+  });
+
+  it('skips generated files', () => {
+    const files = step(`\${{ ${S} != '' }}`);
+    const generated = {
+      [`${WF}/w.yml`]: `# Code generated by a tool. DO NOT EDIT.\n${files[`${WF}/w.yml`]}`,
+    };
+    expect(fp507(generated)).toEqual([]);
+  });
+});
+
+describe('FP507 fixes keep what the condition decides', () => {
+  /** The value classes a context can hold, as GitHub's evaluator compares them (from the design's equiv.mjs). */
+  const values = [
+    new data.StringData(''),
+    new data.StringData('0'),
+    new data.StringData(' '),
+    new data.StringData('false'),
+    new data.StringData('x'),
+    new data.Null(),
+    new data.BooleanData(true),
+    new data.BooleanData(false),
+    new data.NumberData(0),
+    new data.NumberData(1),
+    new data.NumberData(-0),
+    new data.Dictionary(),
+    new data.Array(),
+  ];
+  /** The truthiness of an expression for `inputs.a` and `inputs.b`, or `throws`. */
+  const decide = (source: string, a: data.ExpressionData, b: data.ExpressionData) => {
+    const inputs = new data.Dictionary();
+    inputs.add('a', a);
+    inputs.add('b', b);
+    const context = new data.Dictionary();
+    context.add('inputs', inputs);
+    try {
+      const ast = new Parser(new Lexer(source).lex().tokens, ['inputs'], []).parse();
+      return truthy(new Evaluator(ast, context).evaluate());
+    } catch {
+      return 'throws';
+    }
+  };
+  const workflow = (cond: string) => ({
+    [`${WF}/w.yml`]: `on:\n  workflow_call:\n    inputs:\n      a: { type: string, required: true }\n      b: { type: string, required: true }\njobs:\n  j:\n    if: \${{ ${cond} }}\n    runs-on: x\n    steps: [{ run: x }]\n`,
+  });
+
+  it.each([
+    "inputs.a != ''",
+    "'' != inputs.a",
+    "inputs.a == ''",
+    "'' == inputs.a",
+    "!(inputs.a == '')",
+    "!('' == inputs.a)",
+    "!!(inputs.a == '')",
+    "!(inputs.a != '')",
+    "(inputs.a == '')",
+    "inputs.a != '' && inputs.b == ''",
+    "inputs.a == '' || inputs.b != ''",
+    "!(inputs.a == '' || inputs.b != '') && (inputs.b == '')",
+    "format('{0}', inputs.a) != '' || toJSON(inputs.b) == ''",
+    "contains(inputs.a, 'x') == '' && startsWith(inputs.b, '0') != ''",
+    "inputs.a != '' && inputs.a != inputs.b",
+  ])('%s', (cond) => {
+    const files = workflow(cond);
+    const edits = byCode(lint(files, { config: { rules: { FP507: 'info' } } }), 'FP507').flatMap(
+      (f) => f.suggestions![0]!.edits,
+    );
+    expect(edits.length).toBeGreaterThan(0);
+    const fixed = /if: \$\{\{ (.*) \}\}/.exec(withEdits(files, edits)[`${WF}/w.yml`]!)![1]!;
+    expect(fixed).not.toContain("''");
+    for (const a of values)
+      for (const b of values)
+        expect(decide(fixed, a, b), `${fixed} for ${a.kind}, ${b.kind}`).toBe(decide(cond, a, b));
   });
 });
