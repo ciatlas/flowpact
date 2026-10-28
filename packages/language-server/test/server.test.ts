@@ -246,6 +246,18 @@ describe('diagnostics', () => {
     expect(await client.diagnosticsOf(dir, CALLER)).toEqual([]);
   });
 
+  it("reports GitHub's actions.lock it cannot read on that file, until it changes on disk", async () => {
+    const LOCK = '.github/workflows/actions.lock';
+    const dir = repo({ ...REPO, [LOCK]: "version: 'v0.1.0'\n" });
+    const client = await start(dir);
+    expect(codesOf(await client.diagnosticsOf(dir, LOCK))).toEqual(['FP614']);
+    write(dir, { [LOCK]: "version: 'v0.0.3'\n" });
+    await client.conn.sendNotification(DidChangeWatchedFilesNotification.type, {
+      changes: [{ uri: uri(dir, LOCK), type: FileChangeType.Changed }],
+    });
+    expect(await client.diagnosticsOf(dir, LOCK)).toEqual([]);
+  });
+
   it('hides the rules the client asks it to, also after a settings change', async () => {
     const dir = repo();
     const client = await start(dir, { hiddenRules: ['fp102'] });

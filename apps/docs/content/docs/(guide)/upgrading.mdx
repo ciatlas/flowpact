@@ -40,6 +40,10 @@ the upgrade. What is new:
   call is read where its ref points, as GitHub runs it, even when an action of the same repository and ref is pinned.
   [FP612](/docs/rules/fp612) no longer reports such a call's entry as recording another commit than `actions.lock`,
   and the first `remotes update` may list it as `changed`. A v0.0.1 `actions.lock` is now read.
+- **A new warning, [FP614](/docs/rules/fp614):** flowpact cannot read `actions.lock` (a schema version after
+  `v0.0.x`, or a file that does not parse), so it checks remote actions where their ref points now, not at the commit
+  GitHub runs. Before, only `remotes update` said so. A repository without the file, or with one flowpact reads, gets
+  none.
 
 ## 0.25 → 0.26
 

@@ -186,7 +186,11 @@ export function startServer(connection: Connection): void {
     // Files changed outside the editor (a checkout, a pull) change the analysis too.
     if (watchFiles) {
       void connection.client.register(DidChangeWatchedFilesNotification.type, {
-        watchers: [{ globPattern: '**/.github/**/*.{yml,yaml}' }, { globPattern: '**/action.{yml,yaml}' }],
+        watchers: [
+          { globPattern: '**/.github/**/*.{yml,yaml}' },
+          { globPattern: '**/action.{yml,yaml}' },
+          { globPattern: '**/.github/workflows/actions.lock' },
+        ],
       });
     }
     if (folderEvents) {

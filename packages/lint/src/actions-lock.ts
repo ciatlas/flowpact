@@ -68,7 +68,7 @@ export function readActionsLock(fs: FileSystem): ActionsLockRead {
   try {
     data = parseYaml(text);
   } catch (e) {
-    return { file, error: `not valid YAML: ${(e as Error).message.split('\n')[0]}` };
+    return { file, error: `not valid YAML: ${(e as Error).message.split('\n')[0]!.replace(/:\s*$/, '')}` };
   }
   const parsed = actionsLockSchema.safeParse(data);
   if (!parsed.success) return { file, error: 'not a workflow dependency lockfile flowpact can read' };

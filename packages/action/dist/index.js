@@ -20505,7 +20505,7 @@ function readActionsLock(fs3) {
   try {
     data = (0, import_yaml5.parse)(text2);
   } catch (e) {
-    return { file, error: `not valid YAML: ${e.message.split("\n")[0]}` };
+    return { file, error: `not valid YAML: ${e.message.split("\n")[0].replace(/:\s*$/, "")}` };
   }
   const parsed = actionsLockSchema.safeParse(data);
   if (!parsed.success) return { file, error: "not a workflow dependency lockfile flowpact can read" };
@@ -26787,6 +26787,38 @@ remotes:
     });
   }
 });
+var actionsLockUnreadable = defineRule({
+  code: "FP614",
+  name: "actions-lock-unreadable",
+  category: "structure",
+  defaultSeverity: "warning",
+  docs: {
+    summary: "GitHub\u2019s `.github/workflows/actions.lock` does not parse, or has a schema version flowpact does not read.",
+    why: "flowpact reads a remote action at the commit `actions.lock` pins, which is the one GitHub runs. Without the file, each action is read where its ref points now, which can be another commit with other inputs, and [`FP612`](/docs/rules/fp612) no longer compares the remote interfaces lockfile with it. GitHub still runs the pinned commits.",
+    fix: "For a schema version flowpact does not read yet (it reads `v0.0.x`), upgrade flowpact. For a file that does not parse, write it again with `gh actions-lock`.",
+    examples: {
+      bad: `# .github/workflows/actions.lock, from a gh actions-lock newer than flowpact
+version: 'v0.1.0'
+workflows:
+  '.github/workflows/ci.yml':
+    - 'octo/setup@v2'`,
+      good: `# a version flowpact reads
+version: 'v0.0.3'
+workflows:
+  '.github/workflows/ci.yml':
+    - 'octo/setup@v2'`
+    }
+  },
+  check(ctx) {
+    const { file, error: error3 } = ctx.remotes?.actionsLock ?? {};
+    if (!file || !error3) return;
+    ctx.report({
+      message: `${file} is not used: ${error3}; remote actions are checked where their ref points now, not at the commit GitHub runs`,
+      loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
+      symbol: `${file}#version`
+    });
+  }
+});
 function lockDrift(ctx) {
   const { lock, fetched = [] } = ctx.remotes ?? {};
   const locked = [...Object.keys(lock?.remotes ?? {}), ...Object.keys(lock?.unreadable ?? {})].filter(
@@ -27214,6 +27246,7 @@ var structureRules = [
   remoteUnverified,
   remotesLockInvalid,
   remotesLockOutdated,
+  actionsLockUnreadable,
   needsWithoutData,
   largeInterface,
   missingLocalTarget,

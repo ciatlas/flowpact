@@ -1,4 +1,7 @@
-/** GitHub's actions.lock (actions-lock.ts): the commits it pins, where flowpact reads remote references and reports FP612. */
+/**
+ * GitHub's actions.lock (actions-lock.ts): the commits it pins, where flowpact reads remote references and reports FP612,
+ * and FP614 for a file it cannot read.
+ */
 import { memoryFileSystem } from '@ciatlas/core';
 import {
   ACTIONS_LOCK_FILE,
@@ -11,7 +14,7 @@ import {
   readActionsLock,
 } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
-import { byCode, lint, WF, yaml } from './helpers';
+import { at, byCode, lint, WF, yaml } from './helpers';
 
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
@@ -213,5 +216,37 @@ describe('FP612 and actions.lock', () => {
     expect(fp612(f)).toEqual([
       `${LOCK} is out of date: it records another commit than GitHub’s actions.lock runs for octo/ship/setup@v1 (it records aaaaaaa, actions.lock bbbbbbb). Run \`flowpact remotes update\``,
     ]);
+  });
+});
+
+describe('FP614 actions-lock-unreadable', () => {
+  const ci = {
+    [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
+  };
+  const fp614 = (lock: string) => byCode(lint({ ...ci, [ACTIONS_LOCK_FILE]: lock }), 'FP614');
+
+  it('reports a version flowpact does not read, on the file, as a warning', () => {
+    const [f, ...rest] = fp614(actionsLock({ 'octo/setup@v2': A }, 'v0.1.0'));
+    expect(rest).toEqual([]);
+    expect(f).toMatchObject({
+      severity: 'warning',
+      symbol: `${ACTIONS_LOCK_FILE}#version`,
+      message: `${ACTIONS_LOCK_FILE} is not used: version v0.1.0 is not one flowpact reads (v0.0.x); remote actions are checked where their ref points now, not at the commit GitHub runs`,
+    });
+    expect(at(f!)).toBe(`${ACTIONS_LOCK_FILE}:1:1`);
+  });
+
+  it('reports a file that does not parse, or is no lockfile', () => {
+    expect(fp614('version: [').map((f) => f.message)).toEqual([
+      expect.stringMatching(/is not used: not valid YAML: /),
+    ]);
+    expect(fp614('- a list').map((f) => f.message)).toEqual([
+      expect.stringContaining('is not used: not a workflow dependency lockfile flowpact can read;'),
+    ]);
+  });
+
+  it('reports nothing for a file it reads, or without one', () => {
+    expect(fp614(actionsLock({ 'octo/setup@v2': A }))).toEqual([]);
+    expect(byCode(lint(ci), 'FP614')).toEqual([]);
   });
 });

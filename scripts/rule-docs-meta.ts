@@ -44,8 +44,9 @@ export const RELATED: Record<string, string[]> = {
   FP609: ['FP607'],
   FP610: ['FP606'],
   FP611: ['FP612', 'FP603'],
-  FP612: ['FP603', 'FP611'],
+  FP612: ['FP603', 'FP611', 'FP614'],
   FP613: ['FP609', 'FP503'],
+  FP614: ['FP612', 'FP611'],
   FP801: ['FP802', 'FP804'],
   FP802: ['FP801', 'FP803'],
   FP803: ['FP802', 'FP810'],
@@ -76,6 +77,7 @@ const CONTRACTS: Guide = ['Contracts', '/docs/contracts'];
 const IMPACT: Guide = ['Impact mode', '/docs/impact-mode'];
 const OVERRIDES: Guide = ['Overrides', '/docs/configuration#overrides'];
 const IGNORE_COMMENTS: Guide = ['Ignore comments', '/docs/configuration#ignore-comments'];
+const ACTIONS_LOCK: Guide = ['GitHub’s actions.lock', '/docs/remote-interfaces#githubs-actionslock'];
 
 /** The guides a rule's page links to: by code first, else by its code's range. */
 const GUIDES: Record<string, Guide[]> = {
@@ -97,6 +99,7 @@ const GUIDES: Record<string, Guide[]> = {
   FP611: [REMOTES],
   FP612: [REMOTES],
   FP613: [REMOTES],
+  FP614: [ACTIONS_LOCK],
   FP904: [IGNORE_COMMENTS],
   FP905: [IGNORE_COMMENTS],
 };

@@ -398,7 +398,8 @@ names to a second host.
   graded against interfaces fetched for the run, never its own lockfile's, from the base commit's entries
   (`gradeVersionChanges` in `packages/lint/src/remotes-changes.ts`). `actions.lock` is parsed, never run or written,
   and a version or form flowpact does not know is not used (`readActionsLock` in
-  `packages/lint/src/actions-lock.ts`); a commit it pins is the one the runner runs, after GitHub checks that it
+  `packages/lint/src/actions-lock.ts`) and is reported by [`FP614`](/docs/rules/fp614), so an edit cannot turn it off
+  unseen; a commit it pins is the one the runner runs, after GitHub checks that it
   belongs to the repository, so reading the interface there checks what runs. It is never used for a reusable workflow
   call, which GitHub does not lock (`lockedCommit`). Only `flowpact remotes update` and
   `remotes download` keep the files they read, in a per-user cache: every part of the path (owner, repository, commit,
@@ -424,7 +425,8 @@ names to a second host.
   `packages/action/test/main.test.ts` (no fetch by default or on `pull_request_target`; a version change that breaks a
   call fails the step although the pull request's lockfile hides it); `packages/lint/test/remotes-changes.test.ts`
   (the head's interface fetched whatever the pull request's lockfile says); `packages/lint/test/actions-lock.test.ts`
-  (an unknown version not used; a reusable workflow call read where its ref points, never at a pinned commit);
+  (an unknown version not used, and reported by FP614; a reusable workflow call read where its ref points, never at a
+  pinned commit);
   `test/external.test.ts`
   (core; external units out of everything that follows a call); `packages/language-server/test/hover-remotes.test.ts`
   (no link to a host a lockfile names, the pinned commit opened rather than the one a lockfile claims);

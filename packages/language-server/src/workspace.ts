@@ -9,6 +9,7 @@ import {
   SymbolLocator,
 } from '@ciatlas/core';
 import {
+  ACTIONS_LOCK_FILE,
   type AnalysisResult,
   analyze,
   CONFIG_DIR,
@@ -31,12 +32,13 @@ import { type RemoteBinding, RemoteBindings } from './remotes';
 import type { Settings } from './settings';
 import { type RemoteSources, webHostOf } from './sources';
 
-/** Files the analysis reads: workflows, action metadata, and flowpact's config and contracts. */
+/** Files the analysis reads: workflows, action metadata, flowpact's config and contracts, and GitHub's actions.lock. */
 function isRelevant(rel: string): boolean {
   return (
     /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(rel) ||
     /(^|\/)action\.ya?ml$/i.test(rel) ||
-    rel.startsWith(`${CONFIG_DIR}/`)
+    rel.startsWith(`${CONFIG_DIR}/`) ||
+    rel === ACTIONS_LOCK_FILE
   );
 }
 

@@ -139,7 +139,7 @@ function sampleLines(rule: RuleDefinition, sample: RuleSample): string[] {
 }
 
 /** Rules about a whole file, or about a lockfile or contract file: no ignore comment accepts their findings. */
-const WHOLE_FILE_RULES = new Set(['FP611', 'FP612', 'FP801', 'FP802', 'FP804', 'FP805']);
+const WHOLE_FILE_RULES = new Set(['FP611', 'FP612', 'FP614', 'FP801', 'FP802', 'FP804', 'FP805']);
 
 const REASON = 'why it is acceptable here';
 

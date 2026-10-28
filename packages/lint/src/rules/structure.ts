@@ -396,6 +396,46 @@ remotes:
   },
 });
 
+const actionsLockUnreadable = defineRule({
+  code: 'FP614',
+  name: 'actions-lock-unreadable',
+  category: 'structure',
+  defaultSeverity: 'warning',
+  docs: {
+    summary:
+      'GitHub’s `.github/workflows/actions.lock` does not parse, or has a schema version flowpact does not read.',
+    why:
+      'flowpact reads a remote action at the commit `actions.lock` pins, which is the one GitHub runs. Without the file, ' +
+      'each action is read where its ref points now, which can be another commit with other inputs, and ' +
+      '[`FP612`](/docs/rules/fp612) no longer compares the remote interfaces lockfile with it. GitHub still runs ' +
+      'the pinned commits.',
+    fix:
+      'For a schema version flowpact does not read yet (it reads `v0.0.x`), upgrade flowpact. For a file that does not ' +
+      'parse, write it again with `gh actions-lock`.',
+    examples: {
+      bad: `# .github/workflows/actions.lock, from a gh actions-lock newer than flowpact
+version: 'v0.1.0'
+workflows:
+  '.github/workflows/ci.yml':
+    - 'octo/setup@v2'`,
+      good: `# a version flowpact reads
+version: 'v0.0.3'
+workflows:
+  '.github/workflows/ci.yml':
+    - 'octo/setup@v2'`,
+    },
+  },
+  check(ctx) {
+    const { file, error } = ctx.remotes?.actionsLock ?? {};
+    if (!file || !error) return;
+    ctx.report({
+      message: `${file} is not used: ${error}; remote actions are checked where their ref points now, not at the commit GitHub runs`,
+      loc: { file, line: 1, column: 1, endLine: 1, endColumn: 1 },
+      symbol: `${file}#version`,
+    });
+  },
+});
+
 /**
  * The remote references the lockfile file lacks, its entries nothing uses, those that record another commit than the
  * one their reference pins, and those that record another commit than GitHub's `actions.lock` runs (entries fetched for
@@ -930,6 +970,7 @@ export const structureRules: RuleDefinition[] = [
   remoteUnverified,
   remotesLockInvalid,
   remotesLockOutdated,
+  actionsLockUnreadable,
   needsWithoutData,
   largeInterface,
   missingLocalTarget,

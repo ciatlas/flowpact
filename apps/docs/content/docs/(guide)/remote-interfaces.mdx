@@ -471,7 +471,8 @@ updated `actions.lock` left `remotes.lock.yaml` as it was, so run `flowpact remo
 - Onboarding a workflow with `gh actions-lock` can rewrite its references (`@v4` to `@v4.2.1`, or a SHA to its tag):
   run `flowpact remotes update` after it, or FP612 reports the new references.
 - The schema is before 1.0: flowpact reads versions `v0.0.x`, v0.0.1's keys included. Another version, or a file that
-  does not parse, is not used, and `remotes update` says why. Its `hostname` is not read.
+  does not parse, is not used: [`FP614`](/docs/rules/fp614) reports it, and `remotes update` says why. Its `hostname`
+  is not read.
 
 ## The lockfile
 
