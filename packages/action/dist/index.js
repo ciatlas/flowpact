@@ -24064,7 +24064,12 @@ function declaredInputs(unit) {
   return { ...unit.dispatch?.inputs ?? {}, ...unit.call?.inputs ?? {} };
 }
 function emptyWhenOmitted(input2) {
-  return !input2.required && !input2.hasDefault && input2.type !== "boolean" && input2.type !== "number";
+  if (input2.required || input2.type === "boolean" || input2.type === "number") return false;
+  return !input2.hasDefault || emptyDefault(input2);
+}
+function emptyDefault(input2) {
+  if (input2.default === "") return true;
+  return !!input2.defaultSite && isEmptyValue(evaluateTemplate(input2.defaultSite.text, () => void 0));
 }
 var declaredAt = (callee, loc, message) => isExternal(callee) ? [] : [{ loc, message }];
 var missingRequiredInput = defineRule({
@@ -24315,10 +24320,10 @@ var optionalInputInCondition = defineRule({
   defaultSeverity: "warning",
   generatedFiles: "skip",
   docs: {
-    summary: "An optional input without a default decides an `if:` condition by its truthiness.",
+    summary: "An optional input that is '' when omitted (no default, or `default: ''`) decides an `if:` by its truthiness.",
     why: 'When a caller omits an optional input that has no default, GitHub passes an empty string. A condition such as `if: inputs.deploy` then takes the "false" branch: the job or step is skipped and the run is still green, so nothing tells the caller that the value they left out turned it off.',
-    fix: "If it must run, make the input `required: true` or give it a non-empty `default`. If skipping is intended, say so where it is decided: `inputs.x != ''` (the same at run time, but explicit), or read the skipped step's outputs through a fallback (`steps.token.outputs.token || github.token`).",
-    scope: "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks inside a comparison or function argument (`startsWith(inputs.x || 'main', 'v')`), conditions that are true when the input is '' (`inputs.x || 'yes'`, `!inputs.x`), conditions with text around `${{ }}` (always true; actionlint reports them), and a step whose results are only read through a fallback that is not empty when the step is skipped (`steps.t.outputs.token || github.token`, not `|| ''` or the omitted input), in a condition that asks whether it ran (`if: steps.t.outcome == 'success'`) or that is true when it was skipped, as a whole (`!steps.t.outputs.token`, `always() || \u2026`) or in the term that reads it (the operand of the nearest `&&` or `||` around the read, a comparison or function call around it included: `steps.t.outputs.x == ''` in `steps.t.outputs.x == '' && \u2026`; false instead under an odd number of `!`: `steps.t.outputs.x == 'true'` in `!(steps.t.outputs.x == 'true' || \u2026)`), or through a job output that is then '' and read one of those ways: the workflow then expects the step to be skipped. A step without an `id`, a job's `if:`, a condition that is false when the step was skipped (`!(steps.t.outputs.x == '')`), or a step whose outputs are also read as they are or gate another step (`if: steps.t.outputs.changed == 'true'`, also with `|| inputs.force`: skipped silently too) is still reported. Nor are inputs every local caller passes reported, unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them. To accept the rule for one input in every workflow, use an override with `target: '**#inputs.<name>'`.",
+    fix: "If it must run, make the input `required: true` or give it a non-empty `default`. If skipping is intended, say so where it is decided: `inputs.x != ''` (the same at run time, but explicit), or read the skipped step's outputs through a fallback (`steps.token.outputs.token || github.token`). `default: ''` is not a fix: it is what GitHub passes for an omitted input.",
+    scope: "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks inside a comparison or function argument (`startsWith(inputs.x || 'main', 'v')`), conditions that are true when the input is '' (`inputs.x || 'yes'`, `!inputs.x`), conditions with text around `${{ }}` (always true; actionlint reports them), and a step whose results are only read through a fallback that is not empty when the step is skipped (`steps.t.outputs.token || github.token`, not `|| ''` or the omitted input), in a condition that asks whether it ran (`if: steps.t.outcome == 'success'`) or that is true when it was skipped, as a whole (`!steps.t.outputs.token`, `always() || \u2026`) or in the term that reads it (the operand of the nearest `&&` or `||` around the read, a comparison or function call around it included: `steps.t.outputs.x == ''` in `steps.t.outputs.x == '' && \u2026`; false instead under an odd number of `!`: `steps.t.outputs.x == 'true'` in `!(steps.t.outputs.x == 'true' || \u2026)`), or through a job output that is then '' and read one of those ways: the workflow then expects the step to be skipped. A step without an `id`, a job's `if:`, a condition that is false when the step was skipped (`!(steps.t.outputs.x == '')`), or a step whose outputs are also read as they are or gate another step (`if: steps.t.outputs.changed == 'true'`, also with `|| inputs.force`: skipped silently too) is still reported. Nor are inputs every local caller passes reported, unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them. A `default` that is '' (`default: ''`, `default: ${{ '' }}`) counts as none. To accept the rule for one input in every workflow, use an override with `target: '**#inputs.<name>'`.",
     examples: {
       bad: `inputs:
   environment: { type: string, required: false }
@@ -24455,19 +24460,24 @@ function reportOptionalInputReads(ctx, unit, { flagged, passedBySite }, publishe
     const others = (flaggedBySite.get(usage.site.id) ?? []).filter((n) => n !== input2.name);
     const notes = conditionNotes(others, passedBySite.get(usage.site.id) ?? []);
     ctx.report({
-      message: `Condition reads optional input ${quote(input2.name)}, which has no default and is '' when omitted` + (notes.length ? ` (${notes.join("; ")})` : ""),
+      message: `Condition reads optional input ${quote(input2.name)}, ${omittedValue(input2)}` + (notes.length ? ` (${notes.join("; ")})` : ""),
       loc: usage.ref.loc,
       symbol: sym.input(unit.path, input2.name),
       related: [
-        {
-          loc: input2.loc,
-          message: publishedWithCallers && omitting.length === 0 ? "declared optional without a default; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it" : "declared optional without a default"
-        },
+        declarationNote(input2, publishedWithCallers && omitting.length === 0),
         ...omitting.slice(0, 3).map((c) => ({ loc: c.loc, message: `${c.label} omits it` }))
       ]
     });
   }
 }
+function declarationNote(input2, passedButPublished) {
+  const published = passedButPublished ? "; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it" : "";
+  return input2.hasDefault ? {
+    loc: input2.defaultLoc ?? input2.loc,
+    message: `\`default: ''\` changes nothing: an omitted input is '' anyway${published}`
+  } : { loc: input2.loc, message: `declared optional without a default${published}` };
+}
+var omittedValue = (input2) => input2.hasDefault ? "whose default '' is what GitHub passes when it is omitted" : "which has no default and is '' when omitted";
 function conditionNotes(others, passed) {
   return [
     ...others.length ? [`so ${others.length > 1 ? "are" : "is"} ${others.map(quote).join(", ")}, read by the same condition`] : [],
@@ -24531,9 +24541,9 @@ var optionalForwardedToRequired = defineRule({
   category: "inputs",
   defaultSeverity: "warning",
   docs: {
-    summary: "A required input of a callee is fed from an optional input that has no default.",
+    summary: "A required input of a callee is fed from an optional input that is '' when omitted (no default, or `default: ''`).",
     why: 'The call looks complete, so GitHub never complains about the required input, but when the outer caller omits the optional value the callee receives an empty string. The "required" guarantee is lost one level up.',
-    fix: "Make the outer input required too, give it a default, or add a non-empty fallback: `${{ inputs.x || 'value' }}`. If the callee handles an empty value, make its input `required: false`. If the call is pointless without the value, skip it with `if: inputs.x != ''`.",
+    fix: "Make the outer input required too, give it a non-empty default, or add a non-empty fallback: `${{ inputs.x || 'value' }}`. If the callee handles an empty value, make its input `required: false`. If the call is pointless without the value, skip it with `if: inputs.x != ''`.",
     examples: {
       bad: `# pipeline.yml
 inputs:
@@ -24570,7 +24580,10 @@ function reportForwarded(ctx, call, outer, b, site, target) {
     loc: srcs[0]?.loc ?? b.valueLoc,
     symbol: sym.input(call.callee.path, target.name),
     related: [
-      ...srcs.map((s) => ({ loc: s.decl.loc, message: "optional, no default" })),
+      ...srcs.map((s) => ({
+        loc: s.decl.loc,
+        message: s.decl.hasDefault ? "optional, default ''" : "optional, no default"
+      })),
       { loc: target.loc, message: `required by ${call.callee.path}` }
     ]
   });

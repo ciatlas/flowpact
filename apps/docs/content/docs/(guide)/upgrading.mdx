@@ -28,6 +28,10 @@ the upgrade. What is new:
   (`inputs.x || 'yes'`, `!inputs.x`). Overrides and ignore comments that accepted those findings now match nothing,
   and FP902 and FP905 (warnings) report them. A finding whose message named another input of the same condition that
   is no longer reported loses that note, which changes its fingerprint.
+- **New findings: FP105 and [FP107](/docs/rules/fp107) treat `default: ''` as no default**, since GitHub passes ''
+  for an omitted input anyway. An input whose default is '' (`default: ''`, `default: ${{ '' }}`) is reported where
+  one without a default is: make it `required: true` or give it a non-empty default, or, if skipping is intended, say
+  so in the condition (`inputs.x != ''`).
 
 ## 0.25 → 0.26
 

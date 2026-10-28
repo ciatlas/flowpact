@@ -16,9 +16,9 @@ Severity is configurable per rule; codes never change meaning. Plugin rules use 
 | [`FP102`](/docs/rules/fp102) | `unknown-input` | 🔴 error | A caller passes an input the reusable workflow or local action does not declare. |
 | [`FP103`](/docs/rules/fp103) | `input-type-mismatch` | 🔴 error | A literal value passed to a typed `workflow_call` input has the wrong type. |
 | [`FP104`](/docs/rules/fp104) | `unused-input` | 🟡 warning | An input is declared but never read anywhere in the workflow or action. |
-| [`FP105`](/docs/rules/fp105) | `optional-input-no-default-in-condition` | 🟡 warning | An optional input without a default decides an `if:` condition by its truthiness. |
+| [`FP105`](/docs/rules/fp105) | `optional-input-no-default-in-condition` | 🟡 warning | An optional input that is '' when omitted (no default, or `default: ''`) decides an `if:` by its truthiness. |
 | [`FP106`](/docs/rules/fp106) | `passthrough-dropped` | 🔵 info | A caller passes a value to an input that the callee declares but never reads. |
-| [`FP107`](/docs/rules/fp107) | `optional-forwarded-to-required` | 🟡 warning | A required input of a callee is fed from an optional input that has no default. |
+| [`FP107`](/docs/rules/fp107) | `optional-forwarded-to-required` | 🟡 warning | A required input of a callee is fed from an optional input that is '' when omitted (no default, or `default: ''`). |
 | [`FP108`](/docs/rules/fp108) | `undefined-input-ref` | 🔴 error | An expression reads `inputs.<name>` that the workflow or action does not declare. |
 
 ## Secrets (`FP2xx`)

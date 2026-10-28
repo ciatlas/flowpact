@@ -115,5 +115,5 @@ flowpact explain FP401
 
 - [`FP402`](/docs/rules/fp402) matrix-key-missing-in-combo: An expression reads a matrix key that is only defined in some combinations.
 - [`FP404`](/docs/rules/fp404) undefined-matrix-key: An expression reads a matrix key that no combination defines (or the job has no matrix).
-- [`FP105`](/docs/rules/fp105) optional-input-no-default-in-condition: An optional input without a default decides an `if:` condition by its truthiness.
+- [`FP105`](/docs/rules/fp105) optional-input-no-default-in-condition: An optional input that is '' when omitted (no default, or `default: ''`) decides an `if:` by its truthiness.
 - [How matrices are expanded](/docs/how-it-works#4-expand-matrices--the-part-that-catches-silent-empties)

@@ -109,5 +109,5 @@ flowpact explain FP101
 
 - [`FP102`](/docs/rules/fp102) unknown-input: A caller passes an input the reusable workflow or local action does not declare.
 - [`FP103`](/docs/rules/fp103) input-type-mismatch: A literal value passed to a typed `workflow_call` input has the wrong type.
-- [`FP107`](/docs/rules/fp107) optional-forwarded-to-required: A required input of a callee is fed from an optional input that has no default.
+- [`FP107`](/docs/rules/fp107) optional-forwarded-to-required: A required input of a callee is fed from an optional input that is '' when omitted (no default, or `default: ''`).
 - [Remote interfaces](/docs/remote-interfaces)

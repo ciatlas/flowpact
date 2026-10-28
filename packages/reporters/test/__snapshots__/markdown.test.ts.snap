@@ -157,7 +157,7 @@ Required input "notes" of .github/workflows/build.yml is empty when optional inp
 
 **Why:** The call looks complete, so GitHub never complains about the required input, but when the outer caller omits the optional value the callee receives an empty string. The "required" guarantee is lost one level up.
 
-**Fix:** Make the outer input required too, give it a default, or add a non-empty fallback: \`\${{ inputs.x || 'value' }}\`. If the callee handles an empty value, make its input \`required: false\`. If the call is pointless without the value, skip it with \`if: inputs.x != ''\`.
+**Fix:** Make the outer input required too, give it a non-empty default, or add a non-empty fallback: \`\${{ inputs.x || 'value' }}\`. If the callee handles an empty value, make its input \`required: false\`. If the call is pointless without the value, skip it with \`if: inputs.x != ''\`.
 
 **Related locations:**
 

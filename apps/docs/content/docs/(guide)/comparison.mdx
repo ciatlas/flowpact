@@ -242,7 +242,8 @@ nothing. With `type: boolean`, flowpact stays quiet too: the default is then `fa
   fix     If it must run, make the input `required: true` or give it a non-empty `default`. If
           skipping is intended, say so where it is decided: `inputs.x != ''` (the same at run
           time, but explicit), or read the skipped step's outputs through a fallback
-          (`steps.token.outputs.token || github.token`).
+          (`steps.token.outputs.token || github.token`). `default: ''` is not a fix: it is what
+          GitHub passes for an omitted input.
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp105
 ```
 
@@ -320,9 +321,9 @@ between them. actionlint sees `environment:` present in each call; GitHub's exte
   why     The call looks complete, so GitHub never complains about the required input, but when
           the outer caller omits the optional value the callee receives an empty string. The
           "required" guarantee is lost one level up.
-  fix     Make the outer input required too, give it a default, or add a non-empty fallback:
-          `${{ inputs.x || 'value' }}`. If the callee handles an empty value, make its input
-          `required: false`. If the call is pointless without the value, skip it with `if:
+  fix     Make the outer input required too, give it a non-empty default, or add a non-empty
+          fallback: `${{ inputs.x || 'value' }}`. If the callee handles an empty value, make its
+          input `required: false`. If the call is pointless without the value, skip it with `if:
           inputs.x != ''`.
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp107
 ```

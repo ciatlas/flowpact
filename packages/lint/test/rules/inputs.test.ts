@@ -979,6 +979,54 @@ describe('FP105 optional-input-no-default-in-condition', () => {
     ]);
   });
 
+  describe('an empty default, which GitHub passes for an omitted input anyway (#251)', () => {
+    const files = (decl: string, callerWith = '') => ({
+      [`${WF}/caller.yml`]: `on: push\njobs:\n  call:\n    uses: ./.github/workflows/callee.yml\n    with:\n      name: n\n${callerWith}`,
+      [`${WF}/callee.yml`]: callee
+        .replace('optional: { type: string, required: false }', `optional: ${decl}`)
+        .replace('if: inputs.flag && inputs.count > 0', 'if: inputs.optional'),
+    });
+
+    it.each([`''`, `""`, `"\${{ '' }}"`, `"\${{ null }}"`])(
+      'reports default: %s, at the default',
+      (value) => {
+        const decl = `{ type: string, required: false, default: ${value} }`;
+        const [f, ...rest] = byCode(lint(files(decl)), 'FP105');
+        expect(rest).toEqual([]);
+        expect(f?.message).toBe(
+          `Condition reads optional input "optional", whose default '' is what GitHub passes when it is omitted`,
+        );
+        expect(f?.related.map((r) => `${r.loc.line}:${r.loc.column} ${r.message}`)).toEqual([
+          `7:${`      optional: ${decl}`.indexOf(value) + 1} \`default: ''\` changes nothing: an omitted input is '' anyway`,
+          '4:11 .github/workflows/caller.yml › jobs.call omits it',
+        ]);
+      },
+    );
+
+    it('says so for a published workflow that every local caller passes the input to', () => {
+      const decl = "{ type: string, required: false, default: '' }";
+      const [f] = byCode(lint(files(decl, '      optional: gpu\n')), 'FP105');
+      expect(f?.related.map((r) => r.message)).toEqual([
+        "`default: ''` changes nothing: an omitted input is '' anyway; every caller here passes it, but this unit is published (see `impact.publish`), so callers in other repositories can omit it",
+      ]);
+    });
+
+    it.each([
+      "{ type: string, required: false, default: 'x' }",
+      '{ type: string, required: false, default: "${{ github.ref_name }}" }',
+    ])('is quiet for a default that is not empty: %s', (decl) => {
+      expect(byCode(lint(files(decl)), 'FP105')).toEqual([]);
+    });
+
+    it('treats a null default as none', () => {
+      const [f] = byCode(lint(files('{ type: string, required: false, default: null }')), 'FP105');
+      expect(f?.message).toBe(
+        `Condition reads optional input "optional", which has no default and is '' when omitted`,
+      );
+      expect(f?.related[0]?.message).toBe('declared optional without a default');
+    });
+  });
+
   it('ignores booleans (false is a natural default)', () => {
     expect(
       byCode(lint({ [`${WF}/callee.yml`]: callee }), 'FP105')
@@ -1096,6 +1144,21 @@ describe('FP107 optional-forwarded-to-required', () => {
     const [f] = byCode(r, 'FP107');
     expect(f?.message).toBe('Required input "name" of .github/workflows/callee.yml is always empty');
     expect(f?.related).toHaveLength(1);
+  });
+
+  it("flags an optional input whose default is '', which the callee gets when it is omitted (#251)", () => {
+    const r = lint({
+      [`${WF}/caller.yml`]: caller(`{ type: string, required: false, default: '' }`),
+      [`${WF}/callee.yml`]: callee,
+    });
+    const [f] = byCode(r, 'FP107');
+    expect(f?.message).toBe(
+      'Required input "name" of .github/workflows/callee.yml is empty when optional input "outer" is omitted',
+    );
+    expect(f?.related.map((x) => x.message)).toEqual([
+      "optional, default ''",
+      'required by .github/workflows/callee.yml',
+    ]);
   });
 
   it.each(['{ type: string, required: true }', '{ type: string, default: x }'])('is quiet for %s', (decl) => {
