@@ -217,6 +217,9 @@ function acceptLines(rule: RuleDefinition, sample: RuleSample | undefined): stri
     `flowpact lint --format json | jq -r '.findings[] | select(.code == "${rule.code}") | .symbol'`,
     '```',
     '',
+    '`*` matches within a path segment and `**` across segments, so one entry accepts every finding whose symbol matches:',
+    "`target: '**#inputs.app-id'` is that input in every workflow and action.",
+    '',
     ...baselineLines(rule, 'override'),
   ];
 }

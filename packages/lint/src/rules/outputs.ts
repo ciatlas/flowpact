@@ -16,7 +16,7 @@ import { isPublished } from '../impact';
 import { isExternal } from '../remotes';
 import { renameSegment } from '../suggestions';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
-import { didYouMeanNote, isProperty, listNames, namesKey, quote } from './util';
+import { didYouMeanNote, isProperty, listNames, namesKey, quote, stepsInScope } from './util';
 
 /** FP303's fix for an output of a unit that other repositories might use: published units are not judged. */
 function publishedFix(kind: 'workflow' | 'action', file: string, publish: string[] | undefined): string {
@@ -24,11 +24,6 @@ function publishedFix(kind: 'workflow' | 'action', file: string, publish: string
   return publish
     ? `${remove} If other repositories use this ${kind}, add ${quote(file)} to \`impact.publish\`.`
     : `${remove} If other repositories use this ${kind}, set \`impact.publish\` to the units they use, ${quote(file)} included; it replaces the default (reusable workflows and the root action.yml).`;
-}
-
-function stepsInScope(unit: UnitDecl, jobId: string | undefined): StepDecl[] {
-  if (unit.kind === 'action') return unit.steps;
-  return jobId ? (unit.jobs[jobId]?.steps ?? []) : [];
 }
 
 /** The symbol of an output read from step `id` at `site` (the steps of an action belong to no job). */

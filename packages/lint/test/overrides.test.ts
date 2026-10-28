@@ -154,6 +154,53 @@ describe('matching', () => {
     expect(matchesTarget('a+b(c).yml', 'a+b(c).*')).toBe(true);
     expect(matchesTarget('axb', 'a.b')).toBe(false);
   });
+
+  it('accepts a rule for inputs of one name in every workflow with one target glob', () => {
+    const guarded = (script: string) => yaml`
+      on:
+        workflow_call:
+          inputs:
+            gh-app-id: { type: string, required: false }
+            gh-client-id: { type: string, required: false }
+            region: { type: string, required: false }
+      jobs:
+        j:
+          runs-on: x
+          steps:
+            - if: \${{ inputs.gh-app-id || inputs.gh-client-id }}
+              run: ./${script}.sh
+            - if: inputs.region
+              run: ./${script}.sh
+    `;
+    const configText = yaml`
+      overrides:
+        - rule: FP105
+          target: '**#inputs.gh-*-id'
+          reason: Without app credentials the jobs use github.token instead
+    `;
+    const { config, overrideLocs } = parseConfigText(configText, CONFIG);
+    const r = analyze({
+      root: '/virtual/repo',
+      fs: memoryFileSystem({ [`${WF}/a.yml`]: guarded('a'), [`${WF}/b.yml`]: guarded('b') }),
+      config,
+      overrideLocs,
+      configFile: CONFIG,
+      configText,
+      validateSchema: false,
+      repository: 'acme/repo',
+    });
+    expect(r.suppressed.map((f) => f.symbol)).toEqual([
+      `${WF}/a.yml#inputs.gh-app-id`,
+      `${WF}/a.yml#inputs.gh-client-id`,
+      `${WF}/b.yml#inputs.gh-app-id`,
+      `${WF}/b.yml#inputs.gh-client-id`,
+    ]);
+    expect(byCode(r, 'FP105').map((f) => f.symbol)).toEqual([
+      `${WF}/a.yml#inputs.region`,
+      `${WF}/b.yml#inputs.region`,
+    ]);
+    expect(codes(r)).not.toContain('FP902');
+  });
 });
 
 describe('expiry and hygiene (FP901–903)', () => {

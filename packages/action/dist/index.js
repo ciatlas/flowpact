@@ -23081,6 +23081,62 @@ function useInCondition(site, ref) {
   const seg = site.segments.find((s) => s.refs.includes(ref));
   return seg ? conditionUses(seg.expr, isWholeExpression(site)).get(ref.start) : void 0;
 }
+function fallsBack(fallbacks, ref, resolvers) {
+  const fallback = fallbacks.get(ref.start);
+  return !!fallback && !resolvers.some((resolve9) => isEmptyValue(evaluate(fallback, resolve9)));
+}
+function shapeOf2(source, e) {
+  try {
+    return e.accept({
+      visitLiteral: () => ({ kind: "value", inner: [] }),
+      visitUnary: (u) => ({ kind: "not", inner: [u.expr] }),
+      visitBinary: (b) => ({ kind: "value", inner: [b.left, b.right] }),
+      visitLogical: (l) => ({ kind: "logical", inner: l.args }),
+      visitGrouping: (g) => ({ kind: "grouping", inner: [g.group] }),
+      visitContextAccess: (c) => ({
+        kind: "value",
+        inner: [],
+        start: tokenOffset(source, c.name.range.start)
+      }),
+      visitIndexAccess: (i) => ({ kind: "value", inner: [i.expr, i.index] }),
+      visitFunctionCall: (f) => ({ kind: "value", inner: f.args })
+    });
+  } catch {
+    return { kind: "value", inner: [] };
+  }
+}
+function tokenOffset(source, pos) {
+  let lineStart = 0;
+  let newlines = 0;
+  let inString = false;
+  for (let i = 0; i < source.length && newlines < pos.line; i++) {
+    if (source[i] === "'") inString = !inString;
+    else if (source[i] === "\n") {
+      newlines++;
+      if (!inString) lineStart = i + 1;
+    }
+  }
+  return lineStart + pos.column;
+}
+function booleanTermOf(expr, start) {
+  const find = (e, found, negated, open2) => {
+    const shape = shapeOf2(expr.source, e);
+    if (shape.start !== void 0) return shape.start === start ? found : void 0;
+    const inverts = open2 && shape.kind === "not";
+    const stays = open2 && shape.kind !== "value";
+    for (const inner of shape.inner) {
+      const term = open2 && shape.kind === "logical" ? { term: inner, negated } : found;
+      const result = find(inner, term, negated !== inverts, stays);
+      if (result) return result;
+    }
+    return void 0;
+  };
+  return expr.ast && find(expr.ast, { term: expr.ast, negated: false }, false, true);
+}
+function stepsInScope(unit, jobId) {
+  if (unit.kind === "action") return unit.steps;
+  return jobId ? unit.jobs[jobId]?.steps ?? [] : [];
+}
 function chainRelated(chain) {
   return chain.map((c) => ({
     loc: c.job.uses?.loc ?? c.job.loc,
@@ -24260,18 +24316,29 @@ var optionalInputInCondition = defineRule({
   generatedFiles: "skip",
   docs: {
     summary: "An optional input without a default decides an `if:` condition by its truthiness.",
-    why: 'When a caller omits an optional input that has no default, GitHub substitutes an empty string. A condition such as `if: inputs.x` then takes the "false" branch silently, so jobs or steps are skipped and the run is still green.',
-    fix: "Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`).",
-    scope: "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local caller passes \u2014 unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them.",
+    why: 'When a caller omits an optional input that has no default, GitHub passes an empty string. A condition such as `if: inputs.deploy` then takes the "false" branch: the job or step is skipped and the run is still green, so nothing tells the caller that the value they left out turned it off.',
+    fix: "If it must run, make the input `required: true` or give it a non-empty `default`. If skipping is intended, say so where it is decided: `inputs.x != ''` (the same at run time, but explicit), or read the skipped step's outputs through a fallback (`steps.token.outputs.token || github.token`).",
+    scope: "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks inside a comparison or function argument (`startsWith(inputs.x || 'main', 'v')`), conditions that are true when the input is '' (`inputs.x || 'yes'`, `!inputs.x`), conditions with text around `${{ }}` (always true; actionlint reports them), and a step whose results are only read through a fallback that is not empty when the step is skipped (`steps.t.outputs.token || github.token`, not `|| ''` or the omitted input), in a condition that asks whether it ran (`if: steps.t.outcome == 'success'`) or that is true when it was skipped, as a whole (`!steps.t.outputs.token`, `always() || \u2026`) or in the term that reads it (the operand of the nearest `&&` or `||` around the read, a comparison or function call around it included: `steps.t.outputs.x == ''` in `steps.t.outputs.x == '' && \u2026`; false instead under an odd number of `!`: `steps.t.outputs.x == 'true'` in `!(steps.t.outputs.x == 'true' || \u2026)`), or through a job output that is then '' and read one of those ways: the workflow then expects the step to be skipped. A step without an `id`, a job's `if:`, a condition that is false when the step was skipped (`!(steps.t.outputs.x == '')`), or a step whose outputs are also read as they are or gate another step (`if: steps.t.outputs.changed == 'true'`, also with `|| inputs.force`: skipped silently too) is still reported. Nor are inputs every local caller passes reported, unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them. To accept the rule for one input in every workflow, use an override with `target: '**#inputs.<name>'`.",
     examples: {
       bad: `inputs:
-  variant: { type: string, required: false }
+  environment: { type: string, required: false }
 ...
-if: inputs.variant`,
+- if: inputs.environment
+  run: ./deploy.sh "\${{ inputs.environment }}"`,
       good: `inputs:
-  variant: { type: string, required: false }
+  environment: { type: string, required: false }
+  app-id: { type: string, required: false }
 ...
-if: inputs.variant != ''`
+# Skipping without an environment is intended: say so
+- if: inputs.environment != ''
+  run: ./deploy.sh "\${{ inputs.environment }}"
+# Or let the consumers handle the skipped step
+- id: app-token
+  if: inputs.app-id
+  uses: actions/create-github-app-token@v2
+- uses: actions/checkout@v5
+  with:
+    token: \${{ steps.app-token.outputs.token || github.token }}`
     }
   },
   check(ctx) {
@@ -24298,14 +24365,88 @@ function optionalInputReads(index, unit, callers, callersDecide) {
     }
     for (const usage of usages) flagged.push({ input: input2, usage, omitting });
   }
-  return { flagged, passedBySite };
+  return { flagged: unexpectedSkips(index, unit, decidedWhenOmitted(flagged)), passedBySite };
 }
+function decidedWhenOmitted(flagged) {
+  return flagged.filter((r) => !trueWhenEmpty(r.usage.site, [r.usage.ref]));
+}
+function trueWhenEmpty(site, reads) {
+  const ast = site.segments[0]?.expr.ast;
+  return !!ast && definitelyTruthy(ast, emptyAs(reads));
+}
+function emptyAs(reads) {
+  const keys = new Set(reads.map(refKey));
+  return (ref) => keys.has(refKey(ref)) ? known("") : void 0;
+}
+var refKey = (ref) => [ref.context, ...ref.path].join(".").toLowerCase();
 function decidingReads(index, unit, input2) {
-  const inConditions = index.usagesOf(sym.input(unit.path, input2.name)).filter((u) => u.site.isCondition && !u.whole).map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
+  const inConditions = index.usagesOf(sym.input(unit.path, input2.name)).filter((u) => u.site.isCondition && !u.whole && isWholeExpression(u.site)).map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
   const handledSites = new Set(
     inConditions.filter((x) => x.use === "compared" || x.use === "fallback").map((x) => x.u.site.id)
   );
   return inConditions.filter((x) => (x.use === "truthiness" || x.use === "value") && !handledSites.has(x.u.site.id)).map((x) => x.u);
+}
+function unexpectedSkips(index, unit, flagged) {
+  const inputsAt = /* @__PURE__ */ new Map();
+  for (const { input: input2, usage } of flagged) addName(inputsAt, usage.site.id, input2.name);
+  const expected = /* @__PURE__ */ new Map();
+  return flagged.filter(({ usage: { site } }) => {
+    if (!expected.has(site.id))
+      expected.set(site.id, skipExpected(index, unit, site, inputsAt.get(site.id) ?? []));
+    return !expected.get(site.id);
+  });
+}
+function skippedAs({ id, empty }) {
+  const keys = new Set(empty);
+  return (ref) => {
+    if (keys.has(refKey(ref))) return known("");
+    if (!id || ref.context !== "steps" || ref.path[0]?.toLowerCase() !== id.toLowerCase()) return void 0;
+    if (readsOutcome(ref)) return known("skipped");
+    return ref.path[1]?.toLowerCase() === "outputs" && namesKey2(ref.path[2]) ? known("") : void 0;
+  };
+}
+var readsOutcome = (ref) => ref.context === "steps" && ["outcome", "conclusion"].includes(ref.path[1]?.toLowerCase() ?? "");
+function skipExpected(index, unit, site, inputs) {
+  if (site.field !== "step.if" || site.step === void 0) return false;
+  const id = stepsInScope(unit, site.job)[site.step]?.id;
+  const reads = id ? stepResultReads(unit, site.job, site.step, id) : void 0;
+  const skip = { id, empty: inputs.map((name) => refKey({ context: "inputs", path: [name] })) };
+  return !!reads?.length && reads.every((r) => holdsWhenEmpty(index, unit, r, skip, 1));
+}
+function stepResultReads(unit, job, after, id) {
+  const reads = [];
+  for (const read2 of refsOf(unit)) {
+    const { site, ref } = read2;
+    if (ref.context !== "steps" || site.job !== job || site.step !== void 0 && site.step <= after)
+      continue;
+    const step2 = ref.path[0];
+    if (!namesKey2(step2)) return void 0;
+    if (step2.toLowerCase() === id.toLowerCase()) reads.push(read2);
+  }
+  return reads;
+}
+function holdsWhenEmpty(index, unit, read2, skip, hops) {
+  const { site, ref } = read2;
+  const resolve9 = skippedAs(skip);
+  if (site.isCondition) return readsOutcome(ref) || conditionHolds(site, ref, resolve9);
+  const seg = site.segments.find((s) => s.refs.includes(ref));
+  if (seg && fallsBack(fallbacksOf(seg.expr), ref, [resolve9])) return true;
+  return hops > 0 && jobOutputHolds(index, unit, site, skip, hops);
+}
+function conditionHolds(site, ref, resolve9) {
+  const expr = site.segments[0]?.expr;
+  if (!isWholeExpression(site) || !expr?.ast || definitelyTruthy(expr.ast, resolve9)) return true;
+  if (definitelyFalsy(expr.ast, resolve9)) return false;
+  const found = booleanTermOf(expr, ref.start);
+  return !!found && (found.negated ? definitelyFalsy : definitelyTruthy)(found.term, resolve9);
+}
+function jobOutputHolds(index, unit, site, skip, hops) {
+  if (site.field !== "job.output" || !site.job || !site.key) return false;
+  if (!isEmptyValue(evaluateTemplate(site.text, skippedAs(skip)))) return false;
+  const output = { context: "needs", path: [site.job, "outputs", site.key] };
+  const next = { empty: [...skip.empty, refKey(output)] };
+  const readers = index.usagesOf(sym.jobOutput(unit.path, site.job, site.key));
+  return readers.length > 0 && readers.every((u) => !u.whole && holdsWhenEmpty(index, unit, u, next, hops - 1));
 }
 function reportOptionalInputReads(ctx, unit, { flagged, passedBySite }, publishedWithCallers) {
   const flaggedBySite = /* @__PURE__ */ new Map();
@@ -24969,11 +25110,8 @@ function readsFallBack(seg, lower, combos) {
   const reads = seg.refs.filter((r) => r.context === "matrix" && r.path[0]?.toLowerCase() === lower);
   if (reads.length === 0) return true;
   const fallbacks = fallbacksOf(seg.expr);
-  return reads.every((r) => {
-    const fallback = fallbacks.get(r.start);
-    if (!fallback) return false;
-    return !combos.some((c) => isEmptyValue(evaluate(fallback, matrixResolver(c))));
-  });
+  const resolvers = combos.map((c) => matrixResolver(c));
+  return reads.every((r) => fallsBack(fallbacks, r, resolvers));
 }
 var unusedMatrixShape = defineRule({
   code: "FP405",
@@ -25060,10 +25198,6 @@ var matrixRules = [
 function publishedFix(kind, file, publish) {
   const remove = `Remove the output, or make a ${kind === "workflow" ? "caller" : "user"} read it.`;
   return publish ? `${remove} If other repositories use this ${kind}, add ${quote(file)} to \`impact.publish\`.` : `${remove} If other repositories use this ${kind}, set \`impact.publish\` to the units they use, ${quote(file)} included; it replaces the default (reusable workflows and the root action.yml).`;
-}
-function stepsInScope(unit, jobId) {
-  if (unit.kind === "action") return unit.steps;
-  return jobId ? unit.jobs[jobId]?.steps ?? [] : [];
 }
 function stepOutputSymbol(unit, site, id, output) {
   return sym.stepOutput(unit.path, unit.kind === "workflow" ? site.job : void 0, id, output ?? "");

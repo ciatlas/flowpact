@@ -11,11 +11,11 @@ description: "An optional input without a default decides an `if:` condition by 
 
 ## Why it matters
 
-When a caller omits an optional input that has no default, GitHub substitutes an empty string. A condition such as `if: inputs.x` then takes the "false" branch silently, so jobs or steps are skipped and the run is still green.
+When a caller omits an optional input that has no default, GitHub passes an empty string. A condition such as `if: inputs.deploy` then takes the "false" branch: the job or step is skipped and the run is still green, so nothing tells the caller that the value they left out turned it off.
 
 ## How to fix
 
-Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`).
+If it must run, make the input `required: true` or give it a non-empty `default`. If skipping is intended, say so where it is decided: `inputs.x != ''` (the same at run time, but explicit), or read the skipped step's outputs through a fallback (`steps.token.outputs.token || github.token`).
 
 ## Example
 
@@ -24,9 +24,10 @@ Give the input an explicit `default`, make it `required: true`, or compare expli
 
 ```yaml
 inputs:
-  variant: { type: string, required: false }
+  environment: { type: string, required: false }
 ...
-if: inputs.variant
+- if: inputs.environment
+  run: ./deploy.sh "${{ inputs.environment }}"
 ```
 
 </Tab>
@@ -34,9 +35,19 @@ if: inputs.variant
 
 ```yaml
 inputs:
-  variant: { type: string, required: false }
+  environment: { type: string, required: false }
+  app-id: { type: string, required: false }
 ...
-if: inputs.variant != ''
+# Skipping without an environment is intended: say so
+- if: inputs.environment != ''
+  run: ./deploy.sh "${{ inputs.environment }}"
+# Or let the consumers handle the skipped step
+- id: app-token
+  if: inputs.app-id
+  uses: actions/create-github-app-token@v2
+- uses: actions/checkout@v5
+  with:
+    token: ${{ steps.app-token.outputs.token || github.token }}
 ```
 
 </Tab>
@@ -44,7 +55,7 @@ if: inputs.variant != ''
 
 ## Scope
 
-Not reported: comparisons with a constant, `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local caller passes — unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
+Not reported: comparisons with a constant, `contains()`-style tests, fallbacks inside a comparison or function argument (`startsWith(inputs.x || 'main', 'v')`), conditions that are true when the input is '' (`inputs.x || 'yes'`, `!inputs.x`), conditions with text around `${{ }}` (always true; actionlint reports them), and a step whose results are only read through a fallback that is not empty when the step is skipped (`steps.t.outputs.token || github.token`, not `|| ''` or the omitted input), in a condition that asks whether it ran (`if: steps.t.outcome == 'success'`) or that is true when it was skipped, as a whole (`!steps.t.outputs.token`, `always() || …`) or in the term that reads it (the operand of the nearest `&&` or `||` around the read, a comparison or function call around it included: `steps.t.outputs.x == ''` in `steps.t.outputs.x == '' && …`; false instead under an odd number of `!`: `steps.t.outputs.x == 'true'` in `!(steps.t.outputs.x == 'true' || …)`), or through a job output that is then '' and read one of those ways: the workflow then expects the step to be skipped. A step without an `id`, a job's `if:`, a condition that is false when the step was skipped (`!(steps.t.outputs.x == '')`), or a step whose outputs are also read as they are or gate another step (`if: steps.t.outputs.changed == 'true'`, also with `|| inputs.force`: skipped silently too) is still reported. Nor are inputs every local caller passes reported, unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them. To accept the rule for one input in every workflow, use an override with `target: '**#inputs.<name>'`. Not reported in [generated files](/docs/configuration#generated-files), which are not edited by hand.
 
 ## Accept one finding
 
@@ -75,6 +86,9 @@ overrides:
 ```sh
 flowpact lint --format json | jq -r '.findings[] | select(.code == "FP105") | .symbol'
 ```
+
+`*` matches within a path segment and `**` across segments, so one entry accepts every finding whose symbol matches:
+`target: '**#inputs.app-id'` is that input in every workflow and action.
 
 ## Change the severity
 

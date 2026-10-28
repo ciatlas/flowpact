@@ -4,11 +4,16 @@ import {
   type CallSite,
   type ContextResolver,
   chainTo,
+  definitelyFalsy,
+  definitelyTruthy,
   didYouMean,
   type ExprSite,
   evaluateTemplate,
+  fallbacksOf,
   type InputDecl,
+  isEmptyValue,
   type Json,
+  known,
   type Loc,
   type LocatedRef,
   lookup,
@@ -34,7 +39,19 @@ import {
   suggestion,
 } from '../suggestions';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
-import { chainRelated, didYouMeanNote, isProperty, listNames, namesKey, quote, useInCondition } from './util';
+import {
+  booleanTermOf,
+  chainRelated,
+  didYouMeanNote,
+  fallsBack,
+  isProperty,
+  isWholeExpression,
+  listNames,
+  namesKey,
+  quote,
+  stepsInScope,
+  useInCondition,
+} from './util';
 
 /**
  * For every workflow with `workflow_dispatch`: its inputs read through `github.event.inputs` in it and in the workflows
@@ -452,20 +469,35 @@ const optionalInputInCondition = defineRule({
   docs: {
     summary: 'An optional input without a default decides an `if:` condition by its truthiness.',
     why:
-      'When a caller omits an optional input that has no default, GitHub substitutes an empty string. A condition such ' +
-      'as `if: inputs.x` then takes the "false" branch silently, so jobs or steps are skipped and the run is still green.',
-    fix: "Give the input an explicit `default`, make it `required: true`, or compare explicitly (`inputs.x != ''`, `inputs.x == 'yes'`).",
+      'When a caller omits an optional input that has no default, GitHub passes an empty string. A condition such as ' +
+      '`if: inputs.deploy` then takes the "false" branch: the job or step is skipped and the run is still green, so ' +
+      'nothing tells the caller that the value they left out turned it off.',
+    fix:
+      'If it must run, make the input `required: true` or give it a non-empty `default`. If skipping is intended, say ' +
+      "so where it is decided: `inputs.x != ''` (the same at run time, but explicit), or read the skipped step's " +
+      'outputs through a fallback (`steps.token.outputs.token || github.token`).',
     scope:
-      "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local caller passes — unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them.",
+      "Not reported: comparisons with a constant, `contains()`-style tests, fallbacks inside a comparison or function argument (`startsWith(inputs.x || 'main', 'v')`), conditions that are true when the input is '' (`inputs.x || 'yes'`, `!inputs.x`), conditions with text around `${{ }}` (always true; actionlint reports them), and a step whose results are only read through a fallback that is not empty when the step is skipped (`steps.t.outputs.token || github.token`, not `|| ''` or the omitted input), in a condition that asks whether it ran (`if: steps.t.outcome == 'success'`) or that is true when it was skipped, as a whole (`!steps.t.outputs.token`, `always() || …`) or in the term that reads it (the operand of the nearest `&&` or `||` around the read, a comparison or function call around it included: `steps.t.outputs.x == ''` in `steps.t.outputs.x == '' && …`; false instead under an odd number of `!`: `steps.t.outputs.x == 'true'` in `!(steps.t.outputs.x == 'true' || …)`), or through a job output that is then '' and read one of those ways: the workflow then expects the step to be skipped. A step without an `id`, a job's `if:`, a condition that is false when the step was skipped (`!(steps.t.outputs.x == '')`), or a step whose outputs are also read as they are or gate another step (`if: steps.t.outputs.changed == 'true'`, also with `|| inputs.force`: skipped silently too) is still reported. Nor are inputs every local caller passes reported, unless the workflow can be dispatched or the unit is published (by default the root `action.yml` and reusable workflows whose file name does not start with `_`; see `impact.publish`), since callers in other repositories can still omit them. To accept the rule for one input in every workflow, use an override with `target: '**#inputs.<name>'`.",
     examples: {
       bad: `inputs:
-  variant: { type: string, required: false }
+  environment: { type: string, required: false }
 ...
-if: inputs.variant`,
+- if: inputs.environment
+  run: ./deploy.sh "\${{ inputs.environment }}"`,
       good: `inputs:
-  variant: { type: string, required: false }
+  environment: { type: string, required: false }
+  app-id: { type: string, required: false }
 ...
-if: inputs.variant != ''`,
+# Skipping without an environment is intended: say so
+- if: inputs.environment != ''
+  run: ./deploy.sh "\${{ inputs.environment }}"
+# Or let the consumers handle the skipped step
+- id: app-token
+  if: inputs.app-id
+  uses: actions/create-github-app-token@v2
+- uses: actions/checkout@v5
+  with:
+    token: \${{ steps.app-token.outputs.token || github.token }}`,
     },
   },
   check(ctx) {
@@ -511,20 +543,45 @@ function optionalInputReads(
     }
     for (const usage of usages) flagged.push({ input, usage, omitting });
   }
-  return { flagged, passedBySite };
+  return { flagged: unexpectedSkips(index, unit, decidedWhenOmitted(flagged)), passedBySite };
 }
+
+/**
+ * The reads at conditions that leaving out their input can turn false. A condition that is true when the input is ''
+ * (`inputs.x || 'yes'`, `!inputs.x`) skips nothing when a caller omits it. Each input is checked on its own: in
+ * `inputs.a || !inputs.b`, omitting `a` while passing `b` skips the step, omitting `b` never does.
+ */
+function decidedWhenOmitted(flagged: OptionalRead[]): OptionalRead[] {
+  return flagged.filter((r) => !trueWhenEmpty(r.usage.site, [r.usage.ref]));
+}
+
+/** Whether a whole-expression condition is true when `reads` are '', whatever the rest of it is. */
+function trueWhenEmpty(site: ExprSite, reads: LocatedRef[]): boolean {
+  const ast = site.segments[0]?.expr.ast;
+  return !!ast && definitelyTruthy(ast, emptyAs(reads));
+}
+
+/** Resolves what any of `reads` reads (the same context and path, in any case) to '', and the rest to unknown. */
+function emptyAs(reads: { context: string; path: string[] }[]): ContextResolver {
+  const keys = new Set(reads.map(refKey));
+  return (ref) => (keys.has(refKey(ref)) ? known('') : undefined);
+}
+
+const refKey = (ref: { context: string; path: string[] }) =>
+  [ref.context, ...ref.path].join('.').toLowerCase();
 
 /**
  * The reads of an input that decide a condition by its value. Comparisons with a constant (`inputs.x != ''`,
  * `inputs.x == 'yes'`), tests such as `contains()` and fallbacks handle the omitted case explicitly. A condition that
  * does so for the input is trusted with its other reads too (`inputs.x != '' && inputs.x != steps.s.outputs.current`);
  * otherwise only a value that decides the condition as it is gets reported. A whole read (`toJSON(inputs)`,
- * `inputs[matrix.key]`, see `Usage.whole`) does not single the input out, so it neither decides nor handles it.
+ * `inputs[matrix.key]`, see `Usage.whole`) does not single the input out, so it neither decides nor handles it. A
+ * condition with text around its `${{ }}` is always true.
  */
 function decidingReads(index: ProjectIndex, unit: UnitDecl, input: InputDecl): Usage[] {
   const inConditions = index
     .usagesOf(sym.input(unit.path, input.name))
-    .filter((u) => u.site.isCondition && !u.whole)
+    .filter((u) => u.site.isCondition && !u.whole && isWholeExpression(u.site))
     .map((u) => ({ u, use: useInCondition(u.site, u.ref) }));
   const handledSites = new Set(
     inConditions.filter((x) => x.use === 'compared' || x.use === 'fallback').map((x) => x.u.site.id),
@@ -532,6 +589,136 @@ function decidingReads(index: ProjectIndex, unit: UnitDecl, input: InputDecl): U
   return inConditions
     .filter((x) => (x.use === 'truthiness' || x.use === 'value') && !handledSites.has(x.u.site.id))
     .map((x) => x.u);
+}
+
+/**
+ * The reads left once those at guards of skips the workflow expects are taken out (see `skipExpected`), each guard
+ * judged with every input flagged at it '': a step skipped when they are omitted is not the silent skip FP105 is about.
+ */
+function unexpectedSkips(index: ProjectIndex, unit: UnitDecl, flagged: OptionalRead[]): OptionalRead[] {
+  const inputsAt = new Map<number, string[]>();
+  for (const { input, usage } of flagged) addName(inputsAt, usage.site.id, input.name);
+  const expected = new Map<number, boolean>();
+  return flagged.filter(({ usage: { site } }) => {
+    if (!expected.has(site.id))
+      expected.set(site.id, skipExpected(index, unit, site, inputsAt.get(site.id) ?? []));
+    return !expected.get(site.id);
+  });
+}
+
+/** A reference and the site it is in. */
+type Read = { site: ExprSite; ref: LocatedRef };
+
+/** What is known when a guarded step was skipped: step `id`'s results, and the reads in `empty` (`refKey`s) are ''. */
+interface Skip {
+  id?: string;
+  empty: string[];
+}
+
+/**
+ * Resolves a skipped step's outputs to '' and its `outcome` and `conclusion` to 'skipped' (ids in any case), the reads
+ * in `empty` to '', and the rest to unknown.
+ */
+function skippedAs({ id, empty }: Skip): ContextResolver {
+  const keys = new Set(empty);
+  return (ref) => {
+    if (keys.has(refKey(ref))) return known('');
+    if (!id || ref.context !== 'steps' || ref.path[0]?.toLowerCase() !== id.toLowerCase()) return undefined;
+    if (readsOutcome(ref)) return known('skipped');
+    return ref.path[1]?.toLowerCase() === 'outputs' && namesKey(ref.path[2]) ? known('') : undefined;
+  };
+}
+
+/** Whether a reference reads a step's `outcome` or `conclusion`: asks whether the step ran. */
+const readsOutcome = (ref: { context: string; path: string[] }) =>
+  ref.context === 'steps' && ['outcome', 'conclusion'].includes(ref.path[1]?.toLowerCase() ?? '');
+
+/**
+ * Whether a step's `if:` guards a step the workflow expects to be skipped: the step has an `id`, its results are read
+ * after it, and every such read holds up when the step was skipped because `inputs` are '' (see `holdsWhenEmpty`).
+ * Consumers written for the skipped step show that the skip was considered; they do not show that the step's own
+ * effects are optional.
+ */
+function skipExpected(index: ProjectIndex, unit: UnitDecl, site: ExprSite, inputs: string[]): boolean {
+  if (site.field !== 'step.if' || site.step === undefined) return false;
+  const id = stepsInScope(unit, site.job)[site.step]?.id;
+  const reads = id ? stepResultReads(unit, site.job, site.step, id) : undefined;
+  const skip = { id, empty: inputs.map((name) => refKey({ context: 'inputs', path: [name] })) };
+  return !!reads?.length && reads.every((r) => holdsWhenEmpty(index, unit, r, skip, 1));
+}
+
+/**
+ * The reads of step `id`'s results (`steps.<id>.outputs.token`, `steps.<id>.outcome`) in the job or action of step
+ * number `after`, in the steps after it and the job's outputs; earlier steps and the step itself cannot see them.
+ * Undefined when one of those sites reads a step it does not name (`toJSON(steps)`, `steps[matrix.step]`).
+ */
+function stepResultReads(
+  unit: UnitDecl,
+  job: string | undefined,
+  after: number,
+  id: string,
+): Read[] | undefined {
+  const reads: Read[] = [];
+  for (const read of refsOf(unit)) {
+    const { site, ref } = read;
+    if (ref.context !== 'steps' || site.job !== job || (site.step !== undefined && site.step <= after))
+      continue;
+    const step = ref.path[0];
+    if (!namesKey(step)) return undefined;
+    if (step.toLowerCase() === id.toLowerCase()) reads.push(read);
+  }
+  return reads;
+}
+
+/**
+ * Whether a read of a skipped step's results holds up (`skip` says what is then known): in a condition, it asks
+ * whether the step ran (`steps.t.outcome == 'success'`) or still runs its step then (see `conditionHolds`);
+ * otherwise it is the subject of a fallback that is then not empty (`steps.t.outputs.token || github.token`, not
+ * `|| ''`), or the value of a job output that holds up (see `jobOutputHolds`; `hops` job outputs are followed). Any
+ * other read takes the value as it is.
+ */
+function holdsWhenEmpty(index: ProjectIndex, unit: UnitDecl, read: Read, skip: Skip, hops: number): boolean {
+  const { site, ref } = read;
+  const resolve = skippedAs(skip);
+  if (site.isCondition) return readsOutcome(ref) || conditionHolds(site, ref, resolve);
+  const seg = site.segments.find((s) => s.refs.includes(ref));
+  if (seg && fallsBack(fallbacksOf(seg.expr), ref, [resolve])) return true;
+  return hops > 0 && jobOutputHolds(index, unit, site, skip, hops);
+}
+
+/**
+ * Whether a condition reading a skipped step's result (`ref`, not its `outcome`) still runs its step when `resolve` says
+ * what is then known: the whole condition is true (`!steps.t.outputs.token`, `always() || …`), or the boolean term the
+ * read is in (see `booleanTermOf`) takes the value that runs the step, so the read leaves the decision to the other
+ * terms: true (`steps.t.outputs.x == ''` in `steps.t.outputs.x == '' && …`), or false under an odd number of `!`
+ * (`steps.t.outputs.x == 'true'` in `!(steps.t.outputs.x == 'true' || …)`). Never when the whole condition is then
+ * false (`!(steps.t.outputs.x == '')`). Not a gate such as `steps.t.outputs.changed == 'true' || inputs.force`, which
+ * skips its step silently too when `force` is not passed. A condition with text around its `${{ }}` is always true.
+ */
+function conditionHolds(site: ExprSite, ref: LocatedRef, resolve: ContextResolver): boolean {
+  const expr = site.segments[0]?.expr;
+  if (!isWholeExpression(site) || !expr?.ast || definitelyTruthy(expr.ast, resolve)) return true;
+  if (definitelyFalsy(expr.ast, resolve)) return false;
+  const found = booleanTermOf(expr, ref.start);
+  return !!found && (found.negated ? definitelyFalsy : definitelyTruthy)(found.term, resolve);
+}
+
+/** Whether `site` is a job output that is '' when the step is skipped, and every reader of it holds up then. */
+function jobOutputHolds(
+  index: ProjectIndex,
+  unit: UnitDecl,
+  site: ExprSite,
+  skip: Skip,
+  hops: number,
+): boolean {
+  if (site.field !== 'job.output' || !site.job || !site.key) return false;
+  if (!isEmptyValue(evaluateTemplate(site.text, skippedAs(skip)))) return false;
+  const output = { context: 'needs', path: [site.job, 'outputs', site.key] };
+  const next = { empty: [...skip.empty, refKey(output)] };
+  const readers = index.usagesOf(sym.jobOutput(unit.path, site.job, site.key));
+  return (
+    readers.length > 0 && readers.every((u) => !u.whole && holdsWhenEmpty(index, unit, u, next, hops - 1))
+  );
 }
 
 /**

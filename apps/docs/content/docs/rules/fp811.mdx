@@ -56,6 +56,9 @@ overrides:
 flowpact lint --format json | jq -r '.findings[] | select(.code == "FP811") | .symbol'
 ```
 
+`*` matches within a path segment and `**` across segments, so one entry accepts every finding whose symbol matches:
+`target: '**#inputs.app-id'` is that input in every workflow and action.
+
 An override counts only once it is on the base branch: impact mode reads the overrides and severities of its rules
 from the baseline's config, so a pull request cannot accept or switch off its own check. No ignore comment accepts
 its findings.

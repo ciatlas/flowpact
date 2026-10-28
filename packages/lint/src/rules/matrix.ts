@@ -8,7 +8,6 @@ import {
   didYouMean,
   type ExprSegment,
   type ExprSite,
-  evaluate,
   evaluateTemplate,
   fallbacksOf,
   findTemplateSegments,
@@ -35,6 +34,7 @@ import { addKeys, type Suggestion, suggestion } from '../suggestions';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import {
   chainRelated,
+  fallsBack,
   type Guard,
   guardOf,
   isWholeExpression,
@@ -692,11 +692,8 @@ function readsFallBack(seg: ExprSegment, lower: string, combos: Combination[]): 
   const reads = seg.refs.filter((r) => r.context === 'matrix' && r.path[0]?.toLowerCase() === lower);
   if (reads.length === 0) return true;
   const fallbacks = fallbacksOf(seg.expr);
-  return reads.every((r) => {
-    const fallback = fallbacks.get(r.start);
-    if (!fallback) return false;
-    return !combos.some((c) => isEmptyValue(evaluate(fallback, matrixResolver(c))));
-  });
+  const resolvers = combos.map((c) => matrixResolver(c));
+  return reads.every((r) => fallsBack(fallbacks, r, resolvers));
 }
 
 const unusedMatrixShape = defineRule({

@@ -15,6 +15,20 @@ reports or the API is a major release (the next one is 1.0.0); up to 0.14, a min
 
 Then read the sections below from your version up.
 
+## 0.26 → 0.29
+
+Remove the overrides and ignore comments that [FP902](/docs/rules/fp902) and [FP905](/docs/rules/fp905) report after
+the upgrade. What is new:
+
+- **[FP105](/docs/rules/fp105) leaves out skips the workflow expects:** a step whose results are only read through a
+  fallback that is not empty when the step is skipped (`steps.token.outputs.token || github.token`), in a condition
+  that asks whether it ran or that is true when it was skipped (as a whole, or in the `&&` or `||` operand that reads
+  it, taken with the `!`s around it), or through a job output read that way. Nor does it report a
+  condition with text around `${{ }}`, which is always true, or one that leaving out the input cannot turn false
+  (`inputs.x || 'yes'`, `!inputs.x`). Overrides and ignore comments that accepted those findings now match nothing,
+  and FP902 and FP905 (warnings) report them. A finding whose message named another input of the same condition that
+  is no longer reported loses that note, which changes its fingerprint.
+
 ## 0.25 → 0.26
 
 Nothing to change. What is new:

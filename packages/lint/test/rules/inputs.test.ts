@@ -514,13 +514,47 @@ describe('FP105 optional-input-no-default-in-condition', () => {
 
   it.each([
     'inputs.optional',
-    '${{ !inputs.optional }}',
+    "${{ !inputs.optional && github.event_name == 'push' }}",
     "inputs.optional && github.event_name == 'push'",
     '${{ inputs.optional && always() }}',
     'inputs.optional == github.ref',
     "fromJSON(inputs.optional).enabled && github.event_name == 'push'",
+    "${{ inputs.optional || github.event_name == 'push' }}",
   ])('flags a condition decided by the value as it is: %s', (condition) => {
     expect(byCode(w('', condition), 'FP105')).toHaveLength(1);
+  });
+
+  it.each([
+    // The same test as `inputs.optional == ''`, which is accepted
+    '${{ !inputs.optional }}',
+    "inputs.optional || 'yes'",
+    "${{ (inputs.optional || 'yes') && !inputs.optional }}",
+  ])('is quiet when omitting the input cannot turn the condition false: %s', (condition) => {
+    expect(byCode(w('', condition), 'FP105')).toEqual([]);
+  });
+
+  it('checks each input on its own: omitting a can turn the condition false, omitting b cannot', () => {
+    const r = lint({
+      [`${WF}/w.yml`]: yaml`
+        on:
+          workflow_call:
+            inputs:
+              a: { type: string, required: false }
+              b: { type: string, required: false }
+        jobs:
+          j:
+            runs-on: x
+            steps:
+              - if: \${{ inputs.a || !inputs.b }}
+                run: echo
+      `,
+    });
+    expect(byCode(r, 'FP105').map((f) => f.symbol)).toEqual([`${WF}/w.yml#inputs.a`]);
+  });
+
+  it('is quiet on a condition with text around ${{ }}, which is always true', () => {
+    expect(byCode(w('', 'run ${{ inputs.optional }}'), 'FP105')).toEqual([]);
+    expect(byCode(w('', "${{ inputs.optional }} == 'x'"), 'FP105')).toEqual([]);
   });
 
   it('asks the users of a local action too (the identical workflow input was already quiet)', () => {
@@ -591,6 +625,325 @@ describe('FP105 optional-input-no-default-in-condition', () => {
       });
       expect(byCode(r, 'FP105').map((f) => `${at(f)} ${f.message}`)).toEqual([
         `.github/actions/token/action.yml:8:15 Condition reads optional input "app-id", which has no default and is '' when omitted ("client-id", also read by this condition, is passed by every caller)`,
+      ]);
+    });
+  });
+
+  describe('when the workflow expects the step to be skipped (#251)', () => {
+    const head = yaml`
+      on:
+        workflow_call:
+          inputs:
+            app-id: { type: string, required: false }
+            client-id: { type: string, required: false }
+      jobs:
+        j:
+          runs-on: x
+          steps:
+    `;
+    /** Steps written at the left margin, indented into `jobs.j.steps`. */
+    const steps = (text: string) => text.replace(/^(?=.)/gm, '      ');
+    /** Job `j`: step `token`, guarded by `condition`, then the steps in `after` (and those in `before` first). */
+    const guarded = (after: string, condition = 'inputs.app-id', before = '') =>
+      lint({
+        [`${WF}/w.yml`]: `${head}${steps(before)}${steps(
+          `- id: token\n  if: ${condition}\n  uses: actions/create-github-app-token@v2\n`,
+        )}${steps(after)}`,
+      });
+    const fp105 = (r: ReturnType<typeof lint>) => byCode(r, 'FP105').map((f) => at(f));
+    const checkout = (token: string) => `- uses: actions/checkout@v5\n  with:\n    token: ${token}\n`;
+
+    it("is quiet when the skipped step's outputs are only read through a fallback", () => {
+      const r = guarded(
+        checkout('${{ steps.token.outputs.token || github.token }}'),
+        '${{ inputs.app-id || inputs.client-id }}',
+      );
+      expect(fp105(r)).toEqual([]);
+    });
+
+    it.each([
+      ['a condition on its outcome', "- if: steps.token.outcome == 'success'\n  run: echo has a token\n"],
+      [
+        'a condition on its conclusion, in any case',
+        "- if: steps.Token.Conclusion != 'skipped'\n  run: echo\n",
+      ],
+      [
+        'a condition that still runs, in any case',
+        '- if: ${{ !steps.Token.outputs.token }}\n  run: echo no token\n- if: always() || steps.token.outputs.token\n  run: echo\n',
+      ],
+      [
+        'a term of the condition that is then true',
+        "- if: steps.token.outputs.token == '' && github.event_name == 'push'\n  run: echo no token\n",
+      ],
+      [
+        'a term that is then false under a !',
+        "- if: ${{ !(steps.token.outputs.x == 'true' || github.event_name == 'push') }}\n  run: echo\n",
+      ],
+      // A comparison, function call or index ends the term: the fallback inside it is not a term of its own.
+      [
+        'a term with a fallback inside a comparison or function',
+        "- if: (steps.token.outputs.x || 'true') == 'true' && github.event_name == 'push'\n  run: echo\n" +
+          "- if: contains(steps.token.outputs.x || 'true', 'true') && github.event_name == 'push'\n  run: echo\n" +
+          "- if: (!steps.token.outputs.x) == true && github.event_name == 'push'\n  run: echo\n",
+      ],
+      [
+        'fallbacks, also inside a function',
+        "- run: gh release create\n  env:\n    A: ${{ steps.token.outputs.token || github.token }}\n    B: ${{ format('{0}', steps.token.outputs.token || secrets.PAT) }}\n",
+      ],
+      [
+        // Known limit: a fallback shows the skip was considered, not that the step's own effects are optional.
+        'a summary with a fallback',
+        `- run: echo "\${{ steps.token.outputs.url || 'nowhere' }}" >> "$GITHUB_STEP_SUMMARY"\n`,
+      ],
+    ])('is quiet when every read holds up when the step is skipped: %s', (_, after) => {
+      expect(fp105(guarded(after))).toEqual([]);
+    });
+
+    it('does not count reads before the step, which cannot see it', () => {
+      const r = guarded(
+        checkout('${{ steps.token.outputs.token || github.token }}'),
+        undefined,
+        '- run: echo ${{ steps.token.outputs.token }} ${{ toJSON(steps) }}\n',
+      );
+      expect(fp105(r)).toEqual([]);
+    });
+
+    it.each([
+      ['no read', '- run: echo done\n'],
+      ['a plain read', checkout('${{ steps.token.outputs.token }}')],
+      ['an empty fallback', checkout("${{ steps.token.outputs.token || '' }}")],
+      [
+        'a fallback and a plain read',
+        `${checkout('${{ steps.token.outputs.token || github.token }}')}- run: gh release create\n  env:\n    GH_TOKEN: \${{ steps.token.outputs.token }}\n`,
+      ],
+      [
+        'a read of every step',
+        `${checkout('${{ steps.token.outputs.token || github.token }}')}- run: echo '\${{ toJSON(steps) }}'\n`,
+      ],
+      // The gate is '' == 'true' when the step is skipped: its step is skipped silently too.
+      ['a gate on an output', "- if: steps.token.outputs.changed == 'true'\n  run: ./deploy.sh\n"],
+      [
+        'a gate on an output or another condition',
+        "- if: steps.token.outputs.changed == 'true' || github.event_name == 'push'\n  run: ./deploy.sh\n",
+      ],
+      [
+        'a gate on an output, read again inside it',
+        '- if: steps.token.outputs.token\n  env:\n    GH_TOKEN: ${{ steps.token.outputs.token }}\n  run: gh release list\n',
+      ],
+      [
+        'a fallback over the same step',
+        checkout("${{ steps.token.outputs.a || steps.token.outputs.b || '' }}"),
+      ],
+      ['a fallback to the omitted input', checkout('${{ steps.token.outputs.token || inputs.app-id }}')],
+      // A ! turns a term that is true when the step is skipped false: each of these is then false or a gate.
+      ['a negated test for empty', "- if: ${{ !(steps.token.outputs.x == '') }}\n  run: ./deploy.sh\n"],
+      [
+        'a negated group',
+        "- if: ${{ !(steps.token.outputs.x == '' || github.event_name == 'push') }}\n  run: ./deploy.sh\n",
+      ],
+      [
+        'a negated term and another',
+        "- if: ${{ !(steps.token.outputs.x != 'true') && github.event_name == 'push' }}\n  run: ./deploy.sh\n",
+      ],
+      [
+        'a negated term after success()',
+        "- if: success() && !(steps.token.outputs.x == '')\n  run: ./deploy.sh\n",
+      ],
+      [
+        'a negated term or another',
+        "- if: ${{ !(steps.token.outputs.x == '') || github.event_name == 'push' }}\n  run: ./deploy.sh\n",
+      ],
+      [
+        'a read of a computed step',
+        `${checkout('${{ steps.token.outputs.token || github.token }}')}- run: echo \${{ steps[matrix.step].outcome }}\n`,
+      ],
+    ])('still reports a step whose results are not read only that way: %s', (_, after) => {
+      expect(fp105(guarded(after))).toEqual([`${WF}/w.yml:11:13`]);
+    });
+
+    it('still reports a gate on an output or a boolean input, false when it is not passed either', () => {
+      const r = lint({
+        [`${WF}/w.yml`]: yaml`
+          on:
+            workflow_call:
+              inputs:
+                path: { type: string, required: false }
+                force: { type: boolean, required: false }
+          jobs:
+            j:
+              runs-on: x
+              steps:
+                - id: check
+                  if: inputs.path
+                  run: echo "changed=true" >> "$GITHUB_OUTPUT"
+                - if: steps.check.outputs.changed == 'true' || inputs.force
+                  run: ./deploy.sh
+        `,
+      });
+      expect(fp105(r)).toEqual([`${WF}/w.yml:11:13`]);
+    });
+
+    it('takes every input flagged at the guard as omitted', () => {
+      const condition = '${{ inputs.app-id || inputs.client-id }}';
+      const fallback = (to: string) =>
+        guarded(checkout(`\${{ steps.token.outputs.token || ${to} }}`), condition);
+      expect(fp105(fallback('inputs.client-id'))).toEqual([`${WF}/w.yml:11:17`, `${WF}/w.yml:11:34`]);
+      expect(fp105(fallback('secrets.PAT'))).toEqual([]);
+    });
+
+    it('still reports a step without an id', () => {
+      const r = lint({
+        [`${WF}/w.yml`]: `${head}${steps(
+          `- if: inputs.app-id\n  uses: actions/create-github-app-token@v2\n${checkout('${{ steps.token.outputs.token || github.token }}')}`,
+        )}`,
+      });
+      expect(fp105(r)).toEqual([`${WF}/w.yml:10:13`]);
+    });
+
+    /**
+     * Job `j` sets output `token` to `value`; job `k` reads it as `read`, and sets its own `outputs`, which job `l`
+     * reads through a fallback.
+     */
+    const viaJobOutput = (read: string, value = '${{ steps.token.outputs.token }}', outputs = '{}') =>
+      lint({
+        [`${WF}/w.yml`]: `${yaml`
+          on:
+            workflow_call:
+              inputs:
+                app-id: { type: string, required: false }
+          jobs:
+            j:
+              runs-on: x
+              outputs:
+                token: ${value}
+              steps:
+                - id: token
+                  if: inputs.app-id
+                  uses: actions/create-github-app-token@v2
+            k:
+              needs: j
+              runs-on: x
+              outputs: ${outputs}
+              steps:
+                - uses: actions/checkout@v5
+                  with:
+                    token: ${read}
+        `}  l:\n    needs: k\n    runs-on: x\n    steps:\n      - run: echo \${{ needs.k.outputs.token || 'none' }}\n`,
+      });
+
+    it('follows a job output to its readers', () => {
+      expect(fp105(viaJobOutput('${{ needs.j.outputs.token || github.token }}'))).toEqual([]);
+      expect(fp105(viaJobOutput('${{ needs.J.outputs.Token != 0 }}'))).toEqual([`${WF}/w.yml:12:13`]);
+      expect(
+        fp105(viaJobOutput('${{ needs.j.outputs.token }}', "${{ steps.token.outputs.token || 'none' }}")),
+      ).toEqual([]);
+    });
+
+    it('follows a job output only when it is then empty', () => {
+      const read = '${{ needs.j.outputs.token || github.token }}';
+      expect(fp105(viaJobOutput(read, "${{ steps.token.outputs.token || '' }}"))).toEqual([]);
+      // '/path' when the step is skipped: k never falls back
+      expect(fp105(viaJobOutput(read, '${{ steps.token.outputs.token }}/path'))).toEqual([
+        `${WF}/w.yml:12:13`,
+      ]);
+      expect(fp105(viaJobOutput('${{ needs.j.outputs.token || inputs.app-id }}'))).toEqual([
+        `${WF}/w.yml:12:13`,
+      ]);
+    });
+
+    it("judges a job's if: that reads the job output by its terms and the ! around them", () => {
+      const gated = (condition: string) =>
+        lint({
+          [`${WF}/w.yml`]: yaml`
+            on:
+              workflow_call:
+                inputs:
+                  app-id: { type: string, required: false }
+            jobs:
+              j:
+                runs-on: x
+                outputs:
+                  x: \${{ steps.token.outputs.x }}
+                steps:
+                  - id: token
+                    if: inputs.app-id
+                    uses: actions/create-github-app-token@v2
+              k:
+                needs: j
+                if: ${condition}
+                runs-on: x
+                steps:
+                  - run: ./deploy.sh
+          `,
+        });
+      expect(fp105(gated("${{ needs.j.outputs.x == '' && github.event_name == 'push' }}"))).toEqual([]);
+      expect(fp105(gated("${{ !(needs.j.outputs.x == '') }}"))).toEqual([`${WF}/w.yml:12:13`]);
+    });
+
+    it.each([
+      ['a plain read', '${{ needs.j.outputs.token }}'],
+      ['a whole read', "${{ toJSON(needs.j.outputs) || 'none' }}"],
+      ['no read', '${{ github.token }}'],
+    ])('still reports a job output with %s', (_, read) => {
+      expect(fp105(viaJobOutput(read))).toEqual([`${WF}/w.yml:12:13`]);
+    });
+
+    it('follows one job output, not a second one', () => {
+      const r = viaJobOutput(
+        '${{ needs.j.outputs.token || github.token }}',
+        undefined,
+        '{ token: "${{ needs.j.outputs.token }}" }',
+      );
+      // k's output is read through a fallback, but that is a second hop.
+      expect(fp105(r)).toEqual([`${WF}/w.yml:12:13`]);
+    });
+
+    it("still reports a job's if:", () => {
+      const r = lint({
+        [`${WF}/w.yml`]: yaml`
+          on:
+            workflow_call:
+              inputs:
+                app-id: { type: string, required: false }
+          jobs:
+            j:
+              runs-on: x
+              if: inputs.app-id
+              outputs:
+                token: \${{ steps.token.outputs.token || github.token }}
+              steps:
+                - id: token
+                  uses: actions/create-github-app-token@v2
+        `,
+      });
+      expect(fp105(r)).toEqual([`${WF}/w.yml:8:9`]);
+    });
+
+    it('applies to the steps of a composite action', () => {
+      const action = (value: string) =>
+        lint({
+          '.github/actions/token/action.yml': yaml`
+            name: token
+            inputs:
+              app-id: { required: false }
+            outputs:
+              token: { value: '${value}' }
+            runs:
+              using: composite
+              steps:
+                - id: token
+                  if: inputs.app-id
+                  run: echo "token=t" >> "$GITHUB_OUTPUT"
+                  shell: bash
+                - run: gh api user
+                  shell: bash
+                  env:
+                    GH_TOKEN: \${{ steps.token.outputs.token || github.token }}
+          `,
+        });
+      expect(fp105(action('${{ steps.token.outputs.token || github.token }}'))).toEqual([]);
+      expect(fp105(action('${{ steps.token.outputs.token }}'))).toEqual([
+        '.github/actions/token/action.yml:10:11',
       ]);
     });
   });

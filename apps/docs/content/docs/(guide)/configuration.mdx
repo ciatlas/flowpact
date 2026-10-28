@@ -78,6 +78,10 @@ overrides:
   - rule: remote-unverified
     file: .github/workflows/release.yml    # every finding of this rule in this file
     reason: Calls into acme/shared-workflows are verified in that repository
+
+  - rule: FP105
+    target: '**#inputs.app-id'             # this input, in every workflow and action
+    reason: Without app credentials the steps use github.token instead
 ```
 
 | Key | Required | Description |

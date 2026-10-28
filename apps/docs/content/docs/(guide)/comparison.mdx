@@ -235,16 +235,14 @@ nothing. With `type: boolean`, flowpact stays quiet too: the default is then `fa
 
   context ├─ .github/workflows/release.yml:8:7  declared optional without a default
           └─ .github/workflows/ci.yml:8:11      .github/workflows/ci.yml › jobs.release omits it
-  why     When a caller omits an optional input that has no default, GitHub substitutes an empty
-          string. A condition such as `if: inputs.x` then takes the "false" branch silently, so
-          jobs or steps are skipped and the run is still green.
-  fix     Give the input an explicit `default`, make it `required: true`, or compare explicitly
-          (`inputs.x != ''`, `inputs.x == 'yes'`). Not reported: comparisons with a constant,
-          `contains()`-style tests, fallbacks (`inputs.x || 'default'`), and inputs every local
-          caller passes — unless the workflow can be dispatched or the unit is published (by
-          default the root `action.yml` and reusable workflows whose file name does not start
-          with `_`; see `impact.publish`), since callers in other repositories can still omit
-          them.
+  why     When a caller omits an optional input that has no default, GitHub passes an empty
+          string. A condition such as `if: inputs.deploy` then takes the "false" branch: the job
+          or step is skipped and the run is still green, so nothing tells the caller that the
+          value they left out turned it off.
+  fix     If it must run, make the input `required: true` or give it a non-empty `default`. If
+          skipping is intended, say so where it is decided: `inputs.x != ''` (the same at run
+          time, but explicit), or read the skipped step's outputs through a fallback
+          (`steps.token.outputs.token || github.token`).
   docs    https://ciatlas.github.io/flowpact/docs/rules/fp105
 ```
 

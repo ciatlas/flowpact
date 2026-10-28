@@ -74,6 +74,9 @@ overrides:
 flowpact lint --format json | jq -r '.findings[] | select(.code == "FP609") | .symbol'
 ```
 
+`*` matches within a path segment and `**` across segments, so one entry accepts every finding whose symbol matches:
+`target: '**#inputs.app-id'` is that input in every workflow and action.
+
 ## Change the severity
 
 Change the severity (or turn the rule off) in `.github/flowpact/flowpact.config.yml`, by code or by name:
