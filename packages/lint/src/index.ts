@@ -17,4 +17,14 @@ export * from './remotes-grade';
 export * from './report';
 export * from './rules/index';
 export * from './suggestions';
+export {
+  describeKind,
+  type ExprPosition,
+  interpolated,
+  kindOf,
+  positionOf,
+  rootOperator,
+  skipGuard,
+  type ValueKind,
+} from './value-kind';
 export * from './version';
