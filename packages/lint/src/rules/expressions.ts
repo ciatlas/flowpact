@@ -322,6 +322,7 @@ function functionCalls(source: string): { name: string; offset: number }[] {
 }
 
 const STANDARD_FUNCTIONS = new Set([
+  'case',
   'contains',
   'startswith',
   'endswith',

@@ -23616,6 +23616,7 @@ function functionCalls(source) {
   }));
 }
 var STANDARD_FUNCTIONS = /* @__PURE__ */ new Set([
+  "case",
   "contains",
   "startswith",
   "endswith",

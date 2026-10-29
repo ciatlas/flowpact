@@ -300,6 +300,26 @@ describe('FP502 / FP503: an invalid expression is reported once', () => {
   });
 });
 
+describe('FP505 context-not-available', () => {
+  it('accepts case() in a bare job condition, as inside ${{ }}', () => {
+    const r = lint({
+      [`${WF}/w.yml`]: yaml`
+        on: push
+        jobs:
+          a:
+            if: case(github.event_name == 'push', true, false)
+            runs-on: x
+            steps: [{ run: x }]
+          b:
+            if: \${{ case(github.event_name == 'push', true, false) }}
+            runs-on: x
+            steps: [{ run: x }]
+      `,
+    });
+    expect(byCode(r, 'FP505')).toEqual([]);
+  });
+});
+
 describe('FP503 schema-violation / FP504 yaml-syntax-error', () => {
   it('validates against GitHub’s schema when enabled', () => {
     const r = lint(
