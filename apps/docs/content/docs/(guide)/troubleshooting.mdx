@@ -157,7 +157,8 @@ that part ([When a version changes](/docs/remote-interfaces#when-a-version-chang
 
 `remotes update` says why when it cannot use the file: flowpact reads versions `v0.0.x` of its schema, and a file that
 does not parse is not used. It covers only the workflows it lists: a reference that only other workflows use resolves
-as usual ([GitHub's actions.lock](/docs/remote-interfaces#githubs-actionslock)).
+as usual, and so does a reusable workflow call, which GitHub does not lock
+([GitHub's actions.lock](/docs/remote-interfaces#githubs-actionslock)).
 
 </Accordion>
 </Accordions>

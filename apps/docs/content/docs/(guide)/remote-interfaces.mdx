@@ -28,8 +28,8 @@ flowchart TD
 
 <Callout title="Interfaces, not pins">
   The lockfile records what each reference accepts and returns, so flowpact can check your calls. It does not decide
-  which commit runs: pin references to commit SHAs, or use GitHub's [`actions.lock`](#githubs-actionslock), which
-  flowpact reads.
+  which commit runs: pin references to commit SHAs, or, for actions, use GitHub's
+  [`actions.lock`](#githubs-actionslock), which flowpact reads.
 </Callout>
 
 With it, flowpact checks remote calls as it checks local ones:
@@ -444,28 +444,34 @@ and runs `flowpact` from npm, not code from the pull request.
 ## GitHub's actions.lock
 
 GitHub's [workflow dependency lockfile](https://docs.github.com/actions/concepts/security/workflow-dependency-lockfiles),
-`.github/workflows/actions.lock` (written by `gh actions-lock`, Dependabot and Renovate), pins the commit each
-`owner/repo@ref` runs in the workflows it covers: a tag such as `@v4` keeps running that commit after it moves. The two
-files do different jobs:
+`.github/workflows/actions.lock` (written by `gh actions-lock` and Dependabot; Renovate's support is experimental),
+pins the commit each action `owner/repo@ref` runs in the workflows it covers: a tag such as `@v4` keeps running that
+commit after it moves. The two files do different jobs:
 
 | | `.github/workflows/actions.lock` | `.github/flowpact/remotes.lock.yaml` |
 | --- | --- | --- |
-| Written by | `gh actions-lock`, Dependabot, Renovate | `flowpact remotes update` |
-| Records | the commit each reference runs, and who owns it | each reference's inputs, secrets and outputs at a commit |
+| Written by | `gh actions-lock`, Dependabot, Renovate (experimental) | `flowpact remotes update` |
+| Records | the commit each action runs, and who owns it | each reference's inputs, secrets and outputs at a commit |
 | Used by | the runner, which runs that commit and checks it | flowpact, which checks your calls against the interface |
 
-flowpact reads `actions.lock` and never writes it. `remotes update`, `--fetch-remotes`, the action's `remotes: fetch`
-and the [pull request grading](#on-a-pull-request) read each reference it pins at the pinned commit, not where its tag
-points now, and `remotes update` says how many it read that way. When flowpact's lockfile records another commit,
-[`FP612`](/docs/rules/fp612) reports it: the bot that updated `actions.lock` left `remotes.lock.yaml` as it was, so run
-`flowpact remotes update`.
+flowpact reads `actions.lock` and never writes or verifies it: run `gh actions-lock --verify` in CI for that.
+`remotes update`, `--fetch-remotes`, the action's `remotes: fetch` and the [pull request grading](#on-a-pull-request)
+read each action it pins at the pinned commit, not where its tag points now, and `remotes update` says how many it read
+that way. When flowpact's lockfile records another commit, [`FP612`](/docs/rules/fp612) reports it: the bot that
+updated `actions.lock` left `remotes.lock.yaml` as it was, so run `flowpact remotes update`.
 
-- Only the workflows `actions.lock` lists are covered. A reference used by a covered and an uncovered workflow is read
-  at the pinned commit.
-- A reference with a path (`octo/ship/.github/workflows/deploy.yml@v1`, `actions/cache/restore@v4`) is pinned by its
-  repository's key (`octo/ship@v1`), as `gh actions-lock` writes it.
-- The schema is before 1.0: flowpact reads versions `v0.0.x`. Another version, or a file that does not parse, is not
-  used, and `remotes update` says why. Its `hostname` is not read.
+- Only the workflows `actions.lock` lists are covered. An action used by a covered and an uncovered workflow is read at
+  the pinned commit.
+- An action with a path (`actions/cache/restore@v4`) is pinned by its repository's key (`actions/cache@v4`), as
+  `gh actions-lock` writes it.
+- GitHub does not lock reusable workflow calls (`jobs.<id>.uses`,
+  [gh-actions-lock#179](https://github.com/github/gh-actions-lock/issues/179)), so flowpact reads them where their ref
+  points now, even when an action of the same repository and ref is pinned. Pin them to a commit SHA to choose what
+  runs.
+- Onboarding a workflow with `gh actions-lock` can rewrite its references (`@v4` to `@v4.2.1`, or a SHA to its tag):
+  run `flowpact remotes update` after it, or FP612 reports the new references.
+- The schema is before 1.0: flowpact reads versions `v0.0.x`, v0.0.1's keys included. Another version, or a file that
+  does not parse, is not used, and `remotes update` says why. Its `hostname` is not read.
 
 ## The lockfile
 

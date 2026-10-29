@@ -51,7 +51,8 @@ What each release changed is in the [changelog](/docs/changelog).
 - **[Remote interfaces](/docs/remote-interfaces):** `flowpact remotes update` records the interfaces of the workflows
   and actions you call in other repositories, and calls into them are checked like local ones. On GitHub Enterprise
   Server and GHE.com too, with an opt-in look on github.com as GitHub Connect does. GitHub's own
-  [`actions.lock`](/docs/remote-interfaces#githubs-actionslock) decides which commit is read.
+  [`actions.lock`](/docs/remote-interfaces#githubs-actionslock) decides which commit of an action is read (GitHub does
+  not lock reusable workflow calls).
 - **[Version changes, graded against your calls](/docs/remote-interfaces#when-a-version-changes):** when a reference
   moves to another version, each of your calls is graded as broken, unchecked or still fitting: in a scheduled drift
   check, and on the pull request that moves it.

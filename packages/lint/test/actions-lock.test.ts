@@ -42,11 +42,42 @@ describe('readActionsLock', () => {
     expect(lock.error).toBeUndefined();
     expect(lockedCommit(lock, action('octo/setup@v2'))).toBe(A);
     expect(lockedCommit(lock, action('OCTO/SETUP@v2'))).toBe(A);
-    // A reference with a path is pinned by its repository: gh actions-lock keys `owner/repo@ref`.
-    expect(lockedCommit(lock, parseRemoteRef('octo/ship/.github/workflows/deploy.yml@v1', 'workflow')!)).toBe(
-      B,
-    );
+    // An action with a path is pinned by its repository: gh actions-lock keys `owner/repo@ref`.
+    expect(lockedCommit(lock, action('octo/ship/deploy@v1'))).toBe(B);
+    // GitHub does not lock a reusable workflow call, even where an action of its repository and ref is pinned.
+    expect(
+      lockedCommit(lock, parseRemoteRef('octo/ship/.github/workflows/deploy.yml@v1', 'workflow')!),
+    ).toBeUndefined();
     expect(lockedCommit(lock, action('octo/setup@v3'))).toBeUndefined();
+  });
+
+  it('reads a commit SHA ref in any case', () => {
+    const lock = read(actionsLock({ [`octo/setup@${'e'.repeat(40)}`]: A }));
+    expect(lockedCommit(lock, action(`octo/setup@${'E'.repeat(40)}`))).toBe(A);
+  });
+
+  it('reads v0.0.1, whose keys end with the commit (`:sha1-<hex>`) and whose entries have a tag', () => {
+    const lock = read(yaml`
+      version: 'v0.0.1'
+      workflows:
+        '.github/workflows/ci.yml':
+          - 'octo/setup@v2:sha1-${A}'
+          - 'octo/cache@v4:sha256-${'f'.repeat(64)}'
+      dependencies:
+        'octo/setup@v2:sha1-${A}':
+          tag: 'v2'
+          commit: 'sha1-${A}'
+          owner_id: 1
+          repo_id: 2
+        'octo/cache@v4:sha256-${'f'.repeat(64)}':
+          tag: 'v4'
+          commit: 'sha256-${'f'.repeat(64)}'
+          owner_id: 1
+          repo_id: 3
+    `);
+    expect(lock.error).toBeUndefined();
+    expect(lockedCommit(lock, action('octo/setup@v2'))).toBe(A);
+    expect(lockedCommit(lock, action('octo/cache@v4'))).toBeUndefined();
   });
 
   it('reads v0.0.2 too, and no pin that no covered workflow uses', () => {
@@ -105,6 +136,24 @@ describe('reading remote references at the commits actions.lock pins', () => {
     expect(r.remotes['octo/setup@v2']).toMatchObject({ sha: A, inputs: { version: {} } });
   });
 
+  it('fetches a reusable workflow where its ref points, though an action of its repository and ref is pinned', async () => {
+    const deploy = 'on:\n  workflow_call:\n    inputs:\n      env: { type: string }\njobs: {}\n';
+    const files = {
+      [`${WF}/ci.yml`]:
+        'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/ship/setup@v1\n' +
+        '  d:\n    uses: octo/ship/.github/workflows/deploy.yml@v1\n',
+      [ACTIONS_LOCK_FILE]: actionsLock({ 'octo/ship@v1': A }),
+    };
+    const github = api({ [A]: setup('  version: {}'), [C]: deploy });
+    const r = await fetchMissingRemotes('/virtual/repo', memoryFileSystem(files), undefined, github.options);
+    expect(r.remotes['octo/ship/setup@v1']?.sha).toBe(A);
+    expect(r.remotes['octo/ship/.github/workflows/deploy.yml@v1']).toMatchObject({
+      sha: C,
+      inputs: { env: {} },
+    });
+    expect(github.asked).toContain('/repos/octo/ship/commits/v1');
+  });
+
   it("grades a pull request's version change at the commit the head's actions.lock pins", async () => {
     const ci = (ref: string) =>
       `on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: ${ref}\n        with: { cache: x }\n`;
@@ -149,5 +198,20 @@ describe('FP612 and actions.lock', () => {
   it('reports nothing when they agree, or when actions.lock does not cover the workflow', () => {
     expect(fp612(files(A))).toEqual([]);
     expect(fp612(files(B, []))).toEqual([]);
+  });
+
+  it('reports an action but not a reusable workflow of the same repository and ref, which GitHub does not lock', () => {
+    const f = {
+      [`${WF}/ci.yml`]:
+        'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/ship/setup@v1\n' +
+        '  d:\n    uses: octo/ship/.github/workflows/deploy.yml@v1\n',
+      [LOCK]:
+        `version: 1\nremotes:\n  octo/ship/setup@v1:\n    sha: ${A}\n    kind: action\n` +
+        `  octo/ship/.github/workflows/deploy.yml@v1:\n    sha: ${A}\n    kind: workflow\n`,
+      [ACTIONS_LOCK_FILE]: actionsLock({ 'octo/ship@v1': B }),
+    };
+    expect(fp612(f)).toEqual([
+      `${LOCK} is out of date: it records another commit than GitHub’s actions.lock runs for octo/ship/setup@v1 (it records aaaaaaa, actions.lock bbbbbbb). Run \`flowpact remotes update\``,
+    ]);
   });
 });
