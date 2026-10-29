@@ -583,6 +583,21 @@ describe('navigation', () => {
     const elsewhere = { textDocument: { uri: 'untitled:Untitled-1' }, position: { line: 0, character: 0 } };
     expect(await client.conn.sendRequest('textDocument/hover', elsewhere)).toBeNull();
   });
+
+  it('hovers an expression inside its `${{ }}` where no symbol is written', async () => {
+    const { dir, client } = await ready();
+    const hover = (await client.conn.sendRequest('textDocument/hover', {
+      textDocument: { uri: uri(dir, CALLEE) },
+      position: position(REPO[CALLEE]!, '${{ inputs.name', 3),
+    })) as { contents: { value: string }; range: unknown };
+    expect(hover.contents.value.split('\n').slice(1)).toEqual([
+      '',
+      'written into the script as text  ',
+      "yields text of `inputs.name` | '' (`inputs.name` omitted)",
+    ]);
+    // The range is the expression with its `${{ }}`.
+    expect(hover.range).toEqual({ start: { line: 10, character: 19 }, end: { line: 10, character: 37 } });
+  });
 });
 
 describe('readSettings', () => {

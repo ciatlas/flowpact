@@ -11782,10 +11782,10 @@ function conditionUses(expr, whole = true) {
 function fallbacksOf(expr) {
   const out = /* @__PURE__ */ new Map();
   if (!expr.ast) return out;
-  const unwrap = (e) => e instanceof Grouping ? unwrap(e.group) : e;
+  const unwrap2 = (e) => e instanceof Grouping ? unwrap2(e.group) : e;
   const isOr = (e) => e instanceof Logical && e.operator.type === TokenType.OR;
   const operands = (e) => {
-    const u = unwrap(e);
+    const u = unwrap2(e);
     return isOr(u) ? u.args.flatMap(operands) : [u];
   };
   const refStart = (e) => {
@@ -11796,7 +11796,7 @@ function fallbacksOf(expr) {
     return offsetOf(expr.source, t.range.start.line, t.range.start.column);
   };
   const visit2 = (e) => {
-    const u = unwrap(e);
+    const u = unwrap2(e);
     if (isOr(u)) {
       const ops = operands(u);
       for (const [i, op] of ops.entries()) {
@@ -13494,8 +13494,8 @@ function locateExpression(s, from, expr, closes) {
   let cursor = from;
   const locs = /* @__PURE__ */ new Map();
   for (const r of expr.refs.toSorted((a, b) => a.start - b.start)) {
-    const written = expr.source.slice(r.start, r.end).replaceAll("'", s.quote);
-    const span = written ? spanOf(s, written, cursor, scan) : void 0;
+    const written2 = expr.source.slice(r.start, r.end).replaceAll("'", s.quote);
+    const span = written2 ? spanOf(s, written2, cursor, scan) : void 0;
     if (span) cursor = span[0] + 1;
     const [start, end2] = span ? [s.start + span[0], s.start + span[1]] : [at + r.start, at + r.end];
     locs.set(r, s.source.loc(start, end2));
@@ -13513,10 +13513,10 @@ function expressionEnd(s, from, to) {
   }
   return end;
 }
-function spanOf(s, written, from, scan) {
-  const found = indexOutside(s, written, from, scan);
-  if (found >= 0) return [found, found + written.length];
-  const [first = "", ...rest] = written.split(/\s+/);
+function spanOf(s, written2, from, scan) {
+  const found = indexOutside(s, written2, from, scan);
+  if (found >= 0) return [found, found + written2.length];
+  const [first = "", ...rest] = written2.split(/\s+/);
   if (rest.length === 0) return void 0;
   let start = indexOutside(s, first, from, scan);
   while (start >= 0) {
@@ -13680,9 +13680,9 @@ function classifyUses(raw, at, loc, ctx) {
   if (value.startsWith("docker://")) return { raw, loc, kind: "docker" };
   const kind = at === "job" ? "local-workflow" : "local-action";
   if (value.startsWith("$/")) {
-    const refAt = value.indexOf("@");
-    const target = normalizeRelative(refAt < 0 ? value.slice(2) : value.slice(2, refAt));
-    return { raw, loc, kind, target, self: true, ...refAt < 0 ? {} : { selfRef: value.slice(refAt + 1) } };
+    const refAt2 = value.indexOf("@");
+    const target = normalizeRelative(refAt2 < 0 ? value.slice(2) : value.slice(2, refAt2));
+    return { raw, loc, kind, target, self: true, ...refAt2 < 0 ? {} : { selfRef: value.slice(refAt2 + 1) } };
   }
   if (value.startsWith("./")) {
     const target = normalizeRelative(value.slice(2));
@@ -13719,8 +13719,8 @@ function scanRunWrites(script, fileVar) {
       continue;
     }
     const chunks = line.split(redirect);
-    const written = chunks.length > 1 ? chunks.slice(0, -1) : [line];
-    for (const chunk of written) {
+    const written2 = chunks.length > 1 ? chunks.slice(0, -1) : [line];
+    for (const chunk of written2) {
       const found = [...chunk.matchAll(/(?:^|[\s"'`(;])([A-Za-z_][\w-]*)(?:=|<<)/g)].map((m) => m[1]);
       if (found.length === 0 || /\$\{?\w+\}?(?:=|<<)/.test(chunk)) dynamic = true;
       for (const n of found) if (n !== fileVar) names.add(n);
@@ -21932,14 +21932,14 @@ function applyEntry(e, base, outDir) {
   return true;
 }
 function writeContracts(root, plan, outDir, trees = [root]) {
-  const written = [];
+  const written2 = [];
   const base = outDir ?? root;
   if (outDir) {
     for (const e of plan.entries) if (e.status !== "delete") assertSafeWritePath(join4(outDir, e.file), trees);
   }
   if (!outDir) assertSafeContractPaths(root, plan);
-  for (const e of plan.entries) if (applyEntry(e, base, outDir)) written.push(e.file);
-  return written;
+  for (const e of plan.entries) if (applyEntry(e, base, outDir)) written2.push(e.file);
+  return written2;
 }
 function entryConsumers(e) {
   const out = /* @__PURE__ */ new Set();
@@ -23088,6 +23088,13 @@ function fallsBack(fallbacks, ref, resolvers) {
   const fallback = fallbacks.get(ref.start);
   return !!fallback && !resolvers.some((resolve9) => isEmptyValue(evaluate(fallback, resolve9)));
 }
+function maybeWrittenEarlier(steps2, site, name) {
+  if (!steps2) return false;
+  const earlier = site.step === void 0 ? steps2 : steps2.slice(0, site.step);
+  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
+  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
+  return earlier.some((s) => s.uses && s.uses.kind !== "docker");
+}
 function stepsInScope(unit, jobId) {
   if (unit.kind === "action") return unit.steps;
   return jobId ? unit.jobs[jobId]?.steps ?? [] : [];
@@ -23625,6 +23632,33 @@ function truthinessNodes(root) {
   visit2(root, []);
   return out;
 }
+function childrenOf(e) {
+  const n = nodeOf(e);
+  switch (n.kind) {
+    case "unary":
+      return [n.node.expr];
+    case "binary":
+      return [n.node.left, n.node.right];
+    case "logical":
+    case "call":
+      return n.node.args;
+    case "grouping":
+      return [n.node.group];
+    case "index":
+      return nodeOf(n.node.index).kind === "star" ? [n.node.expr] : [n.node.expr, n.node.index];
+    default:
+      return [];
+  }
+}
+function everyNode(root) {
+  const out = [];
+  const visit2 = (expr, ancestors) => {
+    out.push({ expr, ancestors });
+    for (const child of childrenOf(expr)) visit2(child, [...ancestors, expr]);
+  };
+  visit2(root, []);
+  return out;
+}
 function booleanTermOf(expr, start) {
   if (!expr.ast) return void 0;
   const around = truthinessNodes(expr.ast).filter(({ expr: e }) => {
@@ -23947,15 +23981,24 @@ function callerBindingRemovals(ctx, unit, name) {
 function callersOf(index, unit) {
   if (unit.kind === "workflow")
     return index.callersOf(unit.path).map((c) => ({
+      unit: c.caller,
       with: c.job.with,
       loc: c.job.uses?.loc ?? c.job.loc,
       label: `${c.caller.path} \u203A jobs.${c.job.id}`
     }));
   return index.usersOf(unit.path).map((u) => ({
+    unit: u.unit,
     with: u.step.with,
     loc: u.step.uses?.loc ?? u.step.loc,
     label: `${u.unit.path} \u203A ${u.job ? `jobs.${u.job.id} \u203A ` : ""}step ${u.step.id ?? `#${u.step.index + 1}`}`
   }));
+}
+function callersDecide(unit, callers, published) {
+  return callers.length > 0 && !(unit.kind === "workflow" && unit.dispatch) && !published;
+}
+function omittable(index, unit, input2, impact) {
+  const callers = callersOf(index, unit);
+  return !callersDecide(unit, callers, isPublished(unit, impact)) || callers.some((c) => !lookup(c.with, input2));
 }
 var optionalInputInCondition = defineRule({
   code: "FP105",
@@ -23994,13 +24037,12 @@ var optionalInputInCondition = defineRule({
     for (const unit of ctx.index.units()) {
       const callers = callersOf(ctx.index, unit);
       const published = isPublished(unit, ctx.config.impact);
-      const callersDecide = callers.length > 0 && !(unit.kind === "workflow" && unit.dispatch) && !published;
-      const reads = optionalInputReads(ctx.index, unit, callers, callersDecide);
+      const reads = optionalInputReads(ctx.index, unit, callers, callersDecide(unit, callers, published));
       reportOptionalInputReads(ctx, unit, reads, published && callers.length > 0);
     }
   }
 });
-function optionalInputReads(index, unit, callers, callersDecide) {
+function optionalInputReads(index, unit, callers, callersDecide2) {
   const flagged = [];
   const passedBySite = /* @__PURE__ */ new Map();
   for (const input2 of Object.values(declaredInputs(unit))) {
@@ -24008,7 +24050,7 @@ function optionalInputReads(index, unit, callers, callersDecide) {
     const usages = decidingReads(index, unit, input2);
     if (usages.length === 0) continue;
     const omitting = callers.filter((c) => !lookup(c.with, input2.name));
-    if (callersDecide && omitting.length === 0) {
+    if (callersDecide2 && omitting.length === 0) {
       for (const usage of usages) addName(passedBySite, usage.site.id, input2.name);
       continue;
     }
@@ -24094,8 +24136,8 @@ function jobOutputHolds(index, unit, site, skip, hops) {
   if (!isEmptyValue(evaluateTemplate(site.text, skippedAs(skip)))) return false;
   const output = { context: "needs", path: [site.job, "outputs", site.key] };
   const next = { empty: [...skip.empty, refKey(output)] };
-  const readers = index.usagesOf(sym.jobOutput(unit.path, site.job, site.key));
-  return readers.length > 0 && readers.every((u) => !u.whole && holdsWhenEmpty(index, unit, u, next, hops - 1));
+  const readers2 = index.usagesOf(sym.jobOutput(unit.path, site.job, site.key));
+  return readers2.length > 0 && readers2.every((u) => !u.whole && holdsWhenEmpty(index, unit, u, next, hops - 1));
 }
 function reportOptionalInputReads(ctx, unit, { flagged, passedBySite }, publishedWithCallers) {
   const flaggedBySite = /* @__PURE__ */ new Map();
@@ -24233,13 +24275,13 @@ function reportForwarded(ctx, call, outer, b, site, target) {
   });
 }
 function omittedReads(site, outer) {
-  const omitted = /* @__PURE__ */ new Map();
+  const omitted2 = /* @__PURE__ */ new Map();
   for (const ref of site.segments.flatMap((s) => s.refs)) {
     const decl = ref.context === "inputs" && ref.path[0] ? lookup(outer, ref.path[0]) : void 0;
-    if (!decl || !emptyWhenOmitted(decl) || omitted.has(decl.name)) continue;
-    omitted.set(decl.name, { decl, loc: ref.loc });
+    if (!decl || !emptyWhenOmitted(decl) || omitted2.has(decl.name)) continue;
+    omitted2.set(decl.name, { decl, loc: ref.loc });
   }
-  return [...omitted.values()];
+  return [...omitted2.values()];
 }
 function whenEmpty(names) {
   if (names.length === 0) return "always empty";
@@ -24358,20 +24400,13 @@ function checkEnvReads(ctx, wf, site) {
     for (const ref of seg.refs) {
       const name = ref.path[0];
       if (ref.context !== "env" || !namesKey2(name)) continue;
-      if (envEntry(wf, job, step2, name) || maybeWrittenEarlier(job, site, name)) continue;
+      if (envEntry(wf, job, step2, name) || maybeWrittenEarlier(job?.steps, site, name)) continue;
       reportUndefinedEnv(ctx, wf, site, ref, name);
     }
   }
 }
 function envEntry(wf, job, step2, name) {
   return lookup(wf.env, name) || job && lookup(job.env, name) || step2 && lookup(step2.env, name);
-}
-function maybeWrittenEarlier(job, site, name) {
-  if (!job) return false;
-  const earlier = site.step === void 0 ? job.steps : job.steps.slice(0, site.step);
-  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
-  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
-  return earlier.some((s) => s.uses && s.uses.kind !== "docker");
 }
 function reportUndefinedEnv(ctx, wf, site, ref, name) {
   const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
@@ -27255,6 +27290,624 @@ var structureRules = [
   workspaceUnverified
 ];
 
+// ../lint/src/value-kind.ts
+var BOOLEAN2 = [{ cls: "true" }, { cls: "false" }];
+var UNKNOWN2 = [{ cls: "unknown" }];
+var MAX_DEPTH2 = 8;
+var ALWAYS_TRUE = /* @__PURE__ */ new Set(["true", "text-true", "text-false", "text", "json"]);
+var ALWAYS_FALSE = /* @__PURE__ */ new Set(["false", "empty"]);
+var whenTruthy = (kind) => kind.filter((p) => !ALWAYS_FALSE.has(p.cls));
+var whenFalsy = (kind) => kind.filter((p) => !ALWAYS_TRUE.has(p.cls));
+var isBooleanClass = (cls) => cls === "true" || cls === "false" || cls === "text-true" || cls === "text-false";
+var isMixed = (kind) => kind.some((p) => isBooleanClass(p.cls)) && kind.some((p) => p.cls === "text");
+function emptyReasons(kind) {
+  const out = /* @__PURE__ */ new Map();
+  for (const p of kind) if (p.why) out.set(reasonKey(p.why), out.get(reasonKey(p.why)) ?? p.why);
+  return [...out.values()];
+}
+var reasonKey = (r) => `${r.kind}:${r.loc.file}:${r.loc.line}:${r.loc.column}`;
+function unique(kind) {
+  const out = /* @__PURE__ */ new Map();
+  for (const p of kind) {
+    const key = `${p.cls}|${p.why ? reasonKey(p.why) : ""}|${p.from ?? ""}`;
+    if (!out.has(key)) out.set(key, p);
+  }
+  return [...out.values()];
+}
+var PASSED_ON = {
+  true: "text-true",
+  false: "text-false",
+  number: "text",
+  json: "unknown"
+};
+var interpolated = (kind) => unique(kind.map((p) => PASSED_ON[p.cls] ? { cls: PASSED_ON[p.cls] } : p));
+function textKind(text2) {
+  const lower = text2.toLowerCase();
+  if (text2 === "") return [{ cls: "empty" }];
+  return [{ cls: lower === "true" ? "text-true" : lower === "false" ? "text-false" : "text" }];
+}
+function jsonKind2(value) {
+  if (value === null) return [{ cls: "empty" }];
+  if (typeof value === "boolean") return [{ cls: value ? "true" : "false" }];
+  if (typeof value === "number") return [{ cls: "number" }];
+  if (typeof value === "string") return textKind(value);
+  return [{ cls: "json" }];
+}
+function kindOf(index, unit, site, seg, expr) {
+  return exprKind({ index, unit, site, seg, depth: 0 }, expr);
+}
+function exprKind(s, e) {
+  const n = nodeOf(e);
+  switch (n.kind) {
+    case "literal":
+      return literalKind(n.node);
+    case "unary":
+    case "binary":
+      return BOOLEAN2;
+    case "grouping":
+      return exprKind(s, n.node.group);
+    case "logical":
+      return logicalKind(s, n.node);
+    case "call":
+      return callKind(s, n.node);
+    case "context":
+    case "index":
+      return refKind(s, e);
+    default:
+      return UNKNOWN2;
+  }
+}
+function literalKind(lit) {
+  const { lexeme } = lit.token;
+  if (lexeme === "true" || lexeme === "false") return [{ cls: lexeme }];
+  if (lexeme === "null") return [{ cls: "empty" }];
+  if (lexeme.startsWith("'")) return textKind(lit.literal.coerceString());
+  return [{ cls: "number" }];
+}
+function logicalKind(s, l) {
+  const or = l.operator.lexeme === "||";
+  const kinds = l.args.map((a) => exprKind(s, a));
+  const last = kinds.pop() ?? [];
+  return unique([...kinds.flatMap((k) => or ? whenTruthy(k) : whenFalsy(k)), ...last]);
+}
+var BOOLEAN_FUNCTIONS = /* @__PURE__ */ new Set([
+  "contains",
+  "startswith",
+  "endswith",
+  "success",
+  "failure",
+  "cancelled",
+  "always"
+]);
+var TEXT_FUNCTIONS = /* @__PURE__ */ new Set(["format", "join", "hashfiles"]);
+function callKind(s, call) {
+  const name = call.functionName.lexeme.toLowerCase();
+  if (BOOLEAN_FUNCTIONS.has(name)) return BOOLEAN2;
+  if (name === "tojson") return [{ cls: "text" }];
+  if (TEXT_FUNCTIONS.has(name)) return [{ cls: "text" }, { cls: "empty" }];
+  if (name === "fromjson") return call.args[0] ? fromJsonKind(s, call.args[0]) : UNKNOWN2;
+  if (name === "case")
+    return unique(
+      call.args.filter((_, i) => i % 2 === 1 || i === call.args.length - 1).flatMap((a) => exprKind(s, a))
+    );
+  return UNKNOWN2;
+}
+function fromJsonKind(s, arg) {
+  const n = nodeOf(arg);
+  if (n.kind === "literal" && n.node.token.lexeme.startsWith("'")) {
+    try {
+      return jsonKind2(JSON.parse(n.node.literal.coerceString()));
+    } catch {
+      return [];
+    }
+  }
+  return unique(exprKind(s, arg).flatMap(parsedAs));
+}
+function parsedAs(p) {
+  switch (p.cls) {
+    case "true":
+    case "text-true":
+      return [{ cls: "true" }];
+    case "false":
+    case "text-false":
+      return [{ cls: "false" }];
+    case "number":
+      return [{ cls: "number" }];
+    case "empty":
+      return [];
+    default:
+      return UNKNOWN2;
+  }
+}
+function refAt(seg, e) {
+  const k = nodeOf(e).kind;
+  if (k !== "context" && k !== "index") return void 0;
+  const { start } = exprSpan(seg.expr.source, e);
+  return seg.refs.find((r) => r.start === start);
+}
+var refLabel = (ref) => [ref.context, ...ref.path].join(".");
+var REF_KINDS = {
+  inputs: (s, ref) => inputKind(s, ref, false),
+  github: (s, ref) => inputKind(s, ref, true),
+  env: (s, ref) => envKind(s, ref),
+  steps: (s, ref) => stepOutputKind(s, ref),
+  needs: (s, ref) => outputKind(s, ref),
+  jobs: (s, ref) => outputKind(s, ref),
+  vars: (_, ref) => [{ cls: "text", from: refLabel(ref) }, { cls: "empty" }],
+  secrets: (_, ref) => [{ cls: "text", from: refLabel(ref) }, { cls: "empty" }]
+};
+function refKind(s, e) {
+  const ref = refAt(s.seg, e);
+  const read2 = ref && Object.hasOwn(REF_KINDS, ref.context) ? REF_KINDS[ref.context] : void 0;
+  return ref && read2 ? read2(s, ref) : UNKNOWN2;
+}
+function inputKind(s, ref, viaEvent) {
+  const symbol = s.index.resolveRef(s.unit, s.site, ref);
+  const input2 = symbol && ref.path.length === (viaEvent ? 3 : 1) ? inputRead(s.unit, ref, viaEvent) : void 0;
+  if (!symbol || !input2) return UNKNOWN2;
+  const from = refLabel(ref);
+  const kind = typedKind(s.unit, input2, viaEvent).map((p) => p.cls === "text" ? { ...p, from } : p);
+  return emptyWhenOmitted(input2) ? [...kind, { cls: "empty", why: omitted(input2, symbol) }] : kind;
+}
+function inputRead(unit, ref, viaEvent) {
+  const declared = viaEvent && unit.kind === "workflow" ? unit.dispatch?.inputs ?? {} : declaredInputs(unit);
+  return lookup(declared, ref.path.at(-1));
+}
+var omitted = (input2, symbol) => ({
+  kind: "optional-input",
+  loc: input2.loc,
+  label: `inputs.${input2.name}`,
+  symbols: [symbol],
+  keys: []
+});
+function typedKind(unit, input2, viaEvent) {
+  const typed = unit.kind === "workflow" ? input2.type : void 0;
+  if (typed === "boolean") return viaEvent ? [{ cls: "text-true" }, { cls: "text-false" }] : BOOLEAN2;
+  if (typed === "number") return [{ cls: viaEvent ? "text" : "number" }];
+  return optionsKind(input2.options ?? []) ?? [{ cls: "text" }];
+}
+function optionsKind(options) {
+  const lower = options.map((o) => o.toLowerCase());
+  const booleans = lower.length > 0 && lower.every((o) => o === "true" || o === "false");
+  return booleans ? unique(lower.flatMap(textKind)) : void 0;
+}
+function envKind(s, ref) {
+  const name = ref.path[0];
+  if (!namesKey2(name) || ref.path.length !== 1) return UNKNOWN2;
+  const own2 = ownEnv2(s.index, s.unit, s.site, name);
+  if (own2) return bindingKind(s, own2);
+  const symbol = s.index.resolveRef(s.unit, s.site, ref);
+  const steps2 = s.site.step === void 0 ? void 0 : stepsInScope(s.unit, s.site.job);
+  if (!symbol || maybeWrittenEarlier(steps2, s.site, name)) return UNKNOWN2;
+  return symbolKind(s, symbol);
+}
+function ownEnv2(index, unit, site, name) {
+  const step2 = site.field === "step.env" ? void 0 : index.stepOf(unit, site);
+  return step2 && lookup(step2.env, name);
+}
+function bindingKind(s, b) {
+  return b.site ? siteKind(s, s.unit, b.site) : interpolated(jsonKind2(b.value));
+}
+function outputKind(s, ref) {
+  const symbol = s.index.resolveRef(s.unit, s.site, ref);
+  return symbol && ref.path.length === 3 ? symbolKind(s, symbol) : UNKNOWN2;
+}
+function stepOutputKind(s, ref) {
+  const [id, outputs] = ref.path;
+  const symbol = s.index.resolveRef(s.unit, s.site, ref);
+  if (!symbol || !namesKey2(id) || !isProperty(outputs, "outputs") || ref.path.length !== 3) return UNKNOWN2;
+  const kind = symbolKind(s, symbol);
+  const step2 = stepsInScope(s.unit, s.site.job).find((x) => x.id?.toLowerCase() === id.toLowerCase());
+  const why = step2 && skippedStep(s.index, s.unit, step2, symbol);
+  return why ? unique([...kind, { cls: "empty", why }]) : kind;
+}
+function skipGuard(step2) {
+  const guard = guardOf(step2);
+  return guard && !guard.segments.some((g) => g.refs.length > 0) ? void 0 : guard;
+}
+function skippedStep(index, unit, step2, symbol) {
+  const guard = skipGuard(step2);
+  if (guard === void 0) return void 0;
+  const reads = guard ? guardReads(index, unit, guard) : { symbols: [], keys: [] };
+  return {
+    kind: "guarded-step",
+    loc: guard ? guard.loc : step2.loc,
+    label: `steps.${step2.id}`,
+    symbols: [symbol, ...reads.symbols],
+    keys: reads.keys
+  };
+}
+function guardReads(index, unit, site) {
+  const refs = site.segments.flatMap((s) => s.refs);
+  return {
+    symbols: refs.flatMap((r) => index.readsOf(unit, site, r)),
+    keys: refs.filter((r) => r.context === "github").map(githubKey)
+  };
+}
+var githubKey = (ref) => refLabel(ref).toLowerCase();
+function readsReason(index, unit, site, refs, why) {
+  return refs.some(
+    (r) => r.context === "github" && why.keys.includes(githubKey(r)) || index.readsOf(unit, site, r).some((symbol) => why.symbols.includes(symbol))
+  );
+}
+var memos = /* @__PURE__ */ new WeakMap();
+function memoised(index, key, compute) {
+  let memo = memos.get(index);
+  if (!memo) {
+    memo = /* @__PURE__ */ new Map();
+    memos.set(index, memo);
+  }
+  const known2 = memo.get(key);
+  if (known2 !== void 0) return known2 ?? UNKNOWN2;
+  memo.set(key, null);
+  const kind = compute();
+  memo.set(key, kind);
+  return kind;
+}
+function symbolKind(s, symbol) {
+  if (s.depth >= MAX_DEPTH2) return UNKNOWN2;
+  return memoised(s.index, symbol, () => through(symbol, definedKind({ ...s, depth: s.depth + 1 }, symbol)));
+}
+function definedKind(s, symbol) {
+  const defs = s.index.definitionsOf(symbol);
+  if (defs.length)
+    return unique(
+      defs.flatMap((d) => "site" in d ? siteKind(s, d.unit, d.site) : interpolated(jsonKind2(d.value)))
+    );
+  const outputs = s.index.incoming(symbol, "flows").filter((e) => e.siteId === void 0);
+  return outputs.length ? unique(outputs.flatMap((e) => symbolKind(s, e.from))) : UNKNOWN2;
+}
+var through = (symbol, kind) => kind.map((p) => p.why ? { ...p, why: { ...p.why, symbols: [...p.why.symbols, symbol] } } : p);
+function siteKind(s, unit, site) {
+  if (s.depth >= MAX_DEPTH2) return UNKNOWN2;
+  return memoised(s.index, `site:${site.id}`, () => {
+    const seg = site.segments[0];
+    if (!seg?.expr.ast || site.segments.some((x) => !x.expr.ast)) return UNKNOWN2;
+    if (!isWholeExpression(site)) return [{ cls: "text" }];
+    return interpolated(exprKind({ index: s.index, unit, site, seg, depth: s.depth + 1 }, seg.expr.ast));
+  });
+}
+function producersOf(index, unit, site, seg, e) {
+  const ref = refAt(seg, e);
+  if (!ref || !["env", "steps", "needs", "jobs"].includes(ref.context)) return [];
+  const name = ref.path[0];
+  const own2 = ref.context === "env" && namesKey2(name) ? ownEnv2(index, unit, site, name) : void 0;
+  if (own2)
+    return [{ unit, ...own2.site ? { site: own2.site } : {}, loc: own2.valueLoc, label: `env.${own2.name}` }];
+  const symbol = index.resolveRef(unit, site, ref);
+  return symbol ? definitionsOf(index, symbol, 3) : [];
+}
+function definitionsOf(index, symbol, hops) {
+  const label = index.nodes.get(symbol)?.label ?? symbol;
+  const defs = index.definitionsOf(symbol);
+  if (defs.length)
+    return defs.map(
+      (d) => "site" in d ? { unit: d.unit, site: d.site, loc: d.site.loc, label } : { unit: d.unit, loc: d.loc, label }
+    );
+  if (hops === 0) return [];
+  return index.incoming(symbol, "flows").filter((e) => e.siteId === void 0).flatMap((e) => definitionsOf(index, e.from, hops - 1));
+}
+var CLASS_TEXT = {
+  true: "true",
+  false: "false",
+  "text-true": "'true'",
+  "text-false": "'false'",
+  text: "text",
+  empty: "''",
+  number: "a number",
+  json: "an object or array",
+  unknown: "a value known at run time"
+};
+function describeKind(kind) {
+  if (kind.length === 0) return "nothing: it fails";
+  const order = Object.keys(CLASS_TEXT);
+  const sorted = [...kind].sort((a, b) => order.indexOf(a.cls) - order.indexOf(b.cls));
+  const parts = sorted.map((p) => {
+    if (p.cls === "text" && p.from) return `text of \`${p.from}\``;
+    if (p.why) return `'' (\`${p.why.label}\` ${p.why.kind === "optional-input" ? "omitted" : "skipped"})`;
+    return CLASS_TEXT[p.cls];
+  });
+  return [...new Set(parts)].join(" | ");
+}
+
+// ../lint/src/rules/values.ts
+var valueNotBoolean = defineRule({
+  code: "FP506",
+  name: "value-not-boolean",
+  category: "expressions",
+  defaultSeverity: "error",
+  docs: {
+    summary: "A value read as a boolean can be another string: `fromJSON()` of a value that may be '', a comparison with 'true' of a value that may be other text, or an `env:`, `with:` or `outputs:` value that gives a boolean or text.",
+    why: "Only an `if:` reads a value as true or false. Under `env:`, `with:` and `outputs:` a value is passed on as text: a comparison gives 'true' or 'false', but `a || b` gives the operand itself, and an optional input is '' when omitted. `fromJSON('')` fails the job (`continue-on-error: ${{ fromJSON(env.X) }}` is the usual reader), and so does `fromJSON()` of a file name. A reader that compares the value with 'true' takes the false branch for any other text, and the run stays green. Reported as an error for `fromJSON()`, as a warning otherwise.",
+    fix: "Compare explicitly where the value is set, so that it is 'true' or 'false': `inputs.x != ''` (or `inputs.x == 'yes'`). A literal fallback (`inputs.x || 'false'`) only fixes the empty case. The editor offers `!= ''` as a quick fix where it is certain.",
+    scope: "`fromJSON()` is reported only for a '' flowpact can point at: an optional input without a default (or with `default: ''`) that a caller can omit (as for FP105, not one every local caller passes, unless the workflow can be dispatched or the unit is published), or the output of a step whose `if:` can skip it; not when the reader's own job or step `if:`, or an earlier operand of its `&&`, `||` or `case()`, reads the same input, output or `github` property. In a field that takes a boolean (`continue-on-error:`, a `type: boolean` input) such an input is reported even when every local caller passes it, since other text than 'true' or 'false' fails there too, unless each passes 'true' or 'false' as it is, or one expression that gives a boolean in the caller (`${{ inputs.dry }}` of an input every trigger of the caller declares `type: boolean`, a comparison, `!`, `contains()`). The `||` is reported when one of its operands is a boolean (a comparison, `!`, `contains()`, a boolean input, or 'true'/'false') and another is text; not `c && 'yes' || 'no'`, which is always text, nor an `&&` alone. Values known only at run time (a script\u2019s outputs, `github.event`, the matrix) are never reported. Not reported either: comparisons in a `run:` script (`[[ \"$X\" == \"true\" ]]`), the fall-through of `c && a || b` when `a` is '', a value that is always 'true' or 'false' read by an `if:` (where 'false' is true), and text passed in `with:` to a `type: boolean` input. The quick fix is offered for a value written on one line, where each text operand is a reference that is text or '', and for `fromJSON()` only where it must give a boolean: `continue-on-error:`, a condition, or a `type: boolean` input.",
+    examples: {
+      bad: `- env:
+    CONTINUE_ON_ERROR: \${{ inputs.report-file }}
+  continue-on-error: \${{ fromJSON(env.CONTINUE_ON_ERROR) }}
+  run: ./test.sh
+outputs:
+  is-report: \${{ steps.changed.outputs.any == 'true' || inputs.report-file }}`,
+      good: `- env:
+    CONTINUE_ON_ERROR: \${{ inputs.report-file != '' }}
+  continue-on-error: \${{ fromJSON(env.CONTINUE_ON_ERROR) }}
+  run: ./test.sh
+outputs:
+  is-report: \${{ steps.changed.outputs.any == 'true' || inputs.report-file != '' }}`
+    }
+  },
+  check(ctx) {
+    for (const unit of ctx.index.units()) for (const site of unit.sites) checkSite(ctx, unit, site);
+  }
+});
+function checkSite(ctx, unit, site) {
+  for (const seg of site.segments) if (seg.expr.ast) checkReads(ctx, { unit, site, seg }, seg.expr.ast);
+  if (PRODUCERS[site.field] && isWholeExpression(site)) checkProducer(ctx, unit, site);
+}
+var PRODUCERS = {
+  "workflow.env": "env",
+  "job.env": "env",
+  "step.env": "env",
+  "job.output": "outputs",
+  "workflow.output": "outputs",
+  "action.output": "outputs",
+  "step.with": "with"
+};
+function checkReads(ctx, at, root) {
+  for (const node of everyNode(root)) {
+    const n = nodeOf(node.expr);
+    if (n.kind === "call" && n.node.functionName.lexeme.toLowerCase() === "fromjson" && n.node.args.length === 1)
+      checkFromJson(ctx, at, node, n.node);
+    else if (n.kind === "binary") checkComparison(ctx, at, n.node);
+  }
+}
+function written(source, span, otherwise) {
+  const text2 = source.slice(span.start, span.end);
+  return text2.length <= 60 && !/[\r\n`]/.test(text2) ? `\`${text2}\`` : otherwise;
+}
+function checkFromJson(ctx, at, node, call) {
+  const { index } = ctx;
+  const arg = call.args[0];
+  const kind = kindOf(index, at.unit, at.site, at.seg, arg);
+  const undecided = emptyReasons(kind).filter((why) => !decided(index, at, node, why));
+  const reasons = undecided.filter((why) => canBeEmpty(ctx, why));
+  const passed = undecided.filter((why) => !reasons.includes(why));
+  const text2 = failsOnText(ctx, at, node, kind, passed);
+  if (reasons.length === 0 && !(text2 && passed.length > 0)) return;
+  const source = at.seg.expr.source;
+  const called = written(source, exprSpan(source, call), "`fromJSON()`");
+  const value = written(source, exprSpan(source, arg), "its argument");
+  const producers = producersOf(index, at.unit, at.site, at.seg, arg);
+  ctx.report({
+    message: reasons.length === 0 ? `${called} fails unless ${value} is 'true' or 'false', and it can be other text, such as a file name` : `${called} fails when ${reasons.map(whenEmpty2).join(" or ")}: ${value} is then '', which is not JSON${text2 ? "; other text than 'true' or 'false', such as a file name, fails here too" : ""}`,
+    loc: segmentLoc(index, at.seg, exprSpan(source, call)) ?? at.seg.loc,
+    symbol: (reasons[0] ?? passed[0]).symbols[0],
+    related: [...producers.map(setHere), ...reasons.map(reasonNote)],
+    suggestions: [wantsBoolean(index, at, node) ? producerFix(index, at.unit, producers) : void 0]
+  });
+}
+function failsOnText(ctx, at, node, kind, passed) {
+  return typedBoolean(ctx.index, at, node) && kind.some((p) => p.cls === "text" && !passed.some((why) => passedAsBoolean(ctx, why, p.from)));
+}
+function canBeEmpty(ctx, why) {
+  if (why.kind !== "optional-input") return true;
+  const unit = ctx.index.unit(why.symbols[0].split("#")[0]);
+  return !unit || omittable(ctx.index, unit, why.label.slice("inputs.".length), ctx.config.impact);
+}
+function passedAsBoolean(ctx, why, from) {
+  const unit = ctx.index.unit(why.symbols[0].split("#")[0]);
+  return !!unit && why.label.toLowerCase() === from?.toLowerCase() && passesBoolean(ctx.index, unit, why.label.slice("inputs.".length));
+}
+function passesBoolean(index, unit, input2) {
+  const callers = callersOf(index, unit);
+  return callers.length > 0 && callers.every((c) => {
+    const passed = lookup(c.with, input2);
+    return !!passed && passedBoolean(index, c.unit, passed);
+  });
+}
+function passedBoolean(index, unit, passed) {
+  const { value, site } = passed;
+  if (typeof value === "boolean" || value === "true" || value === "false") return true;
+  const seg = site?.segments[0];
+  if (!site || !seg?.expr.ast || !isWholeExpression(site) || !inputsBooleanOnEveryTrigger(unit, seg))
+    return false;
+  const kind = kindOf(index, unit, site, seg, seg.expr.ast);
+  return kind.length > 0 && kind.every((p) => p.cls === "true" || p.cls === "false");
+}
+function inputsBooleanOnEveryTrigger(unit, seg) {
+  const names = passedOn(seg, seg.expr.ast).flatMap((r) => r.context === "inputs" ? [r.path[0]] : []);
+  if (names.length === 0 || unit.kind !== "workflow") return true;
+  const declarations = unit.triggers.map(
+    (t) => t === "workflow_call" ? unit.call?.inputs : t === "workflow_dispatch" ? unit.dispatch?.inputs : void 0
+  );
+  return names.every(
+    (name) => !!name && declarations.every((inputs) => !!inputs && lookup(inputs, name)?.type === "boolean")
+  );
+}
+function passedOn(seg, e) {
+  const n = nodeOf(e);
+  if (n.kind === "grouping") return passedOn(seg, n.node.group);
+  if (n.kind === "logical") return n.node.args.flatMap((a) => passedOn(seg, a));
+  const ref = refAt(seg, e);
+  return ref ? [ref] : [];
+}
+var whenEmpty2 = (why) => why.kind === "optional-input" ? `optional input \`${why.label.slice("inputs.".length)}\` is omitted` : `step \`${why.label.slice("steps.".length)}\` is skipped by its \`if:\``;
+var setHere = (p) => ({ loc: p.loc, message: `${p.label} is set here` });
+var reasonNote = (why) => ({
+  loc: why.loc,
+  message: why.kind === "optional-input" ? `${why.label} is optional, and '' when omitted` : `${why.label} runs only when this holds; its outputs are '' otherwise`
+});
+function decided(index, at, node, why) {
+  return guardDecides(index, at, why) || earlierOperandDecides(index, at, node, why);
+}
+function guardDecides(index, { unit, site }, why) {
+  const { step: step2, job } = readerOf(index, unit, site);
+  if (neverRuns(step2) || neverRuns(job)) return true;
+  const ownIf = step2?.ifSite === site ? void 0 : step2?.ifSite;
+  if (why.kind === "guarded-step" && ownIf) return true;
+  const guards = [ownIf, job?.ifSite].filter((g) => !!g && g !== site);
+  return guards.some(
+    (g) => readsReason(
+      index,
+      unit,
+      g,
+      g.segments.flatMap((x) => x.refs),
+      why
+    )
+  );
+}
+var neverRuns = (decl) => decl?.ifValue === false;
+function readerOf(index, unit, site) {
+  const job = unit.kind === "workflow" && site.job ? unit.jobs[site.job] : void 0;
+  return { step: index.stepOf(unit, site), job };
+}
+function earlierOperandDecides(index, { unit, site, seg }, node, why) {
+  return earlierOperands(seg.expr.source, node).some((span) => {
+    const refs = seg.refs.filter((r) => r.start >= span.start && r.start < span.end);
+    return readsReason(index, unit, site, refs, why);
+  });
+}
+function earlierOperands(source, node) {
+  const chain = [...node.ancestors, node.expr];
+  const out = [];
+  for (const [i, parent] of node.ancestors.entries()) {
+    const n = nodeOf(parent);
+    const args = n.kind === "logical" || n.kind === "call" && n.node.functionName.lexeme.toLowerCase() === "case" ? n.node.args : [];
+    const at = args.indexOf(chain[i + 1]);
+    for (const arg of args.slice(0, Math.max(at, 0))) out.push(exprSpan(source, arg));
+  }
+  return out;
+}
+function wantsBoolean(index, at, node) {
+  const cond = conditionRoot(at.site);
+  return cond ? truthinessNodes(cond).some((t) => t.expr === node.expr) : typedBoolean(index, at, node);
+}
+function typedBoolean(index, { unit, site }, node) {
+  if (!isWholeExpression(site) || node.ancestors.some((a) => nodeOf(a).kind !== "grouping")) return false;
+  return site.yamlPath.at(-1) === "continue-on-error" || toBooleanInput(index, unit, site);
+}
+function toBooleanInput(index, unit, site) {
+  if (site.field !== "job.with" || unit.kind !== "workflow" || !site.job || !site.key) return false;
+  const job = unit.jobs[site.job];
+  const callee = job && index.calleeOf(job);
+  return !!callee?.call && lookup(callee.call.inputs, site.key)?.type === "boolean";
+}
+function producerFix(index, unit, producers) {
+  const [p] = producers;
+  if (producers.length !== 1 || p?.unit !== unit || !p.site || !PRODUCERS[p.site.field] || !isWholeExpression(p.site))
+    return void 0;
+  return compareFix(index, p.unit, p.site);
+}
+function compareFix(index, unit, site) {
+  const seg = site.segments[0];
+  const root = unwrap(seg.expr.ast);
+  const n = nodeOf(root);
+  const operands = n.kind === "logical" && n.node.operator.lexeme === "||" ? n.node.args : [root];
+  const fixes = operands.map((op) => operandFix(index, { unit, site, seg }, op));
+  if (fixes.includes(void 0)) return void 0;
+  const edits = fixes.filter((f) => f !== null);
+  const fileEdits = edits.length && !singleQuoted(index, site) ? segmentEdits(
+    index,
+    seg,
+    edits.map((f) => f.edit)
+  ) : void 0;
+  return fileEdits && { title: `Compare ${edits.map((f) => f.name).join(" and ")} with ''`, edits: fileEdits };
+}
+function operandFix(index, at, op) {
+  const kind = kindOf(index, at.unit, at.site, at.seg, op);
+  const textual = (p) => p.cls === "text" || p.cls === "empty";
+  if (!kind.some(textual)) return null;
+  const ref = refAt(at.seg, op);
+  if (!ref || !kind.every(textual)) return void 0;
+  const end = exprSpan(at.seg.expr.source, op).end;
+  return { edit: { span: { start: end, end }, newText: " != ''" }, name: `\`${refLabel(ref)}\`` };
+}
+var singleQuoted = (index, site) => sourceOf(index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1] === "'";
+function unwrap(e) {
+  const n = nodeOf(e);
+  return n.kind === "grouping" ? unwrap(n.node.group) : e;
+}
+function isBooleanText(e) {
+  const n = nodeOf(e);
+  if (n.kind !== "literal" || !n.node.token.lexeme.startsWith("'")) return false;
+  const text2 = n.node.literal.coerceString().toLowerCase();
+  return text2 === "true" || text2 === "false";
+}
+function comparedRef(at, { left, right, operator }) {
+  if (operator.lexeme !== "==" && operator.lexeme !== "!=") return void 0;
+  const [literal2, value] = isBooleanText(right) ? [right, left] : isBooleanText(left) ? [left, right] : [];
+  const ref = value && refAt(at.seg, value);
+  return literal2 && value && ref ? { literal: literal2, value, ref } : void 0;
+}
+function checkComparison(ctx, at, binary) {
+  const compared = comparedRef(at, binary);
+  const kind = compared && kindOf(ctx.index, at.unit, at.site, at.seg, compared.value);
+  if (!compared || !kind || !isMixed(kind)) return;
+  const { literal: literal2, value, ref } = compared;
+  const source = at.seg.expr.source;
+  const then = binary.operator.lexeme === "==" ? "false" : "true";
+  ctx.report({
+    message: `\`${refLabel(ref)}\` is compared with ${written(source, exprSpan(source, literal2), "a boolean")}, but it can hold other text, and the comparison is then ${then}: it is ${describeKind(kind)}`,
+    loc: segmentLoc(ctx.index, at.seg, exprSpan(source, binary)) ?? at.seg.loc,
+    severity: "warning",
+    symbol: ctx.index.resolveRef(at.unit, at.site, ref) ?? refLabel(ref),
+    related: producersOf(ctx.index, at.unit, at.site, at.seg, value).map((p) => ({
+      loc: p.loc,
+      message: `${p.label} is set here, to 'true', 'false' or other text`
+    }))
+  });
+}
+function mixedOperands(index, at) {
+  const n = at.seg.expr.ast && nodeOf(unwrap(at.seg.expr.ast));
+  if (n?.kind !== "logical" || n.node.operator.lexeme !== "||") return [];
+  const { args } = n.node;
+  const kinds = args.map((op, i) => {
+    const kind = kindOf(index, at.unit, at.site, at.seg, op);
+    return i < args.length - 1 ? whenTruthy(kind) : kind;
+  });
+  const texts2 = args.filter((_, i) => kinds[i].some((p) => p.cls === "text"));
+  return kinds.some((k) => k.some((p) => isBooleanClass(p.cls))) ? texts2 : [];
+}
+function checkProducer(ctx, unit, site) {
+  const seg = site.segments[0];
+  const texts2 = mixedOperands(ctx.index, { unit, site, seg });
+  if (texts2.length === 0) return;
+  const source = seg.expr.source;
+  const sink = ctx.index.sinkOf(unit, site);
+  const textOf2 = texts2.map((t) => written(source, exprSpan(source, t), "other text")).join(", ");
+  ctx.report({
+    message: `\`${producedName(ctx.index, site, sink)}\` is a boolean or the text of ${textOf2}: \`||\` gives the first operand that is true as it is, not true or false`,
+    loc: segmentLoc(ctx.index, seg, exprSpan(source, texts2[0])) ?? seg.loc,
+    severity: "warning",
+    ...sink ? { symbol: sink } : {},
+    related: readers(ctx.index, unit, site),
+    suggestions: [compareFix(ctx.index, unit, site)]
+  });
+}
+function producedName(index, site, sink) {
+  return site.field !== "step.with" && sink ? index.nodes.get(sink)?.label ?? sink : `${PRODUCERS[site.field]}.${site.key}`;
+}
+function readers(index, unit, site) {
+  const sink = index.sinkOf(unit, site);
+  const reads = sink ? index.usagesOf(sink).map((u) => ({ site: u.site, loc: u.ref.loc })) : ownEnvReads(unit, site);
+  return reads.slice(0, 3).map((r) => ({
+    loc: r.loc,
+    message: r.site.field === "workflow.output" ? `published as outputs.${r.site.key}` : "read here"
+  }));
+}
+function ownEnvReads(unit, site) {
+  const name = site.key?.toLowerCase();
+  const inStep = unit.sites.filter(
+    (s) => s.field !== "step.env" && s.job === site.job && s.step === site.step && s.step !== void 0
+  );
+  return inStep.flatMap(
+    (s) => s.segments.flatMap(
+      (g) => g.refs.filter((r) => r.context === "env" && r.path[0]?.toLowerCase() === name).map((r) => ({ site: s, loc: r.loc }))
+    )
+  );
+}
+var valueRules = [valueNotBoolean];
+
 // ../lint/src/rules/index.ts
 var builtinRules = [
   ...inputRules,
@@ -27262,6 +27915,7 @@ var builtinRules = [
   ...outputRules,
   ...matrixRules,
   ...expressionRules,
+  ...valueRules,
   ...structureRules,
   ...permissionRules,
   ...contractRules,
@@ -28796,14 +29450,14 @@ async function tryFetch(r, opts, out) {
     return await fetchWithFallback(r, opts);
   } catch (e) {
     if (!isFetchFailure(e)) throw e;
-    const problem = { ref: r.raw, error: e.message, kind: kindOf(e) };
+    const problem = { ref: r.raw, error: e.message, kind: kindOf2(e) };
     if (problem.kind === "not-found") out.unreadable.push(problem);
     else out.failed.push(problem);
     return void 0;
   }
 }
 var isFetchFailure = (e) => e instanceof FetchError || e instanceof TypeError || e.name === "TimeoutError";
-function kindOf(e) {
+function kindOf2(e) {
   if (e instanceof FetchError) return e.kind;
   return e.name === "TimeoutError" ? "timeout" : "unreachable";
 }
@@ -29167,7 +29821,7 @@ function refsIn(opts, fs3) {
   });
   return remoteRefsOf(new ProjectIndex(project));
 }
-var unique = (refs) => refs.filter((r, i) => refs.findIndex((o) => o.raw === r.raw) === i);
+var unique2 = (refs) => refs.filter((r, i) => refs.findIndex((o) => o.raw === r.raw) === i);
 function atLockedCommits(fs3, fetch2) {
   const actionsLock = readActionsLock(fs3);
   return { lockedCommit: (r) => lockedCommit(actionsLock, r), ...fetch2 };
@@ -29179,9 +29833,9 @@ async function gradeVersionChanges(opts, base, fetch2 = {}) {
   const baseLock = readRemotesLock(base).lock;
   const locked = (r) => lockedRemote(baseLock, r.raw).entry;
   const [after, before] = await Promise.all([
-    fetchRemoteEntries(unique(changes.map((c) => c.ref)), atLockedCommits(head, fetch2)),
+    fetchRemoteEntries(unique2(changes.map((c) => c.ref)), atLockedCommits(head, fetch2)),
     fetchRemoteEntries(
-      unique(changes.map((c) => c.from).filter((r) => !locked(r))),
+      unique2(changes.map((c) => c.from).filter((r) => !locked(r))),
       atLockedCommits(base, fetch2)
     )
   ]);

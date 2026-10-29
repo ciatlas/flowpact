@@ -32,6 +32,12 @@ the upgrade. What is new:
   for an omitted input anyway. An input whose default is '' (`default: ''`, `default: ${{ '' }}`) is reported where
   one without a default is: make it `required: true` or give it a non-empty default, or, if skipping is intended, say
   so in the condition (`inputs.x != ''`).
+- **New findings: a new rule, [FP506](/docs/rules/fp506),** reports a value read as a boolean that can be another
+  string. It is an error for `fromJSON()` of a value that may be '' (an optional input without a default, or the
+  output of a step whose `if:` can skip it), or that may be other text in `continue-on-error:`, which fails the job,
+  and a warning for a comparison with `'true'` or `'false'` of a value that can be other text, or for an `||` under
+  `env:`, `with:` or `outputs:` that gives a boolean or text (`a == 'b' || inputs.file`). The editor offers `!= ''`
+  where the value is set as a quick fix.
 - **A new rule, [FP507](/docs/rules/fp507), off by default:** a condition that compares a value with `''`
   (`x != ''`, `x == ''`), which an `if:` already does by itself. Turn it on with `FP507: info`: the editor then fades
   the comparison and removes it in a quick fix (`x`, `!x`). It reports nothing under `env:`, `with:`, `outputs:` or
@@ -44,6 +50,8 @@ the upgrade. What is new:
   `v0.0.x`, or a file that does not parse), so it checks remote actions where their ref points now, not at the commit
   GitHub runs. Before, only `remotes update` said so. A repository without the file, or with one flowpact reads, gets
   none.
+- **Editor:** [hovering](/docs/editors#hover) an expression away from a symbol says whether GitHub reads it as a
+  condition or a value and what it yields, and a step output's hover says when it may be `''`.
 
 ## 0.25 → 0.26
 

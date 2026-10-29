@@ -1,0 +1,12 @@
+name: Notify
+description: Posts a notice when enabled
+inputs:
+  enabled:
+    description: Whether to post, as true or false
+    required: true
+runs:
+  using: composite
+  steps:
+    - if: fromJSON(inputs.enabled)
+      shell: bash
+      run: echo "posting"

@@ -11,12 +11,12 @@ description: "A workflow or local action has no contract in `.github/flowpact/` 
 
 ## What you see
 
-In the [`broken`](https://github.com/ciatlas/flowpact/tree/main/fixtures/broken) fixture:
+In the [`boolean-values`](https://github.com/ciatlas/flowpact/tree/main/fixtures/boolean-values) fixture:
 
 ```text
 ✖  ERROR  FP801 contract-missing
-  .github/workflows/expressions.yml has no contract (expected .github/flowpact/contracts/workflows/expressions.contract.yaml)
-  ▶ .github/workflows/expressions.yml:1:1
+  .github/actions/notify has no contract (expected .github/flowpact/contracts/actions/notify.contract.yaml)
+  ▶ .github/actions/notify/action.yml:1:1
 ```
 
 ## Why it matters
@@ -65,7 +65,7 @@ findings, and comes back when the date passes ([overrides](/docs/configuration#o
 ```yaml title=".github/flowpact/flowpact.config.yml"
 overrides:
   - rule: FP801
-    target: ".github/workflows/expressions.yml"
+    target: ".github/actions/notify"
     reason: Why it is acceptable here, at least 10 characters.
     expires: YYYY-MM-DD   # optional
 ```

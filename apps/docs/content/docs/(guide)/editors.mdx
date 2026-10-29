@@ -101,7 +101,13 @@ Hovering an input, secret, output, env variable, matrix key, job or `uses:` valu
   further entries counted. A note in parentheses qualifies an entry as in [`flowpact trace`](/docs/cli#flowpact-trace),
   such as `(when dispatched)` for a workflow input read through `github` (`github.event.inputs.<name>`,
   `toJSON(github)`). `flowpact trace` shows the whole chain.
+- On a step output, a line says when it may be `''`: the step has an `if:` that can skip it.
 - On a caller's `with:` or `secrets:` key, the card shows what this call passes and where the value goes in the callee.
+- **Inside a `${{ }}` or a bare `if:`, away from a symbol:** how GitHub reads the expression there, a condition
+  (`''`, `0`, `false` and `null` are false), a value passed on as text (`true` becomes `'true'`) or a field that takes
+  a boolean or a number, and what it yields: `true` or `false`, `'true'` or `'false'`, the text of an input, or `''`
+  when an optional input is omitted or a step is skipped. Outside a condition, it notes that `||` and `&&` give one of
+  their operands as it is. See [Condition and value](/docs/concepts#condition-and-value).
 - On a remote `uses:` value, the card shows what the [remote interfaces lockfile](/docs/remote-interfaces) records:
   the commit, the inputs, secrets and outputs, and the secrets a reusable workflow reads without declaring them (only
   `secrets: inherit` passes those), or why the reference has no entry. On a remote call's `with:` or
@@ -155,6 +161,7 @@ A finding that flowpact knows how to fix offers it as a quick fix (**Ctrl+.** or
 | Remove the unused input, and what local callers pass for it | [`FP104`](/docs/rules/fp104), in a workflow or action no other repository uses |
 | Regenerate the contracts, every file as `flowpact generate` writes it | a contract finding ([`FP801`](/docs/rules/fp801)–[`FP805`](/docs/rules/fp805)) |
 | Remove a comparison with `''` from a condition: `x != ''` becomes `x`, `x == ''` becomes `!x` | [`FP507`](/docs/rules/fp507), when it is turned on |
+| Compare a text value with `''` where it is set, so that it is `'true'` or `'false'`: `x` becomes `x != ''` | a value read as a boolean that can be other text ([`FP506`](/docs/rules/fp506)) |
 
 An added key gets an empty value for you to fill in. A quick fix is offered only when the change is certain: none in a
 flow mapping (`{ … }`) or a file with CRLF line endings, and no removal from a

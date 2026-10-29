@@ -10,6 +10,7 @@ import { RuleRegistry } from './registry';
 import { secretRules } from './secrets';
 import { structureRules } from './structure';
 import type { RuleDefinition } from './types';
+import { valueRules } from './values';
 
 export const builtinRules: RuleDefinition[] = [
   ...inputRules,
@@ -17,6 +18,7 @@ export const builtinRules: RuleDefinition[] = [
   ...outputRules,
   ...matrixRules,
   ...expressionRules,
+  ...valueRules,
   ...structureRules,
   ...permissionRules,
   ...contractRules,

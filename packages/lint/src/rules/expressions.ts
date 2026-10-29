@@ -31,7 +31,7 @@ import {
 import { sourceOf } from '../suggestions';
 import { declaredInputs, emptyWhenOmitted } from './inputs';
 import { defineRule, type RuleContext, type RuleDefinition } from './types';
-import { namesKey, quote } from './util';
+import { maybeWrittenEarlier, namesKey, quote } from './util';
 
 const GITHUB_ENV_HINTS: Record<string, string> = {
   GITHUB_SHA: 'github.sha',
@@ -94,7 +94,7 @@ function checkEnvReads(ctx: RuleContext, wf: WorkflowDecl, site: ExprSite): void
     for (const ref of seg.refs) {
       const name = ref.path[0];
       if (ref.context !== 'env' || !namesKey(name)) continue;
-      if (envEntry(wf, job, step, name) || maybeWrittenEarlier(job, site, name)) continue;
+      if (envEntry(wf, job, step, name) || maybeWrittenEarlier(job?.steps, site, name)) continue;
       reportUndefinedEnv(ctx, wf, site, ref, name);
     }
   }
@@ -108,16 +108,6 @@ function envEntry(
   name: string,
 ): Binding | undefined {
   return lookup(wf.env, name) || (job && lookup(job.env, name)) || (step && lookup(step.env, name));
-}
-
-/** Whether a step before the site in its job may have written a variable to `$GITHUB_ENV`. */
-function maybeWrittenEarlier(job: JobDecl | undefined, site: ExprSite, name: string): boolean {
-  if (!job) return false;
-  const earlier = site.step === undefined ? job.steps : job.steps.slice(0, site.step);
-  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
-  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
-  // Composite actions and remote actions may export variables we cannot see.
-  return earlier.some((s) => s.uses && s.uses.kind !== 'docker');
 }
 
 /** FP501's report, with the matching context when the name is a runner variable (`env.GITHUB_SHA`). */

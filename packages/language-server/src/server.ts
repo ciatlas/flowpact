@@ -44,7 +44,7 @@ import {
 } from './actions';
 import { completionItems, keyContext, offersFor } from './completion';
 import { pathToUri, toRange, uriToPath } from './convert';
-import { hoverMarkdown, remoteBindingMarkdown } from './hover';
+import { expressionAt, expressionMarkdown, hoverMarkdown, remoteBindingMarkdown } from './hover';
 import { RenameRefused, renameEdits, renameTarget } from './rename';
 import { readSettings, type Settings } from './settings';
 import { RemoteSources, remoteTarget, type SourceTarget } from './sources';
@@ -242,9 +242,25 @@ export function startServer(connection: Connection): void {
       ? found.root.remotes!.occurrences(found.at.symbol)
       : found.root.locator!.occurrences(found.at.symbol);
 
+  /** The card of the expression at a position where no symbol is: inside a `${{ }}`, or a bare `if:`. */
+  const expressionHover = async (uri: string, position: Position) => {
+    const path = uriToPath(uri);
+    const analysis = path ? await workspace?.analysisOf(path) : undefined;
+    const rel = path && analysis?.root.rel(path);
+    const e = rel
+      ? expressionAt(analysis!.result.index, rel, position.line + 1, position.character + 1)
+      : undefined;
+    if (!e) return null;
+    return {
+      contents: { kind: 'markdown' as const, value: expressionMarkdown(analysis!.result.index, e) },
+      range: toRange(e.loc),
+    };
+  };
+
   connection.onHover(async ({ textDocument, position }) => {
     const found = await locate(textDocument.uri, position);
-    if (!found?.root.locator) return null;
+    if (!found) return expressionHover(textDocument.uri, position);
+    if (!found.root.locator) return null;
     const { root, at, remote } = found;
     const lock = root.result?.remotes;
     const value = remote

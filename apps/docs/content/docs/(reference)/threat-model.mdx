@@ -5,8 +5,9 @@ description: What flowpact protects, where untrusted data and code cross into it
 
 This is the security assessment of flowpact 0.26.0 and the changes on `main` since (the two fixes this review led to:
 impact mode's own rules judged by the baseline, and suggested edits that write only plain names), built on
-`@ciatlas/core` 2.3.0, as of 2026-10-20, revisited on 2026-10-28 for the quick fix of FP507. It names what
-flowpact protects and where untrusted data and code cross into it, then ranks the threats by likelihood times impact.
+`@ciatlas/core` 2.3.0, as of 2026-10-20, revisited on 2026-10-28 for the quick fix of FP507 and on 2026-10-29 for
+FP506's. It names what flowpact protects and where untrusted data and code cross into it, then ranks the threats by
+likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
 review. The [security page](/docs/security) describes what flowpact reads, writes and sends, and how to verify a
@@ -349,18 +350,21 @@ link out of the repository.
   only deletes text of a condition or writes `!`, never text from the files, and only where the expression is written
   on one line as it reads, in a file with LF line endings (`segmentEdits` in `packages/lint/src/expr-ast.ts`); it is
   left out when a plain YAML scalar would then start with `!`, which YAML reads as a tag, and FP507 does not report a
-  condition whose text a YAML alias shares with another key, which may be a value. Completion
-  offers no other name (`completionItems` in `packages/language-server/src/completion.ts`, with `isPlainName`). A
-  rename writes the name the user types, and only a valid one (`packages/language-server/src/rename.ts`). The
-  override the editor adds is written as quoted YAML strings (`packages/lint/src/override-entry.ts`), an ignore
-  comment holds only the rule's code, and "Regenerate the contracts" is not offered when a contract path is a symlink,
-  goes through one, or leads outside the repository (`unsafeContractPaths` in `packages/lint/src/contracts.ts`, the
-  check `flowpact generate` makes). The language server writes no file itself: it returns workspace edits, which the
-  editor applies when the user picks one (`packages/language-server/src/actions.ts`).
+  condition whose text a YAML alias shares with another key, which may be a value. FP506's fix only writes ` != ''`
+  after a reference, under the same conditions and never in a single-quoted scalar, which would read the `''` as one
+  quote (`compareFix` in `packages/lint/src/rules/values.ts`). Completion offers no other name (`completionItems` in
+  `packages/language-server/src/completion.ts`, with `isPlainName`). A rename writes the name the user types, and only
+  a valid one (`packages/language-server/src/rename.ts`). The override the editor adds is written as quoted YAML
+  strings (`packages/lint/src/override-entry.ts`), an ignore comment holds only the rule's code, and "Regenerate the
+  contracts" is not offered when a contract path is a symlink, goes through one, or leads outside the repository
+  (`unsafeContractPaths` in `packages/lint/src/contracts.ts`, the check `flowpact generate` makes). The language server
+  writes no file itself: it returns workspace edits, which the editor applies when the user picks one
+  (`packages/language-server/src/actions.ts`).
 - **Tests.** `packages/lint/test/suggestions.test.ts` (applying each fix removes its finding and adds no error; no fix
   that would write a name from the lockfile or a quoted key that is not plain);
   `packages/lint/test/rules/expressions.test.ts` (FP507's fixes decide each condition as before, for every value class
   under GitHub's own evaluator; none in single-quoted, multi-line or CRLF text, or where YAML would read a tag);
+  `packages/lint/test/rules/values.test.ts` (FP506's fix only after references, none in single-quoted or CRLF text);
   `packages/language-server/test/completion.test.ts` (names that are not plain left out, descriptions shown as text);
   `packages/language-server/test/server.test.ts` (quick fixes, an override added with the reason the user gives,
   rename, regenerated contracts); `packages/lint/test/review-round3.test.ts` (contracts not written through symlinks).
