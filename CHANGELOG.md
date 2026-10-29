@@ -4,6 +4,24 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.29.0](https://github.com/ciatlas/flowpact/compare/v0.28.0...v0.29.0) (2026-10-29)
+
+
+### Features
+
+* **language-server:** hover tells whether an expression is a condition or a value, what it yields, and when a step output may be empty ([#260](https://github.com/ciatlas/flowpact/issues/260)) ([765d5f2](https://github.com/ciatlas/flowpact/commit/765d5f2e0f47f9805504664d2bf6fa50c3f60186))
+* **rules:** FP105 and FP107 treat default: '' as no default, since GitHub passes '' for an omitted input anyway ([#254](https://github.com/ciatlas/flowpact/issues/254)) ([751b83f](https://github.com/ciatlas/flowpact/commit/751b83f38758c20f8ec762cb598e50c2638115aa))
+* **rules:** FP506 reports a value that is read as a boolean but can be another string ([#259](https://github.com/ciatlas/flowpact/issues/259)) ([765d5f2](https://github.com/ciatlas/flowpact/commit/765d5f2e0f47f9805504664d2bf6fa50c3f60186))
+* **rules:** FP507 reports a redundant != '' or == '' in a condition, with a fix that removes it ([#256](https://github.com/ciatlas/flowpact/issues/256)) ([adda22c](https://github.com/ciatlas/flowpact/commit/adda22c315d0d26a17507f4c90c1ada8ec837ed7))
+* **rules:** FP614 reports an actions.lock flowpact cannot read, instead of checking remote references at their ref without saying so ([#258](https://github.com/ciatlas/flowpact/issues/258)) ([765d5f2](https://github.com/ciatlas/flowpact/commit/765d5f2e0f47f9805504664d2bf6fa50c3f60186))
+
+
+### Bug Fixes
+
+* **lint:** actions.lock pins actions only, not reusable workflow calls, and its v0.0.1 keys are read ([#257](https://github.com/ciatlas/flowpact/issues/257)) ([adda22c](https://github.com/ciatlas/flowpact/commit/adda22c315d0d26a17507f4c90c1ada8ec837ed7))
+* **rules:** FP105 leaves out skips the workflow expects and conditions an omitted input cannot turn false ([#253](https://github.com/ciatlas/flowpact/issues/253)) ([6215b59](https://github.com/ciatlas/flowpact/commit/6215b59ed2d34e866df58620874228cf17570539))
+* **rules:** FP505 accepts case() in a job's if: without ${{ }} ([#255](https://github.com/ciatlas/flowpact/issues/255)) ([751b83f](https://github.com/ciatlas/flowpact/commit/751b83f38758c20f8ec762cb598e50c2638115aa))
+
 ## [0.28.0](https://github.com/ciatlas/flowpact/compare/v0.27.0...v0.28.0) (2026-10-20)
 
 
