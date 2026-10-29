@@ -27,7 +27,7 @@ import {
   usageReadsCallerEvent,
 } from '@ciatlas/core';
 import { booleanTermOf } from '../expr-ast';
-import { isPublished } from '../impact';
+import { type ImpactPolicy, isPublished } from '../impact';
 import { interfaceCalls, interfaceUses, isExternal } from '../remotes';
 import {
   addKeys,
@@ -451,23 +451,49 @@ function callerBindingRemovals(
 
 /** A local caller of a reusable workflow or action: the bindings it passes and where it calls. */
 interface Caller {
+  /** The workflow or action the call is in. */
+  unit: UnitDecl;
   with: Record<string, Binding>;
   loc: Binding['loc'];
   label: string;
 }
 
-function callersOf(index: ProjectIndex, unit: UnitDecl): Caller[] {
+/** The local callers of a unit: the jobs that call a reusable workflow, or the steps that use an action. */
+export function callersOf(index: ProjectIndex, unit: UnitDecl): Caller[] {
   if (unit.kind === 'workflow')
     return index.callersOf(unit.path).map((c) => ({
+      unit: c.caller,
       with: c.job.with,
       loc: c.job.uses?.loc ?? c.job.loc,
       label: `${c.caller.path} › jobs.${c.job.id}`,
     }));
   return index.usersOf(unit.path).map((u) => ({
+    unit: u.unit,
     with: u.step.with,
     loc: u.step.uses?.loc ?? u.step.loc,
     label: `${u.unit.path} › ${u.job ? `jobs.${u.job.id} › ` : ''}step ${u.step.id ?? `#${u.step.index + 1}`}`,
   }));
+}
+
+/**
+ * Whether the local callers decide which inputs a unit gets: it has some, cannot be dispatched, and is not published,
+ * so no caller elsewhere can omit one.
+ */
+function callersDecide(unit: UnitDecl, callers: Caller[], published: boolean): boolean {
+  return callers.length > 0 && !(unit.kind === 'workflow' && unit.dispatch) && !published;
+}
+
+/** Whether a caller can omit `input` of `unit`, as FP105 sees it: one here does, or callers elsewhere can. */
+export function omittable(
+  index: ProjectIndex,
+  unit: UnitDecl,
+  input: string,
+  impact: Pick<ImpactPolicy, 'publish'>,
+): boolean {
+  const callers = callersOf(index, unit);
+  return (
+    !callersDecide(unit, callers, isPublished(unit, impact)) || callers.some((c) => !lookup(c.with, input))
+  );
 }
 
 const optionalInputInCondition = defineRule({
@@ -518,8 +544,7 @@ const optionalInputInCondition = defineRule({
       // Every local caller passing an input proves nothing for a unit other repositories use (the root action.yml, a
       // published reusable workflow: see `impact.publish`), nor for a workflow that can be dispatched without it.
       const published = isPublished(unit, ctx.config.impact);
-      const callersDecide = callers.length > 0 && !(unit.kind === 'workflow' && unit.dispatch) && !published;
-      const reads = optionalInputReads(ctx.index, unit, callers, callersDecide);
+      const reads = optionalInputReads(ctx.index, unit, callers, callersDecide(unit, callers, published));
       reportOptionalInputReads(ctx, unit, reads, published && callers.length > 0);
     }
   },

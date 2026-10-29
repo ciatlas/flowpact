@@ -64,7 +64,9 @@ An expression in an `if:` is a *condition*: GitHub treats `''`, `0`, `false` and
 true, so `if: steps.patch.outputs.file` and `if: steps.patch.outputs.file != ''` decide the same way. Under `env:`,
 `with:` or `outputs:`, an expression is a *value*, passed on as it is: `a || b` gives the first operand that is true, not
 `true`, and only a comparison such as `x != ''` gives `true` or `false`. An `if:` with text around its `${{ }}` is a
-string, which is always true. [FP507](/docs/rules/fp507) reports a comparison with `''` that a condition does not need.
+string, which is always true. [FP507](/docs/rules/fp507) reports a comparison with `''` that a condition does not need,
+and [FP506](/docs/rules/fp506) a value that is read as a boolean but can be other text, such as `fromJSON()` of an
+optional input or an `||` that gives `true` or a file name.
 
 ## Findings
 

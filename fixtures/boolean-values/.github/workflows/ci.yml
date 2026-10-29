@@ -1,0 +1,16 @@
+name: CI
+on: push
+
+jobs:
+  scan:
+    uses: ./.github/workflows/scan.yml
+    with:
+      config: '{"level": 1}'
+
+  report:
+    needs: scan
+    # False for a file name, though a report changed.
+    if: needs.scan.outputs.is-report == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "mode ${{ needs.scan.outputs.mode }}, noisy ${{ needs.scan.outputs.noisy == 'true' }}"

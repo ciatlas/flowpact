@@ -92,3 +92,4 @@ flowpact explain FP507
 ## Related
 
 - [`FP105`](/docs/rules/fp105) optional-input-no-default-in-condition: An optional input that is '' when omitted (no default, or `default: ''`) decides an `if:` by its truthiness.
+- [`FP506`](/docs/rules/fp506) value-not-boolean: A value read as a boolean can be another string: `fromJSON()` of a value that may be '', a comparison with 'true' of a value that may be other text, or an `env:`, `with:` or `outputs:` value that gives a boolean or text.

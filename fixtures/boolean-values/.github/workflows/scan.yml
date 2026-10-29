@@ -1,0 +1,102 @@
+name: Scan
+on:
+  workflow_call:
+    inputs:
+      report-file:
+        description: A report to check instead of the changed files
+        type: string
+        required: false
+      matrix:
+        description: The targets to build, as JSON
+        type: string
+        required: false
+      config:
+        description: The scanner's settings, as JSON
+        type: string
+        required: true
+      strict:
+        type: boolean
+        required: false
+      verbose:
+        type: boolean
+        required: false
+    outputs:
+      is-report:
+        description: Whether a report changed
+        value: ${{ jobs.detect.outputs.is-report }}
+      mode:
+        value: ${{ jobs.detect.outputs.mode }}
+      noisy:
+        value: ${{ jobs.detect.outputs.noisy }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      # true or false, or the file name: `||` gives the operand itself.
+      is-report: ${{ steps.changed.outputs.any == 'true' || inputs.report-file }}
+      # Always text: 'strict' or 'lenient'.
+      mode: ${{ inputs.strict && 'strict' || 'lenient' }}
+      # Booleans only.
+      noisy: ${{ inputs.strict || inputs.verbose }}
+    steps:
+      - id: changed
+        run: echo "any=true" >> "$GITHUB_OUTPUT"
+      - name: Test
+        env:
+          # '' when the caller omits it, and a file name otherwise: neither is JSON.
+          CONTINUE_ON_ERROR: ${{ inputs.report-file }}
+        continue-on-error: ${{ fromJSON(env.CONTINUE_ON_ERROR) }}
+        run: ./test.sh
+      - name: Configure
+        env:
+          CONFIG: ${{ inputs.config }}
+        run: echo '${{ toJSON(fromJSON(env.CONFIG)) }}'
+      - name: Notify
+        uses: ./.github/actions/notify
+        with:
+          enabled: ${{ github.ref == 'refs/heads/main' || inputs.report-file }}
+
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      targets: ${{ steps.list.outputs.targets }}
+      versions: ${{ steps.versions.outputs.list }}
+    steps:
+      - id: list
+        if: github.event_name == 'push'
+        run: echo 'targets=["a","b"]' >> "$GITHUB_OUTPUT"
+      - id: versions
+        run: echo 'list=["1","2"]' >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: plan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # '' when the list step was skipped.
+        target: ${{ fromJSON(needs.plan.outputs.targets) }}
+        # Written by a script that always runs: not reported.
+        version: ${{ fromJSON(needs.plan.outputs.versions) }}
+    steps:
+      - run: ./deploy.sh
+
+  release:
+    needs: plan
+    # The list step's own condition: the list is not '' here.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: ${{ fromJSON(needs.plan.outputs.targets) }}
+    steps:
+      - run: ./release.sh
+
+  build:
+    # Decided by the job's condition: the matrix is not '' here.
+    if: inputs.matrix != ''
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(inputs.matrix) }}
+    steps:
+      - run: ./build.sh

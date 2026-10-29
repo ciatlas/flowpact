@@ -1,5 +1,15 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`fixture repositories > boolean-values: findings snapshot 1`] = `
+[
+  "warning FP506 .github/workflows/ci.yml:13:9 \`needs.scan.outputs.is-report\` is compared with \`'true'\`, but it can hold other text, and the comparison is then false: it is 'true' | text of \`inputs.report-file\` | '' (\`inputs.report-file\` omitted)",
+  "warning FP506 .github/workflows/scan.yml:37:61 \`jobs.detect.outputs.is-report\` is a boolean or the text of \`inputs.report-file\`: \`||\` gives the first operand that is true as it is, not true or false",
+  "error FP506 .github/workflows/scan.yml:49:32 \`fromJSON(env.CONTINUE_ON_ERROR)\` fails when optional input \`report-file\` is omitted: \`env.CONTINUE_ON_ERROR\` is then '', which is not JSON; other text than 'true' or 'false', such as a file name, fails here too",
+  "warning FP506 .github/workflows/scan.yml:58:59 \`with.enabled\` is a boolean or the text of \`inputs.report-file\`: \`||\` gives the first operand that is true as it is, not true or false",
+  "error FP506 .github/workflows/scan.yml:78:21 \`fromJSON(needs.plan.outputs.targets)\` fails when step \`list\` is skipped by its \`if:\`: \`needs.plan.outputs.targets\` is then '', which is not JSON",
+]
+`;
+
 exports[`fixture repositories > broken: findings snapshot 1`] = `
 [
   "error FP502 .github/workflows/expressions.yml:10:25 Invalid expression "inputs.mode = 'release'": Unexpected symbol: '='",

@@ -212,6 +212,37 @@ export function truthinessNodes(root: Expr): TruthinessNode[] {
   return out;
 }
 
+/** The expressions directly inside a node: its operands, arguments, group, or base and computed index. */
+function childrenOf(e: Expr): Expr[] {
+  const n = nodeOf(e);
+  switch (n.kind) {
+    case 'unary':
+      return [n.node.expr];
+    case 'binary':
+      return [n.node.left, n.node.right];
+    case 'logical':
+    case 'call':
+      return n.node.args;
+    case 'grouping':
+      return [n.node.group];
+    case 'index':
+      return nodeOf(n.node.index).kind === 'star' ? [n.node.expr] : [n.node.expr, n.node.index];
+    default:
+      return [];
+  }
+}
+
+/** Every node of an expression, each with its ancestors from the root, parents before their children. */
+export function everyNode(root: Expr): TruthinessNode[] {
+  const out: TruthinessNode[] = [];
+  const visit = (expr: Expr, ancestors: Expr[]) => {
+    out.push({ expr, ancestors });
+    for (const child of childrenOf(expr)) visit(child, [...ancestors, expr]);
+  };
+  visit(root, []);
+  return out;
+}
+
 /** A boolean term of a condition, and whether an odd number of `!` is around it (see `booleanTermOf`). */
 export interface BooleanTerm {
   term: Expr;

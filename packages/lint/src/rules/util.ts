@@ -55,6 +55,19 @@ export function fallsBack(
   return !!fallback && !resolvers.some((resolve) => isEmptyValue(evaluate(fallback, resolve)));
 }
 
+/**
+ * Whether a step before the site among `steps` (its job's or action's) may have written a variable to `$GITHUB_ENV`,
+ * which then replaces the value `env:` gives it.
+ */
+export function maybeWrittenEarlier(steps: StepDecl[] | undefined, site: ExprSite, name: string): boolean {
+  if (!steps) return false;
+  const earlier = site.step === undefined ? steps : steps.slice(0, site.step);
+  if (earlier.some((s) => s.writesEnv.dynamic)) return true;
+  if (earlier.some((s) => s.writesEnv.names.some((n) => n.toLowerCase() === name.toLowerCase()))) return true;
+  // Composite actions and remote actions may export variables we cannot see.
+  return earlier.some((s) => s.uses && s.uses.kind !== 'docker');
+}
+
 /** The steps a site's `steps` context names: an action's, or those of the site's job. */
 export function stepsInScope(unit: UnitDecl, jobId: string | undefined): StepDecl[] {
   if (unit.kind === 'action') return unit.steps;

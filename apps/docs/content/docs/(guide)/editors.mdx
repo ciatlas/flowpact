@@ -155,6 +155,7 @@ A finding that flowpact knows how to fix offers it as a quick fix (**Ctrl+.** or
 | Remove the unused input, and what local callers pass for it | [`FP104`](/docs/rules/fp104), in a workflow or action no other repository uses |
 | Regenerate the contracts, every file as `flowpact generate` writes it | a contract finding ([`FP801`](/docs/rules/fp801)–[`FP805`](/docs/rules/fp805)) |
 | Remove a comparison with `''` from a condition: `x != ''` becomes `x`, `x == ''` becomes `!x` | [`FP507`](/docs/rules/fp507), when it is turned on |
+| Compare a text value with `''` where it is set, so that it is `'true'` or `'false'`: `x` becomes `x != ''` | a value read as a boolean that can be other text ([`FP506`](/docs/rules/fp506)) |
 
 An added key gets an empty value for you to fill in. A quick fix is offered only when the change is certain: none in a
 flow mapping (`{ … }`) or a file with CRLF line endings, and no removal from a
