@@ -27501,9 +27501,13 @@ function stepOutputKind(s, ref) {
   const why = step2 && skippedStep(s.index, s.unit, step2, symbol);
   return why ? unique([...kind, { cls: "empty", why }]) : kind;
 }
-function skippedStep(index, unit, step2, symbol) {
+function skipGuard(step2) {
   const guard = guardOf(step2);
-  if (guard === void 0 || guard && !guard.segments.some((g) => g.refs.length > 0)) return void 0;
+  return guard && !guard.segments.some((g) => g.refs.length > 0) ? void 0 : guard;
+}
+function skippedStep(index, unit, step2, symbol) {
+  const guard = skipGuard(step2);
+  if (guard === void 0) return void 0;
   const reads = guard ? guardReads(index, unit, guard) : { symbols: [], keys: [] };
   return {
     kind: "guarded-step",
@@ -27596,7 +27600,9 @@ var CLASS_TEXT = {
 };
 function describeKind(kind) {
   if (kind.length === 0) return "nothing: it fails";
-  const parts = kind.map((p) => {
+  const order = Object.keys(CLASS_TEXT);
+  const sorted = [...kind].sort((a, b) => order.indexOf(a.cls) - order.indexOf(b.cls));
+  const parts = sorted.map((p) => {
     if (p.cls === "text" && p.from) return `text of \`${p.from}\``;
     if (p.why) return `'' (\`${p.why.label}\` ${p.why.kind === "optional-input" ? "omitted" : "skipped"})`;
     return CLASS_TEXT[p.cls];

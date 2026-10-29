@@ -1,7 +1,15 @@
 /** What an expression can yield, followed through inputs, env and outputs to where each value is set. */
 import type { ExprSite, UnitDecl } from '@ciatlas/core';
 import { describe, expect, it } from 'vitest';
-import { describeKind, kindOf, producersOf, readsReason, type ValueKind } from '../src/value-kind';
+import {
+  describeKind,
+  kindOf,
+  positionOf,
+  producersOf,
+  readsReason,
+  rootOperator,
+  type ValueKind,
+} from '../src/value-kind';
 import { lint, WF, yaml } from './helpers';
 
 /** A workflow's analysis and the sites of its first job's last step, by their key (or field). */
@@ -459,5 +467,43 @@ describe('describeKind', () => {
       "true | 'false' | text of `inputs.file` | text | '' (`steps.s` skipped) | '' | a number | an object or array | a value known at run time",
     );
     expect(describeKind([])).toBe('nothing: it fails');
+  });
+});
+
+describe('positionOf and rootOperator', () => {
+  const { unit } = analyzed({
+    [`${WF}/w.yml`]: yaml`
+      on: push
+      jobs:
+        j:
+          runs-on: x
+          if: \${{ github.ref }} x
+          strategy:
+            fail-fast: \${{ github.ref == 'a' }}
+            max-parallel: \${{ (1 || 2) }}
+            matrix: { a: [1] }
+          steps:
+            - if: github.ref
+              run: echo \${{ github.ref && 'x' }}
+              env:
+                A: \${{ github.ref }}
+    `,
+  });
+  const at = (path: string) => unit.sites.find((s) => s.yamlPath.join('.').endsWith(path))!;
+
+  it('tells conditions, typed fields, scripts and values apart', () => {
+    expect(
+      ['j.if', 'fail-fast', 'max-parallel', '0.if', '0.run', 'env.A'].map((p) => positionOf(at(p))),
+    ).toEqual(['template', 'boolean', 'number', 'condition', 'script', 'value']);
+  });
+
+  it('finds the `||` or `&&` of an expression, through parentheses', () => {
+    const root = (p: string) => rootOperator(at(p).segments[0]!.expr.ast!);
+    expect([root('max-parallel'), root('0.run'), root('env.A'), root('fail-fast')]).toEqual([
+      '||',
+      '&&',
+      undefined,
+      undefined,
+    ]);
   });
 });

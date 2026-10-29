@@ -123,7 +123,7 @@ const PASSED_ON: Partial<Record<ValueClass, ValueClass>> = {
 };
 
 /** A kind as `env:`, `with:` and `outputs:` pass it on: as text (`true` becomes 'true'). */
-const interpolated = (kind: ValueKind): ValueKind =>
+export const interpolated = (kind: ValueKind): ValueKind =>
   unique(kind.map((p) => (PASSED_ON[p.cls] ? { cls: PASSED_ON[p.cls]! } : p)));
 
 function textKind(text: string): ValueKind {
@@ -367,17 +367,23 @@ function stepOutputKind(s: Scope, ref: LocatedRef): ValueKind {
 }
 
 /**
- * Why a step's outputs may be '': its `if:` can skip it. Not an `if:` that reads no context, such as `success()` or
- * `always()`: the step then runs whenever the job goes on.
+ * The `if:` that can skip a step, whose outputs are then '': its condition, or `false` for `if: false`. None for an
+ * `if:` that reads no context, such as `success()` or `always()`: the step then runs whenever the job goes on.
  */
+export function skipGuard(step: StepDecl): ExprSite | false | undefined {
+  const guard = guardOf(step);
+  return guard && !guard.segments.some((g) => g.refs.length > 0) ? undefined : guard;
+}
+
+/** Why a step's outputs may be '': its `if:` can skip it (see `skipGuard`). */
 function skippedStep(
   index: ProjectIndex,
   unit: UnitDecl,
   step: StepDecl,
   symbol: string,
 ): EmptyReason | undefined {
-  const guard = guardOf(step);
-  if (guard === undefined || (guard && !guard.segments.some((g) => g.refs.length > 0))) return undefined;
+  const guard = skipGuard(step);
+  if (guard === undefined) return undefined;
   const reads = guard ? guardReads(index, unit, guard) : { symbols: [], keys: [] };
   return {
     kind: 'guarded-step',
@@ -466,6 +472,36 @@ function siteKind(s: Scope, unit: UnitDecl, site: ExprSite): ValueKind {
   });
 }
 
+/**
+ * How GitHub reads a site's expression: a `condition` decides by truthiness, but an `if:` with text around its `${{ }}`
+ * is a `template`, a string that is always true; `boolean` and `number` fields take a value of that type and nothing
+ * else; a `script` and every other `value` get the expression as text.
+ */
+export type ExprPosition = 'condition' | 'template' | 'boolean' | 'number' | 'script' | 'value';
+
+const TYPED_FIELDS: Record<string, ExprPosition> = {
+  'continue-on-error': 'boolean',
+  'fail-fast': 'boolean',
+  'timeout-minutes': 'number',
+  'max-parallel': 'number',
+};
+
+/** The `||` or `&&` an expression is, through parentheses: they give one of their operands as it is. */
+export function rootOperator(e: Expr): '||' | '&&' | undefined {
+  const n = nodeOf(e);
+  if (n.kind === 'grouping') return rootOperator(n.node.group);
+  return n.kind === 'logical' ? (n.node.operator.lexeme as '||' | '&&') : undefined;
+}
+
+/** How GitHub reads a site's expression (see `ExprPosition`). */
+export function positionOf(site: ExprSite): ExprPosition {
+  if (site.isCondition) return isWholeExpression(site) ? 'condition' : 'template';
+  const last = site.yamlPath.at(-1);
+  const typed =
+    typeof last === 'string' && Object.hasOwn(TYPED_FIELDS, last) ? TYPED_FIELDS[last] : undefined;
+  return typed ?? (site.field === 'step.run' ? 'script' : 'value');
+}
+
 /** Where a value a reference reads is set: the expression or plain value of an env variable or an output. */
 export interface Producer {
   unit: UnitDecl;
@@ -524,7 +560,9 @@ const CLASS_TEXT: Record<ValueClass, string> = {
 /** A kind for people: `'true' | 'false' | text of inputs.file | '' (inputs.file omitted)`. */
 export function describeKind(kind: ValueKind): string {
   if (kind.length === 0) return 'nothing: it fails';
-  const parts = kind.map((p) => {
+  const order = Object.keys(CLASS_TEXT);
+  const sorted = [...kind].sort((a, b) => order.indexOf(a.cls) - order.indexOf(b.cls));
+  const parts = sorted.map((p) => {
     if (p.cls === 'text' && p.from) return `text of \`${p.from}\``;
     if (p.why) return `'' (\`${p.why.label}\` ${p.why.kind === 'optional-input' ? 'omitted' : 'skipped'})`;
     return CLASS_TEXT[p.cls];

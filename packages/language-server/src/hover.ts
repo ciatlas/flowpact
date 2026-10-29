@@ -1,6 +1,8 @@
 import {
   type Binding,
   type Declaration,
+  type ExprSegment,
+  type ExprSite,
   expandMatrix,
   type GraphNode,
   type Json,
@@ -16,10 +18,17 @@ import {
 import {
   commitOf,
   DOCS_BASE_URL,
+  describeKind,
+  type ExprPosition,
+  interpolated,
   lockedRemote,
   parseRemoteRef,
+  positionOf,
   type RemoteEntry,
   type RemotesLockRead,
+  rootOperator,
+  skipGuard,
+  kindOf as valueKindOf,
 } from '@flowpact/lint';
 import type { RemoteBinding } from './remotes';
 import { type CachedUnit, declarationIn, type RemoteSources, sourceLink } from './sources';
@@ -235,12 +244,35 @@ export function hoverMarkdown(locator: SymbolLocator, at: Occurrence, remote: Re
   const from = declaredElsewhere(decl, owner);
   if (from) facts.line = [from, facts.line].filter(Boolean).join(' · ');
   out.push(`${code(label)}${whereOf(kind, owner, at.symbol)}${facts.line ? ` · ${facts.line}` : ''}`);
+  if (kind === 'step-output') out.push(...skippedLines(index, at.symbol));
   out.push(
     ...(at.role === 'binding'
       ? bindingLines(locator, at, facts)
       : symbolLines(index, at.symbol, kind, facts, decls.length)),
   );
   return out.join('\n');
+}
+
+/** The step a step output symbol belongs to: `<unit>#jobs.<job>.steps.<id>.outputs.<name>`, or an action's. */
+function stepOfOutput(index: ProjectIndex, symbol: string) {
+  const m = /^(.*)#(?:jobs\.([^.]+)\.)?steps\.([^.]+)\.outputs\./.exec(symbol);
+  const unit = m ? index.unit(m[1]!) : undefined;
+  if (!unit) return undefined;
+  const steps = unit.kind === 'workflow' ? (m![2] ? unit.jobs[m![2]]?.steps : undefined) : unit.steps;
+  return steps?.find((s) => s.id === m![3]);
+}
+
+/** When a step output may be '': its step has an `if:` that can skip it. */
+function skippedLines(index: ProjectIndex, symbol: string): string[] {
+  const step = stepOfOutput(index, symbol);
+  const guard = step && skipGuard(step);
+  if (guard === undefined) return [];
+  return [
+    '',
+    guard
+      ? `may be '' · the step runs only ${code(`if: ${guard.text}`)}`
+      : `always '' · the step never runs (${code('if: false')})`,
+  ];
 }
 
 interface Facts {
@@ -537,4 +569,101 @@ function flowLine(root: TraceNode): string {
   if (unique.length === 0) return '';
   const more = unique.length > MAX_FLOW ? ` +${unique.length - MAX_FLOW} more` : '';
   return `${unique.slice(0, MAX_FLOW).join(' · ')}${more}`;
+}
+
+/** An expression of a site, at a position of a file, and where it is written with its `${{ }}`. */
+export interface ExpressionAt {
+  unit: UnitDecl;
+  site: ExprSite;
+  seg: ExprSegment;
+  loc: Loc;
+}
+
+const contains = (loc: Loc, line: number, column: number) =>
+  (loc.line < line || (loc.line === line && loc.column <= column)) &&
+  (loc.endLine > line || (loc.endLine === line && loc.endColumn >= column));
+
+/**
+ * Where a segment is written with its `${{ }}`: its location holds the expression only, without the delimiters or the
+ * spaces inside them. A bare `if:` has none.
+ */
+function delimited(unit: UnitDecl, seg: ExprSegment): Loc {
+  const { loc } = seg;
+  const first = unit.source.lines[loc.line - 1] ?? '';
+  const last = unit.source.lines[loc.endLine - 1] ?? '';
+  const open = first.lastIndexOf('${{', loc.column - 1);
+  const close = last.indexOf('}}', loc.endColumn - 1);
+  const spaced = (text: string) => /^\s*$/.test(text);
+  if (open < 0 || close < 0) return loc;
+  if (!spaced(first.slice(open + 3, loc.column - 1)) || !spaced(last.slice(loc.endColumn - 1, close)))
+    return loc;
+  return { ...loc, column: open + 1, endColumn: close + 3 };
+}
+
+/** The expression written at a position (1-based) of a file: inside a `${{ }}`, or a bare `if:`. */
+export function expressionAt(index: ProjectIndex, file: string, line: number, column: number) {
+  for (const unit of index.units()) {
+    if (unit.file !== file) continue;
+    for (const site of unit.sites)
+      for (const seg of site.segments) {
+        const loc = delimited(unit, seg);
+        if (seg.expr.ast && contains(loc, line, column)) return { unit, site, seg, loc } as ExpressionAt;
+      }
+  }
+  return undefined;
+}
+
+/** What GitHub does with an expression in each position, for its hover. */
+const POSITIONS: Record<ExprPosition, string> = {
+  condition: "condition: '', 0, false and null are false, any other value true",
+  template: 'an `if:` with text around its `${{ }}`: a string, which is always true',
+  boolean: "takes true or false, not text (`fromJSON()` turns 'true' into true)",
+  number: 'takes a number',
+  script: 'written into the script as text',
+  value: "a value, passed on as text: true becomes 'true'",
+};
+
+/** How a value field is named in its hover: `env.NAME`, `outputs.name`, `with.name`, or its key. */
+function fieldName(site: ExprSite): string {
+  const last = site.yamlPath.at(-1);
+  if (!site.key) return code(typeof last === 'string' ? last : site.field);
+  const ctx = site.field.endsWith('.env')
+    ? 'env'
+    : site.field.endsWith('.output')
+      ? 'outputs'
+      : site.field.split('.')[1];
+  return code(`${ctx}.${site.key}`);
+}
+
+/** A note on `||` and `&&` outside a condition: they give an operand as it is. */
+function operatorNote(e: ExpressionAt, position: ExprPosition): string | undefined {
+  const op = position === 'condition' ? undefined : rootOperator(e.seg.expr.ast!);
+  if (op === '||') return '`||` gives the first operand that is true as it is, not true or false';
+  if (op === '&&') return '`&&` gives the first operand that is false as it is, not true or false';
+  return undefined;
+}
+
+/**
+ * Markdown for hovering an expression where no symbol is: how GitHub reads it there (a condition, a value passed on as
+ * text, a field of a type), what it yields, and what `||` or `&&` gives outside a condition. A value is shown as it is
+ * passed on, so `a == 'b'` under `env:` yields 'true' or 'false'.
+ */
+export function expressionMarkdown(index: ProjectIndex, e: ExpressionAt): string {
+  const position = positionOf(e.site);
+  const kind = valueKindOf(index, e.unit, e.site, e.seg, e.seg.expr.ast!);
+  const passedOn = position === 'value' || position === 'script' || position === 'template';
+  const where =
+    position === 'value'
+      ? `${fieldName(e.site)} is `
+      : position === 'boolean' || position === 'number'
+        ? `${fieldName(e.site)} `
+        : '';
+  const note = operatorNote(e, position);
+  return [
+    `**flowpact** · expression · [docs](${DOCS})`,
+    '',
+    `${where}${POSITIONS[position]}  `,
+    `yields ${describeKind(passedOn ? interpolated(kind) : kind)}${note ? '  ' : ''}`,
+    ...(note ? [note] : []),
+  ].join('\n');
 }
