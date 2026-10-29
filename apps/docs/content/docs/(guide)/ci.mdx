@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ciatlas/flowpact@v0.28
+      - uses: ciatlas/flowpact@v0.29
         with:
           mode: check   # or lint, if you do not commit contracts
 ```
@@ -113,7 +113,7 @@ To see findings in the **Security → Code scanning** tab and as pull request an
 ### Pin the version
 
 ```sh
-npx --yes flowpact@0.28 check
+npx --yes flowpact@0.29 check
 ```
 
 The banner at the top of the log shows the exact tool and schema versions that produced the result.
