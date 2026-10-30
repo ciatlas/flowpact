@@ -1,12 +1,6 @@
 /** A pull request's version changes of remote references (remotes-changes.ts): paired with what they replaced, graded. */
-import { memoryFileSystem } from '@ciatlas/core';
-import {
-  gradeVersionChanges,
-  parseConfig,
-  parseRemoteRef,
-  type RemoteRef,
-  versionChanges,
-} from '@flowpact/lint';
+import { memoryFileSystem, parseRemoteRef, type RemoteRef } from '@ciatlas/core';
+import { gradeVersionChanges, parseConfig, versionChanges } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';
 import { WF, yaml } from './helpers';
 

@@ -9,12 +9,13 @@ import {
   type FileSystem,
   loadProject,
   nodeFileSystem,
-  ProjectIndex,
+  type RemoteRef,
   remoteKey,
+  remoteRefsOf,
 } from '@ciatlas/core';
 import { lockedCommit, readActionsLock } from './actions-lock';
 import type { AnalyzeOptions } from './analyze';
-import { lockedRemote, type RemoteEntry, type RemoteRef, readRemotesLock, remoteRefsOf } from './remotes';
+import { lockedRemote, type RemoteEntry, readRemotesLock } from './remotes';
 import { type FetchProblem, type FetchRemotesOptions, fetchRemoteEntries } from './remotes-fetch';
 import { gradeRemoteChanges, type RemoteChange, type RemoteChangeGrade } from './remotes-grade';
 
@@ -54,7 +55,7 @@ function refsIn(opts: AnalyzeOptions, fs: FileSystem): RemoteRef[] {
     validateSchema: false,
     ...(repository ? { repository } : {}),
   });
-  return remoteRefsOf(new ProjectIndex(project));
+  return remoteRefsOf(project);
 }
 
 export interface VersionGrading {

@@ -9002,7 +9002,7 @@ var HttpClientResponse = class {
   }
 };
 var HttpClient = class {
-  constructor(userAgent, handlers, requestOptions) {
+  constructor(userAgent, handlers, requestOptions2) {
     this._ignoreSslError = false;
     this._allowRedirects = true;
     this._allowRedirectDowngrade = false;
@@ -9013,29 +9013,29 @@ var HttpClient = class {
     this._disposed = false;
     this.userAgent = this._getUserAgentWithOrchestrationId(userAgent);
     this.handlers = handlers || [];
-    this.requestOptions = requestOptions;
-    if (requestOptions) {
-      if (requestOptions.ignoreSslError != null) {
-        this._ignoreSslError = requestOptions.ignoreSslError;
+    this.requestOptions = requestOptions2;
+    if (requestOptions2) {
+      if (requestOptions2.ignoreSslError != null) {
+        this._ignoreSslError = requestOptions2.ignoreSslError;
       }
-      this._socketTimeout = requestOptions.socketTimeout;
-      if (requestOptions.allowRedirects != null) {
-        this._allowRedirects = requestOptions.allowRedirects;
+      this._socketTimeout = requestOptions2.socketTimeout;
+      if (requestOptions2.allowRedirects != null) {
+        this._allowRedirects = requestOptions2.allowRedirects;
       }
-      if (requestOptions.allowRedirectDowngrade != null) {
-        this._allowRedirectDowngrade = requestOptions.allowRedirectDowngrade;
+      if (requestOptions2.allowRedirectDowngrade != null) {
+        this._allowRedirectDowngrade = requestOptions2.allowRedirectDowngrade;
       }
-      if (requestOptions.maxRedirects != null) {
-        this._maxRedirects = Math.max(requestOptions.maxRedirects, 0);
+      if (requestOptions2.maxRedirects != null) {
+        this._maxRedirects = Math.max(requestOptions2.maxRedirects, 0);
       }
-      if (requestOptions.keepAlive != null) {
-        this._keepAlive = requestOptions.keepAlive;
+      if (requestOptions2.keepAlive != null) {
+        this._keepAlive = requestOptions2.keepAlive;
       }
-      if (requestOptions.allowRetries != null) {
-        this._allowRetries = requestOptions.allowRetries;
+      if (requestOptions2.allowRetries != null) {
+        this._allowRetries = requestOptions2.allowRetries;
       }
-      if (requestOptions.maxRetries != null) {
-        this._maxRetries = requestOptions.maxRetries;
+      if (requestOptions2.maxRetries != null) {
+        this._maxRetries = requestOptions2.maxRetries;
       }
     }
   }
@@ -12509,6 +12509,13 @@ function needsSecret(needed, name) {
 }
 
 // ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-ref.ts
+function parseRemoteRef(raw, kind) {
+  const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
+  if (!m) return void 0;
+  return { raw: raw.trim(), kind, owner: m[1], repo: m[2], path: m[3].replace(/^\//, ""), ref: m[4] };
+}
+var isFullSha = (ref) => /^[0-9a-f]{40}$/i.test(ref);
+var remoteSourceFiles = (r) => r.kind === "workflow" ? [r.path] : ["action.yml", "action.yaml"].map((n) => r.path ? `${r.path}/${n}` : n);
 function remoteKey(raw) {
   const [owner = "", repo = "", ...rest] = raw.trim().split("/");
   return [owner.toLowerCase(), repo.toLowerCase(), ...rest].join("/");
@@ -17016,7 +17023,7 @@ function explain(unit, diagnostics) {
   if (!shape) return diagnostics;
   const schema3 = parserSchema(unit.kind);
   const root = SCHEMA_ROOT[unit.kind];
-  const keyOf2 = /* @__PURE__ */ new Map();
+  const keyOf3 = /* @__PURE__ */ new Map();
   const groups = /* @__PURE__ */ new Map();
   for (const d of diagnostics) {
     if (d.kind) continue;
@@ -17025,7 +17032,7 @@ function explain(unit, diagnostics) {
     const key = unexpected ? shape.keys.get(pos) : void 0;
     let map;
     if (key && key.name === unexpected[1]) {
-      keyOf2.set(d, key);
+      keyOf3.set(d, key);
       map = key.map;
     } else if (d.message.startsWith("Required property is missing: ")) {
       map = shape.maps.get(pos);
@@ -17034,13 +17041,13 @@ function explain(unit, diagnostics) {
   }
   const replaced = /* @__PURE__ */ new Map();
   for (const [map, group2] of groups) {
-    const resolved = resolveAlternatives(map, group2, keyOf2, schema3, root);
+    const resolved = resolveAlternatives(map, group2, keyOf3, schema3, root);
     if (!resolved) continue;
     for (const [i, d] of group2.entries()) replaced.set(d, i === 0 ? resolved : []);
   }
   const out = [];
   for (const d of diagnostics.flatMap((d2) => replaced.get(d2) ?? [d2])) {
-    const key = keyOf2.get(d);
+    const key = keyOf3.get(d);
     if (!key || d.message !== unexpectedValue(key.name)) {
       out.push(d);
       continue;
@@ -17052,7 +17059,7 @@ function explain(unit, diagnostics) {
   }
   return out;
 }
-function resolveAlternatives(map, group2, keyOf2, schema3, root) {
+function resolveAlternatives(map, group2, keyOf3, schema3, root) {
   const shapes = mappingsAt(schema3, root, map.path);
   if (shapes.length < 2) return void 0;
   const names = new Set(map.keys.map((k) => k.name));
@@ -17064,7 +17071,7 @@ function resolveAlternatives(map, group2, keyOf2, schema3, root) {
   const [best, runnerUp] = scored;
   if (!best || !runnerUp || best.score === 0) return void 0;
   const agrees = (def) => group2.every((d) => {
-    const key = keyOf2.get(d);
+    const key = keyOf3.get(d);
     if (key) return !def.looseKeyType && !propertyOf(def, key.name);
     return propertyOf(def, d.message.slice("Required property is missing: ".length))?.required === true;
   });
@@ -17075,7 +17082,7 @@ function resolveAlternatives(map, group2, keyOf2, schema3, root) {
     return (key, d) => {
       if (!anchor2 || !others.some((o) => propertyOf(o, key.name))) return d;
       const e = { ...d, message: `${d.message} (not allowed together with \`${anchor2.name}\`)` };
-      keyOf2.set(e, key);
+      keyOf3.set(e, key);
       return e;
     };
   };
@@ -17083,9 +17090,9 @@ function resolveAlternatives(map, group2, keyOf2, schema3, root) {
     const explain3 = explained(best.def);
     return [
       ...best.unexpected.map((key) => {
-        const parsed = group2.find((d2) => keyOf2.get(d2) === key);
+        const parsed = group2.find((d2) => keyOf3.get(d2) === key);
         const d = parsed ?? { message: unexpectedValue(key.name), loc: key.loc };
-        keyOf2.set(d, key);
+        keyOf3.set(d, key);
         return explain3(key, d);
       }),
       ...best.missing.map((name) => {
@@ -17097,7 +17104,7 @@ function resolveAlternatives(map, group2, keyOf2, schema3, root) {
   const guesses = scored.filter((s) => s.score === best.score && agrees(s.def));
   if (guesses.length !== 1) return void 0;
   const explain2 = explained(guesses[0].def);
-  return group2.map((d) => keyOf2.has(d) ? explain2(keyOf2.get(d), d) : d);
+  return group2.map((d) => keyOf3.has(d) ? explain2(keyOf3.get(d), d) : d);
 }
 function ignoredKey(kind, key, schema3, root) {
   const { path } = key.map;
@@ -17986,6 +17993,370 @@ var nodeHost = {
 function loadProject(opts) {
   return loadProjectWith(opts, nodeHost);
 }
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-fetch.ts
+var GITHUB_COM_API = "https://api.github.com";
+function apiHost(apiUrl) {
+  const { hostname, pathname } = new URL(apiUrl);
+  return hostname.startsWith("api.") && pathname.replace(/\/+$/, "") === "" ? hostname.slice(4) : hostname;
+}
+var RemoteFetchError = class extends Error {
+  constructor(message, kind, host, status, retryAfterS, brief = message) {
+    super(message);
+    this.kind = kind;
+    this.host = host;
+    this.status = status;
+    this.retryAfterS = retryAfterS;
+    this.brief = brief;
+  }
+  kind;
+  host;
+  status;
+  retryAfterS;
+  brief;
+  name = "RemoteFetchError";
+};
+async function resolveRemoteCommit(r, opts = {}) {
+  checkNames(r, targetOf(opts.api));
+  return withFallback(opts, async (at) => {
+    const body = await onceMore(
+      () => get2(`${repoUrl(r, at)}/commits/${encodeURIComponent(r.ref)}`, "application/vnd.github.sha", at),
+      opts
+    );
+    const sha = body && decode(body).trim();
+    if (!sha || !isFullSha(sha)) throw notFound(`${r.owner}/${r.repo}@${r.ref}`, at);
+    return sha.toLowerCase();
+  });
+}
+async function fetchRemoteSourceAt(r, sha, opts = {}) {
+  const targets = [targetOf(opts.api), ...opts.fallback ? [targetOf(opts.fallback)] : []];
+  checkNames(r, targets[0]);
+  if (!isFullSha(sha))
+    throw new RemoteFetchError(`${sha} is not a full commit SHA`, "other", targets[0].host);
+  const commit = sha.toLowerCase();
+  for (const t of targets) {
+    const cached2 = await fromCache(r, commit, t, opts);
+    if (cached2) return cached2;
+  }
+  return withFallback(opts, async (at) => {
+    const found = await onceMore(() => firstSource(r, commit, at), opts);
+    if (!found) {
+      const what = r.kind === "workflow" ? `${r.path} not found` : `no action.yml in ${r.path || "the repository root"}`;
+      throw new RemoteFetchError(`${what} at ${commit.slice(0, 7)}`, "not-found", at.t.host);
+    }
+    const source = await sourceOf(r, commit, found.file, found.bytes, at.t.host);
+    if (opts.expectDigest !== void 0 && source.digest !== opts.expectDigest)
+      throw new RemoteFetchError(
+        `the digest of ${r.owner}/${r.repo}/${found.file} at ${commit.slice(0, 7)} is ${source.digest}, not ${opts.expectDigest}`,
+        "digest",
+        at.t.host
+      );
+    try {
+      await opts.cache?.set(keyOf(r, commit, found.file, at.t), source.bytes);
+    } catch {
+    }
+    return source;
+  });
+}
+function targetOf(api = { apiUrl: GITHUB_COM_API }) {
+  const url2 = new URL(api.apiUrl);
+  return {
+    base: `${url2.origin}${url2.pathname.replace(/\/+$/, "")}`,
+    origin: url2.origin,
+    host: api.host ?? apiHost(api.apiUrl),
+    ...api.token ? { token: api.token } : {}
+  };
+}
+async function withFallback(opts, work) {
+  try {
+    return await work({ t: targetOf(opts.api), opts });
+  } catch (e) {
+    if (!opts.fallback || !(e instanceof RemoteFetchError && e.kind === "not-found")) throw e;
+    return work({ t: targetOf(opts.fallback), opts });
+  }
+}
+function checkNames(r, t) {
+  const names = [r.owner, r.repo, r.ref, ...r.path.split("/")];
+  if (names.some((n) => n === "." || n === ".."))
+    throw new RemoteFetchError(`${r.raw} has a "." or ".." name, which no repository has`, "other", t.host);
+}
+var repoUrl = (r, at) => `${at.t.base}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
+var keyOf = (r, sha, file, t) => ({
+  host: t.host.toLowerCase(),
+  owner: r.owner.toLowerCase(),
+  repo: r.repo.toLowerCase(),
+  sha,
+  file
+});
+async function fromCache(r, sha, t, opts) {
+  if (!opts.cache) return void 0;
+  for (const file of remoteSourceFiles(r)) {
+    let bytes;
+    try {
+      bytes = await opts.cache.get(keyOf(r, sha, file, t));
+    } catch {
+      bytes = void 0;
+    }
+    if (!bytes) continue;
+    const source = await sourceOf(r, sha, file, bytes, t.host);
+    return opts.expectDigest === void 0 || source.digest === opts.expectDigest ? source : void 0;
+  }
+  return void 0;
+}
+async function firstSource(r, sha, at) {
+  for (const file of remoteSourceFiles(r)) {
+    const path = file.split("/").map(encodeURIComponent).join("/");
+    const bytes = await get2(
+      `${repoUrl(r, at)}/contents/${path}?ref=${sha}`,
+      "application/vnd.github.raw",
+      at
+    );
+    if (bytes !== void 0) return { file, bytes };
+  }
+  return void 0;
+}
+async function sourceOf(r, sha, file, bytes, host) {
+  const hash = new Uint8Array(
+    await globalThis.crypto.subtle.digest("SHA-256", bytes)
+  );
+  const digest = `sha256-${btoa(String.fromCharCode(...hash))}`;
+  return { ref: r, sha, file, bytes, text: decode(bytes), digest, host };
+}
+var decode = (bytes) => new TextDecoder().decode(bytes);
+var notFound = (what, at) => new RemoteFetchError(`${what} not found, or not readable with this token`, "not-found", at.t.host);
+async function onceMore(read2, opts) {
+  const first = await read2();
+  if (first !== void 0) return first;
+  await pause(opts.retryDelayMs ?? RETRY_DELAY_MS, opts.signal);
+  return read2();
+}
+var RETRY_DELAY_MS = 300;
+var get2 = async (url2, accept, at) => (await getReply(url2, accept, at))?.bytes;
+async function getReply(url2, accept, at) {
+  const reply = await withRetries(url2, accept, at);
+  if (reply.res.status === 404 || reply.res.status === 422) return void 0;
+  if (!reply.res.ok) throw httpError(reply.res, at.t);
+  return reply;
+}
+var ATTEMPTS = 3;
+var MAX_RETRY_AFTER_S = 60;
+async function withRetries(url2, accept, at) {
+  const host = new URL(url2).host;
+  for (let attempt = 1; ; attempt++) {
+    at.opts.signal?.throwIfAborted();
+    const down = at.opts.unreachableHosts?.get(host);
+    if (down) throw down;
+    const answer = await attemptOf(url2, accept, at);
+    const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, at.opts) : void 0;
+    if (wait === void 0) return lastAnswer(answer, host, at.opts);
+    at.opts.onRetry?.({
+      host,
+      attempt: attempt + 1,
+      attempts: ATTEMPTS,
+      why: answer instanceof RemoteFetchError ? answer.brief : redact(statusOf(answer.res), at.t.token),
+      waitMs: Math.round(wait)
+    });
+    await pause(wait, at.opts.signal);
+  }
+}
+function lastAnswer(answer, host, opts) {
+  if (!(answer instanceof RemoteFetchError)) return answer;
+  if (answer.kind === "unreachable" || answer.kind === "timeout") opts.unreachableHosts?.set(host, answer);
+  throw answer;
+}
+function headersOf(url2, accept, at) {
+  const headers = { accept, "x-github-api-version": "2022-11-28" };
+  if (at.opts.userAgent) headers["user-agent"] = at.opts.userAgent;
+  if (at.t.token && new URL(url2).origin === at.t.origin) headers.authorization = `Bearer ${at.t.token}`;
+  return headers;
+}
+function signalOf(opts) {
+  const timeout = AbortSignal.timeout(opts.timeoutMs ?? TIMEOUT_MS);
+  return opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
+}
+async function attemptOf(url2, accept, at) {
+  const fetchOf = at.opts.fetch ?? globalThis.fetch;
+  let res;
+  try {
+    res = await fetchOf(url2, { headers: headersOf(url2, accept, at), signal: signalOf(at.opts) });
+  } catch (e) {
+    return networkError(e, at);
+  }
+  at.seen?.(res);
+  if (!res.ok) {
+    res.body?.cancel().catch(() => {
+    });
+    return { res, bytes: new Uint8Array() };
+  }
+  try {
+    return { res, bytes: await bodyOf(res, at) };
+  } catch (e) {
+    return e instanceof RemoteFetchError ? e : networkError(e, at);
+  }
+}
+function retryWait(answer, attempt, opts) {
+  if (answer instanceof RemoteFetchError)
+    return answer.kind === "unreachable" || answer.kind === "timeout" ? backoffMs(attempt, opts) : void 0;
+  if (!passes(answer.res)) return void 0;
+  const after = retryAfterOf(answer.res);
+  if (after === void 0) return backoffMs(attempt, opts);
+  return after <= MAX_RETRY_AFTER_S ? after * 1e3 : void 0;
+}
+function backoffMs(attempt, opts) {
+  const base = opts.retryDelayMs ?? RETRY_DELAY_MS;
+  return base * 2 ** (attempt - 1) + Math.random() * base;
+}
+function pause(ms, signal) {
+  signal?.throwIfAborted();
+  return new Promise((done, fail) => {
+    const stop = () => {
+      clearTimeout(timer);
+      fail(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", stop);
+      done();
+    }, ms);
+    signal?.addEventListener("abort", stop, { once: true });
+  });
+}
+function retryAfterOf(res) {
+  const header = res.headers.get("retry-after");
+  const seconds = header === null ? Number.NaN : Number(header);
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : void 0;
+}
+var rateLimitUsedUp = (res) => (res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0";
+var passes = (res) => res.status >= 500 || slowDown(res) && !rateLimitUsedUp(res);
+var slowDown = (res) => res.status === 429 || res.status === 403 && retryAfterOf(res) !== void 0;
+function resetInS(res) {
+  const reset = Number(res.headers.get("x-ratelimit-reset") ?? Number.NaN);
+  return Number.isFinite(reset) ? Math.max(0, Math.ceil(reset - Date.now() / 1e3)) : void 0;
+}
+var TIMEOUT_MS = 3e4;
+function networkError(e, at) {
+  const { opts, t } = at;
+  if (opts.signal?.aborted) throw opts.signal.reason;
+  const error3 = Object(e);
+  if (error3.name === "TimeoutError") return timeoutError(at);
+  const why = redact(String(error3.cause?.code ?? error3.cause?.message ?? error3.message), t.token);
+  return new RemoteFetchError(
+    `could not reach ${t.origin} (${why})`,
+    "unreachable",
+    t.host,
+    void 0,
+    void 0,
+    NETWORK_CODES[why] ?? `could not connect (${why})`
+  );
+}
+function timeoutError({ opts, t }) {
+  const seconds = (opts.timeoutMs ?? TIMEOUT_MS) / 1e3;
+  const brief = `no answer within ${seconds} s`;
+  return new RemoteFetchError(
+    `no answer from ${t.origin} within ${seconds} s`,
+    "timeout",
+    t.host,
+    void 0,
+    void 0,
+    brief
+  );
+}
+var redact = (text2, token) => token ? text2.split(token).join("***") : text2;
+var NETWORK_CODES = {
+  UND_ERR_CONNECT_TIMEOUT: "connection timed out",
+  ETIMEDOUT: "connection timed out",
+  ECONNREFUSED: "connection refused",
+  ECONNRESET: "connection reset",
+  ENOTFOUND: "host not found",
+  EAI_AGAIN: "host name lookup failed",
+  EHOSTUNREACH: "host unreachable",
+  ENETUNREACH: "network unreachable"
+};
+var statusOf = (res) => `${res.status}${res.statusText ? ` ${res.statusText}` : ""}`;
+function httpError(res, t) {
+  const status = redact(statusOf(res), t.token);
+  const fail = (message, kind, retryAfterS) => new RemoteFetchError(message, kind, t.host, res.status, retryAfterS);
+  if (res.status === 401)
+    return fail(
+      t.token ? `the GitHub API rejected the token (${status})` : `the GitHub API asks for a token (${status})`,
+      "token"
+    );
+  if (rateLimitUsedUp(res))
+    return fail(`the GitHub API rate limit is used up (${status})`, "rate-limit", resetInS(res));
+  if (slowDown(res)) {
+    const after = retryAfterOf(res);
+    const when = after === void 0 ? " later" : ` in ${after} s`;
+    return fail(`the GitHub API asks to slow down (${status}): try again${when}`, "rate-limit", after);
+  }
+  if (res.status === 403) return fail(`the GitHub API refused the request (${status})`, "access");
+  return fail(`${status} from the GitHub API`, res.status >= 500 ? "server" : "other");
+}
+async function bodyOf(res, at) {
+  const max = at.opts.maxFileBytes ?? MAX_FILE_BYTES;
+  const tooLarge = () => new RemoteFetchError(`a response over ${max} bytes`, "too-large", at.t.host, res.status);
+  if (Number(res.headers.get("content-length") ?? 0) > max) {
+    res.body?.cancel().catch(() => {
+    });
+    throw tooLarge();
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks = [];
+  let size = 0;
+  for (; ; ) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      reader.cancel().catch(() => {
+      });
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+var MAX_FILE_BYTES = 1e6;
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote.ts
+var CALLABLE = /^\.github\/workflows\/[^/]+\.[yY][aA]?[mM][lL]$/;
+function remoteRefOfUses(unit, uses) {
+  const kind = uses.kind.endsWith("workflow") ? "workflow" : "action";
+  if (uses.kind === "remote-workflow" || uses.kind === "remote-action") return parseRemoteRef(uses.raw, kind);
+  if (uses.kind !== "local-workflow" && uses.kind !== "local-action") return void 0;
+  if (!unit.external || !unit.origin || uses.workspacePath !== void 0) return void 0;
+  if (uses.self || kind === "workflow" && uses.raw.trim().startsWith("./"))
+    return uses.selfRef === void 0 && uses.target ? atOrigin(unit.origin, uses.target, kind) : void 0;
+  return parseRemoteRef(uses.raw, kind);
+}
+function atOrigin(o, target, kind) {
+  if (kind === "workflow" ? !CALLABLE.test(target) : target === ".." || target.startsWith("../"))
+    return void 0;
+  return parseRemoteRef(`${o.owner}/${o.repo}${target === "." ? "" : `/${target}`}@${o.sha ?? o.ref}`, kind);
+}
+function remoteRefsOf(project, units = [
+  ...project.workflows.values(),
+  ...project.actions.values(),
+  ...project.external?.values() ?? []
+]) {
+  const out = /* @__PURE__ */ new Map();
+  for (const unit of units)
+    for (const uses of usesOf(unit)) {
+      const r = remoteRefOfUses(unit, uses);
+      if (r && !out.has(remoteKey(r.raw))) out.set(remoteKey(r.raw), r);
+    }
+  return [...out].sort(([a], [b]) => compare2(a, b)).map(([, r]) => r);
+}
+function* usesOf(unit) {
+  const users = unit.kind === "action" ? unit.steps : Object.values(unit.jobs).flatMap((j) => [j, ...j.steps]);
+  for (const { uses } of users) if (uses) yield uses;
+}
+var compare2 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
 // ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/trace.ts
 var readsGithub = (ref) => ref.context === "github";
@@ -20576,7 +20947,7 @@ var actionsLockSchema = looseObject({
 });
 var KNOWN_VERSION = /^v0\.0\.\d+$/;
 var pinKey = (owner, repo, ref) => `${owner.toLowerCase()}/${repo.toLowerCase()}@${/^[0-9a-f]{40}$/i.test(ref) ? ref.toLowerCase() : ref}`;
-function keyOf(pin) {
+function keyOf2(pin) {
   const m = /^([^/@:]+)\/([^/@:]+)@([^:]+)(?::sha(?:1|256)-[0-9a-f]+)?$/.exec(pin);
   return m ? pinKey(m[1], m[2], m[3]) : void 0;
 }
@@ -20596,10 +20967,10 @@ function readActionsLock(fs3) {
   const { version: version2, workflows = {}, dependencies = {} } = parsed.data;
   if (!KNOWN_VERSION.test(version2))
     return { file, error: `version ${version2} is not one flowpact reads (v0.0.x)` };
-  const covered = new Set(Object.values(workflows).flatMap((pins) => pins.map(keyOf)));
+  const covered = new Set(Object.values(workflows).flatMap((pins) => pins.map(keyOf2)));
   const commits = /* @__PURE__ */ new Map();
   for (const [pin, dep] of Object.entries(dependencies)) {
-    const key = keyOf(pin);
+    const key = keyOf2(pin);
     const commit = commitOfPin(dep.commit);
     if (key && commit && covered.has(key)) commits.set(key, commit);
   }
@@ -21582,7 +21953,7 @@ function callsOf(wf) {
   for (const job of Object.values(wf.jobs)) if (job.uses) calls2.push(callContract(job, job.uses));
   return calls2.sort((a, b) => byCodePoint(a.job, b.job));
 }
-function usesOf(index, unit) {
+function usesOf2(index, unit) {
   const uses = [];
   for (const u of index.actionUses.filter((x) => x.unit === unit)) {
     const withs = bindingTexts(u.step.with);
@@ -21597,7 +21968,7 @@ function usesOf(index, unit) {
 }
 function buildContract(index, unit) {
   const calls2 = unit.kind === "workflow" ? callsOf(unit) : [];
-  const uses = usesOf(index, unit);
+  const uses = usesOf2(index, unit);
   return {
     $schema: schemaUrl("contract"),
     version: SCHEMA_VERSIONS.contract,
@@ -23025,7 +23396,7 @@ function interfaceYaml(e) {
 }
 var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !pinMismatch(ref, e)).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
 function pinMismatch(ref, entry) {
-  const r = parseRemoteRef2(ref, entry.kind);
+  const r = parseRemoteRef(ref, entry.kind);
   return r !== void 0 && commitOf(r, entry) !== entry.sha;
 }
 function lockedRemote(lock, ref) {
@@ -23036,7 +23407,7 @@ function lockedRemote(lock, ref) {
   const unreadable = find(lock?.unreadable);
   return unreadable === void 0 ? {} : { unreadable };
 }
-var commitOf = (r, entry) => /^[0-9a-f]{40}$/i.test(r.ref) ? r.ref.toLowerCase() : entry.sha;
+var commitOf = (r, entry) => isFullSha(r.ref) ? r.ref.toLowerCase() : entry.sha;
 var isExternal = (unit) => unit.external === true;
 function interfaceCalls(index) {
   const remote = [];
@@ -23059,27 +23430,6 @@ function interfaceUses(index) {
     }
   }
   return [...index.actionUses, ...remote];
-}
-function parseRemoteRef2(raw, kind) {
-  const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
-  if (!m) return void 0;
-  return { raw: raw.trim(), kind, owner: m[1], repo: m[2], path: m[3].replace(/^\//, ""), ref: m[4] };
-}
-function remoteRefsOf(index, units = index.units()) {
-  const out = /* @__PURE__ */ new Map();
-  const add = (raw, kind) => {
-    const ref = parseRemoteRef2(raw, kind);
-    if (ref && !out.has(remoteKey(raw))) out.set(remoteKey(raw), ref);
-  };
-  for (const unit of units) {
-    if (unit.kind === "workflow") {
-      for (const job of Object.values(unit.jobs))
-        if (job.uses?.kind === "remote-workflow") add(job.uses.raw, "workflow");
-    }
-    for (const { step: step3 } of stepsOf(unit))
-      if (step3.uses?.kind === "remote-action") add(step3.uses.raw, "action");
-  }
-  return [...out.values()];
 }
 var lockedInput = (i) => ({
   ...i.type ? { type: i.type } : {},
@@ -23432,7 +23782,7 @@ var contractRules = [
 // ../lint/src/suggestions.ts
 var import_yaml12 = __toESM(require_dist(), 1);
 var sources = /* @__PURE__ */ new WeakMap();
-function sourceOf(index, file) {
+function sourceOf2(index, file) {
   let byFile = sources.get(index);
   if (!byFile) {
     byFile = new Map(index.units().map((u) => [u.source.path, u.source]));
@@ -23448,7 +23798,7 @@ var quoted = (q) => q === "'" ? "'" : '"';
 var PLAIN_NAME = /^\w[\w.-]*$/;
 function renameAt(index, loc, from, to) {
   if (!PLAIN_NAME.test(to)) return void 0;
-  const source = sourceOf(index, loc.file);
+  const source = sourceOf2(index, loc.file);
   const text2 = source && textAt(source, loc);
   if (text2 === void 0) return void 0;
   const q = /^(["'])(.*)\1$/.exec(text2);
@@ -23458,7 +23808,7 @@ function renameAt(index, loc, from, to) {
   return { title: `Rename ${JSON.stringify(from)} to ${JSON.stringify(to)}`, edits: [{ loc, newText }] };
 }
 function renameSegment(index, loc, segment, from, to) {
-  const source = sourceOf(index, loc.file);
+  const source = sourceOf2(index, loc.file);
   const text2 = source && textAt(source, loc);
   if (text2 === void 0 || !/^[\w.-]+$/.test(text2) || !PLAIN_NAME.test(to)) return void 0;
   const parts = text2.split(".");
@@ -23530,7 +23880,7 @@ function removePair(source, pair) {
   };
 }
 function editable(index, file) {
-  const source = sourceOf(index, file);
+  const source = sourceOf2(index, file);
   if (!source || source.text.includes("\r")) return void 0;
   return { source, doc: documentOf(source) };
 }
@@ -23574,7 +23924,7 @@ function replaceValue(index, file, path, newText) {
   return loc.line === loc.endLine && !hasLineBreak(newText) ? { loc, newText } : void 0;
 }
 function keyLoc(index, file, path) {
-  const source = sourceOf(index, file);
+  const source = sourceOf2(index, file);
   const own2 = path.at(-1);
   const parent = source && nodeAt(documentOf(source), path.slice(0, -1));
   const pair = typeof own2 === "string" && (0, import_yaml12.isMap)(parent) ? pairOf(parent, own2) : void 0;
@@ -23759,7 +24109,7 @@ function booleanTermOf(expr, start) {
 }
 function segmentLoc(index, seg, span) {
   const { loc } = seg;
-  const line = loc.line === loc.endLine ? sourceOf(index, loc.file)?.lines[loc.line - 1] : void 0;
+  const line = loc.line === loc.endLine ? sourceOf2(index, loc.file)?.lines[loc.line - 1] : void 0;
   if (line?.slice(loc.column - 1, loc.endColumn - 1) !== seg.expr.source) return void 0;
   return { ...loc, column: loc.column + span.start, endColumn: loc.column + span.end };
 }
@@ -23767,7 +24117,7 @@ function applyEdits(source, edits) {
   return [...edits].sort((a, b) => b.span.start - a.span.start).reduce((s, e) => s.slice(0, e.span.start) + e.newText + s.slice(e.span.end), source);
 }
 function segmentEdits(index, seg, edits) {
-  if (sourceOf(index, seg.loc.file)?.text.includes("\r") || edits.some((e) => /[\r\n]/.test(e.newText)))
+  if (sourceOf2(index, seg.loc.file)?.text.includes("\r") || edits.some((e) => /[\r\n]/.test(e.newText)))
     return void 0;
   const out = [];
   for (const e of edits) {
@@ -24872,7 +25222,7 @@ function negationOf(node) {
 }
 function startsTag(ctx, site, edited) {
   if (!edited.startsWith("!") || site.text.includes("${{")) return false;
-  const first = sourceOf(ctx.index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1];
+  const first = sourceOf2(ctx.index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1];
   return !['"', "'", "|", ">"].includes(first ?? "");
 }
 var expressionRules = [
@@ -26944,7 +27294,7 @@ function lockDrift(ctx) {
     (r) => !fetched.includes(r)
   );
   const lockedKeys = new Set(locked.map(remoteKey));
-  const used = remoteRefsOf(ctx.index).map((r) => r.raw);
+  const used = remoteRefsOf(ctx.index.project).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
   const entries2 = Object.entries(lock?.remotes ?? {}).filter(([ref]) => !fetched.includes(ref));
   const mismatched = entries2.filter(([ref, e]) => pinMismatch(ref, e)).map(([ref, e]) => `${ref} (it records ${e.sha.slice(0, 7)})`);
@@ -26957,7 +27307,7 @@ function lockDrift(ctx) {
 }
 function relockedEntries(entries2, actionsLock) {
   return entries2.flatMap(([ref, e]) => {
-    const r = parseRemoteRef2(ref, e.kind);
+    const r = parseRemoteRef(ref, e.kind);
     const runs = r && !pinMismatch(ref, e) ? lockedCommit(actionsLock, r) : void 0;
     return runs && runs !== e.sha ? [`${ref} (it records ${e.sha.slice(0, 7)}, actions.lock ${runs.slice(0, 7)})`] : [];
   });
@@ -27906,7 +28256,7 @@ function operandFix(index, at, op) {
   const end = exprSpan(at.seg.expr.source, op).end;
   return { edit: { span: { start: end, end }, newText: " != ''" }, name: `\`${refLabel(ref)}\`` };
 }
-var singleQuoted = (index, site) => sourceOf(index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1] === "'";
+var singleQuoted = (index, site) => sourceOf2(index, site.file)?.lines[site.loc.line - 1]?.[site.loc.column - 1] === "'";
 function unwrap(e) {
   const n = nodeOf(e);
   return n.kind === "grouping" ? unwrap(n.node.group) : e;
@@ -28813,12 +29163,12 @@ var workingTree = (root) => ({
   walk: () => [],
   isDir: () => false
 });
-function commitOf2(root, ref, fetch2) {
+function commitOf2(root, ref, fetch) {
   try {
     return resolveCommit(root, ref);
   } catch (err) {
-    if (!fetch2) throw new ImpactSetupError(err.message);
-    fetch2([ref]);
+    if (!fetch) throw new ImpactSetupError(err.message);
+    fetch([ref]);
     try {
       return resolveCommit(root, ref);
     } catch (again) {
@@ -29305,216 +29655,59 @@ import {
 } from "fs";
 import { homedir } from "os";
 import { dirname as dirname5, isAbsolute as isAbsolute7, join as join7, relative as relative6, resolve as resolve6 } from "path";
-var sourceFiles = (r) => r.kind === "workflow" ? [r.path] : ["action.yml", "action.yaml"].map((n) => r.path ? `${r.path}/${n}` : n);
 
 // ../lint/src/remotes-fetch.ts
-var FetchError = class extends Error {
-  constructor(message, kind = "other", brief = message) {
-    super(message);
-    this.kind = kind;
-    this.brief = brief;
-  }
-  kind;
-  brief;
-  get unreadable() {
-    return this.kind === "not-found";
-  }
-};
-async function get2(url2, accept, opts) {
-  const res = await withRetries(url2, accept, opts);
-  if (res.status === 404 || res.status === 422) return void 0;
-  if (!res.ok) throw httpError(res, opts);
-  return bodyOf(res);
+var apiOf = (opts) => ({
+  apiUrl: opts.apiUrl ?? GITHUB_COM_API,
+  ...opts.token ? { token: opts.token } : {}
+});
+function requestOptions(opts) {
+  const { fallback, fetch, cache, unreachableHosts, retryDelayMs, onRetry } = opts;
+  return {
+    api: apiOf(opts),
+    userAgent: "flowpact",
+    ...fallback ? { fallback: { apiUrl: fallback.apiUrl, ...fallback.token ? { token: fallback.token } : {} } } : {},
+    ...fetch ? { fetch } : {},
+    ...cache ? { cache } : {},
+    ...unreachableHosts ? { unreachableHosts } : {},
+    ...retryDelayMs !== void 0 ? { retryDelayMs } : {},
+    ...onRetry ? { onRetry } : {}
+  };
 }
-async function send(url2, accept, opts) {
-  try {
-    return await (opts.fetch ?? fetch)(url2, {
-      headers: {
-        accept,
-        "user-agent": "flowpact",
-        "x-github-api-version": "2022-11-28",
-        ...opts.token ? { authorization: `Bearer ${opts.token}` } : {}
-      },
-      signal: AbortSignal.timeout(TIMEOUT_MS)
-    });
-  } catch (e) {
-    throw networkError(url2, e);
-  }
-}
-var ATTEMPTS = 3;
-var MAX_RETRY_AFTER_S = 60;
-async function withRetries(url2, accept, opts) {
-  const host = new URL(url2).host;
-  for (let attempt = 1; ; attempt++) {
-    const down = opts.unreachableHosts?.get(host);
-    if (down) throw down;
-    const answer = await answerOf(url2, accept, opts);
-    const wait = attempt < ATTEMPTS ? retryWait(answer, attempt, opts) : void 0;
-    if (wait === void 0) return lastAnswer(answer, host, opts);
-    opts.onRetry?.({
-      host,
-      attempt: attempt + 1,
-      attempts: ATTEMPTS,
-      why: answer instanceof Response ? statusOf(answer) : answer.brief,
-      waitMs: Math.round(wait)
-    });
-    await pause(wait);
+var tokenFor = (host, opts) => opts.fallback && host === apiHost(opts.fallback.apiUrl) ? opts.fallback.token : opts.token;
+var USED_UP = "the GitHub API rate limit is used up";
+function adviceOf(e, opts) {
+  const token = tokenFor(e.host, opts);
+  switch (e.kind) {
+    case "unreachable":
+      return ": check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1";
+    case "timeout":
+      return ": check the network, or try again";
+    case "token":
+      return token ? ": check GH_TOKEN or GITHUB_TOKEN, or run `gh auth status`" : ": set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`";
+    case "rate-limit":
+      if (!e.message.startsWith(USED_UP)) return "";
+      return token ? "; try again later" : ": without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`";
+    case "access":
+      return ": the token needs read access to the repository's contents";
+    default:
+      return "";
   }
 }
-async function answerOf(url2, accept, opts) {
-  try {
-    return await send(url2, accept, opts);
-  } catch (e) {
-    return e;
-  }
-}
-function lastAnswer(answer, host, opts) {
-  if (answer instanceof Response) return answer;
-  if (answer.kind === "unreachable" || answer.kind === "timeout") opts.unreachableHosts?.set(host, answer);
-  throw answer;
-}
-var pause = (ms) => new Promise((done) => setTimeout(done, ms));
-var retryAfterOf = (res) => {
-  const header = res.headers.get("retry-after");
-  const seconds = header === null ? Number.NaN : Number(header);
-  return Number.isFinite(seconds) && seconds >= 0 ? seconds : void 0;
-};
-var rateLimitUsedUp = (res) => (res.status === 403 || res.status === 429) && res.headers.get("x-ratelimit-remaining") === "0";
-function retryWait(answer, attempt, opts) {
-  if (answer instanceof Response && !passes(answer)) return void 0;
-  const after = answer instanceof Response ? retryAfterOf(answer) : void 0;
-  if (after === void 0) return backoffMs(attempt, opts);
-  return after <= MAX_RETRY_AFTER_S ? after * 1e3 : void 0;
-}
-var passes = (res) => res.status >= 500 || slowDown(res) && !rateLimitUsedUp(res);
-var slowDown = (res) => res.status === 429 || res.status === 403 && retryAfterOf(res) !== void 0;
-function backoffMs(attempt, opts) {
-  const base = opts.retryDelayMs ?? RETRY_DELAY_MS;
-  return base * 2 ** (attempt - 1) + Math.random() * base;
-}
-var TIMEOUT_MS = 3e4;
-function networkError(url2, e) {
-  const host = new URL(url2).origin;
-  if (e.name === "TimeoutError")
-    return new FetchError(
-      `no answer from ${host} within ${TIMEOUT_MS / 1e3} s: check the network, or try again`,
-      "timeout",
-      `no answer within ${TIMEOUT_MS / 1e3} s`
-    );
-  const cause = e.cause;
-  const why = cause?.code ?? cause?.message ?? e.message;
-  return new FetchError(
-    `could not reach ${host} (${why}): check the network and GITHUB_API_URL; behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1`,
-    "unreachable",
-    NETWORK_CODES[why] ?? `could not connect (${why})`
-  );
-}
-var NETWORK_CODES = {
-  UND_ERR_CONNECT_TIMEOUT: "connection timed out",
-  ETIMEDOUT: "connection timed out",
-  ECONNREFUSED: "connection refused",
-  ECONNRESET: "connection reset",
-  ENOTFOUND: "host not found",
-  EAI_AGAIN: "host name lookup failed",
-  EHOSTUNREACH: "host unreachable",
-  ENETUNREACH: "network unreachable"
-};
-var statusOf = (res) => `${res.status}${res.statusText ? ` ${res.statusText}` : ""}`;
-function httpError(res, opts) {
-  const status = statusOf(res);
-  if (res.status === 401)
-    return new FetchError(
-      opts.token ? `the GitHub API rejected the token (${status}): check GH_TOKEN or GITHUB_TOKEN, or run \`gh auth status\`` : `the GitHub API asks for a token (${status}): set GH_TOKEN or GITHUB_TOKEN, or sign in with \`gh auth login\``,
-      "token"
-    );
-  if (rateLimitUsedUp(res)) return new FetchError(usedUpMessage(status, opts), "rate-limit");
-  if (slowDown(res)) return new FetchError(slowDownMessage(res, status), "rate-limit");
-  if (res.status === 403)
-    return new FetchError(
-      `the GitHub API refused the request (${status}): the token needs read access to the repository's contents`,
-      "access"
-    );
-  return new FetchError(`${status} from the GitHub API`, res.status >= 500 ? "server" : "other");
-}
-var usedUpMessage = (status, opts) => `the GitHub API rate limit is used up (${status})${opts.token ? "; try again later" : ": without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`"}`;
-function slowDownMessage(res, status) {
-  const after = retryAfterOf(res);
-  return `the GitHub API asks to slow down (${status}): try again${after === void 0 ? " later" : ` in ${after} s`}`;
-}
-async function bodyOf(res) {
-  if (Number(res.headers.get("content-length") ?? 0) > MAX_FILE_BYTES) throw tooLarge();
-  const text2 = await res.text();
-  if (text2.length > MAX_FILE_BYTES) throw tooLarge();
-  return text2;
-}
-var MAX_FILE_BYTES = 1e6;
-var tooLarge = () => new FetchError(`a response over ${MAX_FILE_BYTES} bytes`);
-var repoUrl = (r, opts) => `${trimChar(opts.apiUrl ?? "https://api.github.com", "/")}/repos/${encodeURIComponent(r.owner)}/${encodeURIComponent(r.repo)}`;
-var contentsPath = (path) => path.split("/").map(encodeURIComponent).join("/");
-var RETRY_DELAY_MS = 300;
-async function onceMore(read2, opts) {
-  const first = await read2();
-  if (first !== void 0) return first;
-  await pause(opts.retryDelayMs ?? RETRY_DELAY_MS);
-  return read2();
-}
-async function shaOf(r, opts) {
-  const locked = opts.lockedCommit?.(r);
-  if (locked) return locked;
-  const sha = await onceMore(
-    () => get2(`${repoUrl(r, opts)}/commits/${encodeURIComponent(r.ref)}`, "application/vnd.github.sha", opts),
-    opts
-  );
-  if (!sha || !/^[0-9a-f]{40}$/.test(sha.trim()))
-    throw new FetchError(
-      `${r.owner}/${r.repo}@${r.ref} not found, or not readable with this token`,
-      "not-found"
-    );
-  return sha.trim();
-}
-async function firstSource(r, sha, opts) {
-  for (const file of sourceFiles(r)) {
-    const text2 = await fileAt2(r, file, sha, opts);
-    if (text2 !== void 0) return { file, text: text2 };
-  }
-  return void 0;
-}
-var fileAt2 = (r, path, sha, opts) => get2(`${repoUrl(r, opts)}/contents/${contentsPath(path)}?ref=${sha}`, "application/vnd.github.raw", opts);
-async function sourceAt(r, sha, opts) {
-  const found = await onceMore(() => firstSource(r, sha, opts), opts);
-  if (found) {
-    opts.onSource?.({ ref: r, sha, ...found });
-    return found;
-  }
-  const what = r.kind === "workflow" ? `${r.path} not found` : `no action.yml in ${r.path || "the repository root"}`;
-  throw new FetchError(`${what} at ${sha.slice(0, 7)}`, "not-found");
+function entryOf(r, source) {
+  const ctx = createParseContext(`${r.owner}/${r.repo}`);
+  if (r.kind === "action")
+    return lockEntryOf(parseActionFile(r.raw, source.file, source.text, ctx), source.sha);
+  const wf = parseWorkflowFile(r.raw, source.text, ctx);
+  const undeclared = undeclaredSecretsRead(wf);
+  return { ...lockEntryOf(wf, source.sha), ...undeclared.length ? { undeclaredSecrets: undeclared } : {} };
 }
 async function fetchRemoteEntry(r, opts = {}) {
-  const sha = await shaOf(r, opts);
-  const ctx = createParseContext(`${r.owner}/${r.repo}`);
-  const { file, text: text2 } = await sourceAt(r, sha, opts);
-  if (r.kind === "action") return lockEntryOf(parseActionFile(r.raw, file, text2, ctx), sha);
-  const wf = parseWorkflowFile(r.raw, text2, ctx);
-  const undeclared = undeclaredSecretsRead(wf);
-  return { ...lockEntryOf(wf, sha), ...undeclared.length ? { undeclaredSecrets: undeclared } : {} };
-}
-async function fetchWithFallback(r, opts) {
-  try {
-    return await fetchRemoteEntry(r, opts);
-  } catch (e) {
-    if (!opts.fallback || !(e instanceof FetchError && e.unreadable)) throw e;
-    const { apiUrl, token } = opts.fallback;
-    const entry = await fetchRemoteEntry(r, {
-      ...opts,
-      apiUrl,
-      ...token ? { token } : { token: void 0 }
-    });
-    return { ...entry, host: hostOf(apiUrl) };
-  }
-}
-function hostOf(apiUrl) {
-  const { hostname } = new URL(apiUrl);
-  return hostname.startsWith("api.") ? hostname.slice(4) : hostname;
+  const request = requestOptions(opts);
+  const sha = opts.lockedCommit?.(r) ?? await resolveRemoteCommit(r, request);
+  const source = await fetchRemoteSourceAt(r, sha, request);
+  const entry = entryOf(r, source);
+  return source.host === apiHost(apiOf(opts).apiUrl) ? entry : { ...entry, host: source.host };
 }
 async function eachRef(refs, opts, work) {
   const count = { done: 0, total: refs.length };
@@ -29531,18 +29724,19 @@ async function eachLimited(items, limit, work) {
 }
 async function tryFetch(r, opts, out) {
   try {
-    return await fetchWithFallback(r, opts);
+    return await fetchRemoteEntry(r, opts);
   } catch (e) {
     if (!isFetchFailure(e)) throw e;
-    const problem = { ref: r.raw, error: e.message, kind: kindOf2(e) };
+    const problem = { ref: r.raw, error: messageOf(e, opts), kind: kindOf2(e) };
     if (problem.kind === "not-found") out.unreadable.push(problem);
     else out.failed.push(problem);
     return void 0;
   }
 }
-var isFetchFailure = (e) => e instanceof FetchError || e instanceof TypeError || e.name === "TimeoutError";
+var isFetchFailure = (e) => e instanceof RemoteFetchError || e instanceof TypeError || e.name === "TimeoutError";
+var messageOf = (e, opts) => e instanceof RemoteFetchError ? `${e.message}${adviceOf(e, opts)}` : e.message;
 function kindOf2(e) {
-  if (e instanceof FetchError) return e.kind;
+  if (e instanceof RemoteFetchError) return e.kind;
   return e.name === "TimeoutError" ? "timeout" : "unreachable";
 }
 async function fetchCounted(r, opts, out, count) {
@@ -29566,7 +29760,7 @@ async function fetchMissingRemotes(root, fs3, lock, opts = {}) {
     ...opts.repository ? { repository: opts.repository } : {}
   });
   const locked = new Set(Object.keys(lock?.remotes ?? {}).map(remoteKey));
-  const missing = remoteRefsOf(new ProjectIndex(project)).filter((r) => !locked.has(remoteKey(r.raw)));
+  const missing = remoteRefsOf(project).filter((r) => !locked.has(remoteKey(r.raw)));
   const actionsLock = readActionsLock(fs3);
   return fetchRemoteEntries(missing, { lockedCommit: (r) => lockedCommit(actionsLock, r), ...opts });
 }
@@ -29637,7 +29831,7 @@ function setEntry(lock, ref, entry) {
   const key = remoteKey(ref);
   for (const k of Object.keys(lock.remotes)) if (remoteKey(k) === key) delete lock.remotes[k];
   if (!entry) return;
-  const r = parseRemoteRef2(ref, entry.kind);
+  const r = parseRemoteRef(ref, entry.kind);
   lock.remotes[ref] = r ? { ...entry, sha: commitOf(r, entry) } : entry;
 }
 var stepName = (s) => s.id ?? `#${s.index + 1}`;
@@ -29882,16 +30076,16 @@ var interfaceChanges2 = (ref, before, after) => [
 ];
 
 // ../lint/src/remotes-changes.ts
-var targetOf = (r) => `${r.kind}:${r.owner.toLowerCase()}/${r.repo.toLowerCase()}/${r.path}`;
+var targetOf2 = (r) => `${r.kind}:${r.owner.toLowerCase()}/${r.repo.toLowerCase()}/${r.path}`;
 function versionChanges(base, head) {
   const inBase = new Set(base.map((r) => remoteKey(r.raw)));
   const inHead = new Set(head.map((r) => remoteKey(r.raw)));
   const replaced = (target) => {
-    const same2 = base.filter((r) => targetOf(r) === target);
+    const same2 = base.filter((r) => targetOf2(r) === target);
     return same2.find((r) => !inHead.has(remoteKey(r.raw))) ?? same2[0];
   };
   return head.flatMap((ref) => {
-    const from = inBase.has(remoteKey(ref.raw)) ? void 0 : replaced(targetOf(ref));
+    const from = inBase.has(remoteKey(ref.raw)) ? void 0 : replaced(targetOf2(ref));
     return from ? [{ ref, from }] : [];
   });
 }
@@ -29903,24 +30097,24 @@ function refsIn(opts, fs3) {
     validateSchema: false,
     ...repository ? { repository } : {}
   });
-  return remoteRefsOf(new ProjectIndex(project));
+  return remoteRefsOf(project);
 }
 var unique2 = (refs) => refs.filter((r, i) => refs.findIndex((o) => o.raw === r.raw) === i);
-function atLockedCommits(fs3, fetch2) {
+function atLockedCommits(fs3, fetch) {
   const actionsLock = readActionsLock(fs3);
-  return { lockedCommit: (r) => lockedCommit(actionsLock, r), ...fetch2 };
+  return { lockedCommit: (r) => lockedCommit(actionsLock, r), ...fetch };
 }
-async function gradeVersionChanges(opts, base, fetch2 = {}) {
+async function gradeVersionChanges(opts, base, fetch = {}) {
   const head = opts.fs ?? nodeFileSystem(opts.root);
   const changes = versionChanges(refsIn(opts, base), refsIn(opts, head));
   if (!changes.length) return { changes, grades: [], failed: [] };
   const baseLock = readRemotesLock(base).lock;
   const locked = (r) => lockedRemote(baseLock, r.raw).entry;
   const [after, before] = await Promise.all([
-    fetchRemoteEntries(unique2(changes.map((c) => c.ref)), atLockedCommits(head, fetch2)),
+    fetchRemoteEntries(unique2(changes.map((c) => c.ref)), atLockedCommits(head, fetch)),
     fetchRemoteEntries(
       unique2(changes.map((c) => c.from).filter((r) => !locked(r))),
-      atLockedCommits(base, fetch2)
+      atLockedCommits(base, fetch)
     )
   ]);
   const graded = changes.flatMap((c) => {
@@ -31033,13 +31227,13 @@ var BLOB_RETRY_ERRORS = [
   "REQUEST_SEND_ERROR"
 ];
 var stallTimeout = () => Number.parseInt(process.env.ACTIONS_ARTIFACT_UPLOAD_TIMEOUT_MS ?? "", 10) || 3e5;
-function blobError(e, redact) {
+function blobError(e, redact2) {
   const stalled = e.message.startsWith("Request timeout");
-  const failure2 = stalled ? `upload stalled: no progress in ${stallTimeout()} ms (${redact(e.message)})` : redact(e.message);
+  const failure2 = stalled ? `upload stalled: no progress in ${stallTimeout()} ms (${redact2(e.message)})` : redact2(e.message);
   const retryable = !stalled && BLOB_RETRY_ERRORS.some((c) => e.code === c || e.message.toUpperCase().includes(c));
   return { failure: failure2, retryable };
 }
-async function blobAttempt(http2, url2, body, headers, redact) {
+async function blobAttempt(http2, url2, body, headers, redact2) {
   try {
     const res = await http2.request("PUT", url2, Readable.from([body]), {
       ...headers,
@@ -31057,13 +31251,13 @@ async function blobAttempt(http2, url2, body, headers, redact) {
       retryable: status === 500 || status === 503
     };
   } catch (err) {
-    return blobError(err, redact);
+    return blobError(err, redact2);
   }
 }
 async function blobRequest(http2, url2, body, headers, what, secrets) {
-  const redact = (s) => secrets.reduce((out, secret) => out.replaceAll(secret, "***"), s);
+  const redact2 = (s) => secrets.reduce((out, secret) => out.replaceAll(secret, "***"), s);
   for (let attempt = 1; ; attempt++) {
-    const failed = await blobAttempt(http2, url2, body, headers, redact);
+    const failed = await blobAttempt(http2, url2, body, headers, redact2);
     if (!failed) return;
     if (!failed.retryable || attempt === 4) throw new Error(`${what} failed: ${failed.failure}`);
     const delay = (2 ** (attempt - 1) - 1) * 4e3;
@@ -31651,7 +31845,7 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
 }
 function githubComFallback(inputs) {
   const api = process.env.GITHUB_API_URL;
-  if (!inputs.remotesGithubCom || !api || hostOf(api) === "github.com") return {};
+  if (!inputs.remotesGithubCom || !api || apiHost(api) === "github.com") return {};
   const token = getInput("github-com-token");
   return { fallback: { apiUrl: "https://api.github.com", ...token ? { token } : {} } };
 }

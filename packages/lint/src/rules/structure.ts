@@ -6,14 +6,16 @@ import {
   type MissingTarget,
   type Project,
   type ProjectIndex,
+  parseRemoteRef,
   refsOf,
   remoteKey,
+  remoteRefsOf,
   sym,
   type UnverifiedUse,
   type WorkflowDecl,
 } from '@ciatlas/core';
 import { type ActionsLockRead, lockedCommit } from '../actions-lock';
-import { parseRemoteRef, pinMismatch, type RemoteEntry, remoteRefsOf } from '../remotes';
+import { pinMismatch, type RemoteEntry } from '../remotes';
 import { defineRule, type RelatedLocation, type RuleContext, type RuleDefinition } from './types';
 import { chainRelated, listNames, quote } from './util';
 
@@ -453,7 +455,7 @@ function lockDrift(ctx: RuleContext): {
     (r) => !fetched.includes(r),
   );
   const lockedKeys = new Set(locked.map(remoteKey));
-  const used = remoteRefsOf(ctx.index).map((r) => r.raw);
+  const used = remoteRefsOf(ctx.index.project).map((r) => r.raw);
   const usedKeys = new Set(used.map(remoteKey));
   const entries = Object.entries(lock?.remotes ?? {}).filter(([ref]) => !fetched.includes(ref));
   const mismatched = entries

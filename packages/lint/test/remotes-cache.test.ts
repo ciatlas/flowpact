@@ -23,7 +23,6 @@ import {
   pruneCache,
   remotesCacheDir,
   remotesCacheIn,
-  sourceFiles,
   touchCommit,
 } from '@flowpact/lint';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -146,14 +145,6 @@ describe('cachedSourcePath', () => {
     expect(cachedSourcePath(dir, { owner: 'octo', repo: '.' }, SHA, 'action.yml')).toBeUndefined();
     expect(cachedSourcePath(dir, SHIP, 'v1', 'action.yml')).toBeUndefined();
     expect(cachedSourcePath(dir, SHIP, SHA.toUpperCase(), 'action.yml')).toBeUndefined();
-  });
-
-  it('lists the files an interface is read from: the workflow file, or action.yml then action.yaml', () => {
-    expect(sourceFiles({ kind: 'workflow', path: '.github/workflows/d.yml' })).toEqual([
-      '.github/workflows/d.yml',
-    ]);
-    expect(sourceFiles({ kind: 'action', path: '' })).toEqual(['action.yml', 'action.yaml']);
-    expect(sourceFiles({ kind: 'action', path: 'setup' })).toEqual(['setup/action.yml', 'setup/action.yaml']);
   });
 });
 

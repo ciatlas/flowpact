@@ -6,7 +6,7 @@ description: What flowpact protects, where untrusted data and code cross into it
 This is the security assessment of flowpact 0.26.0 and the changes on `main` since (the two fixes this review led to:
 impact mode's own rules judged by the baseline, and suggested edits that write only plain names), built on
 `@ciatlas/core` 2.3.0, as of 2026-10-20, revisited on 2026-10-28 for the quick fix of FP507 and on 2026-10-29 for
-FP506's. It names what flowpact protects and where untrusted data and code cross into it, then ranks the threats by
+FP506's, and on 2026-10-30 for the move of the remote fetcher into `@ciatlas/core` 2.6.0. It names what flowpact protects and where untrusted data and code cross into it, then ranks the threats by
 likelihood times impact.
 For each threat it gives the code that defends against it, the tests that check that code, and the risk that remains.
 It is revisited for every new feature and every breaking change, and the version and date above change with each
@@ -14,7 +14,7 @@ review. The [security page](/docs/security) describes what flowpact reads, write
 release; to report a vulnerability, see the [security policy](https://github.com/ciatlas/flowpact/security/policy).
 
 Paths are in this repository, except those marked (core), which are in
-[ciatlas/core](https://github.com/ciatlas/core/tree/v2.3.0) at v2.3.0.
+[ciatlas/core](https://github.com/ciatlas/core/tree/v2.6.0) at v2.6.0.
 
 <InlineTOC items={toc} />
 
@@ -393,10 +393,13 @@ names to a second host.
   commit SHA, and `flowpact remotes update` rewrites it from the source, so a false entry shows in the pull request's
   diff. An entry that records another commit than the full SHA its reference pins is not used at all, and
   [`FP612`](/docs/rules/fp612) reports it (`pinMismatch` in `packages/lint/src/remotes.ts`): a false entry cannot make
-  the calls of a pinned reference pass. Fetched files are parsed, never run, and refused over 1 MB or after 30 seconds, eight at a time
-  (`packages/lint/src/remotes-fetch.ts`). A remote unit has no body: nothing that follows a call into a callee reaches
+  the calls of a pinned reference pass. Fetched files are parsed, never run, and refused over 1 MB or after 30 seconds
+  (`fetchRemoteSourceAt` in `src/remote-fetch.ts` (core)), eight at a time (`packages/lint/src/remotes-fetch.ts`); a
+  reference with a `.` or `..` name is refused before any request, so that it cannot send the token to another endpoint
+  of the API (`checkNames` (core)). A remote unit has no body: nothing that follows a call into a callee reaches
   it (core `ProjectIndex.interfaceOf`, `actionInterfaceOf`). Fetching is opt-in; the token goes only to the GitHub API
-  (`GITHUB_API_URL`) as an authorization header and is never printed; the action does not fetch on
+  (`GITHUB_API_URL`) as an authorization header and is never printed, nor kept in a message (`headersOf`, `redact`
+  (core)); the action does not fetch on
   `pull_request_target` or `workflow_run`, where an untrusted pull request would choose the references while the token
   may be privileged (`remotesToFetch` in `packages/action/src/main.ts`). The version changes of a pull request are
   graded against interfaces fetched for the run, never its own lockfile's, from the base commit's entries
@@ -415,14 +418,15 @@ names to a second host.
   (`pruneCache`). References and reasons from the lockfile are printed with control
   characters escaped (`packages/cli/src/lib/text.ts`). The github.com fallback is off unless asked, is used only for
   references the enterprise server answers as missing or unreadable, and never with the enterprise token
-  (`fetchWithFallback`, `apiFor` in `packages/lint/src/remotes-fetch.ts`); an entry read there records
+  (`withFallback` in `src/remote-fetch.ts` (core), `apiFor` in `packages/lint/src/remotes-fetch.ts`); an entry read there records
   `host: github.com`, which `remotes download` follows only with `--github-com`, and it skips any other host a lockfile
   names. The editor opens and links the commit a reference runs (its own full SHA, else the locked commit), and links a
   source only on a host it is sure of: github.com for an entry read there, `GITHUB_API_URL`, or a github.com or GHE.com
   `origin` (`webHostOf`, `sourceLink` in `packages/language-server/src/sources.ts`); it never analyzes a cached file.
 - **Tests.** `packages/lint/test/remotes.test.ts` (FP611 for an invalid lockfile, then nothing checked;
-  `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the token sent only to the API, a response
-  over 1 MB refused, the enterprise token never sent to github.com); `packages/lint/test/remotes-cache.test.ts` (paths
+  `FP612` for an outdated one); `packages/lint/test/remotes-fetch.test.ts` (the enterprise token never sent to
+  github.com); `test/remote-fetch.test.ts` (core; the token sent only to the API and never in a message, a response over
+  1 MB refused, a `.` or `..` name refused before any request); `packages/lint/test/remotes-cache.test.ts` (paths
   that leave the cache, or are no file name on Windows, refused; files for your user alone);
   `packages/cli/test/cli.remotes.e2e.test.ts` (the token never in the output, control characters from the lockfile
   shown rather than sent, nothing cached by a dry run, `lint --fetch-remotes` or in CI unless asked);

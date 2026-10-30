@@ -6,10 +6,9 @@
  * verifies the file. The schema is before 1.0 (v0.0.3 when this was written): it is read tolerantly, and a version it
  * does not know is not used.
  */
-import type { FileSystem } from '@ciatlas/core';
+import type { FileSystem, RemoteRef } from '@ciatlas/core';
 import { parse as parseYaml } from 'yaml';
 import * as z from 'zod/mini';
-import type { RemoteRef } from './remotes';
 import './zod';
 
 export const ACTIONS_LOCK_FILE = '.github/workflows/actions.lock';

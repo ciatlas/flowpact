@@ -192,8 +192,8 @@ if (result.changes) {
   keep none (`--no-cache`); by default it is `FLOWPACT_CACHE_DIR`, else none in CI, else the per-user cache.
   `onProgress(progress)` is called as each reference is done, with `done`, `total`, `ref`, `outcome` and `detail`.
   The result has `file` (the lockfile), `changes`, `added`, `changed` and `removed`, `failed` and `unreadable` (each
-  `{ ref, error, kind }`, `kind` being `unreachable`, `timeout`, `token`, `access`, `rate-limit`, `server`, `not-found`
-  or `other`), `apiUrl` (the API it read), `tokenSource` (where the token came from, never the token), `hints` (what to
+  `{ ref, error, kind }`, `kind` being `unreachable`, `timeout`, `token`, `access`, `rate-limit`, `server`, `not-found`,
+  `too-large` (a file over 1 MB), `digest` or `other`), `apiUrl` (the API it read), `tokenSource` (where the token came from, never the token), `hints` (what to
   check, when references could not be read) with `guide` (where to point flowpact, when the API or the token may be the
   wrong one), and `sources` (the cache's `dir`, and
   files `written`, older commits `removed`, files `notKept` with why) or `sourcesNotKept`. `grades` has each changed
