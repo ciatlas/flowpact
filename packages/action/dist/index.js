@@ -8890,22 +8890,22 @@ var __awaiter = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve9, reject) {
     function fulfilled(value) {
       try {
-        step2(generator.next(value));
+        step3(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step2(generator["throw"](value));
+        step3(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step2(result) {
+    function step3(result) {
       result.done ? resolve9(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step2((generator = generator.apply(thisArg, _arguments || [])).next());
+    step3((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var HttpCodes;
@@ -9519,22 +9519,22 @@ var __awaiter2 = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve9, reject) {
     function fulfilled(value) {
       try {
-        step2(generator.next(value));
+        step3(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step2(generator["throw"](value));
+        step3(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step2(result) {
+    function step3(result) {
       result.done ? resolve9(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step2((generator = generator.apply(thisArg, _arguments || [])).next());
+    step3((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var BearerCredentialHandler = class {
@@ -9572,22 +9572,22 @@ var __awaiter3 = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve9, reject) {
     function fulfilled(value) {
       try {
-        step2(generator.next(value));
+        step3(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step2(generator["throw"](value));
+        step3(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step2(result) {
+    function step3(result) {
       result.done ? resolve9(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step2((generator = generator.apply(thisArg, _arguments || [])).next());
+    step3((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var { access, appendFile, writeFile } = promises;
@@ -9871,22 +9871,22 @@ var __awaiter4 = function(thisArg, _arguments, P, generator) {
   return new (P || (P = Promise))(function(resolve9, reject) {
     function fulfilled(value) {
       try {
-        step2(generator.next(value));
+        step3(generator.next(value));
       } catch (e) {
         reject(e);
       }
     }
     function rejected(value) {
       try {
-        step2(generator["throw"](value));
+        step3(generator["throw"](value));
       } catch (e) {
         reject(e);
       }
     }
-    function step2(result) {
+    function step3(result) {
       result.done ? resolve9(result.value) : adopt(result.value).then(fulfilled, rejected);
     }
-    step2((generator = generator.apply(thisArg, _arguments || [])).next());
+    step3((generator = generator.apply(thisArg, _arguments || [])).next());
   });
 };
 var ExitCode;
@@ -9955,6 +9955,9 @@ function group(name, fn) {
     return result;
   });
 }
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/actions-lock.ts
+var import_yaml = __toESM(require_dist(), 1);
 
 // ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
 var Expr = class {
@@ -11277,7 +11280,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11564,32 +11567,32 @@ function literalToJson(lit) {
       return null;
   }
 }
-function evaluate(e, resolve9) {
+function evaluate(e, resolve9, options = {}) {
   if (e instanceof Literal) return known(literalToJson(e));
-  if (e instanceof Grouping) return evaluate(e.group, resolve9);
+  if (e instanceof Grouping) return evaluate(e.group, resolve9, options);
   if (e instanceof ContextAccess || e instanceof IndexAccess) {
-    const chain = refChain(e, resolve9);
+    const chain = refChain(e, resolve9, options);
     if (chain) {
       const resolved = resolve9(chain);
       return resolved ?? UNKNOWN;
     }
     if (e instanceof IndexAccess) {
-      const base = evaluate(e.expr, resolve9);
-      const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve9);
+      const base = evaluate(e.expr, resolve9, options);
+      const idx = e.index instanceof Star ? void 0 : evaluate(e.index, resolve9, options);
       if (!base.known || !idx?.known) return { known: false, taint: mergeTaint(base, ...idx ? [idx] : []) };
       return known(indexInto(base.value, idx.value), mergeTaint(base, idx));
     }
     return UNKNOWN;
   }
   if (e instanceof Unary) {
-    const v = evaluate(e.expr, resolve9);
+    const v = evaluate(e.expr, resolve9, options);
     return v.known ? known(!truthy2(v.value)) : UNKNOWN;
   }
   if (e instanceof Logical) {
     const isAnd = e.operator.type === TokenType.AND;
     let last = UNKNOWN;
     for (const [i, arg] of e.args.entries()) {
-      const v = evaluate(arg, resolve9);
+      const v = evaluate(arg, resolve9, options);
       last = v;
       if (!v.known) return v;
       if (isAnd ? !truthy2(v.value) : truthy2(v.value)) {
@@ -11599,8 +11602,8 @@ function evaluate(e, resolve9) {
     return last;
   }
   if (e instanceof Binary) {
-    const l = evaluate(e.left, resolve9);
-    const r = evaluate(e.right, resolve9);
+    const l = evaluate(e.left, resolve9, options);
+    const r = evaluate(e.right, resolve9, options);
     const taint = [];
     if (!l.known || !r.known) return UNKNOWN;
     switch (e.operator.type) {
@@ -11624,17 +11627,17 @@ function evaluate(e, resolve9) {
         return { known: false, taint };
     }
   }
-  if (e instanceof FunctionCall) return evalCall(e, resolve9);
+  if (e instanceof FunctionCall) return evalCall(e, resolve9, options);
   return UNKNOWN;
 }
-function refChain(e, resolve9) {
+function refChain(e, resolve9, options) {
   if (e instanceof ContextAccess) return { context: e.name.lexeme.toLowerCase(), path: [] };
   if (e instanceof IndexAccess) {
-    const base = refChain(e.expr, resolve9);
+    const base = refChain(e.expr, resolve9, options);
     if (!base) return void 0;
     if (e.index instanceof Star) return void 0;
     if (e.index instanceof Literal) return { ...base, path: [...base.path, toStr(literalToJson(e.index))] };
-    const idx = evaluate(e.index, resolve9);
+    const idx = evaluate(e.index, resolve9, options);
     if (idx.known && (typeof idx.value === "string" || typeof idx.value === "number")) {
       return { ...base, path: [...base.path, String(idx.value)] };
     }
@@ -11654,15 +11657,23 @@ function indexInto(base, idx) {
   }
   return null;
 }
-var RUNTIME_FUNCTIONS = /* @__PURE__ */ new Set(["success", "failure", "cancelled", "hashfiles"]);
-function evalCall(e, resolve9) {
+var RUNTIME_FUNCTIONS = /* @__PURE__ */ new Set([
+  "success",
+  "failure",
+  "cancelled",
+  "hashfiles"
+]);
+function runtimeCall(name, args, taint, options) {
+  return options.runtime?.(name, args) ?? { known: false, taint };
+}
+function evalCall(e, resolve9, options) {
   const name = e.functionName.lexeme.toLowerCase();
-  const args = e.args.map((a) => evaluate(a, resolve9));
+  const args = e.args.map((a) => evaluate(a, resolve9, options));
   const taint = mergeTaint(...args);
   const allKnown = args.every((a) => a.known);
   const vals = args.map((a) => a.known ? a.value : null);
   if (name === "always") return known(true, taint);
-  if (RUNTIME_FUNCTIONS.has(name)) return { known: false, taint };
+  if (RUNTIME_FUNCTIONS.has(name)) return runtimeCall(name, args, taint, options);
   if (!allKnown) return { known: false, taint };
   switch (name) {
     case "format": {
@@ -11816,37 +11827,37 @@ function fallbacksOf(expr) {
   visit2(expr.ast);
   return out;
 }
-function definitelyFalsy(e, resolve9) {
-  if (e instanceof Grouping) return definitelyFalsy(e.group, resolve9);
+function definitelyFalsy(e, resolve9, options = {}) {
+  if (e instanceof Grouping) return definitelyFalsy(e.group, resolve9, options);
   if (e instanceof Logical) {
-    return e.operator.type === TokenType.AND ? e.args.some((a) => definitelyFalsy(a, resolve9)) : e.args.every((a) => definitelyFalsy(a, resolve9));
+    return e.operator.type === TokenType.AND ? e.args.some((a) => definitelyFalsy(a, resolve9, options)) : e.args.every((a) => definitelyFalsy(a, resolve9, options));
   }
-  if (e instanceof Unary) return definitelyTruthy(e.expr, resolve9);
-  const v = evaluate(e, resolve9);
+  if (e instanceof Unary) return definitelyTruthy(e.expr, resolve9, options);
+  const v = evaluate(e, resolve9, options);
   return v.known && !truthy2(v.value);
 }
-function definitelyTruthy(e, resolve9) {
-  if (e instanceof Grouping) return definitelyTruthy(e.group, resolve9);
+function definitelyTruthy(e, resolve9, options = {}) {
+  if (e instanceof Grouping) return definitelyTruthy(e.group, resolve9, options);
   if (e instanceof Logical) {
-    return e.operator.type === TokenType.AND ? e.args.every((a) => definitelyTruthy(a, resolve9)) : e.args.some((a) => definitelyTruthy(a, resolve9));
+    return e.operator.type === TokenType.AND ? e.args.every((a) => definitelyTruthy(a, resolve9, options)) : e.args.some((a) => definitelyTruthy(a, resolve9, options));
   }
-  if (e instanceof Unary) return definitelyFalsy(e.expr, resolve9);
-  const v = evaluate(e, resolve9);
+  if (e instanceof Unary) return definitelyFalsy(e.expr, resolve9, options);
+  const v = evaluate(e, resolve9, options);
   return v.known && truthy2(v.value);
 }
-function evaluateTemplate(text2, resolve9) {
+function evaluateTemplate(text2, resolve9, options = {}) {
   const segments = findTemplateSegments(text2);
   if (segments.length === 0) return known(text2);
   const first = segments[0];
   if (segments.length === 1 && first.start === 0 && first.end === text2.length) {
-    return first.expr.ast ? evaluate(first.expr.ast, resolve9) : UNKNOWN;
+    return first.expr.ast ? evaluate(first.expr.ast, resolve9, options) : UNKNOWN;
   }
   let out = "";
   let cursor = 0;
   const parts = [];
   for (const seg of segments) {
     out += text2.slice(cursor, seg.start);
-    const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve9) : UNKNOWN;
+    const v = seg.expr.ast ? evaluate(seg.expr.ast, resolve9, options) : UNKNOWN;
     parts.push(v);
     if (!v.known) return { known: false, taint: mergeTaint(...parts) };
     out += toStr(v.value);
@@ -11856,7 +11867,7 @@ function evaluateTemplate(text2, resolve9) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11867,7 +11878,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12069,7 +12080,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12210,11 +12221,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12281,7 +12292,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12417,7 +12428,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12430,7 +12441,7 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
@@ -12497,7 +12508,13 @@ function needsSecret(needed, name) {
   return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-ref.ts
+function remoteKey(raw) {
+  const [owner = "", repo = "", ...rest] = raw.trim().split("/");
+  return [owner.toLowerCase(), repo.toLowerCase(), ...rest].join("/");
+}
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/graph.ts
 var computed = (s) => s === void 0 || s === "*" || s === "?";
 var isKey = (s, key) => s?.toLowerCase() === key;
 function wholeReads(reads) {
@@ -12559,22 +12576,18 @@ function matrixKeys(job) {
   const m = job?.matrix;
   return m ? [...m.dims.map((d) => d.name), ...m.include.flatMap((inc) => Object.keys(inc.keyLocs))] : [];
 }
-function remoteKey(raw) {
-  const [owner = "", repo = "", ...rest] = raw.trim().split("/");
-  return [owner.toLowerCase(), repo.toLowerCase(), ...rest].join("/");
-}
 var sym = {
   input: (unit, name) => `${unit}#inputs.${name}`,
   secret: (unit, name) => `${unit}#secrets.${name}`,
   output: (unit, name) => `${unit}#outputs.${name}`,
   job: (unit, job) => `${unit}#jobs.${job}`,
   jobOutput: (unit, job, name) => `${unit}#jobs.${job}.outputs.${name}`,
-  stepOutput: (unit, job, step2, name) => job === void 0 ? `${unit}#steps.${step2}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step2}.outputs.${name}`,
+  stepOutput: (unit, job, step3, name) => job === void 0 ? `${unit}#steps.${step3}.outputs.${name}` : `${unit}#jobs.${job}.steps.${step3}.outputs.${name}`,
   env: (unit, job, name) => job === void 0 ? `${unit}#env.${name}` : `${unit}#jobs.${job}.env.${name}`,
   /** A step, by its id (in a job, or in an action, which has no jobs). */
   step: (unit, job, id) => job === void 0 ? `${unit}#steps.${id}` : `${unit}#jobs.${job}.steps.${id}`,
   /** A variable of a step's own `env:`, by the step's index: a step needs no id. */
-  stepEnv: (unit, job, step2, name) => job === void 0 ? `${unit}#steps[${step2}].env.${name}` : `${unit}#jobs.${job}.steps[${step2}].env.${name}`,
+  stepEnv: (unit, job, step3, name) => job === void 0 ? `${unit}#steps[${step3}].env.${name}` : `${unit}#jobs.${job}.steps[${step3}].env.${name}`,
   matrix: (unit, job, key) => `${unit}#jobs.${job}.matrix.${key}`,
   var: (name) => `vars.${name}`,
   remote: (raw) => `remote:${raw}`
@@ -12584,9 +12597,18 @@ function resolveSecret(unit, name) {
   const decl = unit.call ? lookup(unit.call.secrets, name) : void 0;
   return sym.secret(unit.path, decl?.name ?? name);
 }
+function externalUsesOf(project) {
+  const out = /* @__PURE__ */ new WeakSet();
+  for (const unit of project.external?.values() ?? []) {
+    const users = unit.kind === "action" ? unit.steps : Object.values(unit.jobs).flatMap((j) => [j, ...j.steps]);
+    for (const { uses } of users) if (uses) out.add(uses);
+  }
+  return out;
+}
 var ProjectIndex = class {
   constructor(project) {
     this.project = project;
+    this.externalUses = externalUsesOf(project);
     for (const wf of project.workflows.values()) this.indexWorkflow(wf);
     for (const a of project.actions.values()) this.indexAction(a);
     for (const unit of this.units()) for (const site of unit.sites) this.indexSite(unit, site);
@@ -12602,6 +12624,8 @@ var ProjectIndex = class {
   definitions = /* @__PURE__ */ new Map();
   /** The secrets a whole `secrets` reads in each workflow, by path, once computed (see `secretNames`). */
   heldSecrets = /* @__PURE__ */ new Map();
+  /** The `uses:` of external units' jobs and steps: they name another repository's files, not this project's. */
+  externalUses;
   units() {
     return [...this.project.workflows.values(), ...this.project.actions.values()];
   }
@@ -12622,10 +12646,14 @@ var ProjectIndex = class {
     const wf = this.targetOf(job);
     return wf?.call ? wf : void 0;
   }
-  /** The local workflow file a job's `uses:` points at, reusable or not. */
+  /**
+   * The local workflow file a job's `uses:` points at, reusable or not. Never for a job of an external unit, whose `./`
+   * names its own repository's file (as `actionOf` never resolves an external unit's step).
+   */
   targetOf(job) {
     if (job.uses?.kind !== "local-workflow" || !job.uses.target || job.uses.selfRef !== void 0)
       return void 0;
+    if (this.externalUses.has(job.uses)) return void 0;
     if (!/^\.github\/workflows\/[^/]+\.ya?ml$/i.test(job.uses.target)) return void 0;
     return this.project.workflows.get(job.uses.target);
   }
@@ -12641,15 +12669,16 @@ var ProjectIndex = class {
   }
   /** The interface a step uses: its local action, or the external unit of its remote one (see `interfaceOf`). */
   // fallow-ignore-next-line unused-class-member -- API for flowpact's checks of remote actions (ciatlas/flowpact#152)
-  actionInterfaceOf(step2) {
-    if (step2.uses?.kind !== "remote-action") return this.actionOf(step2);
-    const unit = this.project.external?.get(remoteKey(step2.uses.raw));
+  actionInterfaceOf(step3) {
+    if (step3.uses?.kind !== "remote-action") return this.actionOf(step3);
+    const unit = this.project.external?.get(remoteKey(step3.uses.raw));
     return unit?.kind === "action" ? unit : void 0;
   }
-  actionOf(step2) {
-    if (step2.uses?.kind !== "local-action" || !step2.uses.target || step2.uses.selfRef !== void 0)
+  actionOf(step3) {
+    if (step3.uses?.kind !== "local-action" || !step3.uses.target || step3.uses.selfRef !== void 0)
       return void 0;
-    return this.project.actions.get(step2.uses.target);
+    if (this.externalUses.has(step3.uses)) return void 0;
+    return this.project.actions.get(step3.uses.target);
   }
   usagesOf(symbol) {
     return this.usages.get(symbol) ?? [];
@@ -12781,25 +12810,25 @@ var ProjectIndex = class {
           this.edge({ from: jid, to: r, kind: "calls", loc: job.uses.loc });
         }
       }
-      for (const step2 of job.steps) this.indexStep(wf, job, step2);
+      for (const step3 of job.steps) this.indexStep(wf, job, step3);
     }
   }
-  indexStep(unit, job, step2) {
-    const action = this.actionOf(step2);
+  indexStep(unit, job, step3) {
+    const action = this.actionOf(step3);
     if (!action) return;
-    this.actionUses.push({ unit, ...job ? { job } : {}, step: step2, action });
-    if (step2.uses) {
+    this.actionUses.push({ unit, ...job ? { job } : {}, step: step3, action });
+    if (step3.uses) {
       const from = job ? sym.job(unit.path, job.id) : unit.path;
-      this.edge({ from, to: action.path, kind: "uses", loc: step2.uses.loc });
+      this.edge({ from, to: action.path, kind: "uses", loc: step3.uses.loc });
     }
-    if (step2.id) {
+    if (step3.id) {
       for (const o of Object.values(action.outputs)) {
         const so = this.node({
-          id: sym.stepOutput(unit.path, job?.id, step2.id, o.name),
+          id: sym.stepOutput(unit.path, job?.id, step3.id, o.name),
           kind: "step-output",
-          label: `steps.${step2.id}.outputs.${o.name}`,
+          label: `steps.${step3.id}.outputs.${o.name}`,
           unit: unit.path,
-          loc: step2.idLoc ?? step2.loc
+          loc: step3.idLoc ?? step3.loc
         });
         this.edge({ from: sym.output(action.path, o.name), to: so, kind: "flows", loc: o.loc });
       }
@@ -12818,7 +12847,7 @@ var ProjectIndex = class {
         unit: u,
         loc: o.loc
       });
-    for (const step2 of a.steps) this.indexStep(a, void 0, step2);
+    for (const step3 of a.steps) this.indexStep(a, void 0, step3);
   }
   /** Which symbol does the site's value define? (e.g. `with: { foo: ... }` on a reusable call defines the callee's `inputs.foo`). */
   sinkOf(unit, site) {
@@ -12835,8 +12864,8 @@ var ProjectIndex = class {
         return site.field === "job.with" ? sym.input(callee.path, name) : sym.secret(callee.path, name);
       }
       case "step.with": {
-        const step2 = this.stepOf(unit, site);
-        const action = step2 && this.actionOf(step2);
+        const step3 = this.stepOf(unit, site);
+        const action = step3 && this.actionOf(step3);
         if (!action) return void 0;
         return sym.input(action.path, lookup(action.inputs, key)?.name ?? key);
       }
@@ -12898,8 +12927,8 @@ var ProjectIndex = class {
    * the step (it is not a symbol); its values are evaluated before it applies, so they read the outer env.
    */
   resolveEnv(unit, site, name) {
-    const step2 = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
-    if (step2 && lookup(step2.env, name)) return void 0;
+    const step3 = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+    if (step3 && lookup(step3.env, name)) return void 0;
     const job = jobAt(unit, site);
     const own2 = job && lookup(job.env, name);
     if (own2) return sym.env(unit.path, job.id, own2.name);
@@ -12931,11 +12960,11 @@ var ProjectIndex = class {
   }
   /** The output `name` of the step `id` of the site's job, or of an action. */
   resolveStepOutput(unit, site, id, name) {
-    const step2 = stepsAt(unit, site).find((s) => s.id?.toLowerCase() === id.toLowerCase());
-    if (!step2?.id) return void 0;
-    const action = this.actionOf(step2);
+    const step3 = stepsAt(unit, site).find((s) => s.id?.toLowerCase() === id.toLowerCase());
+    if (!step3?.id) return void 0;
+    const action = this.actionOf(step3);
     const output = (action && lookup(action.outputs, name)?.name) ?? name;
-    return sym.stepOutput(unit.path, stepJob(unit, site), step2.id, output);
+    return sym.stepOutput(unit.path, stepJob(unit, site), step3.id, output);
   }
   /**
    * Every symbol a reference reads. Besides the single symbol of `resolveRef`, a reference that stops at a whole object
@@ -13055,10 +13084,10 @@ var ProjectIndex = class {
   }
   /** The env variables in scope at a site: the step's own, the job's and the workflow's. */
   envNames(unit, site) {
-    const step2 = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
+    const step3 = site.field === "step.env" ? void 0 : this.stepOf(unit, site);
     const workflow2 = unit.kind === "workflow" ? unit.env : void 0;
     return [
-      ...declaredNames(step2?.env),
+      ...declaredNames(step3?.env),
       ...declaredNames(jobAt(unit, site)?.env),
       ...declaredNames(workflow2)
     ];
@@ -13103,11 +13132,11 @@ var ProjectIndex = class {
     const steps2 = stepsAt(unit, site);
     const named = computed(a) ? steps2.filter((s) => site.step === void 0 || s.index < site.step) : steps2.filter((s) => s.id?.toLowerCase() === a.toLowerCase());
     const job = stepJob(unit, site);
-    return named.flatMap((step2) => {
-      const action = this.actionOf(step2);
-      if (!step2.id || !action) return [];
+    return named.flatMap((step3) => {
+      const action = this.actionOf(step3);
+      if (!step3.id || !action) return [];
       return pickOutputs(Object.keys(action.outputs), ref.path).map(
-        (n) => sym.stepOutput(unit.path, job, step2.id, n)
+        (n) => sym.stepOutput(unit.path, job, step3.id, n)
       );
     });
   }
@@ -13192,8 +13221,8 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/source.ts
-var import_yaml = __toESM(require_dist(), 1);
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/source.ts
+var import_yaml2 = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
     this.path = path;
@@ -13203,7 +13232,7 @@ var SourceFile = class {
   path;
   text;
   lines;
-  lineCounter = new import_yaml.LineCounter();
+  lineCounter = new import_yaml2.LineCounter();
   /** Converts a [start, end) character offset range to a {@link Loc}. Requires the line counter to be populated by the YAML parser. */
   loc(start, end = start) {
     const from = Math.max(0, start);
@@ -13219,7 +13248,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -13273,9 +13302,44 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/parse.ts
-var import_yaml2 = __toESM(require_dist(), 1);
-import { posix as posix2 } from "path";
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/node-fs.ts
+import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
+import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/parse.ts
+var import_yaml3 = __toESM(require_dist(), 1);
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/posix.ts
+var posixIsAbsolute = (path) => path.startsWith("/");
+function posixNormalize(path) {
+  if (path === "") return ".";
+  const absolute = path.startsWith("/");
+  const trailing = path.endsWith("/");
+  const out = [];
+  for (const segment of path.split("/")) step(out, segment, absolute);
+  if (out.length === 0) return absolute ? "/" : trailing ? "./" : ".";
+  return `${absolute ? "/" : ""}${out.join("/")}${trailing ? "/" : ""}`;
+}
+function step(out, segment, absolute) {
+  if (segment === "" || segment === ".") return;
+  if (segment !== "..") {
+    out.push(segment);
+    return;
+  }
+  if (out.length && out.at(-1) !== "..") out.pop();
+  else if (!absolute) out.push("..");
+}
+function posixJoin(...parts) {
+  const joined = parts.filter((p) => p !== "").join("/");
+  return joined === "" ? "." : posixNormalize(joined);
+}
+function posixBasename(path) {
+  const trimmed = path.replace(/\/+$/, "");
+  const i = trimmed.lastIndexOf("/");
+  return i === -1 ? trimmed : trimmed.slice(i + 1);
+}
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/parse.ts
 function createParseContext(repository) {
   let id = 0;
   return { ...repository ? { repository } : {}, nextSiteId: () => ++id };
@@ -13291,8 +13355,8 @@ function nodeLoc(source, node) {
   return source.loc(r[0], r[1]);
 }
 function pairs(node) {
-  if (!(0, import_yaml2.isMap)(node)) return [];
-  return node.items.filter((p) => (0, import_yaml2.isPair)(p) && (0, import_yaml2.isScalar)(p.key));
+  if (!(0, import_yaml3.isMap)(node)) return [];
+  return node.items.filter((p) => (0, import_yaml3.isPair)(p) && (0, import_yaml3.isScalar)(p.key));
 }
 function get(node, key) {
   for (const p of pairs(node))
@@ -13303,12 +13367,12 @@ function getPair(node, key) {
   return pairs(node).find((p) => String(p.key.value) === key);
 }
 function str(node) {
-  if ((0, import_yaml2.isScalar)(node) && node.value !== null && node.value !== void 0) return String(node.value);
+  if ((0, import_yaml3.isScalar)(node) && node.value !== null && node.value !== void 0) return String(node.value);
   return void 0;
 }
 function toJs(node) {
   if (node === null || node === void 0) return null;
-  if ((0, import_yaml2.isScalar)(node) || (0, import_yaml2.isMap)(node) || (0, import_yaml2.isSeq)(node)) return node.toJSON();
+  if ((0, import_yaml3.isScalar)(node) || (0, import_yaml3.isMap)(node) || (0, import_yaml3.isSeq)(node)) return node.toJSON();
   return null;
 }
 function classify(kind, p) {
@@ -13316,15 +13380,15 @@ function classify(kind, p) {
     if (p[0] === "jobs" && typeof p[1] === "string") {
       const job = p[1];
       if (p[2] === "steps" && typeof p[3] === "number") {
-        const step2 = p[3];
+        const step3 = p[3];
         const f2 = p[4];
-        if (f2 === "if" && p.length === 5) return { field: "step.if", job, step: step2, cond: true };
+        if (f2 === "if" && p.length === 5) return { field: "step.if", job, step: step3, cond: true };
         if (f2 === "with" && typeof p[5] === "string")
-          return { field: "step.with", job, step: step2, key: p[5], cond: false };
+          return { field: "step.with", job, step: step3, key: p[5], cond: false };
         if (f2 === "env" && typeof p[5] === "string")
-          return { field: "step.env", job, step: step2, key: p[5], cond: false };
-        if (f2 === "run") return { field: "step.run", job, step: step2, cond: false };
-        return { field: "step.other", job, step: step2, cond: false };
+          return { field: "step.env", job, step: step3, key: p[5], cond: false };
+        if (f2 === "run") return { field: "step.run", job, step: step3, cond: false };
+        return { field: "step.other", job, step: step3, cond: false };
       }
       const f = p[2];
       if (f === "if" && p.length === 3) return { field: "job.if", job, cond: true };
@@ -13348,13 +13412,13 @@ function classify(kind, p) {
     return { field: "workflow.other", cond: false };
   }
   if (p[0] === "runs" && p[1] === "steps" && typeof p[2] === "number") {
-    const step2 = p[2];
+    const step3 = p[2];
     const f = p[3];
-    if (f === "if" && p.length === 4) return { field: "step.if", step: step2, cond: true };
-    if (f === "with" && typeof p[4] === "string") return { field: "step.with", step: step2, key: p[4], cond: false };
-    if (f === "env" && typeof p[4] === "string") return { field: "step.env", step: step2, key: p[4], cond: false };
-    if (f === "run") return { field: "step.run", step: step2, cond: false };
-    return { field: "step.other", step: step2, cond: false };
+    if (f === "if" && p.length === 4) return { field: "step.if", step: step3, cond: true };
+    if (f === "with" && typeof p[4] === "string") return { field: "step.with", step: step3, key: p[4], cond: false };
+    if (f === "env" && typeof p[4] === "string") return { field: "step.env", step: step3, key: p[4], cond: false };
+    if (f === "run") return { field: "step.run", step: step3, cond: false };
+    return { field: "step.other", step: step3, cond: false };
   }
   if (p[0] === "runs" && (p[1] === "pre-if" || p[1] === "post-if") && p.length === 2) {
     return { field: "action.runs-if", cond: true };
@@ -13369,15 +13433,15 @@ function classify(kind, p) {
 }
 function collectSites(unit, kind, ownerPath, ctx, root) {
   const visit2 = (node, p) => {
-    if ((0, import_yaml2.isMap)(node)) {
+    if ((0, import_yaml3.isMap)(node)) {
       for (const pair of pairs(node)) visit2(pair.value, [...p, String(pair.key.value)]);
       return;
     }
-    if ((0, import_yaml2.isSeq)(node)) {
+    if ((0, import_yaml3.isSeq)(node)) {
       for (const [i, item] of node.items.entries()) visit2(item, [...p, i]);
       return;
     }
-    if (!(0, import_yaml2.isScalar)(node)) return;
+    if (!(0, import_yaml3.isScalar)(node)) return;
     const c = classify(kind, p);
     const isString2 = typeof node.value === "string";
     if (!isString2 && !c.cond) return;
@@ -13624,7 +13688,7 @@ function inputDecls(unit, node, base) {
       required: toJs(get(def, "required")) === true,
       ...defaultOf(unit, getPair(def, "default"), [...base, name, "default"]),
       ...description ? { description } : {},
-      ...(0, import_yaml2.isSeq)(opts) ? { options: toJs(opts).map(String) } : {},
+      ...(0, import_yaml3.isSeq)(opts) ? { options: toJs(opts).map(String) } : {},
       loc: nodeLoc(unit.source, pair.key)
     };
   }
@@ -13673,7 +13737,7 @@ function outputDecls(unit, node, base, valueKey) {
 }
 var WORKFLOW_FILE = /^\.github\/workflows\/[^/]+\.ya?ml$/;
 function normalizeRelative(path) {
-  return trimChar(posix2.normalize(trimChar(path, "/") || "."), "/") || ".";
+  return trimChar(posixNormalize(trimChar(path, "/") || "."), "/") || ".";
 }
 function classifyUses(raw, at, loc, ctx) {
   const value = raw.trim();
@@ -13737,7 +13801,7 @@ function scanRunWrites(script, fileVar) {
   return { names: [...names], dynamic, mentions };
 }
 function steps(unit, node, base, at, ctx) {
-  if (!(0, import_yaml2.isSeq)(node)) return [];
+  if (!(0, import_yaml3.isSeq)(node)) return [];
   return node.items.map((item, index) => {
     const p = [...base, index];
     const id = str(get(item, "id"));
@@ -13749,7 +13813,7 @@ function steps(unit, node, base, at, ctx) {
     const usesRaw = str(usesNode);
     const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
     const ifNode = get(item, "if");
-    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
+    const ifValue = (0, import_yaml3.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
     void at;
     return {
       index,
@@ -13849,7 +13913,7 @@ function codeOf(src) {
   return code(false);
 }
 function matrixEntries(unit, node, base) {
-  if (!(0, import_yaml2.isSeq)(node)) return [];
+  if (!(0, import_yaml3.isSeq)(node)) return [];
   return node.items.map((item, i) => {
     const values = {};
     const keyLocs = {};
@@ -13868,7 +13932,7 @@ function matrix(unit, strategy, base) {
   if (!pair) return void 0;
   const loc = nodeLoc(unit.source, pair.key);
   const mp = [...base, "matrix"];
-  if ((0, import_yaml2.isScalar)(pair.value)) return dynamicMatrix(unit, loc, mp);
+  if ((0, import_yaml3.isScalar)(pair.value)) return dynamicMatrix(unit, loc, mp);
   const dims = [];
   let include = NO_FILTER;
   let exclude = NO_FILTER;
@@ -13903,8 +13967,8 @@ function dynamicMatrix(unit, loc, path) {
 }
 var NO_FILTER = { entries: [], dynamic: false };
 function matrixFilter(unit, node, path) {
-  if ((0, import_yaml2.isScalar)(node)) return { entries: [], dynamic: true };
-  const items = (0, import_yaml2.isSeq)(node) ? node.items : [];
+  if ((0, import_yaml3.isScalar)(node)) return { entries: [], dynamic: true };
+  const items = (0, import_yaml3.isSeq)(node) ? node.items : [];
   const expression = (i) => unit.siteByPath.has(pathKey([...path, i]));
   return {
     entries: matrixEntries(unit, node, path).filter((_, i) => !expression(i)),
@@ -13914,7 +13978,7 @@ function matrixFilter(unit, node, path) {
 function matrixDim(unit, p, path) {
   const name = String(p.key.value);
   const loc = nodeLoc(unit.source, p.key);
-  if (!(0, import_yaml2.isSeq)(p.value)) return { name, loc, values: null, unknownIndexes: [] };
+  if (!(0, import_yaml3.isSeq)(p.value)) return { name, loc, values: null, unknownIndexes: [] };
   const expression = (i) => unit.siteByPath.has(pathKey([...path, i]));
   return {
     name,
@@ -13931,23 +13995,23 @@ function jobs(unit, node, ctx) {
     const p = ["jobs", id];
     const needsNode = get(j, "needs");
     const needs = [];
-    if ((0, import_yaml2.isScalar)(needsNode) && needsNode.value != null) {
+    if ((0, import_yaml3.isScalar)(needsNode) && needsNode.value != null) {
       needs.push({ id: String(needsNode.value), loc: nodeLoc(unit.source, needsNode) });
-    } else if ((0, import_yaml2.isSeq)(needsNode)) {
+    } else if ((0, import_yaml3.isSeq)(needsNode)) {
       for (const n of needsNode.items) {
-        if ((0, import_yaml2.isScalar)(n)) needs.push({ id: String(n.value), loc: nodeLoc(unit.source, n) });
+        if ((0, import_yaml3.isScalar)(n)) needs.push({ id: String(n.value), loc: nodeLoc(unit.source, n) });
       }
     }
     const usesNode = get(j, "uses");
     const usesRaw = str(usesNode);
     const secretsPair = getPair(j, "secrets");
-    const secretsInherit2 = (0, import_yaml2.isScalar)(secretsPair?.value) && String(secretsPair.value.value) === "inherit";
+    const secretsInherit2 = (0, import_yaml3.isScalar)(secretsPair?.value) && String(secretsPair.value.value) === "inherit";
     const ifSite = unit.siteByPath.get(pathKey([...p, "if"]));
     const name = str(get(j, "name"));
     const nameSite = unit.siteByPath.get(pathKey([...p, "name"]));
     const namePair = getPair(j, "name");
     const ifNode = get(j, "if");
-    const ifValue = (0, import_yaml2.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
+    const ifValue = (0, import_yaml3.isScalar)(ifNode) && typeof ifNode.value === "boolean" ? ifNode.value : void 0;
     const strategy = get(j, "strategy");
     const m = matrix(unit, strategy, [...p, "strategy"]);
     out[id] = {
@@ -13985,32 +14049,32 @@ function jobSettings(source, j) {
 }
 var isExpression = (text2) => text2.includes("${{");
 function texts(node) {
-  if ((0, import_yaml2.isSeq)(node)) return node.items.flatMap((n) => str(n) === void 0 ? [] : [str(n)]);
+  if ((0, import_yaml3.isSeq)(node)) return node.items.flatMap((n) => str(n) === void 0 ? [] : [str(n)]);
   const one = str(node);
   return one === void 0 ? [] : [one];
 }
 function runsOn(source, node) {
   if (!node) return void 0;
-  const group2 = (0, import_yaml2.isMap)(node) ? str(get(node, "group")) : void 0;
-  const labels = texts((0, import_yaml2.isMap)(node) ? get(node, "labels") : node);
-  const dynamic = [...labels, group2 ?? ""].some(isExpression) || !((0, import_yaml2.isMap)(node) || labels.length);
+  const group2 = (0, import_yaml3.isMap)(node) ? str(get(node, "group")) : void 0;
+  const labels = texts((0, import_yaml3.isMap)(node) ? get(node, "labels") : node);
+  const dynamic = [...labels, group2 ?? ""].some(isExpression) || !((0, import_yaml3.isMap)(node) || labels.length);
   return { labels, ...group2 !== void 0 ? { group: group2 } : {}, dynamic, loc: nodeLoc(source, node) };
 }
 function environment(source, node) {
-  const name = str((0, import_yaml2.isMap)(node) ? get(node, "name") : node);
+  const name = str((0, import_yaml3.isMap)(node) ? get(node, "name") : node);
   if (name === void 0 || !node) return void 0;
   return { name, dynamic: isExpression(name), loc: nodeLoc(source, node) };
 }
 function permissions(node) {
-  if ((0, import_yaml2.isScalar)(node)) {
+  if ((0, import_yaml3.isScalar)(node)) {
     const v = String(node.value);
     return v === "read-all" || v === "write-all" ? v : void 0;
   }
-  if (!(0, import_yaml2.isMap)(node)) return void 0;
+  if (!(0, import_yaml3.isMap)(node)) return void 0;
   const out = {};
   for (const pair of node.items) {
-    const key = (0, import_yaml2.isScalar)(pair.key) ? String(pair.key.value) : void 0;
-    const value = (0, import_yaml2.isScalar)(pair.value) ? String(pair.value.value) : void 0;
+    const key = (0, import_yaml3.isScalar)(pair.key) ? String(pair.key.value) : void 0;
+    const value = (0, import_yaml3.isScalar)(pair.value) ? String(pair.value.value) : void 0;
     if (key && (value === "read" || value === "write" || value === "none")) out[key] = value;
   }
   return out;
@@ -14025,12 +14089,12 @@ function aliasExpansionTooLarge(doc) {
     if (cached2 !== void 0) return cached2;
     memo.set(node, 1);
     let n = 1;
-    if ((0, import_yaml2.isAlias)(node)) {
+    if ((0, import_yaml3.isAlias)(node)) {
       n = size(node.resolve(doc));
       if (n > MAX_ALIAS_EXPANSION && !culprit) culprit = node;
-    } else if ((0, import_yaml2.isMap)(node)) {
+    } else if ((0, import_yaml3.isMap)(node)) {
       for (const p of node.items) n += size(p.key) + size(p.value);
-    } else if ((0, import_yaml2.isSeq)(node)) {
+    } else if ((0, import_yaml3.isSeq)(node)) {
       for (const item of node.items) n += size(item);
     }
     n = Math.min(n, MAX_ALIAS_EXPANSION + 1);
@@ -14041,10 +14105,10 @@ function aliasExpansionTooLarge(doc) {
 }
 function load(path, text2) {
   const source = new SourceFile(path, text2);
-  const doc = (0, import_yaml2.parseDocument)(text2, { lineCounter: source.lineCounter, prettyErrors: false, strict: false });
+  const doc = (0, import_yaml3.parseDocument)(text2, { lineCounter: source.lineCounter, prettyErrors: false, strict: false });
   const aliasBomb = doc.errors.length === 0 ? aliasExpansionTooLarge(doc) : void 0;
   if (doc.errors.length === 0 && !aliasBomb) {
-    (0, import_yaml2.visit)(doc, {
+    (0, import_yaml3.visit)(doc, {
       Alias(_, alias) {
         const target = alias.resolve(doc);
         return target ? target : void 0;
@@ -14099,10 +14163,10 @@ function parseWorkflowFile(path, text2, ctx) {
   if (root) collectSites(unit, "workflow", path, ctx, root);
   const on = get(root, "on");
   const triggers = [];
-  if ((0, import_yaml2.isScalar)(on) && on.value != null) {
+  if ((0, import_yaml3.isScalar)(on) && on.value != null) {
     triggers.push(String(on.value));
-  } else if ((0, import_yaml2.isSeq)(on)) {
-    for (const t of on.items) if ((0, import_yaml2.isScalar)(t)) triggers.push(String(t.value));
+  } else if ((0, import_yaml3.isSeq)(on)) {
+    for (const t of on.items) if ((0, import_yaml3.isScalar)(t)) triggers.push(String(t.value));
   } else {
     for (const p of pairs(on)) triggers.push(String(p.key.value));
   }
@@ -14161,10 +14225,6 @@ function parseActionFile(dir, file, text2, ctx) {
     steps: steps(unit, get(runs, "steps"), ["runs", "steps"], "action", ctx)
   };
 }
-
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/project.ts
-import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
-import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
 // ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/templates/tokens/types.js
 var TokenType2;
@@ -16450,12 +16510,12 @@ function getWorkflowSchema() {
 }
 
 // ../../node_modules/.pnpm/@actions+workflow-parser@0.3.61/node_modules/@actions/workflow-parser/dist/workflows/yaml-object-reader.js
-var import_yaml3 = __toESM(require_dist(), 1);
+var import_yaml4 = __toESM(require_dist(), 1);
 var YamlObjectReader = class _YamlObjectReader {
   constructor(fileId, content) {
-    this.lineCounter = new import_yaml3.LineCounter();
+    this.lineCounter = new import_yaml4.LineCounter();
     this.errors = [];
-    this.doc = (0, import_yaml3.parseDocument)(content, {
+    this.doc = (0, import_yaml4.parseDocument)(content, {
       lineCounter: this.lineCounter,
       keepSourceTokens: true,
       uniqueKeys: false
@@ -16469,17 +16529,17 @@ var YamlObjectReader = class _YamlObjectReader {
   }
   *getNodes(node, aliasResolutionStack) {
     let range = this.getRange(node);
-    if ((0, import_yaml3.isDocument)(node)) {
+    if ((0, import_yaml4.isDocument)(node)) {
       yield new ParseEvent(EventType.DocumentStart);
       for (const item of this.getNodes(node.contents, /* @__PURE__ */ new Set())) {
         yield item;
       }
       yield new ParseEvent(EventType.DocumentEnd);
     }
-    if ((0, import_yaml3.isCollection)(node)) {
-      if ((0, import_yaml3.isSeq)(node)) {
+    if ((0, import_yaml4.isCollection)(node)) {
+      if ((0, import_yaml4.isSeq)(node)) {
         yield new ParseEvent(EventType.SequenceStart, new SequenceToken(this.fileId, range, void 0));
-      } else if ((0, import_yaml3.isMap)(node)) {
+      } else if ((0, import_yaml4.isMap)(node)) {
         yield new ParseEvent(EventType.MappingStart, new MappingToken(this.fileId, range, void 0));
       }
       for (const item of node.items) {
@@ -16487,16 +16547,16 @@ var YamlObjectReader = class _YamlObjectReader {
           yield child;
         }
       }
-      if ((0, import_yaml3.isSeq)(node)) {
+      if ((0, import_yaml4.isSeq)(node)) {
         yield new ParseEvent(EventType.SequenceEnd);
-      } else if ((0, import_yaml3.isMap)(node)) {
+      } else if ((0, import_yaml4.isMap)(node)) {
         yield new ParseEvent(EventType.MappingEnd);
       }
     }
-    if ((0, import_yaml3.isScalar)(node)) {
+    if ((0, import_yaml4.isScalar)(node)) {
       yield new ParseEvent(EventType.Literal, _YamlObjectReader.getLiteralToken(this.fileId, range, node));
     }
-    if ((0, import_yaml3.isAlias)(node)) {
+    if ((0, import_yaml4.isAlias)(node)) {
       const resolved = node.resolve(this.doc);
       if (resolved) {
         if (aliasResolutionStack.has(resolved)) {
@@ -16508,7 +16568,7 @@ var YamlObjectReader = class _YamlObjectReader {
       }
       return;
     }
-    if ((0, import_yaml3.isPair)(node)) {
+    if ((0, import_yaml4.isPair)(node)) {
       const scalarKey = node.key;
       range = this.getRange(scalarKey);
       const key = scalarKey.value;
@@ -16727,10 +16787,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/validate.ts
-var import_yaml4 = __toESM(require_dist(), 1);
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/validate.ts
+var import_yaml5 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16803,7 +16863,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -16911,8 +16971,8 @@ function validateSchema(unit, logger) {
 }
 var posKey = (line, column) => `${line}:${column}`;
 function shapeOf(unit) {
-  const lineCounter = new import_yaml4.LineCounter();
-  const doc = (0, import_yaml4.parseDocument)(unit.source.text, { lineCounter, prettyErrors: false, strict: false });
+  const lineCounter = new import_yaml5.LineCounter();
+  const doc = (0, import_yaml5.parseDocument)(unit.source.text, { lineCounter, prettyErrors: false, strict: false });
   if (doc.errors.length > 0) return void 0;
   const shape = { maps: /* @__PURE__ */ new Map(), keys: /* @__PURE__ */ new Map() };
   const locOf = (range) => {
@@ -16921,22 +16981,22 @@ function shapeOf(unit) {
     return { file: unit.file, line: a.line, column: a.col, endLine: b.line, endColumn: b.col };
   };
   const mergeOf = (value) => {
-    const sources2 = (0, import_yaml4.isSeq)(value) ? value.items : [value];
-    const maps = sources2.map((s) => (0, import_yaml4.isAlias)(s) ? s.resolve(doc) : s).filter(import_yaml4.isMap);
-    const keys = maps.flatMap((m) => m.items.flatMap((p) => (0, import_yaml4.isScalar)(p.key) ? [String(p.key.value)] : []));
-    const aliases = sources2.filter(import_yaml4.isAlias).map((a) => `*${a.source}`);
+    const sources2 = (0, import_yaml5.isSeq)(value) ? value.items : [value];
+    const maps = sources2.map((s) => (0, import_yaml5.isAlias)(s) ? s.resolve(doc) : s).filter(import_yaml5.isMap);
+    const keys = maps.flatMap((m) => m.items.flatMap((p) => (0, import_yaml5.isScalar)(p.key) ? [String(p.key.value)] : []));
+    const aliases = sources2.filter(import_yaml5.isAlias).map((a) => `*${a.source}`);
     return { aliases: [...new Set(aliases)], keys };
   };
   const walk = (node, path) => {
-    if ((0, import_yaml4.isSeq)(node)) {
+    if ((0, import_yaml5.isSeq)(node)) {
       for (const [i, item] of node.items.entries()) walk(item, [...path, i]);
       return;
     }
-    if (!(0, import_yaml4.isMap)(node) || !node.range) return;
+    if (!(0, import_yaml5.isMap)(node) || !node.range) return;
     const map = { path, keys: [], loc: locOf(node.range) };
     shape.maps.set(posKey(map.loc.line, map.loc.column), map);
     for (const pair of node.items) {
-      if (!(0, import_yaml4.isScalar)(pair.key) || !pair.key.range) continue;
+      if (!(0, import_yaml5.isScalar)(pair.key) || !pair.key.range) continue;
       const name = String(pair.key.value);
       const key = { name, map, loc: locOf(pair.key.range) };
       if (name === "<<") key.merge = mergeOf(pair.value);
@@ -17092,8 +17152,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/script-writes.ts
-import { posix as posix3 } from "path";
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/script-writes.ts
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
   "sudo",
@@ -17237,10 +17296,10 @@ function resolveWord(word, cwd) {
   }
   if (base === void 0 || w === "" || /[$`*?[\]{}~]/.test(w) || w.startsWith("/")) return void 0;
   if (/^[A-Za-z][\w+.-]*:/.test(w)) return void 0;
-  const path = normalizeRelative(posix3.join(base, w));
+  const path = normalizeRelative(posixJoin(base, w));
   return escapes(path) ? void 0 : path;
 }
-var basename = (word) => posix3.basename(word.replaceAll("\\", "/").replace(/\/+$/, ""));
+var basename = (word) => posixBasename(word.replaceAll("\\", "/").replace(/\/+$/, ""));
 function scriptWrites2(script) {
   const writes = [];
   const text2 = script.replace(/\$\{\{\s*github\.workspace\s*\}\}/g, "$GITHUB_WORKSPACE").replace(/\$\{\{[\s\S]*?\}\}/g, "$EXPR").replace(/\\\r?\n/g, " ");
@@ -17363,7 +17422,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17395,16 +17454,16 @@ function checkoutPath(b) {
   return escapes2(path) ? "outside" : { path };
 }
 var within = (path, dir) => dir === "." || path === dir || path.startsWith(`${dir}/`);
-function applyCheckout(ws, step2, repository) {
-  const loc = step2.uses?.loc ?? step2.loc;
-  const other = checkoutRepository(step2.with.repository, repository);
-  const placement = checkoutPath(step2.with.path);
+function applyCheckout(ws, step3, repository) {
+  const loc = step3.uses?.loc ?? step3.loc;
+  const other = checkoutRepository(step3.with.repository, repository);
+  const placement = checkoutPath(step3.with.path);
   if (placement === "outside") return ws;
   const repo = other !== void 0 ? { repository: other } : {};
   if (placement === "dynamic")
-    return { ...ws, managed: true, dynamic: { path: text(step2.with.path), ...repo, loc } };
+    return { ...ws, managed: true, dynamic: { path: text(step3.with.path), ...repo, loc } };
   const { path } = placement;
-  const ref = text(step2.with.ref);
+  const ref = text(step3.with.ref);
   const mounts = ws.mounts.filter((m) => !within(m.path, path));
   mounts.push({ path, ...repo, ...other === void 0 && !runningCommit(ref) ? { ref } : {}, loc });
   return {
@@ -17486,11 +17545,11 @@ function workspaceResolver(opts) {
     if (rootless) return { kind: "local", target: rel, found: false, elsewhere: elsewhere() };
     return { kind: "local", target: rel, found: false, ...checkout };
   };
-  const record3 = (unit, job, step2, outcome, rooted, via) => {
-    let r = records.get(step2);
+  const record3 = (unit, job, step3, outcome, rooted, via) => {
+    let r = records.get(step3);
     if (!r) {
-      r = { unit, ...job !== void 0 ? { job } : {}, step: step2, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
-      records.set(step2, r);
+      r = { unit, ...job !== void 0 ? { job } : {}, step: step3, rooted: /* @__PURE__ */ new Map(), assumed: /* @__PURE__ */ new Map() };
+      records.set(step3, r);
     }
     const outcomes = rooted ? r.rooted : r.assumed;
     const key = JSON.stringify(outcome);
@@ -17498,25 +17557,25 @@ function workspaceResolver(opts) {
   };
   const walk = (unit, job, steps2, start, rooted, via) => {
     let ws = start;
-    for (const step2 of steps2) {
-      if (step2.run !== void 0) {
-        let writes = stepWrites.get(step2);
+    for (const step3 of steps2) {
+      if (step3.run !== void 0) {
+        let writes = stepWrites.get(step3);
         if (!writes) {
-          const loc = step2.runLoc ?? step2.loc;
-          writes = scriptWrites2(step2.run).map((w) => ({ ...w, loc }));
-          stepWrites.set(step2, writes);
+          const loc = step3.runLoc ?? step3.loc;
+          writes = scriptWrites2(step3.run).map((w) => ({ ...w, loc }));
+          stepWrites.set(step3, writes);
         }
         if (writes.length) ws = { ...ws, writes: [...ws.writes, ...writes] };
       }
-      const uses = step2.uses;
+      const uses = step3.uses;
       if (!uses) continue;
       if (isCheckout(uses)) {
-        ws = applyCheckout(ws, step2, opts.repository);
+        ws = applyCheckout(ws, step3, opts.repository);
         continue;
       }
       if (uses.kind !== "local-action" || uses.target === void 0) continue;
       const outcome = resolve9(uses, ws);
-      record3(unit, job, step2, outcome, rooted, via);
+      record3(unit, job, step3, outcome, rooted, via);
       const action = outcome.kind === "local" && outcome.found ? opts.loadAction(outcome.target) : void 0;
       if (action) {
         const caller = {
@@ -17615,94 +17674,10 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
-var MAX_LINKS2 = 40;
-var MAX_LINKED_DIRS2 = 1e3;
 var ACTIONS_DIR = ".github/actions";
 var toPosix = (p) => p.split("\\").join("/");
-function insideRepository(root, abs) {
-  let realRoot;
-  try {
-    realRoot = realpathSync(root);
-  } catch {
-    realRoot = resolve(root);
-  }
-  let target = resolve(abs);
-  let rest = "";
-  for (; ; ) {
-    try {
-      target = join2(realpathSync(target), rest);
-      break;
-    } catch {
-      const parent = dirname(target);
-      if (parent === target) return false;
-      rest = join2(basename2(target), rest);
-      target = parent;
-    }
-  }
-  const rel = toPosix(relative(realRoot, target));
-  if (rel === "") return true;
-  if (escapesRoot(rel)) return false;
-  return rel !== ".git" && !rel.startsWith(".git/");
-}
-function nodeFileSystem(root) {
-  const abs = (p) => join2(root, p);
-  const listings = /* @__PURE__ */ new Map();
-  const exactCase = (p) => {
-    let dir = root;
-    for (const part of toPosix(p).split("/").filter((x) => x && x !== ".")) {
-      if (part === "..") return false;
-      let names = listings.get(dir);
-      if (!names) {
-        try {
-          names = new Set(readdirSync(dir));
-        } catch {
-          return false;
-        }
-        listings.set(dir, names);
-      }
-      if (!names.has(part)) return false;
-      dir = join2(dir, part);
-    }
-    return true;
-  };
-  const inside = (p) => existsSync2(abs(p)) && exactCase(p) && insideRepository(root, abs(p));
-  const isFile = (p) => inside(p) && statSync(abs(p)).isFile();
-  return {
-    read: (p) => isFile(p) ? readFileSync(abs(p), "utf8") : void 0,
-    list: (dir) => {
-      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
-      return readdirSync(abs(dir)).map((name) => toPosix(join2(dir, name))).filter((f) => isFile(f));
-    },
-    walk: (dir) => {
-      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
-      const out = [];
-      let linked = 0;
-      const queue = [
-        { dir: toPosix(dir), above: /* @__PURE__ */ new Set(), links: 0 }
-      ];
-      for (let i = 0; i < queue.length; i++) {
-        const next = queue[i];
-        const real = realpathSync(abs(next.dir));
-        if (next.above.has(real)) continue;
-        const above = new Set(next.above).add(real);
-        for (const name of readdirSync(abs(next.dir))) {
-          if (name === "node_modules" || name === ".git") continue;
-          const p = toPosix(join2(next.dir, name));
-          if (isFile(p)) out.push(p);
-          else if (inside(p) && statSync(abs(p)).isDirectory()) {
-            const link = lstatSync(abs(p)).isSymbolicLink();
-            if (link && (next.links >= MAX_LINKS2 || linked++ >= MAX_LINKED_DIRS2)) continue;
-            queue.push({ dir: p, above, links: next.links + (link ? 1 : 0) });
-          }
-        }
-      }
-      return out;
-    },
-    isDir: (p) => inside(p) && statSync(abs(p)).isDirectory()
-  };
-}
 var dirPrefix = (dir) => {
   const d = toPosix(dir).replace(/^\.(\/|$)/, "").replace(/\/$/, "");
   return d ? `${d}/` : "";
@@ -17728,19 +17703,11 @@ var isYaml = (p) => /\.ya?ml$/i.test(p);
 var isActionFile = (p) => /(^|\/)action\.ya?ml$/i.test(p);
 var isWorkflowFile = (p) => /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(p);
 var isCallableWorkflowPath = (p) => /^\.github\/workflows\/[^/]+\.ya?ml$/.test(p.replace(/\.ya?ml$/i, (e) => e.toLowerCase()));
-var escapesRoot = (p) => p === ".." || p.startsWith("../") || isAbsolute(p);
-function detectRepository(root, env = process.env) {
-  if (env.GITHUB_REPOSITORY) return env.GITHUB_REPOSITORY;
-  const gitConfig = join2(root, ".git", "config");
-  if (!existsSync2(gitConfig)) return void 0;
-  const text2 = readFileSync(gitConfig, "utf8");
-  const origin = /\[remote "origin"\][^[]*?^[ \t]*url\s*=\s*(\S+)/m.exec(text2)?.[1];
-  const m = origin && /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(origin);
-  return m ? m[1] : void 0;
-}
-function loadProject(opts) {
+var escapesRoot = (p) => p === ".." || p.startsWith("../") || posixIsAbsolute(p);
+function loadProjectWith(opts, host) {
   const logger = (opts.logger ?? silentLogger).child("load");
-  const fs3 = opts.fs ?? nodeFileSystem(opts.root);
+  const fs3 = opts.fs ?? host.defaultFs?.(opts.root);
+  if (!fs3) throw new Error("loadProject needs a file system here: pass fs (memoryFileSystem(files))");
   const ctx = createParseContext(opts.repository);
   const workflows = /* @__PURE__ */ new Map();
   const actions = /* @__PURE__ */ new Map();
@@ -17799,7 +17766,7 @@ function loadProject(opts) {
   let wholeRepository = false;
   const ignoredTargets = [];
   for (const p of opts.paths ?? []) {
-    const rel = toPosix(relative(opts.root, resolve(opts.root, p))) || ".";
+    const rel = host.relativeTo(opts.root, p) || ".";
     if (rel === "." || rel === "") {
       wholeRepository = true;
       continue;
@@ -17897,13 +17864,130 @@ function externalUnits(remotes = [], ctx) {
   if (!remotes.length) return {};
   const out = /* @__PURE__ */ new Map();
   for (const r of remotes) {
-    const unit = r.kind === "workflow" ? parseWorkflowFile(r.ref, r.text, ctx) : parseActionFile(r.ref, r.ref, r.text, ctx);
-    out.set(remoteKey(r.ref), { ...unit, external: true });
+    const origin = originOf(r);
+    const own2 = {
+      nextSiteId: ctx.nextSiteId,
+      ...origin ? { repository: `${origin.owner}/${origin.repo}` } : {}
+    };
+    const unit = r.kind === "workflow" ? parseWorkflowFile(r.ref, r.text, own2) : parseActionFile(r.ref, r.ref, r.text, own2);
+    out.set(remoteKey(r.ref), { ...unit, external: true, ...origin ? { origin } : {} });
   }
   return { external: out };
 }
+function originOf(r) {
+  const value = r.ref.trim();
+  const at = value.indexOf("@");
+  const [owner = "", repo = "", ...path] = (at < 0 ? value : value.slice(0, at)).split("/");
+  const ref = at < 0 ? "" : value.slice(at + 1);
+  if (!owner || !repo || !ref) return void 0;
+  return { owner, repo, path: path.join("/"), ref, ...r.sha ? { sha: r.sha } : {} };
+}
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+9496bddeae3e4646103f913cc7d50ce748843e82/node_modules/@ciatlas/core/src/trace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/node-fs.ts
+var MAX_LINKS2 = 40;
+var MAX_LINKED_DIRS2 = 1e3;
+function insideRepository(root, abs) {
+  let realRoot;
+  try {
+    realRoot = realpathSync(root);
+  } catch {
+    realRoot = resolve(root);
+  }
+  let target = resolve(abs);
+  let rest = "";
+  for (; ; ) {
+    try {
+      target = join2(realpathSync(target), rest);
+      break;
+    } catch {
+      const parent = dirname(target);
+      if (parent === target) return false;
+      rest = join2(basename2(target), rest);
+      target = parent;
+    }
+  }
+  const rel = toPosix(relative(realRoot, target));
+  if (rel === "") return true;
+  if (rel === ".." || rel.startsWith("../")) return false;
+  return rel !== ".git" && !rel.startsWith(".git/");
+}
+function nodeFileSystem(root) {
+  const abs = (p) => join2(root, p);
+  const listings = /* @__PURE__ */ new Map();
+  const exactCase = (p) => {
+    let dir = root;
+    for (const part of toPosix(p).split("/").filter((x) => x && x !== ".")) {
+      if (part === "..") return false;
+      let names = listings.get(dir);
+      if (!names) {
+        try {
+          names = new Set(readdirSync(dir));
+        } catch {
+          return false;
+        }
+        listings.set(dir, names);
+      }
+      if (!names.has(part)) return false;
+      dir = join2(dir, part);
+    }
+    return true;
+  };
+  const inside = (p) => existsSync2(abs(p)) && exactCase(p) && insideRepository(root, abs(p));
+  const isFile = (p) => inside(p) && statSync(abs(p)).isFile();
+  const expand2 = (next, out, queue, budget) => {
+    const real = realpathSync(abs(next.dir));
+    if (next.above.has(real)) return;
+    const above = new Set(next.above).add(real);
+    for (const name of readdirSync(abs(next.dir))) {
+      if (name === "node_modules" || name === ".git") continue;
+      const p = toPosix(join2(next.dir, name));
+      if (isFile(p)) out.push(p);
+      else if (inside(p) && statSync(abs(p)).isDirectory()) enqueue(p, next, above, queue, budget);
+    }
+  };
+  const enqueue = (p, next, above, queue, budget) => {
+    const link = lstatSync(abs(p)).isSymbolicLink();
+    if (link && (next.links >= MAX_LINKS2 || budget.linked++ >= MAX_LINKED_DIRS2)) return;
+    queue.push({ dir: p, above, links: next.links + (link ? 1 : 0) });
+  };
+  return {
+    read: (p) => isFile(p) ? readFileSync(abs(p), "utf8") : void 0,
+    list: (dir) => {
+      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
+      return readdirSync(abs(dir)).map((name) => toPosix(join2(dir, name))).filter((f) => isFile(f));
+    },
+    walk: (dir) => {
+      if (!inside(dir) || !statSync(abs(dir)).isDirectory()) return [];
+      const out = [];
+      const queue = [{ dir: toPosix(dir), above: /* @__PURE__ */ new Set(), links: 0 }];
+      const budget = { linked: 0 };
+      for (let i = 0; i < queue.length; i++) expand2(queue[i], out, queue, budget);
+      return out;
+    },
+    isDir: (p) => inside(p) && statSync(abs(p)).isDirectory()
+  };
+}
+function detectRepository(root, env = process.env) {
+  if (env.GITHUB_REPOSITORY) return env.GITHUB_REPOSITORY;
+  const gitConfig = join2(root, ".git", "config");
+  if (!existsSync2(gitConfig)) return void 0;
+  const text2 = readFileSync(gitConfig, "utf8");
+  const origin = /\[remote "origin"\][^[]*?^[ \t]*url\s*=\s*(\S+)/m.exec(text2)?.[1];
+  const m = origin && /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(origin);
+  return m ? m[1] : void 0;
+}
+var nodeHost = {
+  defaultFs: (root) => nodeFileSystem(root),
+  relativeTo: (root, p) => {
+    const rel = relative(root, resolve(root, p));
+    return isAbsolute(rel) ? ".." : toPosix(rel);
+  }
+};
+function loadProject(opts) {
+  return loadProjectWith(opts, nodeHost);
+}
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/trace.ts
 var readsGithub = (ref) => ref.context === "github";
 function usageReadsCallerEvent(index, u) {
   const wf = index.project.workflows.get(u.site.ownerPath);
@@ -17933,7 +18017,7 @@ function namesMember(ref) {
 var namesKey = (segment) => !!segment && segment !== "*" && segment !== "?";
 
 // ../lint/src/actions-lock.ts
-var import_yaml5 = __toESM(require_dist(), 1);
+var import_yaml6 = __toESM(require_dist(), 1);
 
 // ../../node_modules/.pnpm/zod@4.6.6/node_modules/zod/v4/core/util.js
 function getEnumValues(entries2) {
@@ -20503,7 +20587,7 @@ function readActionsLock(fs3) {
   const file = ACTIONS_LOCK_FILE;
   let data;
   try {
-    data = (0, import_yaml5.parse)(text2);
+    data = (0, import_yaml6.parse)(text2);
   } catch (e) {
     return { file, error: `not valid YAML: ${e.message.split("\n")[0].replace(/:\s*$/, "")}` };
   }
@@ -20530,7 +20614,7 @@ import { relative as relative4, resolve as resolve4 } from "path";
 // ../lint/src/config.ts
 import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
 import { isAbsolute as isAbsolute2, join as join3, relative as relative2, resolve as resolve2 } from "path";
-var import_yaml6 = __toESM(require_dist(), 1);
+var import_yaml7 = __toESM(require_dist(), 1);
 
 // ../lint/src/location.json
 var location_default = {
@@ -20788,8 +20872,8 @@ function findConfigFile(root, explicit) {
   return void 0;
 }
 function readYaml(text2, file) {
-  const lineCounter = new import_yaml6.LineCounter();
-  const doc = (0, import_yaml6.parseDocument)(text2, { lineCounter, prettyErrors: false });
+  const lineCounter = new import_yaml7.LineCounter();
+  const doc = (0, import_yaml7.parseDocument)(text2, { lineCounter, prettyErrors: false });
   if (doc.errors.length) {
     throw new ConfigError(`Config file is not valid YAML: ${doc.errors[0].message.split("\n")[0]}`, file);
   }
@@ -20804,8 +20888,8 @@ function parseConfigText(text2, file = "flowpact.config.yml", base) {
   const { doc, lineCounter, data: raw } = readYaml(text2, file);
   const data = raw ?? {};
   const config2 = parseConfig(base ? mergeConfig(base, data) : data, file);
-  const overridesNode = (0, import_yaml6.isMap)(doc.contents) ? doc.contents.get("overrides", true) : void 0;
-  const overrideLocs = (0, import_yaml6.isSeq)(overridesNode) ? overridesNode.items.map((item) => {
+  const overridesNode = (0, import_yaml7.isMap)(doc.contents) ? doc.contents.get("overrides", true) : void 0;
+  const overrideLocs = (0, import_yaml7.isSeq)(overridesNode) ? overridesNode.items.map((item) => {
     const r = item.range ?? [0, 0, 0];
     const a = lineCounter.linePos(r[0]);
     return {
@@ -21321,7 +21405,7 @@ function splitLines(text2) {
 }
 
 // ../lint/src/contracts.ts
-var import_yaml7 = __toESM(require_dist(), 1);
+var import_yaml8 = __toESM(require_dist(), 1);
 var CONTRACTS_DIR = `${CONFIG_DIR}/contracts`;
 function normalizeContractText(text2) {
   return text2.replace(/\r\n/g, "\n");
@@ -21528,7 +21612,7 @@ function buildContract(index, unit) {
   };
 }
 function serializeContract(c) {
-  return `${CONTRACT_HEADER}${(0, import_yaml7.stringify)(c, { lineWidth: 0, indent: 2, defaultStringType: "PLAIN", singleQuote: true })}`;
+  return `${CONTRACT_HEADER}${(0, import_yaml8.stringify)(c, { lineWidth: 0, indent: 2, defaultStringType: "PLAIN", singleQuote: true })}`;
 }
 function contractFileFor(unit, taken = /* @__PURE__ */ new Set(), dir = CONTRACTS_DIR, extension = "yaml") {
   const fileOf = (base2) => `${dir}/${base2}.contract.${extension}`;
@@ -21722,7 +21806,7 @@ function readContracts(fs3) {
   for (const file of fs3.walk(CONTRACTS_DIR).filter((f) => CONTRACT_FILE.test(f)).sort()) {
     const text2 = fs3.read(file) ?? "";
     try {
-      const parsed = contractSchema.safeParse((0, import_yaml7.parse)(text2));
+      const parsed = contractSchema.safeParse((0, import_yaml8.parse)(text2));
       out.set(
         file,
         parsed.success ? { file, text: text2, contract: parsed.data } : {
@@ -21946,7 +22030,7 @@ function entryConsumers(e) {
   for (const text2 of [e.before, e.after]) {
     if (!text2) continue;
     try {
-      const data = (0, import_yaml7.parse)(text2);
+      const data = (0, import_yaml8.parse)(text2);
       for (const c of data?.consumers ?? []) if (typeof c?.from === "string") out.add(c.from);
     } catch {
     }
@@ -21973,7 +22057,7 @@ function scopePlan(plan, keep) {
 }
 
 // ../lint/src/ignore-comments.ts
-var import_yaml8 = __toESM(require_dist(), 1);
+var import_yaml9 = __toESM(require_dist(), 1);
 var DIRECTIVE = /(?<=^|\s)#\s*flowpact:/g;
 var MARKERS = /* @__PURE__ */ new Set(["", "", ""]);
 var NOT_YAML = /* @__PURE__ */ new Set(["space", "newline", "comment"]);
@@ -22027,7 +22111,7 @@ function noteLine(out, st, type, token, start, line) {
   }
 }
 function record2(out, st, token, start, line) {
-  const type = st.scalar ? "scalar" : import_yaml8.CST.tokenType(token) ?? "other";
+  const type = st.scalar ? "scalar" : import_yaml9.CST.tokenType(token) ?? "other";
   if (type === "scalar" || QUOTED.has(type)) closeScalar(out, st, spanOf2(token, start, line, st.header));
   else if (type === "block-scalar-header") st.header = line(start);
   noteLine(out, st, type, token, start, line);
@@ -22035,7 +22119,7 @@ function record2(out, st, token, start, line) {
 function lex(text2, line) {
   const out = { comments: [], spans: [], yamlLines: [] };
   const st = { offset: 0, scalar: false, lineHasYaml: false };
-  for (const token of new import_yaml8.Lexer().lex(text2)) {
+  for (const token of new import_yaml9.Lexer().lex(text2)) {
     if (MARKERS.has(token)) {
       st.scalar ||= token === "";
       continue;
@@ -22137,7 +22221,7 @@ function applyIgnoreComments(findings, files, resolve9) {
 }
 
 // ../lint/src/impact.ts
-var import_yaml9 = __toESM(require_dist(), 1);
+var import_yaml10 = __toESM(require_dist(), 1);
 
 // ../lint/src/job-chains.ts
 function byJobChain(index, wf, pick2, stopAt, depth = 0, seen = /* @__PURE__ */ new Set()) {
@@ -22461,16 +22545,16 @@ function unitsRun(index, unit, seen = /* @__PURE__ */ new Map()) {
 var stepsRun = (index, unit) => unitsRun(index, unit).flatMap(
   (u) => u.kind === "workflow" ? Object.values(u.jobs).flatMap((j) => j.steps) : u.steps
 );
-function artifactName(step2) {
-  const name = step2.with.name?.value;
+function artifactName(step3) {
+  const name = step3.with.name?.value;
   return name === void 0 || name === null ? "artifact" : String(name);
 }
 function uploadsOf(index, unit) {
   const out = { names: /* @__PURE__ */ new Set(), dynamic: false };
-  for (const step2 of stepsRun(index, unit)) {
-    if (step2.uses?.kind !== "remote-action" || !UPLOAD_ARTIFACT.test(step2.uses.raw)) continue;
-    if (!out.at && step2.loc.file === unit.file) out.at = step2.uses.loc;
-    const name = artifactName(step2);
+  for (const step3 of stepsRun(index, unit)) {
+    if (step3.uses?.kind !== "remote-action" || !UPLOAD_ARTIFACT.test(step3.uses.raw)) continue;
+    if (!out.at && step3.loc.file === unit.file) out.at = step3.uses.loc;
+    const name = artifactName(step3);
     if (name.includes("${{")) out.dynamic = true;
     else out.names.add(name);
   }
@@ -22495,7 +22579,7 @@ function canonical(v) {
 }
 function implementationOf(unit) {
   try {
-    const doc = (0, import_yaml9.parse)(unit.source.text);
+    const doc = (0, import_yaml10.parse)(unit.source.text);
     return canonical(doc?.[unit.kind === "workflow" ? "jobs" : "runs"] ?? null);
   } catch {
     return unit.source.text;
@@ -22585,8 +22669,8 @@ function sourcesIn(unit, field, key, context, job) {
 }
 var stepNamed = (steps2, id) => steps2.find((s) => sameName(s.id, id));
 function stepConditions(steps2, id, where) {
-  const step2 = stepNamed(steps2, id);
-  const own2 = step2 && realCondition(step2.ifValue, step2.ifSite);
+  const step3 = stepNamed(steps2, id);
+  const own2 = step3 && realCondition(step3.ifValue, step3.ifSite);
   return own2 ? [{ where: `${where}.steps.${id}`, text: own2 }] : [];
 }
 function jobOutputSources(index, wf, id, name, depth) {
@@ -22863,7 +22947,7 @@ function computeImpact(base, head, baseline, declared, policy, lookAt = {}) {
 }
 
 // ../lint/src/remotes.ts
-var import_yaml10 = __toESM(require_dist(), 1);
+var import_yaml11 = __toESM(require_dist(), 1);
 var REMOTES_LOCK_FILES = [
   `${CONFIG_DIR}/remotes.lock.yaml`,
   `${CONFIG_DIR}/remotes.lock.yml`
@@ -22919,7 +23003,7 @@ function readRemotesLock(fs3) {
   if (!file) return {};
   let data;
   try {
-    data = (0, import_yaml10.parse)(fs3.read(file));
+    data = (0, import_yaml11.parse)(fs3.read(file));
   } catch (e) {
     return { file, error: `not valid YAML: ${e.message.split("\n")[0]}` };
   }
@@ -22932,16 +23016,16 @@ function interfaceYaml(e) {
   const inputs = e.inputs ?? {};
   if (e.kind === "workflow") {
     const outputs2 = Object.fromEntries((e.outputs ?? []).map((o) => [o, { value: "" }]));
-    return (0, import_yaml10.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
+    return (0, import_yaml11.stringify)({ on: { workflow_call: { inputs, secrets: e.secrets ?? {}, outputs: outputs2 } }, jobs: {} });
   }
   const outputs = Object.fromEntries((e.outputs ?? []).map((o) => [o, { description: "" }]));
   const using = e.using ?? "composite";
   const runs = using === "composite" ? { using, steps: [] } : { using, main: "" };
-  return (0, import_yaml10.stringify)({ name: "", inputs, outputs, runs });
+  return (0, import_yaml11.stringify)({ name: "", inputs, outputs, runs });
 }
 var remoteInterfaces = (lock) => Object.entries(lock?.remotes ?? {}).filter(([ref, e]) => !pinMismatch(ref, e)).map(([ref, e]) => ({ ref, kind: e.kind, text: interfaceYaml(e) }));
 function pinMismatch(ref, entry) {
-  const r = parseRemoteRef(ref, entry.kind);
+  const r = parseRemoteRef2(ref, entry.kind);
   return r !== void 0 && commitOf(r, entry) !== entry.sha;
 }
 function lockedRemote(lock, ref) {
@@ -22965,18 +23049,18 @@ function interfaceCalls(index) {
   }
   return [...index.callSites, ...remote];
 }
-var stepsOf = (unit) => unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((job) => job.steps.map((step2) => ({ job, step: step2 }))) : unit.steps.map((step2) => ({ step: step2 }));
+var stepsOf = (unit) => unit.kind === "workflow" ? Object.values(unit.jobs).flatMap((job) => job.steps.map((step3) => ({ job, step: step3 }))) : unit.steps.map((step3) => ({ step: step3 }));
 function interfaceUses(index) {
   const remote = [];
   for (const unit of index.units()) {
-    for (const { job, step: step2 } of stepsOf(unit)) {
-      const action = step2.uses?.kind === "remote-action" ? index.actionInterfaceOf(step2) : void 0;
-      if (action) remote.push({ unit, ...job ? { job } : {}, step: step2, action });
+    for (const { job, step: step3 } of stepsOf(unit)) {
+      const action = step3.uses?.kind === "remote-action" ? index.actionInterfaceOf(step3) : void 0;
+      if (action) remote.push({ unit, ...job ? { job } : {}, step: step3, action });
     }
   }
   return [...index.actionUses, ...remote];
 }
-function parseRemoteRef(raw, kind) {
+function parseRemoteRef2(raw, kind) {
   const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
   if (!m) return void 0;
   return { raw: raw.trim(), kind, owner: m[1], repo: m[2], path: m[3].replace(/^\//, ""), ref: m[4] };
@@ -22984,7 +23068,7 @@ function parseRemoteRef(raw, kind) {
 function remoteRefsOf(index, units = index.units()) {
   const out = /* @__PURE__ */ new Map();
   const add = (raw, kind) => {
-    const ref = parseRemoteRef(raw, kind);
+    const ref = parseRemoteRef2(raw, kind);
     if (ref && !out.has(remoteKey(raw))) out.set(remoteKey(raw), ref);
   };
   for (const unit of units) {
@@ -22992,8 +23076,8 @@ function remoteRefsOf(index, units = index.units()) {
       for (const job of Object.values(unit.jobs))
         if (job.uses?.kind === "remote-workflow") add(job.uses.raw, "workflow");
     }
-    for (const { step: step2 } of stepsOf(unit))
-      if (step2.uses?.kind === "remote-action") add(step2.uses.raw, "action");
+    for (const { step: step3 } of stepsOf(unit))
+      if (step3.uses?.kind === "remote-action") add(step3.uses.raw, "action");
   }
   return [...out.values()];
 }
@@ -23052,7 +23136,7 @@ function serializeRemotesLock(lock) {
   const sorted = (rec) => Object.fromEntries(Object.entries(rec).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0));
   const unreadable = Object.keys(lock.unreadable ?? {}).length ? { unreadable: sorted(lock.unreadable) } : {};
   const doc = { version: 1, remotes: sorted(lock.remotes), ...unreadable };
-  return `${LOCK_HEADER}${(0, import_yaml10.stringify)(doc, { lineWidth: 0, singleQuote: true })}`;
+  return `${LOCK_HEADER}${(0, import_yaml11.stringify)(doc, { lineWidth: 0, singleQuote: true })}`;
 }
 
 // ../lint/src/rules/types.ts
@@ -23346,7 +23430,7 @@ var contractRules = [
 ];
 
 // ../lint/src/suggestions.ts
-var import_yaml11 = __toESM(require_dist(), 1);
+var import_yaml12 = __toESM(require_dist(), 1);
 var sources = /* @__PURE__ */ new WeakMap();
 function sourceOf(index, file) {
   let byFile = sources.get(index);
@@ -23390,26 +23474,26 @@ var documents = /* @__PURE__ */ new WeakMap();
 function documentOf(source) {
   let doc = documents.get(source);
   if (!doc) {
-    doc = (0, import_yaml11.parseDocument)(source.text);
+    doc = (0, import_yaml12.parseDocument)(source.text);
     documents.set(source, doc);
   }
   return doc;
 }
 function pairOf(map, key) {
-  const pairs2 = map.items.filter((p) => (0, import_yaml11.isScalar)(p.key));
+  const pairs2 = map.items.filter((p) => (0, import_yaml12.isScalar)(p.key));
   const name = (p) => String(p.key.value);
   return pairs2.find((p) => name(p) === key) ?? pairs2.find((p) => name(p).toLowerCase() === key.toLowerCase());
 }
 function nodeAt(doc, path) {
   let node = doc.contents;
-  for (const step2 of path) {
-    if (typeof step2 === "number") node = (0, import_yaml11.isSeq)(node) ? node.items[step2] : void 0;
-    else node = (0, import_yaml11.isMap)(node) ? pairOf(node, step2)?.value : void 0;
+  for (const step3 of path) {
+    if (typeof step3 === "number") node = (0, import_yaml12.isSeq)(node) ? node.items[step3] : void 0;
+    else node = (0, import_yaml12.isMap)(node) ? pairOf(node, step3)?.value : void 0;
     if (node === void 0) return void 0;
   }
   return node;
 }
-var isBlockMap = (node) => (0, import_yaml11.isMap)(node) && !node.flow && node.items.length > 0;
+var isBlockMap = (node) => (0, import_yaml12.isMap)(node) && !node.flow && node.items.length > 0;
 var keyStart = (source, pair) => source.loc(pair.key.range[0]);
 function pairLines(source, pair) {
   const first = keyStart(source, pair).line;
@@ -23484,7 +23568,7 @@ var hasLineBreak = (text2) => /[\r\n\u0085\u2028\u2029]/.test(text2);
 function replaceValue(index, file, path, newText) {
   const at = editable(index, file);
   const node = at && nodeAt(at.doc, path);
-  if (!at || !((0, import_yaml11.isScalar)(node) || ((0, import_yaml11.isMap)(node) || (0, import_yaml11.isSeq)(node)) && node.flow) || !node.range)
+  if (!at || !((0, import_yaml12.isScalar)(node) || ((0, import_yaml12.isMap)(node) || (0, import_yaml12.isSeq)(node)) && node.flow) || !node.range)
     return void 0;
   const loc = at.source.loc(node.range[0], node.range[1]);
   return loc.line === loc.endLine && !hasLineBreak(newText) ? { loc, newText } : void 0;
@@ -23493,7 +23577,7 @@ function keyLoc(index, file, path) {
   const source = sourceOf(index, file);
   const own2 = path.at(-1);
   const parent = source && nodeAt(documentOf(source), path.slice(0, -1));
-  const pair = typeof own2 === "string" && (0, import_yaml11.isMap)(parent) ? pairOf(parent, own2) : void 0;
+  const pair = typeof own2 === "string" && (0, import_yaml12.isMap)(parent) ? pairOf(parent, own2) : void 0;
   const range = pair?.key?.range;
   return source && range ? source.loc(range[0], range[1]) : void 0;
 }
@@ -23511,7 +23595,7 @@ function removeKey(index, file, path, key, line) {
   const holder = typeof own2 === "string" && isBlockMap(parent) ? pairOf(parent, own2) : void 0;
   return holder && removePair(source, holder);
 }
-var stepWithPath = (job, step2) => job === void 0 ? ["runs", "steps", step2, "with"] : ["jobs", job, "steps", step2, "with"];
+var stepWithPath = (job, step3) => job === void 0 ? ["runs", "steps", step3, "with"] : ["jobs", job, "steps", step3, "with"];
 function suggestion(title, edits) {
   if (edits.length === 0 || edits.some((e) => e === void 0)) return void 0;
   return { title, edits };
@@ -24110,9 +24194,9 @@ function stepResultReads(unit, job, after, id) {
     const { site, ref } = read2;
     if (ref.context !== "steps" || site.job !== job || site.step !== void 0 && site.step <= after)
       continue;
-    const step2 = ref.path[0];
-    if (!namesKey2(step2)) return void 0;
-    if (step2.toLowerCase() === id.toLowerCase()) reads.push(read2);
+    const step3 = ref.path[0];
+    if (!namesKey2(step3)) return void 0;
+    if (step3.toLowerCase() === id.toLowerCase()) reads.push(read2);
   }
   return reads;
 }
@@ -24391,22 +24475,22 @@ var undefinedEnvRef = defineRule({
 });
 function siteScope(wf, site) {
   const job = site.job ? wf.jobs[site.job] : void 0;
-  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return { job, step: step2 };
+  const step3 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return { job, step: step3 };
 }
 function checkEnvReads(ctx, wf, site) {
-  const { job, step: step2 } = siteScope(wf, site);
+  const { job, step: step3 } = siteScope(wf, site);
   for (const seg of site.segments) {
     for (const ref of seg.refs) {
       const name = ref.path[0];
       if (ref.context !== "env" || !namesKey2(name)) continue;
-      if (envEntry(wf, job, step2, name) || maybeWrittenEarlier(job?.steps, site, name)) continue;
+      if (envEntry(wf, job, step3, name) || maybeWrittenEarlier(job?.steps, site, name)) continue;
       reportUndefinedEnv(ctx, wf, site, ref, name);
     }
   }
 }
-function envEntry(wf, job, step2, name) {
-  return lookup(wf.env, name) || job && lookup(job.env, name) || step2 && lookup(step2.env, name);
+function envEntry(wf, job, step3, name) {
+  return lookup(wf.env, name) || job && lookup(job.env, name) || step3 && lookup(step3.env, name);
 }
 function reportUndefinedEnv(ctx, wf, site, ref, name) {
   const hint = GITHUB_ENV_HINTS[name.toUpperCase()];
@@ -25003,11 +25087,11 @@ function skippedIn(guard, combo) {
   return ast !== void 0 && definitelyFalsy(ast, matrixResolver(combo));
 }
 function guardsOf(job, site) {
-  const step2 = site.step !== void 0 ? job.steps[site.step] : void 0;
+  const step3 = site.step !== void 0 ? job.steps[site.step] : void 0;
   const jobGuard = guardOf(job);
   return [
     jobGuard !== false && jobGuard && hasMatrixRef(jobGuard) ? void 0 : jobGuard,
-    step2 && guardOf(step2)
+    step3 && guardOf(step3)
   ].filter((g) => g !== void 0 && g !== site);
 }
 function affectedCombos(site, exp, predicate, guards = [], onlyKey, text2 = site.text) {
@@ -25155,7 +25239,7 @@ with:
   }
 });
 function withTargets(ctx, job) {
-  return [...callTargets(ctx, job), ...job.steps.flatMap((step2) => stepTargets(ctx, step2))];
+  return [...callTargets(ctx, job), ...job.steps.flatMap((step3) => stepTargets(ctx, step3))];
 }
 function callTargets(ctx, job) {
   const uses = job.uses;
@@ -25171,14 +25255,14 @@ function callTargets(ctx, job) {
     };
   });
 }
-function stepTargets(ctx, step2) {
-  const action = ctx.index.actionOf(step2);
-  return Object.values(step2.with).map((b) => {
+function stepTargets(ctx, step3) {
+  const action = ctx.index.actionOf(step3);
+  return Object.values(step3.with).map((b) => {
     const input2 = action ? lookup(action.inputs, b.name) : void 0;
     return {
       binding: b,
-      target: action?.path ?? step2.uses?.raw ?? `step #${step2.index + 1}`,
-      step: step2,
+      target: action?.path ?? step3.uses?.raw ?? `step #${step3.index + 1}`,
+      step: step3,
       ...action ? { callee: action } : {},
       ...input2 ? { input: input2, symbol: sym.input(action.path, input2.name) } : {}
     };
@@ -25580,8 +25664,8 @@ function checkJobOutputRef(ctx, wf, site, ref, a) {
 function checkStepOutputRef(ctx, unit, site, ref, a) {
   const c = ref.path[2];
   const steps2 = stepsInScope(unit, site.job);
-  const step2 = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
-  if (!step2) {
+  const step3 = steps2.find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step3) {
     const guess = didYouMean(
       a,
       steps2.flatMap((s) => s.id ? [s.id] : [])
@@ -25594,20 +25678,20 @@ function checkStepOutputRef(ctx, unit, site, ref, a) {
     });
     return;
   }
-  if (site.step !== void 0 && step2.index >= site.step) {
+  if (site.step !== void 0 && step3.index >= site.step) {
     ctx.report({
-      message: `Step ${quote(a)} runs ${step2.index === site.step ? "as" : "after"} this step, so its outputs are not available yet`,
+      message: `Step ${quote(a)} runs ${step3.index === site.step ? "as" : "after"} this step, so its outputs are not available yet`,
       loc: ref.loc,
       symbol: stepOutputSymbol(unit, site, a, c),
-      related: [{ loc: step2.idLoc ?? step2.loc, message: `step ${quote(a)} is defined here` }]
+      related: [{ loc: step3.idLoc ?? step3.loc, message: `step ${quote(a)} is defined here` }]
     });
     return;
   }
-  checkActionOutputRef(ctx, step2, ref);
+  checkActionOutputRef(ctx, step3, ref);
 }
-function checkActionOutputRef(ctx, step2, ref) {
+function checkActionOutputRef(ctx, step3, ref) {
   const [, b, c] = ref.path;
-  const action = ctx.index.actionInterfaceOf(step2);
+  const action = ctx.index.actionInterfaceOf(step3);
   if (!isProperty(b, "outputs") || !namesKey2(c) || !action) return;
   if (action.using !== "composite") return;
   if (lookup(action.outputs, c)) return;
@@ -25618,7 +25702,7 @@ function checkActionOutputRef(ctx, step2, ref) {
     loc: ref.loc,
     symbol: sym.output(action.path, c),
     suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : void 0],
-    related: [{ loc: step2.uses?.loc ?? step2.loc, message: `declared outputs: ${listNames(names)}` }]
+    related: [{ loc: step3.uses?.loc ?? step3.loc, message: `declared outputs: ${listNames(names)}` }]
   });
 }
 var outputRefWithoutNeeds = defineRule({
@@ -25796,17 +25880,17 @@ version: \${{ steps.meta.outputs.version }}`,
     }
   }
 });
-function writesAreKnown(step2) {
-  const w = step2.writesOutputs;
+function writesAreKnown(step3) {
+  const w = step3.writesOutputs;
   if (!w.mentions || w.dynamic) return false;
-  return !(step2.uses && !step2.with.script);
+  return !(step3.uses && !step3.with.script);
 }
 function checkStepOutputWritten(ctx, unit, site, ref) {
   const [a, b, c] = ref.path;
   if (!isProperty(b, "outputs") || !a || !namesKey2(c)) return;
-  const step2 = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
-  if (!step2 || !writesAreKnown(step2)) return;
-  const w = step2.writesOutputs;
+  const step3 = stepsInScope(unit, site.job).find((s) => s.id?.toLowerCase() === a.toLowerCase());
+  if (!step3 || !writesAreKnown(step3)) return;
+  const w = step3.writesOutputs;
   if (w.names.some((n) => n.toLowerCase() === c.toLowerCase())) return;
   const guess = didYouMean(c, w.names);
   ctx.report({
@@ -25814,7 +25898,7 @@ function checkStepOutputWritten(ctx, unit, site, ref) {
     loc: ref.loc,
     symbol: stepOutputSymbol(unit, site, a, c),
     suggestions: [guess ? renameSegment(ctx.index, ref.loc, 3, c, guess) : void 0],
-    related: [{ loc: step2.runLoc ?? step2.loc, message: "outputs are written here" }]
+    related: [{ loc: step3.runLoc ?? step3.loc, message: "outputs are written here" }]
   });
 }
 var outputRules = [
@@ -26458,8 +26542,8 @@ function undeclaredSecretsRead(wf) {
 }
 function runsOnEveryCall(wf, site) {
   const job = site.job !== void 0 ? wf.jobs[site.job] : void 0;
-  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return !(step2 && hasCondition(step2)) && !(job && jobMayBeSkipped(wf, job, /* @__PURE__ */ new Set()));
+  const step3 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return !(step3 && hasCondition(step3)) && !(job && jobMayBeSkipped(wf, job, /* @__PURE__ */ new Set()));
 }
 var hasCondition = (d) => d.ifValue === false || !!d.ifSite?.segments.some((s) => s.refs.length);
 function jobMayBeSkipped(wf, job, seen) {
@@ -26519,8 +26603,8 @@ function omittedInputValue(decl) {
 }
 function guardsOf2(wf, site) {
   const job = site.job !== void 0 ? wf.jobs[site.job] : void 0;
-  const step2 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
-  return [job && guardOf(job), step2 && guardOf(step2)].filter(
+  const step3 = job && site.step !== void 0 ? job.steps[site.step] : void 0;
+  return [job && guardOf(job), step3 && guardOf(step3)].filter(
     (g) => g !== void 0 && g !== site
   );
 }
@@ -26873,7 +26957,7 @@ function lockDrift(ctx) {
 }
 function relockedEntries(entries2, actionsLock) {
   return entries2.flatMap(([ref, e]) => {
-    const r = parseRemoteRef(ref, e.kind);
+    const r = parseRemoteRef2(ref, e.kind);
     const runs = r && !pinMismatch(ref, e) ? lockedCommit(actionsLock, r) : void 0;
     return runs && runs !== e.sha ? [`${ref} (it records ${e.sha.slice(0, 7)}, actions.lock ${runs.slice(0, 7)})`] : [];
   });
@@ -27482,8 +27566,8 @@ function envKind(s, ref) {
   return symbolKind(s, symbol);
 }
 function ownEnv2(index, unit, site, name) {
-  const step2 = site.field === "step.env" ? void 0 : index.stepOf(unit, site);
-  return step2 && lookup(step2.env, name);
+  const step3 = site.field === "step.env" ? void 0 : index.stepOf(unit, site);
+  return step3 && lookup(step3.env, name);
 }
 function bindingKind(s, b) {
   return b.site ? siteKind(s, s.unit, b.site) : interpolated(jsonKind2(b.value));
@@ -27497,22 +27581,22 @@ function stepOutputKind(s, ref) {
   const symbol = s.index.resolveRef(s.unit, s.site, ref);
   if (!symbol || !namesKey2(id) || !isProperty(outputs, "outputs") || ref.path.length !== 3) return UNKNOWN2;
   const kind = symbolKind(s, symbol);
-  const step2 = stepsInScope(s.unit, s.site.job).find((x) => x.id?.toLowerCase() === id.toLowerCase());
-  const why = step2 && skippedStep(s.index, s.unit, step2, symbol);
+  const step3 = stepsInScope(s.unit, s.site.job).find((x) => x.id?.toLowerCase() === id.toLowerCase());
+  const why = step3 && skippedStep(s.index, s.unit, step3, symbol);
   return why ? unique([...kind, { cls: "empty", why }]) : kind;
 }
-function skipGuard(step2) {
-  const guard = guardOf(step2);
+function skipGuard(step3) {
+  const guard = guardOf(step3);
   return guard && !guard.segments.some((g) => g.refs.length > 0) ? void 0 : guard;
 }
-function skippedStep(index, unit, step2, symbol) {
-  const guard = skipGuard(step2);
+function skippedStep(index, unit, step3, symbol) {
+  const guard = skipGuard(step3);
   if (guard === void 0) return void 0;
   const reads = guard ? guardReads(index, unit, guard) : { symbols: [], keys: [] };
   return {
     kind: "guarded-step",
-    loc: guard ? guard.loc : step2.loc,
-    label: `steps.${step2.id}`,
+    loc: guard ? guard.loc : step3.loc,
+    label: `steps.${step3.id}`,
     symbols: [symbol, ...reads.symbols],
     keys: reads.keys
   };
@@ -27741,9 +27825,9 @@ function decided(index, at, node, why) {
   return guardDecides(index, at, why) || earlierOperandDecides(index, at, node, why);
 }
 function guardDecides(index, { unit, site }, why) {
-  const { step: step2, job } = readerOf(index, unit, site);
-  if (neverRuns(step2) || neverRuns(job)) return true;
-  const ownIf = step2?.ifSite === site ? void 0 : step2?.ifSite;
+  const { step: step3, job } = readerOf(index, unit, site);
+  if (neverRuns(step3) || neverRuns(job)) return true;
+  const ownIf = step3?.ifSite === site ? void 0 : step3?.ifSite;
   if (why.kind === "guarded-step" && ownIf) return true;
   const guards = [ownIf, job?.ifSite].filter((g) => !!g && g !== site);
   return guards.some(
@@ -28636,7 +28720,7 @@ function exitCodeFor(summary2, failOn) {
 }
 
 // ../lint/src/contract-locate.ts
-var import_yaml12 = __toESM(require_dist(), 1);
+var import_yaml13 = __toESM(require_dist(), 1);
 
 // ../lint/src/git-origin.ts
 import { readFileSync as readFileSync3 } from "fs";
@@ -28981,7 +29065,7 @@ function untracked(w, part) {
   w.at.push({ name: part, tree: void 0 });
   return void 0;
 }
-function step(w, part) {
+function step2(w, part) {
   if (part === "" || part === ".") return void 0;
   if (part === "..") return w.at.pop() ? void 0 : leave(w, join6(w.dir, "..", ...w.todo));
   const tree = w.at.length ? w.at[w.at.length - 1].tree : w.tree;
@@ -29005,7 +29089,7 @@ function locate2(top, commit, path) {
   enter(w, top, commit, "HEAD", "");
   w.todo = path.split("/");
   let found;
-  while (!found && w.todo.length) found = step(w, w.todo.shift());
+  while (!found && w.todo.length) found = step2(w, w.todo.shift());
   if (found && found.kind !== "none") return found;
   return w.shown ? { kind: "none", submodule: `${w.shown.slice(0, -1)} at ${w.tree.slice(0, 7)}` } : NONE;
 }
@@ -29169,7 +29253,7 @@ function prepareImpact(root, headConfig, req, logger) {
 }
 
 // ../lint/src/override-entry.ts
-var import_yaml13 = __toESM(require_dist(), 1);
+var import_yaml14 = __toESM(require_dist(), 1);
 
 // ../lint/src/plugins.ts
 import { existsSync as existsSync6 } from "fs";
@@ -29553,7 +29637,7 @@ function setEntry(lock, ref, entry) {
   const key = remoteKey(ref);
   for (const k of Object.keys(lock.remotes)) if (remoteKey(k) === key) delete lock.remotes[k];
   if (!entry) return;
-  const r = parseRemoteRef(ref, entry.kind);
+  const r = parseRemoteRef2(ref, entry.kind);
   lock.remotes[ref] = r ? { ...entry, sha: commitOf(r, entry) } : entry;
 }
 var stepName = (s) => s.id ?? `#${s.index + 1}`;
@@ -30080,9 +30164,9 @@ function reportGraph(index) {
 }
 
 // ../reporters/src/kit/github.ts
-import { posix as posix4 } from "path";
+import { posix as posix2 } from "path";
 function inRepository(file, pathPrefix = "") {
-  return pathPrefix ? posix4.join(pathPrefix, file) : file;
+  return pathPrefix ? posix2.join(pathPrefix, file) : file;
 }
 
 // ../reporters/src/kit/graph.ts
@@ -30116,11 +30200,11 @@ function stepsOf2(unit, job) {
   return job ? job.steps : unit.kind === "action" ? unit.steps : [];
 }
 function stepEdges(g, unit, job, matrix2) {
-  for (const step2 of stepsOf2(unit, job)) {
-    if (step2.uses?.kind !== "local-action") continue;
-    const to = g.index.actionOf(step2)?.path ?? missingNode(g, step2.uses);
+  for (const step3 of stepsOf2(unit, job)) {
+    if (step3.uses?.kind !== "local-action") continue;
+    const to = g.index.actionOf(step3)?.path ?? missingNode(g, step3.uses);
     if (!to) continue;
-    const via = job ? `jobs.${job.id} \u203A steps[${step2.index}]` : `steps[${step2.index}]`;
+    const via = job ? `jobs.${job.id} \u203A steps[${step3.index}]` : `steps[${step3.index}]`;
     g.edges.push({ from: unit.path, to, via, kind: "uses", ...matrix2 !== void 0 ? { matrix: matrix2 } : {} });
   }
 }
@@ -30827,7 +30911,7 @@ function renderVersionChanges(v, links = {}) {
 }
 
 // src/main.ts
-var import_yaml14 = __toESM(require_dist(), 1);
+var import_yaml15 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
@@ -31182,7 +31266,7 @@ var fromActionDir = (p) => isAbsolute9(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml14.parse)(readFileSync6(actionYml, "utf8"));
+    const meta2 = (0, import_yaml15.parse)(readFileSync6(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
