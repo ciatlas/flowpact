@@ -14,7 +14,8 @@
       "!**/next-env.d.ts",
       "!fixtures",
       "!apps/docs/content/docs/rules",
-      "!apps/docs/public/schemas"
+      "!apps/docs/public/schemas",
+      "!CHANGELOG.md"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
