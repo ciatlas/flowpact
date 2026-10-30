@@ -5,7 +5,14 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { escapeControl, type Logger, nodeFileSystem } from '@ciatlas/core';
+import {
+  escapeControl,
+  type Logger,
+  nodeFileSystem,
+  type RemoteFailureKind,
+  type RemoteRef,
+  type RemoteSourceCache,
+} from '@ciatlas/core';
 import {
   type ActionsLockRead,
   assertSafeWritePath,
@@ -13,8 +20,6 @@ import {
   commitKey,
   downloadRemoteSources,
   envCacheDir,
-  type FetchedSource,
-  type FetchFailureKind,
   type FetchProgress,
   type FetchRemotesOptions,
   type FetchRetry,
@@ -28,7 +33,6 @@ import {
   REMOTES_LOCK_FILES,
   type RemoteChange,
   type RemoteChangeGrade,
-  type RemoteRef,
   type RemotesDownload,
   type RemotesLock,
   type RemotesUpdate,
@@ -204,7 +208,7 @@ export function fetchOptions(
 export function adviceFor(
   root: string,
   access: GithubAccess,
-  problems: { kind?: FetchFailureKind }[],
+  problems: { kind?: RemoteFailureKind }[],
 ): ReturnType<typeof fetchAdvice> {
   if (!problems.length) return { hints: [] };
   return fetchAdvice(
@@ -360,13 +364,14 @@ const NO_CACHE_DIR =
 
 /**
  * Keeps each fetched file in the sources cache, when there is one, counting what it wrote (a failure is logged, never
- * thrown): the option to fetch with, and the result's fields to report it.
+ * thrown): the cache to fetch with, written through and never read (the API is asked every time), and the result's
+ * fields to report it.
  */
 function sourcesKeeper(
   cache: { dir?: string; why?: string },
   logger: Logger,
 ): {
-  fetch: { onSource?: (s: FetchedSource) => void };
+  fetch: { cache?: RemoteSourceCache };
   result: Partial<RemotesUpdateResult>;
   finish: () => void;
 } {
@@ -375,17 +380,19 @@ function sourcesKeeper(
   const dir = cache.dir;
   const kept: SourcesKept = { dir, written: 0, removed: 0, notKept: 0 };
   const used = new Set<string>();
-  const onSource = (s: FetchedSource) => {
-    const outcome = cacheSource(dir, s.ref, s.sha, s.file, s.text);
+  const set: RemoteSourceCache['set'] = (key, bytes) => {
+    // As the API's text, without a byte order mark: the file the editor opens.
+    const outcome = cacheSource(dir, key, key.sha, key.file, new TextDecoder().decode(bytes));
     if (outcome === 'written' || outcome === 'present') {
-      touchCommit(dir, s.ref, s.sha);
-      used.add(commitKey(s.ref, s.sha));
+      touchCommit(dir, key, key.sha);
+      used.add(commitKey(key, key.sha));
     }
+    const what = () => escapeControl(`${key.owner}/${key.repo}/${key.file}@${key.sha.slice(0, 7)}`);
     if (outcome === 'written') kept.written++;
     else if (outcome === 'unsafe')
-      logger.debug(`source not cached: ${escapeControl(s.ref.raw)}: its path cannot be a file name`);
+      logger.debug(`source not cached: ${what()}: its path cannot be a file name`);
     else if (typeof outcome === 'object') {
-      logger.debug(`source not cached: ${escapeControl(s.ref.raw)}: ${outcome.failed}`);
+      logger.debug(`source not cached: ${what()}: ${outcome.failed}`);
       kept.notKept++;
       kept.failed ??= outcome.failed;
     }
@@ -393,7 +400,7 @@ function sourcesKeeper(
   const finish = () => {
     kept.removed = pruneUsed(dir, used, logger);
   };
-  return { fetch: { onSource }, result: { sources: kept }, finish };
+  return { fetch: { cache: { get: () => undefined, set } }, result: { sources: kept }, finish };
 }
 
 /**

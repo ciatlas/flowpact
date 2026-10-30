@@ -3,13 +3,12 @@
  * `pnpm typecheck`; there is nothing to run. src/api.ts is typed with the declarations too, so its functions must
  * return what they promise.
  */
-import type { ProjectIndex as EngineIndex, Loc as EngineLoc } from '@ciatlas/core';
+import type { ProjectIndex as EngineIndex, Loc as EngineLoc, RemoteFailureKind } from '@ciatlas/core';
 import type {
   Finding as EngineFinding,
   RemoteChangeGrade as EngineGrade,
   RuleContext as EngineRuleContext,
   RuleDefinition as EngineRuleDefinition,
-  FetchFailureKind,
   FetchProblem,
   FetchProgress,
   JsonReport,
@@ -49,7 +48,7 @@ const lintOptions = (o: Api.LintOptions): ReportOptions => o;
 
 // The remotes functions pass their options to the commands' code as they are, and report progress as it does.
 same<Api.RemoteProgress, FetchProgress>(true);
-same<Api.RemoteFailureKind, FetchFailureKind>(true);
+same<Api.RemoteFailureKind, RemoteFailureKind>(true);
 same<Api.RemoteProblem, FetchProblem>(true);
 same<Api.SetupGuideRow, GuideRow>(true);
 same<Api.RemoteChangeGrade, EngineGrade>(true);

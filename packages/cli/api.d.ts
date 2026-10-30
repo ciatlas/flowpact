@@ -524,7 +524,8 @@ export interface SetupGuideRow {
 /**
  * What kind of failure kept a remote reference from being fetched, for what to check: `unreachable` (no connection to
  * the API), `timeout` (no answer), `token` (401: the API refused the token, or wants one), `access` (403: the token may
- * not read it), `rate-limit`, `server` (5xx), `not-found` (it does not exist, or the token cannot read it), or `other`.
+ * not read it), `rate-limit`, `server` (5xx), `not-found` (it does not exist, or the token cannot read it), `too-large`
+ * (a file over 1 MB), `digest` (not the file expected; flowpact does not report it yet), or `other`.
  */
 export type RemoteFailureKind =
   | 'unreachable'
@@ -534,6 +535,8 @@ export type RemoteFailureKind =
   | 'rate-limit'
   | 'server'
   | 'not-found'
+  | 'too-large'
+  | 'digest'
   | 'other';
 
 /** What `remotesUpdate` wrote to the remote interfaces lockfile, or with `dryRun` would write. */

@@ -18,7 +18,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
-import type { RemoteRef } from './remotes';
+import { type RemoteRef, remoteSourceFiles } from '@ciatlas/core';
 
 /**
  * The cache's directory: `remotes` in `FLOWPACT_CACHE_DIR` (an absolute path), else in the platform's per-user cache:
@@ -118,19 +118,13 @@ export function cachedSourcePath(
   return rel && !rel.startsWith('..') && !isAbsolute(rel) ? path : undefined;
 }
 
-/** The files a remote reference's interface is read from: its workflow file, or its action's `action.yml` or `.yaml`. */
-export const sourceFiles = (r: Pick<RemoteRef, 'kind' | 'path'>): string[] =>
-  r.kind === 'workflow'
-    ? [r.path]
-    : ['action.yml', 'action.yaml'].map((n) => (r.path ? `${r.path}/${n}` : n));
-
 /** The cached file of a remote reference at a commit, when the cache has it: its path on disk, and in the repository. */
 export function cachedSource(
   dir: string,
   r: Pick<RemoteRef, 'kind' | 'owner' | 'repo' | 'path'>,
   sha: string,
 ): { path: string; file: string } | undefined {
-  for (const file of sourceFiles(r)) {
+  for (const file of remoteSourceFiles(r)) {
     const path = cachedSourcePath(dir, r, sha, file);
     if (path && existsSync(path)) return { path, file };
   }

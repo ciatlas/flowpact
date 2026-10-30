@@ -3,16 +3,13 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { parseRemoteRef, type RemoteFetchError, remoteRefsOf } from '@ciatlas/core';
 import {
   cachedSource,
   commitOf,
   downloadRemoteSources,
-  type FetchedSource,
   fetchRemoteEntries,
-  hostOf,
-  parseRemoteRef,
   type RemotesLock,
-  remoteRefsOf,
   serializeRemotesLock,
   updateRemotesLock,
 } from '@flowpact/lint';
@@ -126,14 +123,6 @@ describe('updateRemotesLock', () => {
     });
   });
 
-  it('sends the token to the API only, and reads action.yml before action.yaml', async () => {
-    const seen = api.seen.splice(0);
-    expect(seen.every((r) => r.url.startsWith('https://api.github.com/') && r.auth === 'Bearer t0k3n')).toBe(
-      true,
-    );
-    expect(seen.map((r) => new URL(r.url).pathname)).toContain('/repos/octo/setup/contents/action.yml');
-  });
-
   it('keeps a previous entry it cannot fetch, drops entries nothing uses, and reports changes', async () => {
     const previous: RemotesLock = {
       version: 1,
@@ -166,34 +155,6 @@ describe('updateRemotesLock', () => {
     expect(findings.filter((f) => f.code === 'FP101').map((f) => f.message)).toContain(
       'jobs.deploy calls octo/ship/.github/workflows/deploy.yml@v1 without required input "env"',
     );
-  });
-});
-
-describe('parseRemoteRef', () => {
-  it('splits owner, repository, path and ref, and refuses what is not a remote reference', () => {
-    expect(parseRemoteRef('octo/ship/.github/workflows/d.yml@v1', 'workflow')).toMatchObject({
-      owner: 'octo',
-      repo: 'ship',
-      path: '.github/workflows/d.yml',
-      ref: 'v1',
-    });
-    expect(parseRemoteRef('octo/setup@v2', 'action')).toMatchObject({ path: '', ref: 'v2' });
-    for (const bad of ['docker://alpine:3', 'octo/setup', './local', 'octo@v1'])
-      expect(parseRemoteRef(bad, 'action')).toBeUndefined();
-  });
-});
-
-describe('fetchRemoteEntry limits', () => {
-  it('refuses a response over 1 MB', async () => {
-    const big = (async (input: string | URL) =>
-      String(input).includes('/commits/')
-        ? new Response(SHA('a'))
-        : new Response(`# ${'x'.repeat(1_000_001)}`)) as typeof globalThis.fetch;
-    const index = lint({
-      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/big@v1\n',
-    }).index;
-    const u = await updateRemotesLock(index, undefined, { fetch: big });
-    expect(u.failed).toEqual([{ ref: 'octo/big@v1', error: 'a response over 1000000 bytes', kind: 'other' }]);
   });
 });
 
@@ -236,112 +197,6 @@ describe('unreadable references', () => {
     const findings = lint(files).findings.map((f) => f.code);
     expect(findings).not.toContain('FP612');
     expect(findings).not.toContain('FP611');
-  });
-});
-
-describe('a 404 the GitHub API answers now and then', () => {
-  const index = () =>
-    lint({
-      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
-    }).index;
-
-  /** The fake API, answering 404 the first time each URL whose path matches `flaky` is asked for. */
-  function flaky(api: ReturnType<typeof fakeApi>, matches: RegExp) {
-    const asked = new Set<string>();
-    return (async (input: string | URL, init?: RequestInit) => {
-      const url = String(input);
-      if (matches.test(new URL(url).pathname) && !asked.has(url)) {
-        asked.add(url);
-        return new Response('', { status: 404 });
-      }
-      return api.fetch(input, init);
-    }) as typeof globalThis.fetch;
-  }
-
-  it('asks once more for a file or a commit, rather than recording the reference as unreadable', async () => {
-    const api = fakeApi({ 'octo/setup@v2': SHA('b') }, { [`octo/setup/action.yml@${SHA('b')}`]: SETUP });
-    for (const matches of [/\/contents\//, /\/commits\//]) {
-      const u = await updateRemotesLock(index(), undefined, { fetch: flaky(api, matches), retryDelayMs: 0 });
-      expect(u.unreadable).toEqual([]);
-      expect(u.lock.remotes['octo/setup@v2']?.sha).toBe(SHA('b'));
-    }
-  });
-
-  it('still records a reference that is not there as unreadable, after one more request', async () => {
-    const api = fakeApi({}, {});
-    const u = await updateRemotesLock(index(), undefined, { fetch: api.fetch, retryDelayMs: 0 });
-    expect(u.unreadable.map((p) => p.ref)).toEqual(['octo/setup@v2']);
-    expect(api.seen.map((s) => new URL(s.url).pathname)).toEqual([
-      '/repos/octo/setup/commits/v2',
-      '/repos/octo/setup/commits/v2',
-    ]);
-  });
-});
-
-describe('failures that pass', () => {
-  const index = () =>
-    lint({
-      [`${WF}/ci.yml`]: 'on: push\njobs:\n  b:\n    runs-on: x\n    steps:\n      - uses: octo/setup@v2\n',
-    }).index;
-  const github = () =>
-    fakeApi({ 'octo/setup@v2': SHA('b') }, { [`octo/setup/action.yml@${SHA('b')}`]: SETUP });
-
-  /** The fake API, after these answers to the first requests (an Error is the network's). */
-  function first(answers: (Response | Error)[], api = github()) {
-    let n = 0;
-    const fetch = (async (input: string | URL, init?: RequestInit) => {
-      n++;
-      const answer = answers.shift();
-      if (answer instanceof Error) throw answer;
-      return answer ?? api.fetch(input, init);
-    }) as typeof globalThis.fetch;
-    return { fetch, sent: () => n };
-  }
-  const update = (fetch: typeof globalThis.fetch) =>
-    updateRemotesLock(index(), undefined, { fetch, retryDelayMs: 0 });
-  const status = (code: number, headers: Record<string, string> = {}) =>
-    new Response('', { status: code, headers });
-
-  it('sends a request again after a server error or no answer, three times at most', async () => {
-    for (const failure of [status(502), status(503), new TypeError('fetch failed')]) {
-      const api = first([failure]);
-      const u = await update(api.fetch);
-      expect(u.lock.remotes['octo/setup@v2']?.sha).toBe(SHA('b'));
-      expect(api.sent()).toBe(3); // the failure, then the commit and the file
-    }
-    const down = first([status(503), status(503), status(503)]);
-    const u = await update(down.fetch);
-    expect(u.failed).toEqual([{ ref: 'octo/setup@v2', error: '503 from the GitHub API', kind: 'server' }]);
-    expect(down.sent()).toBe(3);
-  });
-
-  it('waits as long as the secondary rate limit asks, up to a minute', async () => {
-    const soon = first([status(403, { 'retry-after': '0' }), status(429)]);
-    expect((await update(soon.fetch)).lock.remotes['octo/setup@v2']?.sha).toBe(SHA('b'));
-    expect(soon.sent()).toBe(4);
-    const later = first([status(429, { 'retry-after': '3600' })]);
-    expect((await update(later.fetch)).failed).toEqual([
-      {
-        ref: 'octo/setup@v2',
-        error: 'the GitHub API asks to slow down (429): try again in 3600 s',
-        kind: 'rate-limit',
-      },
-    ]);
-    expect(later.sent()).toBe(1);
-  });
-
-  it('does not send again what another try cannot change', async () => {
-    const usedUp = status(403, { 'x-ratelimit-remaining': '0' });
-    for (const [answer, error] of [
-      [status(401), /asks for a token/],
-      [status(403), /needs read access/],
-      [usedUp, /rate limit is used up/],
-      [status(429, { 'x-ratelimit-remaining': '0' }), /rate limit is used up/],
-    ] as const) {
-      const api = first([answer]);
-      expect((await update(api.fetch)).failed[0]?.error).toMatch(error);
-      expect(api.sent()).toBe(1);
-    }
   });
 });
 
@@ -434,20 +289,13 @@ describe('a host that cannot be reached', () => {
     expect(slow.sent()).toBeLessThanOrEqual(24);
   });
 
-  it('still sends each request to a host that answers, with errors', async () => {
-    const api = always(() => new Response('', { status: 503 }));
-    const u = await updateRemotesLock(index(), undefined, { fetch: api.fetch, retryDelayMs: 0 });
-    expect(u.failed.map((f) => f.kind)).toEqual(Array(12).fill('server'));
-    expect(api.sent()).toBe(36);
-  });
-
   it('is remembered across the fetching functions given the same map, host by host', async () => {
-    const unreachableHosts = new Map<string, Error>();
+    const unreachableHosts = new Map<string, RemoteFetchError>();
     const first = always(refused);
     await updateRemotesLock(index(), undefined, { fetch: first.fetch, retryDelayMs: 0, unreachableHosts });
     expect([...unreachableHosts.keys()]).toEqual(['api.github.com']);
     const again = always(refused);
-    const refs = remoteRefsOf(index());
+    const refs = remoteRefsOf(index().project);
     const r = await fetchRemoteEntries(refs, { fetch: again.fetch, retryDelayMs: 0, unreachableHosts });
     expect(r.failed.map((f) => f.kind)).toEqual(Array(12).fill('unreachable'));
     expect(again.sent()).toBe(0);
@@ -501,9 +349,13 @@ describe('fetch errors say why and what to do, and progress is reported', () => 
     expect(await error(limited)).toBe(
       'the GitHub API rate limit is used up (403): without a token it allows 60 requests an hour; set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`',
     );
+    expect(await error(limited, 't')).toBe('the GitHub API rate limit is used up (403); try again later');
     expect(await error(() => new Response('', { status: 403 }), 't')).toBe(
       "the GitHub API refused the request (403): the token needs read access to the repository's contents",
     );
+    // A secondary rate limit says when to try again itself.
+    const slowDown = () => new Response('', { status: 429, headers: { 'retry-after': '3600' } });
+    expect(await error(slowDown)).toBe('the GitHub API asks to slow down (429): try again in 3600 s');
   });
 
   it('tells the kind of each failure, for what to check', async () => {
@@ -631,13 +483,10 @@ describe('GitHub Enterprise Server and github.com through GitHub Connect', () =>
       apiUrl: GHES,
       token: 'ghes',
       fallback: { apiUrl: 'https://api.github.com', token: 'dotcom' },
-      onSource: (s) => got.push(`${s.ref.raw} ${s.sha} ${s.file}`),
+      cache: { get: () => undefined, set: (k) => void got.push(`${k.owner}/${k.repo} ${k.sha} ${k.file}`) },
     });
     // The file read on github.com goes to the sources cache too.
-    expect(got.sort()).toEqual([
-      `corp/internal@v1 ${SHA('c')} action.yml`,
-      `octo/setup@v2 ${SHA('b')} action.yml`,
-    ]);
+    expect(got.sort()).toEqual([`corp/internal ${SHA('c')} action.yml`, `octo/setup ${SHA('b')} action.yml`]);
     expect(u.lock.remotes['corp/internal@v1']).not.toHaveProperty('host');
     expect(u.lock.remotes['octo/setup@v2']).toMatchObject({ sha: SHA('b'), host: 'github.com' });
     expect(u.lock.unreadable).toBeUndefined();
@@ -658,10 +507,26 @@ describe('GitHub Enterprise Server and github.com through GitHub Connect', () =>
     expect(anon.seen.filter((r) => r.host === 'api.github.com').every((r) => r.auth === null)).toBe(true);
   });
 
-  it('names the host an API serves', () => {
-    expect(hostOf('https://api.github.com')).toBe('github.com');
-    expect(hostOf('https://ghes.example/api/v3')).toBe('ghes.example');
-    expect(hostOf('https://api.acme.ghe.com')).toBe('acme.ghe.com');
+  it("advises on github.com's token, not the enterprise server's, when github.com refuses one", async () => {
+    const api = twoHosts();
+    const fetch = (async (input: string | URL, init?: RequestInit) =>
+      new URL(String(input)).host === 'api.github.com'
+        ? new Response('', { status: 401 })
+        : api.fetch(input, init)) as typeof globalThis.fetch;
+    const u = await updateRemotesLock(index(), undefined, {
+      fetch,
+      apiUrl: GHES,
+      token: 'ghes',
+      fallback: { apiUrl: 'https://api.github.com' },
+    });
+    expect(u.failed).toEqual([
+      {
+        ref: 'octo/setup@v2',
+        error:
+          'the GitHub API asks for a token (401): set GH_TOKEN or GITHUB_TOKEN, or sign in with `gh auth login`',
+        kind: 'token',
+      },
+    ]);
   });
 });
 
@@ -806,11 +671,14 @@ describe('the files read, for the sources cache', () => {
     for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
   });
 
-  it('hands each workflow file and action.yml read to onSource, with its commit and path', async () => {
-    const got: Omit<FetchedSource, 'ref'>[] = [];
+  it('writes each workflow file and action.yml read through the cache, with its commit and path', async () => {
+    const got: { sha: string; file: string; text: string }[] = [];
     await updateRemotesLock(index, undefined, {
       fetch: api().fetch,
-      onSource: ({ ref: _, ...s }) => got.push(s),
+      cache: {
+        get: () => undefined,
+        set: ({ sha, file }, bytes) => void got.push({ sha, file, text: new TextDecoder().decode(bytes) }),
+      },
     });
     expect(got.sort((a, b) => (a.file < b.file ? -1 : 1))).toEqual([
       { sha: SHA('a'), file: '.github/workflows/deploy.yml', text: DEPLOY },

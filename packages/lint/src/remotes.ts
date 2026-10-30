@@ -8,9 +8,12 @@ import {
   type CallSite,
   type FileSystem,
   type InputDecl,
+  isFullSha,
   type JobDecl,
   type ProjectIndex,
+  parseRemoteRef,
   type RemoteInterface,
+  type RemoteRef,
   remoteKey,
   type StepDecl,
   type UnitDecl,
@@ -164,7 +167,7 @@ export function lockedRemote(
  * lockfile says), else the commit the lockfile pins for it. The sources cache keeps, and the editor opens, this one.
  */
 export const commitOf = (r: Pick<RemoteRef, 'ref'>, entry: Pick<RemoteEntry, 'sha'>): string =>
-  /^[0-9a-f]{40}$/i.test(r.ref) ? r.ref.toLowerCase() : entry.sha;
+  isFullSha(r.ref) ? r.ref.toLowerCase() : entry.sha;
 
 /** Whether a unit is a remote interface, which has no file of this repository to point at. */
 export const isExternal = (unit: UnitDecl) => unit.external === true;
@@ -206,40 +209,6 @@ export function interfaceUses(index: ProjectIndex): ActionUse[] {
 // ---------------------------------------------------------------------------
 // Writing the lockfile
 // ---------------------------------------------------------------------------
-
-/** A remote reference: `owner/repo/path@ref`, its path in that repository (none for a root action) and its ref. */
-export interface RemoteRef {
-  raw: string;
-  kind: 'workflow' | 'action';
-  owner: string;
-  repo: string;
-  path: string;
-  ref: string;
-}
-
-/** A `uses:` value of another repository, or undefined for one that is not (`docker://…`, a malformed one). */
-export function parseRemoteRef(raw: string, kind: RemoteRef['kind']): RemoteRef | undefined {
-  const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
-  if (!m) return undefined;
-  return { raw: raw.trim(), kind, owner: m[1]!, repo: m[2]!, path: m[3]!.replace(/^\//, ''), ref: m[4]! };
-}
-
-/** The remote reusable workflows and actions a project uses, once each (by `remoteKey`), in the order they are met. */
-export function remoteRefsOf(index: ProjectIndex, units: Iterable<UnitDecl> = index.units()): RemoteRef[] {
-  const out = new Map<string, RemoteRef>();
-  const add = (raw: string, kind: RemoteRef['kind']) => {
-    const ref = parseRemoteRef(raw, kind);
-    if (ref && !out.has(remoteKey(raw))) out.set(remoteKey(raw), ref);
-  };
-  for (const unit of units) {
-    if (unit.kind === 'workflow')
-      for (const job of Object.values(unit.jobs))
-        if (job.uses?.kind === 'remote-workflow') add(job.uses.raw, 'workflow');
-    for (const { step } of stepsOf(unit))
-      if (step.uses?.kind === 'remote-action') add(step.uses.raw, 'action');
-  }
-  return [...out.values()];
-}
 
 /**
  * The units the requested paths name (`Project.targets`), and the local workflows and actions they reach; undefined

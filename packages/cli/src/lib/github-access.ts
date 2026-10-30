@@ -4,9 +4,7 @@
  * fails. The token itself is never shown, only what kind it is.
  */
 import { spawnSync } from 'node:child_process';
-import { type FetchFailureKind, hostOf } from '@flowpact/lint';
-
-const GITHUB_COM_API = 'https://api.github.com';
+import { apiHost, GITHUB_COM_API, type RemoteFailureKind } from '@ciatlas/core';
 
 /** How the GitHub API is reached. */
 export interface GithubAccess {
@@ -64,7 +62,7 @@ function tokenFor(
   if (given) return { token: given, tokenSource: 'the token option' };
   for (const name of ['GH_TOKEN', 'GITHUB_TOKEN'] as const)
     if (process.env[name]) return { token: process.env[name], tokenSource: name };
-  const host = hostOf(apiUrl);
+  const host = apiHost(apiUrl);
   const gh = ghToken(host);
   return 'token' in gh
     ? { token: gh.token, tokenSource: `\`gh auth token --hostname ${host}\`` }
@@ -73,7 +71,7 @@ function tokenFor(
 
 /** github.com's API, for what an enterprise server lacks, as the runner reaches it through GitHub Connect. */
 function githubComFallback(apiUrl: string, githubCom: boolean | undefined): Pick<GithubAccess, 'fallback'> {
-  if (!githubCom || hostOf(apiUrl) === 'github.com') return {};
+  if (!githubCom || apiHost(apiUrl) === 'github.com') return {};
   const token = process.env.GITHUB_COM_TOKEN;
   return { fallback: { apiUrl: GITHUB_COM_API, ...(token ? { token } : {}) } };
 }
@@ -98,7 +96,7 @@ const tokenKind = (token: string) => TOKEN_KINDS.find(([prefix]) => token.starts
  * is none, then github.com's API when it is looked at too.
  */
 export function accessLines(a: GithubAccess): string[] {
-  const host = hostOf(a.apiUrl);
+  const host = apiHost(a.apiUrl);
   const from = {
     option: 'the apiUrl option',
     GITHUB_API_URL: 'GITHUB_API_URL',
@@ -135,7 +133,7 @@ interface HintContext {
 const PROXY = 'Behind a proxy, set HTTPS_PROXY and NODE_USE_ENV_PROXY=1';
 
 /** One hint per cause, in this order: the kinds of failure it is for, and the hint (none when it would not help). */
-const HINTS: [kinds: FetchFailureKind[], hint: (c: HintContext) => string | undefined][] = [
+const HINTS: [kinds: RemoteFailureKind[], hint: (c: HintContext) => string | undefined][] = [
   [['unreachable', 'timeout'], unreachableHint],
   [['token'], tokenHint],
   [
@@ -160,10 +158,10 @@ const HINTS: [kinds: FetchFailureKind[], hint: (c: HintContext) => string | unde
  */
 function fetchHints(
   a: GithubAccess,
-  kinds: (FetchFailureKind | undefined)[],
+  kinds: (RemoteFailureKind | undefined)[],
   origin: string | undefined,
 ): string[] {
-  const host = hostOf(a.apiUrl);
+  const host = apiHost(a.apiUrl);
   const c: HintContext = {
     a,
     host,
@@ -226,7 +224,7 @@ export interface GuideRow {
  */
 export function fetchAdvice(
   a: GithubAccess,
-  kinds: (FetchFailureKind | undefined)[],
+  kinds: (RemoteFailureKind | undefined)[],
   origin: string | undefined,
 ): { hints: string[]; guide?: GuideRow[] } {
   const hints = fetchHints(a, kinds, origin);
@@ -241,7 +239,7 @@ export function fetchAdvice(
  * or the repository's `origin` names, else a placeholder.
  */
 function setupGuide(apiUrl: string, origin: string | undefined): GuideRow[] {
-  const hosts = [hostOf(apiUrl), ...(origin && !isGithubCom(origin) ? [origin] : [])];
+  const hosts = [apiHost(apiUrl), ...(origin && !isGithubCom(origin) ? [origin] : [])];
   const ghe = hosts.find((h) => h.endsWith('.ghe.com')) ?? '<name>.ghe.com';
   const ghes = hosts.find((h) => h !== 'github.com' && !h.endsWith('.ghe.com')) ?? '<host>';
   const token = (h?: string) => `GH_TOKEN, else \`gh auth login${h ? ` --hostname ${h}` : ''}\``;

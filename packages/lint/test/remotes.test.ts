@@ -201,7 +201,7 @@ describe('fetched remote interfaces and an outdated lockfile', () => {
   it('reports a lockfile that lacks a reference or has one nothing uses (FP612), also when the run fetched it', () => {
     const bumped = { [`${WF}/ci.yml`]: ci.replace('Octo/Setup@v2', 'octo/setup@v3'), [LOCK]: lock };
     const expected =
-      '.github/flowpact/remotes.lock.yaml is out of date: it lacks octo/ship/.github/workflows/other.yml@v1, octo/setup@v3; it no longer needs octo/setup@v2. Run `flowpact remotes update`';
+      '.github/flowpact/remotes.lock.yaml is out of date: it lacks octo/setup@v3, octo/ship/.github/workflows/other.yml@v1; it no longer needs octo/setup@v2. Run `flowpact remotes update`';
     expect(messages(bumped, 'FP612')).toEqual([expected]);
     const fetched = { 'octo/setup@v3': setup };
     expect(byCode(lint(bumped, { fetchedRemotes: fetched }), 'FP612').map((f) => f.message)).toEqual([

@@ -2,7 +2,7 @@
  * GitHub's actions.lock (actions-lock.ts): the commits it pins, where flowpact reads remote references and reports FP612,
  * and FP614 for a file it cannot read.
  */
-import { memoryFileSystem } from '@ciatlas/core';
+import { memoryFileSystem, parseRemoteRef } from '@ciatlas/core';
 import {
   ACTIONS_LOCK_FILE,
   fetchMissingRemotes,
@@ -10,7 +10,6 @@ import {
   gradeVersionChanges,
   lockedCommit,
   parseConfig,
-  parseRemoteRef,
   readActionsLock,
 } from '@flowpact/lint';
 import { describe, expect, it } from 'vitest';

@@ -1,11 +1,13 @@
 import { readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import {
+  apiHost,
   createParseContext,
   type Loc,
   lookup,
   type Occurrence,
   parseActionFile,
+  parseRemoteRef,
   parseWorkflowFile,
   type SymbolLocator,
   type UnitDecl,
@@ -13,10 +15,8 @@ import {
 import {
   cachedSource,
   commitOf,
-  hostOf,
   lockedRemote,
   originHost,
-  parseRemoteRef,
   plainHost,
   type RemoteEntry,
   type RemotesLock,
@@ -192,7 +192,7 @@ export function webHostOf(
 ): string | undefined {
   if (env.GITHUB_API_URL) {
     try {
-      return plainHost(hostOf(env.GITHUB_API_URL));
+      return plainHost(apiHost(env.GITHUB_API_URL));
     } catch {
       return undefined;
     }

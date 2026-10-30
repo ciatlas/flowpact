@@ -5,6 +5,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as core from '@actions/core';
 import {
+  apiHost,
   createLogger,
   gitFileSystem,
   type Logger,
@@ -35,7 +36,6 @@ import {
   followsPullRequest,
   githubEvent,
   gradeVersionChanges,
-  hostOf,
   type ImpactLevel,
   type ImpactRequest,
   ImpactSetupError,
@@ -765,7 +765,7 @@ function inputPlugins(inputs: Inputs, { workspace, root }: Place, pluginsOff: st
  */
 function githubComFallback(inputs: Inputs): Pick<FetchRemotesOptions, 'fallback'> {
   const api = process.env.GITHUB_API_URL;
-  if (!inputs.remotesGithubCom || !api || hostOf(api) === 'github.com') return {};
+  if (!inputs.remotesGithubCom || !api || apiHost(api) === 'github.com') return {};
   const token = core.getInput('github-com-token');
   return { fallback: { apiUrl: 'https://api.github.com', ...(token ? { token } : {}) } };
 }
