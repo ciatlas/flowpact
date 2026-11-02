@@ -33,17 +33,20 @@ const files: Record<string, string> = {
   [`/repos/octo/setup/contents/action.yml?ref=${SHA3}`]: setupAction('node-version'),
 };
 const auth: (string | undefined)[] = [];
+/** The paths the fake API was asked for, in order. */
+const asked: string[] = [];
 /** A HOME of its own: the CLI asks `gh` for a token, which writes its state under HOME (or the working directory). */
 const home = mkdtempSync(join(tmpdir(), 'flowpact-remotes-home-'));
-/** The sources cache (FLOWPACT_CACHE_DIR), and where it keeps octo/setup's action.yml. */
+/** The sources cache (FLOWPACT_CACHE_DIR), and where it keeps octo/setup's action.yml: under the fake API's host. */
 const cache = join(home, 'cache');
-const SETUP_SOURCE = join(cache, 'remotes', 'octo', 'setup', SHA, 'action.yml');
+const SETUP_SOURCE = join(cache, 'remotes', '127.0.0.1', 'octo', 'setup', SHA, 'action.yml');
 let server: Server;
 let api = '';
 
 beforeAll(async () => {
   server = createServer((req, res) => {
     auth.push(req.headers.authorization);
+    asked.push(req.url ?? '');
     const body = files[req.url ?? ''];
     res.writeHead(body === undefined ? 404 : 200).end(body ?? '');
   });
@@ -260,6 +263,12 @@ describe('the sources cache', () => {
     expect(readFileSync(SETUP_SOURCE, 'utf8')).toBe(
       files[`/repos/octo/setup/contents/action.yml?ref=${SHA}`],
     );
+    // Again: the ref is resolved, and the file at that commit is read from the cache.
+    const from = asked.length;
+    const again = await run(root, ['update']);
+    expect(again.exitCode).toBe(0);
+    expect(asked.slice(from).filter((p) => p.includes('/contents/'))).toEqual([]);
+    expect(asked.slice(from)).toContain('/repos/octo/setup/commits/v2');
   });
 
   it('remotes download fills the cache from the lockfile, without resolving a ref or changing the lockfile', async () => {
@@ -291,7 +300,7 @@ describe('the sources cache', () => {
     const given = join(home, 'given');
     const asked = await run(root, ['update', '--cache-dir', given], { CI: 'true', FLOWPACT_CACHE_DIR: '' });
     expect(asked.stdout).toContain(`sources: ${join(given, 'remotes')} (1 new)`);
-    expect(existsSync(join(given, 'remotes', 'octo', 'setup', SHA, 'action.yml'))).toBe(true);
+    expect(existsSync(join(given, 'remotes', '127.0.0.1', 'octo', 'setup', SHA, 'action.yml'))).toBe(true);
     rmSync(cache, { recursive: true, force: true });
     const env = await run(root, ['update'], { CI: 'true' });
     expect(env.stdout).toContain(`sources: ${join(cache, 'remotes')} (1 new)`);
@@ -313,9 +322,9 @@ describe('the sources cache', () => {
     expect(download.stderr).toContain('--no-cache is for `flowpact remotes update`');
   });
 
-  it('keeps the 3 most recently used commits of each repository it uses, and remotes clean empties the cache', async () => {
+  it('keeps the 3 most recently used commits of each repository, and remotes clean empties the cache', async () => {
     rmSync(cache, { recursive: true, force: true });
-    const ship = join(cache, 'remotes', 'octo', 'setup');
+    const ship = join(cache, 'remotes', '127.0.0.1', 'octo', 'setup');
     for (const [i, c] of ['1', '2', '3', '4'].entries()) {
       mkdirSync(join(ship, c.repeat(40)), { recursive: true });
       writeFileSync(join(ship, c.repeat(40), 'action.yml'), c);

@@ -285,7 +285,7 @@ A source the cache has is not downloaded again. A reference the lockfile has no 
 (`flowpact remotes update` adds it), one it records as not readable as `skipped`. A source that cannot be downloaded or
 kept is listed as `failed`, and makes the command exit `1`.
 
-Both commands then keep the 3 most recently used commits of each repository they used, and never one they used; the
+Both commands then keep the 3 most recently used commits of each repository in the cache, and every one they used; the
 output counts the older commits removed. See [`flowpact remotes clean`](#flowpact-remotes-clean) to clean more.
 
 ### `flowpact remotes clean`
@@ -301,7 +301,7 @@ flowpact remotes clean [--keep <n>] [--cache-dir <dir>]
 | `--keep <n>` | Keep the `n` most recently used commits of each repository (used by `remotes update` or `remotes download`); without it, nothing is kept. |
 | `--cache-dir <dir>` | flowpact's cache directory, as for `remotes update`. |
 
-It removes only the `<owner>/<repo>/<sha>` directories flowpact keeps there, then the directories they leave empty;
+It removes only the `<host>/<owner>/<repo>/<sha>` directories flowpact keeps there, then the directories they leave empty;
 anything else in the directory stays. A commit it cannot remove is named in the output and makes it exit `1`.
 
 ## `flowpact graph`

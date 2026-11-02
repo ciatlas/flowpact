@@ -15,6 +15,14 @@ reports or the API is a major release (the next one is 1.0.0); up to 0.14, a min
 
 Then read the sections below from your version up.
 
+## 0.29.0 → 0.29.1
+
+Run `flowpact remotes download` once in each repository whose remote sources you open in the editor. The
+[sources cache](/docs/remote-interfaces#sources-for-the-editor) now keeps each file under its host
+(`github.com/octo/ship/<sha>/…`), and flowpact no longer reads the files earlier releases kept: go to definition on a
+remote reference finds nothing until the cache has it again. Delete the old `<owner>` directories in it, or the whole
+`remotes` directory. `remotes update` now also reads a file the cache has instead of asking the API for it.
+
 ## 0.26 → 0.29
 
 Remove the overrides and ignore comments that [FP902](/docs/rules/fp902) and [FP905](/docs/rules/fp905) report after

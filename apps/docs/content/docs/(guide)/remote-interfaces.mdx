@@ -168,22 +168,28 @@ has, and needs the same [token](#which-token).
 
 `--cache-dir <dir>` (relative to where you run flowpact) or `FLOWPACT_CACHE_DIR` (an absolute path) moves it to
 `<dir>/remotes`; point your editor at the same place ([Editors](/docs/editors)). Files are kept read-only, by
-repository and commit (`octo/ship/<sha>/.github/workflows/deploy.yml`). A file at a commit never changes, so nothing
-goes stale, one cache serves every repository on the machine, and you can delete any of it at any time.
+host, repository and commit (`github.com/octo/ship/<sha>/.github/workflows/deploy.yml`), as served. A file at a commit
+never changes, so nothing goes stale, one cache serves every repository on the machine, and you can delete any of it at
+any time.
+
+Older flowpact releases kept the files without the host (`octo/ship/<sha>/…`). flowpact no longer reads, prunes or
+cleans those directories: delete them, or the whole `remotes` directory, and run `flowpact remotes download` to fill the
+cache again.
 
 <Accordions type="multiple">
 <Accordion title="How big the cache gets, and cleaning it" id="cache-cleaning">
 
-After `remotes update` and `remotes download`, each repository they used keeps its 3 most recently used commits (never
-one the run used). `flowpact remotes clean` empties the cache, and `flowpact remotes clean --keep 2` keeps 2 per
-repository. Cleaning removes only the `<owner>/<repo>/<sha>` directories flowpact keeps, nothing else.
+After `remotes update` and `remotes download`, each repository in the cache keeps its 3 most recently used commits,
+and every commit the run used. The cache also stays under 128 MiB: past that, the least recently used commits go first,
+never one the run used. `flowpact remotes clean` empties the cache, and `flowpact remotes clean --keep 2` keeps 2 per
+repository. Cleaning removes only the `<host>/<owner>/<repo>/<sha>` directories flowpact keeps, nothing else.
 
 </Accordion>
 <Accordion title="Private repositories, and paths that are not cached" id="cache-privacy">
 
 Files of private and internal repositories land there too, readable by your user only: flowpact creates the cache's
 files and directories for you alone, wherever it is. A reference whose path could not be a file name on every platform
-(`..`, a character Windows rejects) is not cached.
+(`..`, a character Windows rejects), or on a host given with a port, is not cached.
 
 </Accordion>
 <Accordion title="The cache in CI" id="cache-in-ci">

@@ -4237,10 +4237,10 @@ var require_resolve_block_map = __commonJS({
       let offset = bm.offset;
       let commentEnd = null;
       for (const collItem of bm.items) {
-        const { start, key, sep: sep5, value } = collItem;
+        const { start, key, sep: sep6, value } = collItem;
         const keyProps = resolveProps.resolveProps(start, {
           indicator: "explicit-key-ind",
-          next: key ?? sep5?.[0],
+          next: key ?? sep6?.[0],
           offset,
           onError,
           parentIndent: bm.indent,
@@ -4254,7 +4254,7 @@ var require_resolve_block_map = __commonJS({
             else if ("indent" in key && key.indent !== bm.indent)
               onError(offset, "BAD_INDENT", startColMsg);
           }
-          if (!keyProps.anchor && !keyProps.tag && !sep5) {
+          if (!keyProps.anchor && !keyProps.tag && !sep6) {
             commentEnd = keyProps.end;
             if (keyProps.comment) {
               if (map.comment)
@@ -4278,7 +4278,7 @@ var require_resolve_block_map = __commonJS({
         ctx.atKey = false;
         if (utilMapIncludes.mapIncludes(ctx, map.items, keyNode))
           onError(keyStart2, "DUPLICATE_KEY", "Map keys must be unique");
-        const valueProps = resolveProps.resolveProps(sep5 ?? [], {
+        const valueProps = resolveProps.resolveProps(sep6 ?? [], {
           indicator: "map-value-ind",
           next: value,
           offset: keyNode.range[2],
@@ -4294,7 +4294,7 @@ var require_resolve_block_map = __commonJS({
             if (ctx.options.strict && keyProps.start < valueProps.found.offset - 1024)
               onError(keyNode.range, "KEY_OVER_1024_CHARS", "The : indicator must be at most 1024 chars after the start of an implicit block mapping key");
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep5, null, valueProps, onError);
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : composeEmptyNode(ctx, offset, sep6, null, valueProps, onError);
           if (ctx.schema.compat)
             utilFlowIndentCheck.flowIndentCheck(bm.indent, value, onError);
           offset = valueNode.range[2];
@@ -4385,7 +4385,7 @@ var require_resolve_end = __commonJS({
       let comment = "";
       if (end) {
         let hasSpace = false;
-        let sep5 = "";
+        let sep6 = "";
         for (const token of end) {
           const { source, type } = token;
           switch (type) {
@@ -4399,13 +4399,13 @@ var require_resolve_end = __commonJS({
               if (!comment)
                 comment = cb;
               else
-                comment += sep5 + cb;
-              sep5 = "";
+                comment += sep6 + cb;
+              sep6 = "";
               break;
             }
             case "newline":
               if (comment)
-                sep5 += source;
+                sep6 += source;
               hasSpace = true;
               break;
             default:
@@ -4448,18 +4448,18 @@ var require_resolve_flow_collection = __commonJS({
       let offset = fc.offset + fc.start.source.length;
       for (let i = 0; i < fc.items.length; ++i) {
         const collItem = fc.items[i];
-        const { start, key, sep: sep5, value } = collItem;
+        const { start, key, sep: sep6, value } = collItem;
         const props = resolveProps.resolveProps(start, {
           flow: fcName,
           indicator: "explicit-key-ind",
-          next: key ?? sep5?.[0],
+          next: key ?? sep6?.[0],
           offset,
           onError,
           parentIndent: fc.indent,
           startOnNewline: false
         });
         if (!props.found) {
-          if (!props.anchor && !props.tag && !sep5 && !value) {
+          if (!props.anchor && !props.tag && !sep6 && !value) {
             if (i === 0 && props.comma)
               onError(props.comma, "UNEXPECTED_TOKEN", `Unexpected , in ${fcName}`);
             else if (i < fc.items.length - 1)
@@ -4513,8 +4513,8 @@ var require_resolve_flow_collection = __commonJS({
             }
           }
         }
-        if (!isMap8 && !sep5 && !props.found) {
-          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep5, null, props, onError);
+        if (!isMap8 && !sep6 && !props.found) {
+          const valueNode = value ? composeNode(ctx, value, props, onError) : composeEmptyNode(ctx, props.end, sep6, null, props, onError);
           coll.items.push(valueNode);
           offset = valueNode.range[2];
           if (isBlock(value))
@@ -4526,7 +4526,7 @@ var require_resolve_flow_collection = __commonJS({
           if (isBlock(key))
             onError(keyNode.range, "BLOCK_IN_FLOW", blockMsg);
           ctx.atKey = false;
-          const valueProps = resolveProps.resolveProps(sep5 ?? [], {
+          const valueProps = resolveProps.resolveProps(sep6 ?? [], {
             flow: fcName,
             indicator: "map-value-ind",
             next: value,
@@ -4537,8 +4537,8 @@ var require_resolve_flow_collection = __commonJS({
           });
           if (valueProps.found) {
             if (!isMap8 && !props.found && ctx.options.strict) {
-              if (sep5)
-                for (const st of sep5) {
+              if (sep6)
+                for (const st of sep6) {
                   if (st === valueProps.found)
                     break;
                   if (st.type === "newline") {
@@ -4555,7 +4555,7 @@ var require_resolve_flow_collection = __commonJS({
             else
               onError(valueProps.start, "MISSING_CHAR", `Missing , or : between ${fcName} items`);
           }
-          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep5, null, valueProps, onError) : null;
+          const valueNode = value ? composeNode(ctx, value, valueProps, onError) : valueProps.found ? composeEmptyNode(ctx, valueProps.end, sep6, null, valueProps, onError) : null;
           if (valueNode) {
             if (isBlock(value))
               onError(valueNode.range, "BLOCK_IN_FLOW", blockMsg);
@@ -4735,7 +4735,7 @@ var require_resolve_block_scalar = __commonJS({
           chompStart = i + 1;
       }
       let value = "";
-      let sep5 = "";
+      let sep6 = "";
       let prevMoreIndented = false;
       for (let i = 0; i < contentStart; ++i)
         value += lines[i][0].slice(trimIndent) + "\n";
@@ -4752,24 +4752,24 @@ var require_resolve_block_scalar = __commonJS({
           indent = "";
         }
         if (type === Scalar.Scalar.BLOCK_LITERAL) {
-          value += sep5 + indent.slice(trimIndent) + content;
-          sep5 = "\n";
+          value += sep6 + indent.slice(trimIndent) + content;
+          sep6 = "\n";
         } else if (indent.length > trimIndent || content[0] === "	") {
-          if (sep5 === " ")
-            sep5 = "\n";
-          else if (!prevMoreIndented && sep5 === "\n")
-            sep5 = "\n\n";
-          value += sep5 + indent.slice(trimIndent) + content;
-          sep5 = "\n";
+          if (sep6 === " ")
+            sep6 = "\n";
+          else if (!prevMoreIndented && sep6 === "\n")
+            sep6 = "\n\n";
+          value += sep6 + indent.slice(trimIndent) + content;
+          sep6 = "\n";
           prevMoreIndented = true;
         } else if (content === "") {
-          if (sep5 === "\n")
+          if (sep6 === "\n")
             value += "\n";
           else
-            sep5 = "\n";
+            sep6 = "\n";
         } else {
-          value += sep5 + content;
-          sep5 = " ";
+          value += sep6 + content;
+          sep6 = " ";
           prevMoreIndented = false;
         }
       }
@@ -4952,25 +4952,25 @@ var require_resolve_flow_scalar = __commonJS({
         trimBoth = /^[ \t]+|[ \t]+$/g;
       }
       let res = match[1].replace(trimEnd, "");
-      let sep5 = " ";
+      let sep6 = " ";
       let pos = line.lastIndex;
       while (match = line.exec(source)) {
         const lm = match[1].replace(trimBoth, "");
         if (lm === "") {
-          if (sep5 === "\n")
-            res += sep5;
+          if (sep6 === "\n")
+            res += sep6;
           else
-            sep5 = "\n";
+            sep6 = "\n";
         } else {
-          res += sep5 + lm;
-          sep5 = " ";
+          res += sep6 + lm;
+          sep6 = " ";
         }
         pos = line.lastIndex;
       }
       const last = /[ \t]*(.*)/sy;
       last.lastIndex = pos;
       match = last.exec(source);
-      return res + sep5 + (match?.[1] ?? "");
+      return res + sep6 + (match?.[1] ?? "");
     }
     function doubleQuotedValue(source, onError) {
       let res = "";
@@ -5780,14 +5780,14 @@ var require_cst_stringify = __commonJS({
         }
       }
     }
-    function stringifyItem({ start, key, sep: sep5, value }) {
+    function stringifyItem({ start, key, sep: sep6, value }) {
       let res = "";
       for (const st of start)
         res += st.source;
       if (key)
         res += stringifyToken(key);
-      if (sep5)
-        for (const st of sep5)
+      if (sep6)
+        for (const st of sep6)
           res += st.source;
       if (value)
         res += stringifyToken(value);
@@ -6954,18 +6954,18 @@ var require_parser = __commonJS({
         if (this.type === "map-value-ind") {
           const prev = getPrevProps(this.peek(2));
           const start = getFirstKeyStartProps(prev);
-          let sep5;
+          let sep6;
           if (scalar.end) {
-            sep5 = scalar.end;
-            sep5.push(this.sourceToken);
+            sep6 = scalar.end;
+            sep6.push(this.sourceToken);
             delete scalar.end;
           } else
-            sep5 = [this.sourceToken];
+            sep6 = [this.sourceToken];
           const map = {
             type: "block-map",
             offset: scalar.offset,
             indent: scalar.indent,
-            items: [{ start, key: scalar, sep: sep5 }]
+            items: [{ start, key: scalar, sep: sep6 }]
           };
           this.onKeyLine = true;
           this.stack[this.stack.length - 1] = map;
@@ -7118,15 +7118,15 @@ var require_parser = __commonJS({
                 } else if (isFlowToken(it.key) && !includesToken(it.sep, "newline")) {
                   const start2 = getFirstKeyStartProps(it.start);
                   const key = it.key;
-                  const sep5 = it.sep;
-                  sep5.push(this.sourceToken);
+                  const sep6 = it.sep;
+                  sep6.push(this.sourceToken);
                   delete it.key;
                   delete it.sep;
                   this.stack.push({
                     type: "block-map",
                     offset: this.offset,
                     indent: this.indent,
-                    items: [{ start: start2, key, sep: sep5 }]
+                    items: [{ start: start2, key, sep: sep6 }]
                   });
                 } else if (start.length > 0) {
                   it.sep = it.sep.concat(start, this.sourceToken);
@@ -7320,13 +7320,13 @@ var require_parser = __commonJS({
             const prev = getPrevProps(parent);
             const start = getFirstKeyStartProps(prev);
             fixFlowSeqItems(fc);
-            const sep5 = fc.end.splice(1, fc.end.length);
-            sep5.push(this.sourceToken);
+            const sep6 = fc.end.splice(1, fc.end.length);
+            sep6.push(this.sourceToken);
             const map = {
               type: "block-map",
               offset: fc.offset,
               indent: fc.indent,
-              items: [{ start, key: fc, sep: sep5 }]
+              items: [{ start, key: fc, sep: sep6 }]
             };
             this.onKeyLine = true;
             this.stack[this.stack.length - 1] = map;
@@ -8681,9 +8681,9 @@ var require_cronstrue = __commonJS({
 
 // src/main.ts
 import { execFileSync as execFileSync3 } from "child_process";
-import { mkdirSync as mkdirSync3, mkdtempSync, readFileSync as readFileSync6, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
+import { mkdirSync as mkdirSync3, mkdtempSync, readFileSync as readFileSync7, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "fs";
 import { tmpdir } from "os";
-import { dirname as dirname6, isAbsolute as isAbsolute9, join as join8, relative as relative8, resolve as resolve8, sep as sep4 } from "path";
+import { dirname as dirname6, isAbsolute as isAbsolute9, join as join9, relative as relative7, resolve as resolve8, sep as sep5 } from "path";
 import { fileURLToPath } from "url";
 
 // ../../node_modules/.pnpm/@actions+core@3.0.1/node_modules/@actions/core/lib/command.js
@@ -9956,7 +9956,7 @@ function group(name, fn) {
   });
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/actions-lock.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/actions-lock.ts
 var import_yaml = __toESM(require_dist(), 1);
 
 // ../../node_modules/.pnpm/@actions+expressions@0.3.61/node_modules/@actions/expressions/dist/ast.js
@@ -11280,7 +11280,7 @@ var Parser = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/expressions.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/expressions.ts
 var KNOWN_CONTEXTS = [
   "github",
   "env",
@@ -11706,8 +11706,8 @@ function evalCall(e, resolve9, options) {
       );
     case "join": {
       const arr = vals[0] ?? null;
-      const sep5 = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
-      return known(Array.isArray(arr) ? arr.map(toStr).join(sep5) : toStr(arr), taint);
+      const sep6 = vals.length > 1 ? toStr(vals[1] ?? null) : ",";
+      return known(Array.isArray(arr) ? arr.map(toStr).join(sep6) : toStr(arr), taint);
     }
     case "tojson":
       return known(JSON.stringify(vals[0] ?? null, null, 2), taint);
@@ -11867,7 +11867,7 @@ function evaluateTemplate(text2, resolve9, options = {}) {
   return known(out, mergeTaint(...parts));
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/ir.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/ir.ts
 function lookup(rec, key) {
   if (Object.hasOwn(rec, key)) return rec[key];
   const lower = key.toLowerCase();
@@ -11878,7 +11878,7 @@ function siteAt(sites, at) {
   return sites.find((s) => s.loc.line === at.line && Math.abs(s.loc.column - at.column) <= 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/matrix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/matrix.ts
 var GITHUB_MATRIX_LIMIT = 256;
 var MAX_COMBINATIONS = 2e4;
 function jsonEqual(a, b) {
@@ -12080,7 +12080,7 @@ function declaredMatrix(keys) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/checks.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/checks.ts
 function suffixValues(value) {
   if (value === null || value === "") return [];
   if (typeof value === "boolean") return [value ? "true" : "false"];
@@ -12221,11 +12221,11 @@ function workflowChecks(index, wf, inputs = {}, depth = 0, seen = /* @__PURE__ *
   return out;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/git.ts
 import { execFileSync } from "child_process";
 import { posix } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/text.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/text.ts
 function escapeControl(s, keepNewlines = false) {
   return s.replace(/[\u0000-\u001f\u007f-\u009f]/g, (ch) => {
     if (keepNewlines && ch === "\n") return ch;
@@ -12292,7 +12292,7 @@ function didYouMean(name, candidates) {
   return best.d <= Math.max(2, Math.floor(name.length / 3)) ? best.c : void 0;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/git.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/git.ts
 var GitError = class extends Error {
 };
 var MAX_BUFFER = 256 * 1024 * 1024;
@@ -12428,7 +12428,7 @@ function gitFileSystem(root, commit) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/glob.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/glob.ts
 function matchesPattern(path, pattern) {
   if (!pattern.includes("*"))
     return path === pattern || path.startsWith(pattern.endsWith("/") ? pattern : `${pattern}/`);
@@ -12441,7 +12441,7 @@ function matchesPattern(path, pattern) {
 }
 var escapeRe = (s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/queries.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/queries.ts
 function* refsOf(unit) {
   for (const site of unit.sites)
     for (const seg of site.segments) for (const ref of seg.refs) yield { site, ref };
@@ -12508,7 +12508,7 @@ function needsSecret(needed, name) {
   return needed.all || [...needed.names].some((n) => n.toLowerCase() === lower);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-ref.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/remote-ref.ts
 function parseRemoteRef(raw, kind) {
   const m = /^([^/@\s]+)\/([^/@\s]+)((?:\/[^@\s]+)?)@([^@\s]+)$/.exec(raw.trim());
   if (!m) return void 0;
@@ -12521,7 +12521,7 @@ function remoteKey(raw) {
   return [owner.toLowerCase(), repo.toLowerCase(), ...rest].join("/");
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/graph.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/graph.ts
 var computed = (s) => s === void 0 || s === "*" || s === "?";
 var isKey = (s, key) => s?.toLowerCase() === key;
 function wholeReads(reads) {
@@ -13228,7 +13228,7 @@ var ProjectIndex = class {
   }
 };
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/source.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/source.ts
 var import_yaml2 = __toESM(require_dist(), 1);
 var SourceFile = class {
   constructor(path, text2) {
@@ -13255,7 +13255,7 @@ function compareLoc(a, b) {
   return a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/logger.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/logger.ts
 var ORDER = { silent: 0, error: 1, warn: 2, info: 3, debug: 4, trace: 5 };
 var DEFAULTS = { scope: "flowpact", debugEnv: "FLOWPACT_DEBUG" };
 function createLogger(options = {}) {
@@ -13309,14 +13309,14 @@ function truthy3(v) {
   return v !== void 0 && ["1", "true", "yes", "on", "trace"].includes(v.toLowerCase());
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/node-fs.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/node-fs.ts
 import { existsSync as existsSync2, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "fs";
 import { basename as basename2, dirname, isAbsolute, join as join2, relative, resolve } from "path";
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/parse.ts
 var import_yaml3 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/posix.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/posix.ts
 var posixIsAbsolute = (path) => path.startsWith("/");
 function posixNormalize(path) {
   if (path === "") return ".";
@@ -13346,7 +13346,7 @@ function posixBasename(path) {
   return i === -1 ? trimmed : trimmed.slice(i + 1);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/parse.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/parse.ts
 function createParseContext(repository) {
   let id = 0;
   return { ...repository ? { repository } : {}, nextSiteId: () => ++id };
@@ -16794,10 +16794,10 @@ function parseAction(entryFile, contextOrTrace) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/validate.ts
 var import_yaml5 = __toESM(require_dist(), 1);
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/schema.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/schema.ts
 var SCHEMA_ROOT = { workflow: "workflow-root-strict", action: "action-root-strict" };
 var CACHE_MODE = {
   values: ["read", "write", "write-only", "none"],
@@ -16870,7 +16870,7 @@ function mappingsAt(schema3, root, path) {
   return [...out];
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/validate.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/validate.ts
 var EXPRESSION_ERROR = /^(?:Unexpected symbol|Unexpected end of expression|Unrecognized named-value|Unrecognized function|Too few parameters supplied|Too many parameters supplied|Even number of parameters supplied|Exceeded max expression (?:depth|length)|ErrorExceededMaxLength|The expression is not closed)\b/;
 var UNCLOSED = /^The expression is not closed\b/;
 var UNPARSED_VALUE = /^Unexpected value '[\s\S]*\$\{\{/;
@@ -17159,7 +17159,7 @@ function mergeFix(key, where, whole) {
   return whole && single ? `${repeat}, or alias ${whole} instead.` : `${repeat}.`;
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/script-writes.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/script-writes.ts
 var escapes = (path) => path === ".." || path.startsWith("../");
 var PREFIXES = /* @__PURE__ */ new Set([
   "sudo",
@@ -17429,7 +17429,7 @@ function writesTo(write, path, isRepoDir) {
   return write.path !== "." && path.startsWith(`${write.path}/`) && !isRepoDir(write.path);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/workspace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/workspace.ts
 var initialWorkspace = () => ({ mounts: [{ path: "." }], managed: false, writes: [] });
 var CHECKOUT = /^actions\/checkout(?:@|$)/i;
 var OWN_REPOSITORY = /^github\.(?:repository|event\.repository\.full_name|event\.pull_request\.(?:head|base)\.repo\.full_name|event\.workflow_run\.head_repository\.full_name)$/;
@@ -17681,7 +17681,7 @@ function workspaceResolver(opts) {
   };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/project.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/project.ts
 var WORKFLOWS_DIR = ".github/workflows";
 var ACTIONS_DIR = ".github/actions";
 var toPosix = (p) => p.split("\\").join("/");
@@ -17890,7 +17890,7 @@ function originOf(r) {
   return { owner, repo, path: path.join("/"), ref, ...r.sha ? { sha: r.sha } : {} };
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/node-fs.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/node-fs.ts
 var MAX_LINKS2 = 40;
 var MAX_LINKED_DIRS2 = 1e3;
 function insideRepository(root, abs) {
@@ -17994,7 +17994,25 @@ function loadProject(opts) {
   return loadProjectWith(opts, nodeHost);
 }
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote-fetch.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/node-remote-cache.ts
+import { randomBytes } from "crypto";
+import {
+  existsSync as existsSync3,
+  lstatSync as lstatSync2,
+  mkdirSync,
+  readdirSync as readdirSync2,
+  readFileSync as readFileSync2,
+  realpathSync as realpathSync2,
+  renameSync,
+  rmdirSync,
+  rmSync,
+  utimesSync,
+  writeFileSync
+} from "fs";
+import { dirname as dirname2, join as join3, sep } from "path";
+var DEFAULT_MAX_BYTES = 128 * 1024 * 1024;
+
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/remote-fetch.ts
 var GITHUB_COM_API = "https://api.github.com";
 function apiHost(apiUrl) {
   const { hostname, pathname } = new URL(apiUrl);
@@ -18323,7 +18341,7 @@ async function bodyOf(res, at) {
 }
 var MAX_FILE_BYTES = 1e6;
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/remote.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/remote.ts
 var CALLABLE = /^\.github\/workflows\/[^/]+\.[yY][aA]?[mM][lL]$/;
 function remoteRefOfUses(unit, uses) {
   const kind = uses.kind.endsWith("workflow") ? "workflow" : "action";
@@ -18358,7 +18376,7 @@ function* usesOf(unit) {
 }
 var compare2 = (a, b) => a < b ? -1 : a > b ? 1 : 0;
 
-// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+e718844f8459c64bb3a585cd94cff10fef40aec8/node_modules/@ciatlas/core/src/trace.ts
+// ../../node_modules/.pnpm/@ciatlas+core@https+++codeload.github.com+ciatlas+core+tar.gz+60d64766d85b761f96628c1774bc055d9f369a35/node_modules/@ciatlas/core/src/trace.ts
 var readsGithub = (ref) => ref.context === "github";
 function usageReadsCallerEvent(index, u) {
   const wf = index.project.workflows.get(u.site.ownerPath);
@@ -20983,8 +21001,8 @@ import { createHash } from "crypto";
 import { relative as relative4, resolve as resolve4 } from "path";
 
 // ../lint/src/config.ts
-import { existsSync as existsSync3, readFileSync as readFileSync2 } from "fs";
-import { isAbsolute as isAbsolute2, join as join3, relative as relative2, resolve as resolve2 } from "path";
+import { existsSync as existsSync4, readFileSync as readFileSync3 } from "fs";
+import { isAbsolute as isAbsolute2, join as join4, relative as relative2, resolve as resolve2 } from "path";
 var import_yaml7 = __toESM(require_dist(), 1);
 
 // ../lint/src/location.json
@@ -21195,8 +21213,8 @@ function mergeConfig(base, repo) {
 }
 function loadBaseConfig(file) {
   const full = isAbsolute2(file) ? file : resolve2(process.cwd(), file);
-  if (!existsSync3(full)) throw new ConfigError(`Base config file not found: ${file}`, file);
-  return parseBaseConfig(readFileSync2(full, "utf8"), file);
+  if (!existsSync4(full)) throw new ConfigError(`Base config file not found: ${file}`, file);
+  return parseBaseConfig(readFileSync3(full, "utf8"), file);
 }
 function parseBaseConfig(text2, file) {
   const data = readYaml(text2, file).data ?? {};
@@ -21223,14 +21241,14 @@ function loadConfig(root, explicit, opts = {}) {
   const withBase = base ? { base: { file: opts.base, data: base } } : {};
   const found = findConfigFile(root, explicit);
   if (!found) return { config: base ? parseConfig(base, opts.base) : defaultConfig(), ...withBase };
-  const text2 = readFileSync2(found.full, "utf8");
+  const text2 = readFileSync3(found.full, "utf8");
   return { ...parseConfigText(text2, found.rel, base), file: found.rel, text: text2, ...withBase };
 }
 function findConfigFile(root, explicit) {
-  const candidates = explicit ? [explicit] : CONFIG_FILES.map((f) => join3(root, CONFIG_DIR, f));
+  const candidates = explicit ? [explicit] : CONFIG_FILES.map((f) => join4(root, CONFIG_DIR, f));
   for (const abs of candidates) {
-    const full = explicit && !abs.startsWith("/") ? join3(process.cwd(), abs) : abs;
-    if (!existsSync3(full)) {
+    const full = explicit && !abs.startsWith("/") ? join4(process.cwd(), abs) : abs;
+    if (!existsSync4(full)) {
       if (explicit) throw new ConfigError(`Config file not found: ${explicit}`, explicit);
       continue;
     }
@@ -21284,8 +21302,8 @@ function parseConfig(raw, file) {
 }
 
 // ../lint/src/contracts.ts
-import { existsSync as existsSync4, lstatSync as lstatSync2, mkdirSync, realpathSync as realpathSync2, rmSync, writeFileSync } from "fs";
-import { basename as basename3, dirname as dirname2, isAbsolute as isAbsolute3, join as join4, parse as parse2, relative as relative3, resolve as resolve3, sep } from "path";
+import { existsSync as existsSync5, lstatSync as lstatSync3, mkdirSync as mkdirSync2, realpathSync as realpathSync3, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "fs";
+import { basename as basename3, dirname as dirname3, isAbsolute as isAbsolute3, join as join5, parse as parse2, relative as relative3, resolve as resolve3, sep as sep2 } from "path";
 
 // ../../node_modules/.pnpm/diff@9.0.0/node_modules/diff/libesm/diff/base.js
 var Diff = class {
@@ -22302,7 +22320,7 @@ var UnsafePathError = class extends Error {
 };
 function isSymlink(abs) {
   try {
-    return lstatSync2(abs).isSymbolicLink();
+    return lstatSync3(abs).isSymbolicLink();
   } catch {
     return false;
   }
@@ -22312,9 +22330,9 @@ function realpathNearest(p) {
   let at = resolve3(p);
   for (; ; ) {
     try {
-      return join4(realpathSync2.native(at), ...rest.reverse());
+      return join5(realpathSync3.native(at), ...rest.reverse());
     } catch {
-      const parent = dirname2(at);
+      const parent = dirname3(at);
       if (parent === at) return resolve3(p);
       rest.push(basename3(at));
       at = parent;
@@ -22323,7 +22341,7 @@ function realpathNearest(p) {
 }
 var withinOrAt = (root, p) => {
   const rel = relative3(root, p);
-  return rel === "" || rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute3(rel);
+  return rel === "" || rel !== ".." && !rel.startsWith(`..${sep2}`) && !isAbsolute3(rel);
 };
 function pathInside(tree, p) {
   return withinOrAt(realpathNearest(tree), realpathNearest(p));
@@ -22331,30 +22349,30 @@ function pathInside(tree, p) {
 function followsLinkIn(realTree, target) {
   const abs = resolve3(target);
   let at = parse2(abs).root;
-  for (const part of abs.slice(at.length).split(sep).filter(Boolean)) {
-    const next = join4(at, part);
+  for (const part of abs.slice(at.length).split(sep2).filter(Boolean)) {
+    const next = join5(at, part);
     let link;
     try {
-      link = lstatSync2(next).isSymbolicLink();
+      link = lstatSync3(next).isSymbolicLink();
     } catch {
       return false;
     }
     if (link && withinOrAt(realTree, at)) return true;
-    at = link ? realpathSync2.native(next) : next;
+    at = link ? realpathSync3.native(next) : next;
   }
   return false;
 }
 function assertSafeWritePath(abs, trees) {
   const target = resolve3(abs);
-  const realParent = realpathNearest(dirname2(target));
+  const realParent = realpathNearest(dirname3(target));
   const ancestors = [];
-  for (let at = target; ; at = dirname2(at)) {
+  for (let at = target; ; at = dirname3(at)) {
     ancestors.push(at);
-    if (dirname2(at) === at) break;
+    if (dirname3(at) === at) break;
   }
   for (const tree of trees) {
     const realTree = realpathNearest(tree);
-    const enters = ancestors.some((a) => existsSync4(a) && withinOrAt(realTree, realpathSync2.native(a)));
+    const enters = ancestors.some((a) => existsSync5(a) && withinOrAt(realTree, realpathSync3.native(a)));
     if (!enters && !withinOrAt(resolve3(tree), target)) continue;
     if (isSymlink(target) || !withinOrAt(realTree, realParent) || followsLinkIn(realTree, target))
       throw new UnsafePathError(
@@ -22364,7 +22382,7 @@ function assertSafeWritePath(abs, trees) {
 }
 function unsafeContractPaths(root, plan) {
   return plan.entries.filter((e) => e.status !== "unchanged").map((e) => e.file).filter(
-    (f) => isSymlink(join4(root, f)) || !insideRepository(root, join4(root, f)) || followsLinkIn(realpathNearest(root), join4(root, f))
+    (f) => isSymlink(join5(root, f)) || !insideRepository(root, join5(root, f)) || followsLinkIn(realpathNearest(root), join5(root, f))
   );
 }
 function assertSafeContractPaths(root, plan) {
@@ -22375,22 +22393,22 @@ function assertSafeContractPaths(root, plan) {
     );
 }
 function applyEntry(e, base, outDir) {
-  const abs = join4(base, e.file);
+  const abs = join5(base, e.file);
   if (e.status === "delete") {
-    if (outDir || !existsSync4(abs)) return false;
-    rmSync(abs);
+    if (outDir || !existsSync5(abs)) return false;
+    rmSync2(abs);
     return true;
   }
   if (e.status === "unchanged" && !outDir) return false;
-  mkdirSync(dirname2(abs), { recursive: true });
-  writeFileSync(abs, e.after ?? "");
+  mkdirSync2(dirname3(abs), { recursive: true });
+  writeFileSync2(abs, e.after ?? "");
   return true;
 }
 function writeContracts(root, plan, outDir, trees = [root]) {
   const written2 = [];
   const base = outDir ?? root;
   if (outDir) {
-    for (const e of plan.entries) if (e.status !== "delete") assertSafeWritePath(join4(outDir, e.file), trees);
+    for (const e of plan.entries) if (e.status !== "delete") assertSafeWritePath(join5(outDir, e.file), trees);
   }
   if (!outDir) assertSafeContractPaths(root, plan);
   for (const e of plan.entries) if (applyEntry(e, base, outDir)) written2.push(e.file);
@@ -22414,7 +22432,7 @@ function contractsInScope(index, given = { root: ".", paths: [] }) {
   const { targets } = index.project;
   const targeted = (unit) => targets.has(index.unit(unit)?.file ?? unit);
   const paths = given.paths.map(
-    (p) => unitOfPath(relative3(given.root, resolve3(given.root, p)).split(sep).join("/"))
+    (p) => unitOfPath(relative3(given.root, resolve3(given.root, p)).split(sep2).join("/"))
   );
   const gone = (unit) => !index.unit(unit) && paths.some((p) => pathHolds(p, unit));
   return (e) => e.unit !== void 0 && (targeted(e.unit) || gone(e.unit)) || entryConsumers(e).some(targeted);
@@ -29073,20 +29091,20 @@ function exitCodeFor(summary2, failOn) {
 var import_yaml13 = __toESM(require_dist(), 1);
 
 // ../lint/src/git-origin.ts
-import { readFileSync as readFileSync3 } from "fs";
-import { dirname as dirname3, isAbsolute as isAbsolute4, join as join5 } from "path";
+import { readFileSync as readFileSync4 } from "fs";
+import { dirname as dirname4, isAbsolute as isAbsolute4, join as join6 } from "path";
 
 // ../lint/src/impact-run.ts
 import { execFileSync as execFileSync2 } from "child_process";
 import {
-  existsSync as existsSync5,
-  lstatSync as lstatSync3,
-  readFileSync as readFileSync4,
+  existsSync as existsSync6,
+  lstatSync as lstatSync4,
+  readFileSync as readFileSync5,
   readlinkSync,
-  realpathSync as realpathSync3,
+  realpathSync as realpathSync4,
   statSync as statSync2
 } from "fs";
-import { basename as basename4, dirname as dirname4, isAbsolute as isAbsolute5, join as join6, relative as relative5, sep as sep2 } from "path";
+import { basename as basename4, dirname as dirname5, isAbsolute as isAbsolute5, join as join7, relative as relative5, sep as sep3 } from "path";
 var ImpactSetupError = class extends Error {
 };
 var followsPullRequest = (event) => event === "merge_group" || event === "push";
@@ -29094,7 +29112,7 @@ function githubEvent(env = process.env) {
   if (!env.GITHUB_EVENT_NAME) return void 0;
   let payload;
   try {
-    if (env.GITHUB_EVENT_PATH) payload = JSON.parse(readFileSync4(env.GITHUB_EVENT_PATH, "utf8"));
+    if (env.GITHUB_EVENT_PATH) payload = JSON.parse(readFileSync5(env.GITHUB_EVENT_PATH, "utf8"));
   } catch {
     payload = void 0;
   }
@@ -29154,7 +29172,7 @@ function baselineConfig(fs3, configPath, base, notes) {
 var workingTree = (root) => ({
   read: (p) => {
     try {
-      return readFileSync4(join6(root, p), "utf8");
+      return readFileSync5(join7(root, p), "utf8");
     } catch {
       return void 0;
     }
@@ -29275,8 +29293,8 @@ function gitOutput(dir, args) {
   }
 }
 function isCheckout2(dir) {
-  const top = existsSync5(dir) ? gitTopLevel(dir) : void 0;
-  return top !== void 0 && realpathSync3.native(top) === realpathSync3.native(dir);
+  const top = existsSync6(dir) ? gitTopLevel(dir) : void 0;
+  return top !== void 0 && realpathSync4.native(top) === realpathSync4.native(dir);
 }
 function hasCommit(dir, commit) {
   try {
@@ -29301,26 +29319,26 @@ var sameFile = (a, b) => {
   const [x, y] = [statSync2(a, { throwIfNoEntry: false }), statSync2(b, { throwIfNoEntry: false })];
   return x !== void 0 && y !== void 0 && x.ino === y.ino && x.dev === y.dev;
 };
-var ignoresCase = (dir) => gitOutput(dir, ["config", "--bool", "core.ignorecase"])?.trim() === "true" || sameFile(join6(dir, ".git"), join6(dir, ".GIT"));
+var ignoresCase = (dir) => gitOutput(dir, ["config", "--bool", "core.ignorecase"])?.trim() === "true" || sameFile(join7(dir, ".git"), join7(dir, ".GIT"));
 var realpathOr = (p) => {
   try {
-    return realpathSync3.native(p);
+    return realpathSync4.native(p);
   } catch {
     return void 0;
   }
 };
 function repositoryPathOf(top, file) {
   const dirs = [];
-  for (let dir = dirname4(file); dir !== dirname4(dir); dir = dirname4(dir)) dirs.unshift(dir);
+  for (let dir = dirname5(file); dir !== dirname5(dir); dir = dirname5(dir)) dirs.unshift(dir);
   const reals = dirs.map(realpathOr);
   const atTop = reals.indexOf(top);
   if (atTop >= 0) return toPosix2(relative5(dirs[atTop], file));
   const inside = reals.findIndex((real2) => real2 !== void 0 && pathInside(top, real2));
-  if (inside >= 0) return toPosix2(join6(relative5(top, reals[inside]), relative5(dirs[inside], file)));
+  if (inside >= 0) return toPosix2(join7(relative5(top, reals[inside]), relative5(dirs[inside], file)));
   const real = realpathOr(file);
   return real !== void 0 && pathInside(top, real) ? toPosix2(relative5(top, real)) : void 0;
 }
-var toPosix2 = (path) => path.split(sep2).join("/");
+var toPosix2 = (path) => path.split(sep3).join("/");
 var NONE = { kind: "none" };
 var MAX_LINKS3 = 40;
 function enter(w, dir, commit, head, shown) {
@@ -29340,13 +29358,13 @@ function leave(w, abs) {
 }
 function follow(w, target) {
   if (target === void 0 || ++w.links > MAX_LINKS3) return NONE;
-  if (isAbsolute5(target)) return leave(w, join6(target, ...w.todo));
+  if (isAbsolute5(target)) return leave(w, join7(target, ...w.todo));
   w.todo.unshift(...target.split("/"));
   return void 0;
 }
 function submodule(w, entry) {
   const path = [...w.at.map((a) => a.name), entry.name].join("/");
-  const dir = join6(w.dir, path);
+  const dir = join7(w.dir, path);
   if (!isCheckout2(dir) || !hasCommit(dir, entry.object)) {
     const at = `${w.shown}${path} at ${entry.object.slice(0, 7)}`;
     return { kind: "unread", submodule: at, path: [`${w.shown}${path}`, ...w.todo].join("/") };
@@ -29403,21 +29421,21 @@ function trackedIn(dir, commit, parts, ignoreCase) {
 function untracked(w, part) {
   const parent = w.at.map((a) => a.name);
   if (trackedAtHead(w, [...parent, part])) return NONE;
-  const full = join6(w.dir, ...parent, part);
+  const full = join7(w.dir, ...parent, part);
   let stat2;
   try {
-    stat2 = lstatSync3(full);
+    stat2 = lstatSync4(full);
   } catch {
     return NONE;
   }
-  if (stat2.isSymbolicLink()) return follow(w, readlinkSync(full).split(sep2).join("/"));
+  if (stat2.isSymbolicLink()) return follow(w, readlinkSync(full).split(sep3).join("/"));
   if (!stat2.isDirectory()) return w.todo.length ? NONE : fileAt(full);
   w.at.push({ name: part, tree: void 0 });
   return void 0;
 }
 function step2(w, part) {
   if (part === "" || part === ".") return void 0;
-  if (part === "..") return w.at.pop() ? void 0 : leave(w, join6(w.dir, "..", ...w.todo));
+  if (part === "..") return w.at.pop() ? void 0 : leave(w, join7(w.dir, "..", ...w.todo));
   const tree = w.at.length ? w.at[w.at.length - 1].tree : w.tree;
   const entries2 = tree === void 0 ? [] : treeEntries(gitOutput(w.dir, ["ls-tree", "-z", tree]));
   const entry = entryNamed(entries2, part, w.ignoreCase);
@@ -29445,13 +29463,13 @@ function locate2(top, commit, path) {
 }
 var textOf = (found) => {
   if (found.kind === "tracked") return gitOutput(found.dir, ["cat-file", "blob", found.object]);
-  return found.kind === "file" ? workingTree(dirname4(found.file)).read(basename4(found.file)) : void 0;
+  return found.kind === "file" ? workingTree(dirname5(found.file)).read(basename4(found.file)) : void 0;
 };
 function repositoryBaseConfig(root, commit, req) {
   const file = req.baseConfig ? req.baseConfigFile : void 0;
   const top = file ? gitTopLevel(root) : void 0;
   if (!file || top === void 0) return void 0;
-  const realTop = realpathSync3.native(top);
+  const realTop = realpathSync4.native(top);
   const path = repositoryPathOf(realTop, file);
   if (path === void 0) return void 0;
   const baseline = locate2(realTop, commit, path);
@@ -29528,7 +29546,7 @@ function pendingSettings(baseline, head, comparePolicy) {
   ];
 }
 function baselinePolicy(root, baseline, req, headConfig, notes) {
-  const configPath = req.configPath ? relative5(root, join6(root, req.configPath)).split("\\").join("/") : void 0;
+  const configPath = req.configPath ? relative5(root, join7(root, req.configPath)).split("\\").join("/") : void 0;
   const repositoryBase = repositoryBaseConfig(root, baseline.commit, req);
   if (repositoryBase) {
     notes.push(
@@ -29606,7 +29624,7 @@ function prepareImpact(root, headConfig, req, logger) {
 var import_yaml14 = __toESM(require_dist(), 1);
 
 // ../lint/src/plugins.ts
-import { existsSync as existsSync6 } from "fs";
+import { existsSync as existsSync7 } from "fs";
 import { isAbsolute as isAbsolute6, resolve as resolve5 } from "path";
 import { pathToFileURL } from "url";
 var isRule = (v) => typeof v === "object" && v !== null && typeof v.code === "string" && typeof v.check === "function";
@@ -29614,7 +29632,7 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
   const loaded = [];
   for (const spec of config2.plugins) {
     const abs = isAbsolute6(spec) ? spec : resolve5(root, spec);
-    if (!existsSync6(abs))
+    if (!existsSync7(abs))
       throw new ConfigError(`Plugin not found: ${spec}`, void 0, [`plugins: ${abs} does not exist`]);
     let mod;
     try {
@@ -29641,20 +29659,8 @@ async function loadPlugins(root, config2, registry2, logger = silentLogger) {
 }
 
 // ../lint/src/remotes-cache.ts
-import { randomBytes } from "crypto";
-import {
-  existsSync as existsSync7,
-  mkdirSync as mkdirSync2,
-  readdirSync as readdirSync2,
-  renameSync,
-  rmdirSync,
-  rmSync as rmSync2,
-  statSync as statSync3,
-  utimesSync,
-  writeFileSync as writeFileSync2
-} from "fs";
 import { homedir } from "os";
-import { dirname as dirname5, isAbsolute as isAbsolute7, join as join7, relative as relative6, resolve as resolve6 } from "path";
+import { isAbsolute as isAbsolute7, join as join8, resolve as resolve6 } from "path";
 
 // ../lint/src/remotes-fetch.ts
 var apiOf = (opts) => ({
@@ -31109,8 +31115,8 @@ var import_yaml15 = __toESM(require_dist(), 1);
 
 // src/upload.ts
 import { createHash as createHash2, randomUUID as randomUUID2 } from "crypto";
-import { readFileSync as readFileSync5, statSync as statSync4 } from "fs";
-import { isAbsolute as isAbsolute8, relative as relative7, resolve as resolve7, sep as sep3 } from "path";
+import { readFileSync as readFileSync6, statSync as statSync3 } from "fs";
+import { isAbsolute as isAbsolute8, relative as relative6, resolve as resolve7, sep as sep4 } from "path";
 import { Readable } from "stream";
 import { crc32, deflateRawSync } from "zlib";
 var SERVICE = "github.actions.results.api.v1.ArtifactService";
@@ -31267,7 +31273,7 @@ async function blobRequest(http2, url2, body, headers, what, secrets) {
 }
 async function uploadBlob(signedUrl, zip2, secrets) {
   const http2 = new HttpClient(USER_AGENT, [], { socketTimeout: stallTimeout() });
-  const join9 = signedUrl.includes("?") ? "&" : "?";
+  const join10 = signedUrl.includes("?") ? "&" : "?";
   const prefix = randomUUID2();
   const ids = [];
   for (let at = 0; at < zip2.length; at += BLOCK_SIZE) {
@@ -31275,7 +31281,7 @@ async function uploadBlob(signedUrl, zip2, secrets) {
     ids.push(id);
     await blobRequest(
       http2,
-      `${signedUrl}${join9}comp=block&blockid=${encodeURIComponent(id)}`,
+      `${signedUrl}${join10}comp=block&blockid=${encodeURIComponent(id)}`,
       zip2.subarray(at, at + BLOCK_SIZE),
       { "Content-Type": "application/octet-stream" },
       "Put Block",
@@ -31286,7 +31292,7 @@ async function uploadBlob(signedUrl, zip2, secrets) {
   const list = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><BlockList>${latest}</BlockList>`;
   await blobRequest(
     http2,
-    `${signedUrl}${join9}comp=blocklist`,
+    `${signedUrl}${join10}comp=blocklist`,
     Buffer.from(list),
     { "Content-Type": "application/xml", "x-ms-blob-content-type": "application/zip" },
     "Put Block List",
@@ -31359,14 +31365,14 @@ async function uploadArtifact(name, files, rootDirectory, options = {}) {
   if (!files.length) throw new Error("No files were found to upload");
   const root = resolve7(rootDirectory);
   const entries2 = files.map((file) => {
-    const path = relative7(root, resolve7(file));
-    if (!path || path === ".." || path.startsWith(`..${sep3}`) || isAbsolute8(path))
+    const path = relative6(root, resolve7(file));
+    if (!path || path === ".." || path.startsWith(`..${sep4}`) || isAbsolute8(path))
       throw new Error(`${file} is not inside the artifact's root directory ${root}`);
-    const entry = path.split(sep3).join("/");
+    const entry = path.split(sep4).join("/");
     if (BAD_PATH.test(entry))
       throw new Error(`The path ${entry} contains one of " : < > | * ? or a line break`);
-    const data = readFileSync5(file);
-    const { mode, mtime } = statSync4(file);
+    const data = readFileSync6(file);
+    const { mode, mtime } = statSync3(file);
     return { name: entry, data, mode, mtime };
   });
   const token = process.env.ACTIONS_RUNTIME_TOKEN;
@@ -31460,7 +31466,7 @@ var fromActionDir = (p) => isAbsolute9(p) ? p : resolve8(ACTION_DIR, p);
 function declaredDefaultsOf(actionYml) {
   const defaults = {};
   try {
-    const meta2 = (0, import_yaml15.parse)(readFileSync6(actionYml, "utf8"));
+    const meta2 = (0, import_yaml15.parse)(readFileSync7(actionYml, "utf8"));
     for (const [k, v] of Object.entries(meta2?.inputs ?? {}))
       if (typeof v?.default === "string") defaults[k] = v.default;
   } catch (err) {
@@ -31473,7 +31479,7 @@ function declaredDefaultsOf(actionYml) {
 }
 var declaredDefaults;
 function declaredDefault(name) {
-  declaredDefaults ??= declaredDefaultsOf(join8(ACTION_DIR, "action.yml"));
+  declaredDefaults ??= declaredDefaultsOf(join9(ACTION_DIR, "action.yml"));
   return declaredDefaults[name]?.trim() || DEFAULTS2[name];
 }
 var orgInput = (name) => getInput(name).trim() || declaredDefault(name);
@@ -31678,7 +31684,7 @@ function actionsSink(runnerDebug, groups) {
     }
   };
 }
-var toPosix3 = (p) => p.split(sep4).join("/");
+var toPosix3 = (p) => p.split(sep5).join("/");
 var plural2 = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 function annotate(f, prefix) {
   const { level: level2, message, ...props } = githubAnnotation(f, { pathPrefix: prefix });
@@ -31691,7 +31697,7 @@ function writeReport(workspace, file, content) {
   assertSafeWritePath(abs, [workspace]);
   mkdirSync3(dirname6(abs), { recursive: true });
   writeFileSync3(abs, content);
-  const shown = toPosix3(relative8(workspace, abs));
+  const shown = toPosix3(relative7(workspace, abs));
   info(`wrote ${shown.startsWith("..") ? abs : shown}`);
   return abs;
 }
@@ -31723,24 +31729,24 @@ async function driftArtifact(plan, prefix, inputs, runId) {
   const runnerTemp = process.env.RUNNER_TEMP;
   let dir;
   if (runnerTemp) {
-    dir = join8(runnerTemp, name);
+    dir = join9(runnerTemp, name);
     rmSync3(dir, { recursive: true, force: true });
     mkdirSync3(dir, { recursive: true });
   } else {
-    dir = mkdtempSync(join8(tmpdir(), `${name}-`));
+    dir = mkdtempSync(join9(tmpdir(), `${name}-`));
   }
   const repoPlan = {
     ...plan,
     entries: plan.entries.map((e) => ({ ...e, file: inRepository(e.file, prefix) }))
   };
-  const patch = join8(dir, PATCH_FILE);
+  const patch = join9(dir, PATCH_FILE);
   writeFileSync3(patch, contractPatch(repoPlan));
-  const contracts = writeContracts(dir, repoPlan, join8(dir, ARTIFACT_DIR));
-  writeFileSync3(join8(dir, ARTIFACT_DIR, "README.md"), artifactReadme(plan, inputs.artifactName, runId));
+  const contracts = writeContracts(dir, repoPlan, join9(dir, ARTIFACT_DIR));
+  writeFileSync3(join9(dir, ARTIFACT_DIR, "README.md"), artifactReadme(plan, inputs.artifactName, runId));
   const files = [
     patch,
-    join8(dir, ARTIFACT_DIR, "README.md"),
-    ...contracts.map((f) => join8(dir, ARTIFACT_DIR, f))
+    join9(dir, ARTIFACT_DIR, "README.md"),
+    ...contracts.map((f) => join9(dir, ARTIFACT_DIR, f))
   ];
   info(`wrote ${PATCH_FILE} and ${plural2(contracts.length, "contract file")} to ${dir}`);
   const out = { dir, patch };
@@ -31818,7 +31824,7 @@ function logging(debug2, envLevel) {
 function placeOf(workingDirectory) {
   const workspace = resolve8(process.env.GITHUB_WORKSPACE || process.cwd());
   const root = resolve8(workspace, workingDirectory);
-  const rel = toPosix3(relative8(workspace, root));
+  const rel = toPosix3(relative7(workspace, root));
   return { workspace, root, prefix: rel === "" || rel === "." ? "" : rel };
 }
 function loadInputConfig(inputs, { root, prefix }) {
@@ -31838,7 +31844,7 @@ function inputPlugins(inputs, { workspace, root }, pluginsOff) {
   const extraPlugins = inputs.extraPlugins.filter((p) => inputs.plugins || !inCheckout(p));
   const skippedPlugins = inputs.extraPlugins.filter((p) => !extraPlugins.includes(p));
   if (skippedPlugins.length) {
-    const names = skippedPlugins.map((p) => toPosix3(relative8(workspace, p))).join(", ");
+    const names = skippedPlugins.map((p) => toPosix3(relative7(workspace, p))).join(", ");
     warning(`Not loading the plugin input's ${names} from the checkout: ${pluginsOff}.`);
   }
   return extraPlugins;

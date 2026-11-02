@@ -6,9 +6,11 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
+  directoryRemoteCache,
   escapeControl,
   type Logger,
   nodeFileSystem,
+  pruneRemoteCache,
   type RemoteFailureKind,
   type RemoteRef,
   type RemoteSourceCache,
@@ -16,7 +18,6 @@ import {
 import {
   type ActionsLockRead,
   assertSafeWritePath,
-  cacheSource,
   commitKey,
   downloadRemoteSources,
   envCacheDir,
@@ -25,11 +26,10 @@ import {
   type FetchRetry,
   gradeRemoteChanges,
   inCi,
-  KEEP_COMMITS,
   lockedCommit,
   lockedRemote,
   originHost,
-  pruneCache,
+  pruneUsed,
   REMOTES_LOCK_FILES,
   type RemoteChange,
   type RemoteChangeGrade,
@@ -42,7 +42,6 @@ import {
   remotesCacheDir,
   remotesCacheIn,
   serializeRemotesLock,
-  touchCommit,
   updateRemotesLock,
 } from '@flowpact/lint';
 import { attempt, usage } from './errors';
@@ -124,7 +123,10 @@ export interface RemotesUpdateResult extends Omit<RemotesUpdate, 'lock'> {
 export interface SourcesKept {
   dir: string;
   written: number;
-  /** Older commits removed afterwards: the cache keeps the `KEEP_COMMITS` most recent of each repository used. */
+  /**
+   * Older commits removed afterwards: the cache keeps the `KEEP_COMMITS` most recently used of each repository, and
+   * every one the run used.
+   */
   removed: number;
   /** How many files could not be written, and why the first one could not; the lockfile is written all the same. */
   notKept: number;
@@ -364,8 +366,8 @@ const NO_CACHE_DIR =
 
 /**
  * Keeps each fetched file in the sources cache, when there is one, counting what it wrote (a failure is logged, never
- * thrown): the cache to fetch with, written through and never read (the API is asked every time), and the result's
- * fields to report it.
+ * thrown): the cache to fetch with, read first (a file at a commit never changes, so the API is asked only for those
+ * it lacks) and written through, and the result's fields to report it.
  */
 function sourcesKeeper(
   cache: { dir?: string; why?: string },
@@ -379,14 +381,17 @@ function sourcesKeeper(
     return { fetch: {}, result: cache.why ? { sourcesNotKept: cache.why } : {}, finish: () => undefined };
   const dir = cache.dir;
   const kept: SourcesKept = { dir, written: 0, removed: 0, notKept: 0 };
+  const sources = directoryRemoteCache(dir);
   const used = new Set<string>();
+  const get: RemoteSourceCache['get'] = (key) => {
+    const bytes = sources.get(key);
+    if (bytes) used.add(commitKey(key, key.sha));
+    return bytes;
+  };
   const set: RemoteSourceCache['set'] = (key, bytes) => {
-    // As the API's text, without a byte order mark: the file the editor opens.
-    const outcome = cacheSource(dir, key, key.sha, key.file, new TextDecoder().decode(bytes));
-    if (outcome === 'written' || outcome === 'present') {
-      touchCommit(dir, key, key.sha);
-      used.add(commitKey(key, key.sha));
-    }
+    // As served, a byte order mark included: the file the editor opens.
+    const outcome = sources.write(key, bytes);
+    if (outcome === 'written' || outcome === 'present') used.add(commitKey(key, key.sha));
     const what = () => escapeControl(`${key.owner}/${key.repo}/${key.file}@${key.sha.slice(0, 7)}`);
     if (outcome === 'written') kept.written++;
     else if (outcome === 'unsafe')
@@ -398,19 +403,17 @@ function sourcesKeeper(
     }
   };
   const finish = () => {
-    kept.removed = pruneUsed(dir, used, logger);
+    kept.removed = pruneOld(dir, used, logger);
   };
-  return { fetch: { cache: { get: () => undefined, set } }, result: { sources: kept }, finish };
+  return { fetch: { cache: { get, set } }, result: { sources: kept }, finish };
 }
 
 /**
- * Removes the older commits of the repositories a run used, keeping the `KEEP_COMMITS` most recently used of each and
- * every one the run used; returns how many it removed.
+ * Removes the older commits in the cache, keeping the `KEEP_COMMITS` most recently used of each repository and every
+ * one the run used; returns how many it removed.
  */
-function pruneUsed(dir: string, commits: Iterable<string>, logger: Logger): number {
-  const keep = new Set(commits);
-  const repos = [...keep].map((k) => k.split('/').slice(0, 2).join('/'));
-  const pruned = pruneCache(dir, KEEP_COMMITS, { repos, keep });
+function pruneOld(dir: string, commits: Iterable<string>, logger: Logger): number {
+  const pruned = pruneUsed(dir, new Set(commits));
   if (pruned.failed) logger.debug(`old sources not removed: ${pruned.failed}`);
   return pruned.removed;
 }
@@ -453,10 +456,10 @@ export async function runRemotesDownload(
   logger.debug(`remote sources: ${dir}`);
   const download = await timed(
     logger,
-    () => downloadRemoteSources(result.index, lock, dir, fetch),
+    () => downloadRemoteSources(result.index, lock, directoryRemoteCache(dir), fetch),
     options.display,
   );
-  const removed = pruneUsed(dir, download.commits, logger);
+  const removed = pruneOld(dir, download.commits, logger);
   // A failure to write the cache is local: nothing about the API or the token would help.
   const advice = adviceFor(
     root,
@@ -487,7 +490,8 @@ export function runRemotesClean(options: RemotesCleanOptions = {}): RemotesClean
   if (!dir) throw usage(`no cache to clean: ${NO_CACHE_DIR}`);
   const keep = options.keep ?? 0;
   if (!Number.isInteger(keep) || keep < 0) throw usage('keep must be a whole number, 0 or more');
-  return { dir, keep, ...pruneCache(dir, keep) };
+  const { removed, failed } = pruneRemoteCache(dir, { keepCommits: keep });
+  return { dir, keep, removed, ...(failed ? { failed } : {}) };
 }
 
 /** The lockfile, which `remotes download` needs: none, or one it cannot use, is a usage error. */

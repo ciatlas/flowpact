@@ -3,6 +3,9 @@ import { isAbsolute, relative } from 'node:path';
 import {
   apiHost,
   createParseContext,
+  type DirectoryRemoteCache,
+  directoryRemoteCache,
+  GITHUB_COM_API,
   type Loc,
   lookup,
   type Occurrence,
@@ -33,23 +36,36 @@ export interface CachedUnit {
 
 /**
  * The remote sources cache as the editor reads it (see `remotesCacheDir`): the file of a remote reference at the commit
- * it runs (`commitOf`: its own full SHA, else the commit the lockfile pins). Each file is parsed once: a file at a
- * commit never changes. Without a directory (no home directory to keep one in), it has nothing.
+ * it runs (`commitOf`: its own full SHA, else the commit the lockfile pins), on the host it was read from. Each file is
+ * parsed once: a file at a commit never changes. Without a directory (no home directory to keep one in), it has nothing.
  */
 export class RemoteSources {
   /** Files parsed, by path. Only files read: one that could not be (pruned meanwhile) is read again next time. */
   private readonly parsed = new Map<string, UnitDecl>();
   private readonly realDir: string | undefined;
+  private readonly cache: DirectoryRemoteCache | undefined;
+  /** Where an entry without a host was read: see `defaultHosts`. */
+  private readonly hosts: string[];
 
-  constructor(readonly dir: string | undefined = remotesCacheDir()) {
+  constructor(
+    readonly dir: string | undefined = remotesCacheDir(),
+    env: Record<string, string | undefined> = process.env,
+  ) {
     this.realDir = dir && real(dir);
+    this.cache = dir ? directoryRemoteCache(dir) : undefined;
+    this.hosts = defaultHosts(env);
   }
 
   /** The cached source of a remote reference the lockfile has; undefined without an entry, or a file in the cache. */
   of(lock: RemotesLock | undefined, ref: string): CachedUnit | undefined {
     const { entry } = lockedRemote(lock, ref);
     const r = entry && parseRemoteRef(ref, entry.kind);
-    const found = r && this.dir && cachedSource(this.dir, r, commitOf(r, entry));
+    const cache = this.cache;
+    if (!r || !cache) return undefined;
+    const sha = commitOf(r, entry);
+    const found = (entry.host ? [entry.host] : this.hosts)
+      .map((host) => cachedSource(cache, host, r, sha))
+      .find((f) => f !== undefined);
     if (!found) return undefined;
     const unit =
       this.parsed.get(found.path) ?? parseCached(found.path, found.file, entry, `${r.owner}/${r.repo}`);
@@ -68,6 +84,20 @@ export class RemoteSources {
     const file = real(path);
     return file !== undefined && inside(this.realDir, file);
   }
+}
+
+/**
+ * The hosts a lockfile entry without one may have been read from, in order: `GITHUB_API_URL`'s, as `flowpact remotes
+ * update` reads by default, then github.com's (the editor may not see the variable the command line had).
+ */
+function defaultHosts(env: Record<string, string | undefined>): string[] {
+  const hosts: string[] = [];
+  try {
+    if (env.GITHUB_API_URL) hosts.push(apiHost(env.GITHUB_API_URL));
+  } catch {
+    // Not a URL: `remotes update` could not have read with it.
+  }
+  return [...new Set([...hosts, apiHost(GITHUB_COM_API)])];
 }
 
 const inside = (dir: string, path: string) => {
@@ -93,7 +123,8 @@ function parseCached(
 ): UnitDecl | undefined {
   let text: string;
   try {
-    text = readFileSync(path, 'utf8');
+    // Kept as served: without a byte order mark, as the parser had it and the editor shows it.
+    text = readFileSync(path, 'utf8').replace(/^\uFEFF/, '');
   } catch {
     return undefined;
   }

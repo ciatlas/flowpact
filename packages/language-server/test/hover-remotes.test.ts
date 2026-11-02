@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { memoryFileSystem, SymbolLocator } from '@ciatlas/core';
-import { analyze, cacheSource, hostOfGitUrl, originHost, parseConfig } from '@flowpact/lint';
+import { directoryRemoteCache, memoryFileSystem, SymbolLocator } from '@ciatlas/core';
+import { analyze, hostOfGitUrl, originHost, parseConfig } from '@flowpact/lint';
 import { afterAll, describe, expect, it } from 'vitest';
 import { hoverMarkdown, remoteBindingMarkdown } from '../src/hover';
 import { RemoteBindings } from '../src/remotes';
@@ -226,15 +226,27 @@ outputs:
 runs: { using: node24, main: index.js }
 `;
 
+/** A remote source into core's cache in `dir`, as `flowpact remotes update` keeps it: as served, on its host. */
+const keep = (dir: string, repo: string, file: string, text: string, host = 'github.com') =>
+  directoryRemoteCache(dir).write(
+    { host, owner: 'octo', repo, sha: SHA, file },
+    new TextEncoder().encode(text),
+  );
+
+/** The remotes lockfile among `files`, as the workspace reads it. */
+const lockIn = (files: Record<string, string>) =>
+  analyze({ root: '/r', fs: memoryFileSystem(files), config: parseConfig({}), validateSchema: false }).remotes
+    ?.lock;
+
 describe('remote references with their sources cached', () => {
   const dir = mkdtempSync(join(tmpdir(), 'flowpact-sources-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
-  cacheSource(dir, { owner: 'octo', repo: 'ship' }, SHA, '.github/workflows/deploy.yml', DEPLOY_SOURCE);
-  cacheSource(dir, { owner: 'octo', repo: 'setup' }, SHA, 'action.yml', SETUP_SOURCE);
-  const sources = new RemoteSources(dir);
+  keep(dir, 'ship', '.github/workflows/deploy.yml', DEPLOY_SOURCE);
+  keep(dir, 'setup', 'action.yml', SETUP_SOURCE);
+  const sources = new RemoteSources(dir, {});
   const { hover, key, target } = setup({ [CI]: ci, [LOCK]: lock }, { sources });
-  const deployFile = join(dir, 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
-  const setupFile = join(dir, 'octo', 'setup', SHA, 'action.yml');
+  const deployFile = join(dir, 'github.com', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
+  const setupFile = join(dir, 'github.com', 'octo', 'setup', SHA, 'action.yml');
 
   it('names the source in the hover and says Go to Definition opens it', () => {
     const text = hover(DEPLOY);
@@ -286,9 +298,9 @@ describe('remote references with their sources cached', () => {
     const link = `${dir}-link`;
     symlinkSync(dir, link);
     try {
-      expect(sources.contains(join(link, 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'))).toBe(
-        true,
-      );
+      expect(
+        sources.contains(join(link, 'github.com', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml')),
+      ).toBe(true);
     } finally {
       rmSync(link);
     }
@@ -299,22 +311,70 @@ describe('remote references with their sources cached', () => {
   it('reads a source again once it is back, after it could not be read', () => {
     const fresh = mkdtempSync(join(tmpdir(), 'flowpact-reread-'));
     try {
-      const own = new RemoteSources(fresh);
-      const lockOf = analyze({
-        root: '/r',
-        fs: memoryFileSystem({ [CI]: ci, [LOCK]: lock }),
-        config: parseConfig({}),
-        validateSchema: false,
-      }).remotes?.lock;
+      const own = new RemoteSources(fresh, {});
+      const lockOf = lockIn({ [CI]: ci, [LOCK]: lock });
       // A directory where the file would be: found, but not readable as a file.
-      const file = join(fresh, 'octo', 'setup', SHA, 'action.yml');
+      const file = join(fresh, 'github.com', 'octo', 'setup', SHA, 'action.yml');
       mkdirSync(file, { recursive: true });
       expect(own.of(lockOf, 'octo/setup@v2')).toBeUndefined();
       rmSync(file, { recursive: true });
-      cacheSource(fresh, { owner: 'octo', repo: 'setup' }, SHA, 'action.yml', SETUP_SOURCE);
+      keep(fresh, 'setup', 'action.yml', SETUP_SOURCE);
       expect(own.of(lockOf, 'octo/setup@v2')?.unit.name).toBe('Setup');
     } finally {
       rmSync(fresh, { recursive: true, force: true });
+    }
+  });
+
+  it("opens a source on the host the lockfile entry was read from, else the API's", () => {
+    const at = mkdtempSync(join(tmpdir(), 'flowpact-hosts-'));
+    try {
+      keep(at, 'ship', '.github/workflows/deploy.yml', DEPLOY_SOURCE, 'ghes.example');
+      keep(at, 'setup', 'action.yml', SETUP_SOURCE);
+      const ghes = { GITHUB_API_URL: 'https://GHES.example/api/v3' };
+      const lockOf = lockIn({ [CI]: ci, [LOCK]: lock });
+      // The workflow's entry has no host: it was read from the API `GITHUB_API_URL` names, or github.com's.
+      expect(new RemoteSources(at, ghes).of(lockOf, DEPLOY)?.path).toBe(
+        join(at, 'ghes.example', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'),
+      );
+      expect(new RemoteSources(at, {}).of(lockOf, DEPLOY)).toBeUndefined();
+      // The action's entry says github.com (the fallback): there, whatever the API.
+      expect(new RemoteSources(at, ghes).of(lockOf, 'octo/setup@v2')?.path).toBe(
+        join(at, 'github.com', 'octo', 'setup', SHA, 'action.yml'),
+      );
+      // A source read from github.com is found from an editor that has GITHUB_API_URL for another host.
+      keep(at, 'ship', '.github/workflows/deploy.yml', DEPLOY_SOURCE);
+      expect(
+        new RemoteSources(at, { GITHUB_API_URL: 'https://other.example/api/v3' }).of(lockOf, DEPLOY)?.path,
+      ).toBe(join(at, 'github.com', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'));
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
+  });
+
+  it('goes to a declaration in a source served with a byte order mark, on its line', () => {
+    const at = mkdtempSync(join(tmpdir(), 'flowpact-bom-'));
+    try {
+      keep(at, 'setup', 'action.yml', `\uFEFF${SETUP_SOURCE}`);
+      const bom = setup({ [CI]: ci, [LOCK]: lock }, { sources: new RemoteSources(at, {}) });
+      expect(bom.target('version:')).toEqual({
+        path: join(at, 'github.com', 'octo', 'setup', SHA, 'action.yml'),
+        loc: expect.objectContaining({ line: 3, column: 3 }),
+      });
+    } finally {
+      rmSync(at, { recursive: true, force: true });
+    }
+  });
+
+  it('reads no source kept without a host, as flowpact kept them before core’s cache', () => {
+    const at = mkdtempSync(join(tmpdir(), 'flowpact-old-'));
+    try {
+      mkdirSync(join(at, 'octo', 'setup', SHA), { recursive: true });
+      writeFileSync(join(at, 'octo', 'setup', SHA, 'action.yml'), SETUP_SOURCE);
+      expect(
+        new RemoteSources(at, {}).of(lockIn({ [CI]: ci, [LOCK]: lock }), 'octo/setup@v2'),
+      ).toBeUndefined();
+    } finally {
+      rmSync(at, { recursive: true, force: true });
     }
   });
 
@@ -324,13 +384,7 @@ describe('remote references with their sources cached', () => {
     const forged = `version: 1\nremotes:\n  octo/ship/.github/workflows/deploy.yml@${pinned}:\n    sha: ${SHA}\n    kind: workflow\n`;
     const files = { [CI]: pinnedCi, [LOCK]: forged };
     // The cache has the lockfile's commit, not the pinned one: nothing to open.
-    expect(
-      sources.of(
-        analyze({ root: '/r', fs: memoryFileSystem(files), config: parseConfig({}), validateSchema: false })
-          .remotes?.lock,
-        `octo/ship/.github/workflows/deploy.yml@${pinned}`,
-      ),
-    ).toBeUndefined();
+    expect(sources.of(lockIn(files), `octo/ship/.github/workflows/deploy.yml@${pinned}`)).toBeUndefined();
     const text = setup(files, { sources, webHost: 'github.com' }).hoverIn(CI, pinnedCi, 'octo/ship');
     expect(text).toContain('reusable workflow at `ddddddd`');
     expect(text).toContain('`remotes.lock.yaml` records commit `abcdef1` for it, not the one it pins');

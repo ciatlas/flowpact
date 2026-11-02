@@ -1,4 +1,4 @@
-/** The remote sources cache: where it is, which paths it refuses, and how it writes. */
+/** The remote sources cache: where it is, and how flowpact finds and prunes files in core's directory cache. */
 import {
   existsSync,
   mkdirSync,
@@ -6,24 +6,20 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
-  statSync,
-  symlinkSync,
   utimesSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { directoryRemoteCache, parseRemoteRef } from '@ciatlas/core';
 import {
   cachedSource,
-  cachedSourcePath,
-  cacheSource,
   commitKey,
   envCacheDir,
   inCi,
-  pruneCache,
+  pruneUsed,
   remotesCacheDir,
   remotesCacheIn,
-  touchCommit,
 } from '@flowpact/lint';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -116,117 +112,55 @@ describe('the cache directory given, and CI', () => {
   });
 });
 
-describe('cachedSourcePath', () => {
-  const dir = join('/cache', 'remotes');
+describe('cachedSource', () => {
+  const bytes = (t: string) => new TextEncoder().encode(t);
 
-  it('keeps a file by owner and repository in lower case, commit and path', () => {
-    expect(cachedSourcePath(dir, SHIP, SHA, '.github/workflows/deploy.yml')).toBe(
-      join(dir, 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'),
+  it("finds a reference's file in core's cache, on the host it was read from", () => {
+    const cache = directoryRemoteCache(tempDir());
+    const action = { kind: 'action' as const, ...SHIP, path: 'setup' };
+    expect(cachedSource(cache, 'github.com', action, SHA)).toBeUndefined();
+    const key = { host: 'github.com', owner: 'octo', repo: 'ship', sha: SHA, file: 'setup/action.yaml' };
+    expect(cache.write(key, bytes('name: x\n'))).toBe('written');
+    const found = cachedSource(cache, 'GitHub.com', action, SHA)!;
+    expect(found).toEqual({
+      path: join(cache.dir, 'github.com', 'octo', 'ship', SHA, 'setup', 'action.yaml'),
+      file: 'setup/action.yaml',
+    });
+    expect(readFileSync(found.path, 'utf8')).toBe('name: x\n');
+    expect(cachedSource(cache, 'ghe.example.com', action, SHA)).toBeUndefined();
+  });
+});
+
+describe('pruneUsed', () => {
+  const sha = (c: string) => c.repeat(40);
+
+  it('keeps the most recently used commits of each repository, and every one used on any host', () => {
+    const dir = tempDir();
+    const cache = directoryRemoteCache(dir);
+    let t = 1_700_000_000;
+    for (const c of ['1', '2', '3', '4', '5']) {
+      cache.write(
+        { host: 'github.com', owner: 'octo', repo: 'ship', sha: sha(c), file: 'action.yml' },
+        new Uint8Array([1]),
+      );
+      const at = new Date(++t * 1000);
+      utimesSync(join(dir, 'github.com', 'octo', 'ship', sha(c)), at, at);
+    }
+    const used = new Set([commitKey({ owner: 'Octo', repo: 'Ship' }, sha('1'))]);
+    expect(pruneUsed(dir, used)).toMatchObject({ removed: 1 });
+    expect(readdirSync(join(dir, 'github.com', 'octo', 'ship')).sort()).toEqual(
+      [sha('1'), sha('3'), sha('4'), sha('5')].sort(),
     );
   });
 
-  it('refuses what could leave the directory or is no file name on every platform', () => {
-    for (const file of [
-      '../../../etc/passwd',
-      'a/../../b',
-      './action.yml',
-      'a//action.yml',
-      'C:/x/action.yml',
-      'a\\..\\b/action.yml',
-      'con/action.yml',
-      'LPT1.txt/action.yml',
-      'dir./action.yml',
-      'dir /action.yml',
-      'a\u0001b/action.yml',
-      'a|b/action.yml',
-    ])
-      expect(cachedSourcePath(dir, SHIP, SHA, file), file).toBeUndefined();
-    expect(cachedSourcePath(dir, { owner: '..', repo: 'x' }, SHA, 'action.yml')).toBeUndefined();
-    expect(cachedSourcePath(dir, { owner: 'octo', repo: '.' }, SHA, 'action.yml')).toBeUndefined();
-    expect(cachedSourcePath(dir, SHIP, 'v1', 'action.yml')).toBeUndefined();
-    expect(cachedSourcePath(dir, SHIP, SHA.toUpperCase(), 'action.yml')).toBeUndefined();
-  });
-});
-
-describe('cacheSource and cachedSource', () => {
-  it('writes a file once, read-only, and finds it again', () => {
+  it("leaves the layout without a host alone: before core's cache, nothing reads it", () => {
     const dir = tempDir();
-    const action = { kind: 'action' as const, ...SHIP, path: 'setup' };
-    expect(cachedSource(dir, action, SHA)).toBeUndefined();
-    expect(cacheSource(dir, SHIP, SHA, 'setup/action.yaml', 'name: x\n')).toBe('written');
-    const found = cachedSource(dir, action, SHA)!;
-    expect(found.file).toBe('setup/action.yaml');
-    expect(readFileSync(found.path, 'utf8')).toBe('name: x\n');
-    if (process.platform !== 'win32') {
-      // Read-only, and for your user alone: private repositories' files land here too.
-      expect(statSync(found.path).mode & 0o777).toBe(0o400);
-      expect(statSync(join(dir, 'octo')).mode & 0o077).toBe(0);
-    }
-    expect(cacheSource(dir, SHIP, SHA, 'setup/action.yaml', 'other')).toBe('present');
-    expect(readFileSync(found.path, 'utf8')).toBe('name: x\n');
-  });
-
-  it('refuses an unsafe path, and says why it could not write without throwing', () => {
-    const dir = tempDir();
-    expect(cacheSource(dir, SHIP, SHA, '../x.yml', 'x')).toBe('unsafe');
-    // A file where the owner's directory would go.
-    writeFileSync(join(dir, 'octo'), '');
-    expect(cacheSource(dir, SHIP, SHA, 'action.yml', 'x')).toEqual({ failed: expect.any(String) });
-  });
-});
-
-describe('pruneCache', () => {
-  const sha = (c: string) => c.repeat(40);
-  /** A cache with octo/ship at commits 1–4 used in that order (4 last), and octo/setup at 5. */
-  function seeded() {
-    const dir = tempDir();
-    let t = 1_700_000_000;
-    for (const c of ['1', '2', '3', '4']) {
-      cacheSource(dir, { owner: 'octo', repo: 'ship' }, sha(c), 'action.yml', c);
-      const at = new Date(++t * 1000);
-      utimesSync(join(dir, 'octo', 'ship', sha(c)), at, at);
-    }
-    cacheSource(dir, { owner: 'octo', repo: 'setup' }, sha('5'), 'action.yml', '5');
-    return dir;
-  }
-  const left = (dir: string, repo = 'ship') => readdirSync(join(dir, 'octo', repo)).sort();
-
-  it('keeps the most recently used commits of each repository', () => {
-    const dir = seeded();
-    expect(pruneCache(dir, 2)).toEqual({ removed: 2 });
-    expect(left(dir)).toEqual([sha('3'), sha('4')]);
-    expect(left(dir, 'setup')).toEqual([sha('5')]);
-  });
-
-  it('never removes a commit the run uses, and prunes only the repositories it names', () => {
-    const dir = seeded();
-    const used = new Set([commitKey({ owner: 'Octo', repo: 'Ship' }, sha('1'))]);
-    expect(pruneCache(dir, 2, { repos: ['Octo/Ship'], keep: used })).toEqual({ removed: 1 });
-    expect(left(dir)).toEqual([sha('1'), sha('3'), sha('4')]);
-    expect(pruneCache(dir, 0, { repos: ['octo/other'] })).toEqual({ removed: 0 });
-  });
-
-  it('marks a commit as used, so it outlives the ones not used since', () => {
-    const dir = seeded();
-    touchCommit(dir, { owner: 'OCTO', repo: 'ship' }, sha('1'));
-    pruneCache(dir, 1);
-    expect(left(dir)).toEqual([sha('1')]);
-  });
-
-  it('empties the cache with 0, removing empty directories, and leaves what flowpact did not put there', () => {
-    const dir = seeded();
-    writeFileSync(join(dir, 'notes.txt'), 'mine');
-    mkdirSync(join(dir, 'octo', 'ship', 'not-a-commit'));
-    const outside = tempDir();
-    mkdirSync(join(outside, sha('9')));
-    writeFileSync(join(outside, sha('9'), 'keep.txt'), 'keep');
-    symlinkSync(join(outside, sha('9')), join(dir, 'octo', 'setup', sha('9')));
-    expect(pruneCache(dir, 0)).toEqual({ removed: 5 });
-    expect(existsSync(join(dir, 'notes.txt'))).toBe(true);
-    expect(readdirSync(join(dir, 'octo', 'ship'))).toEqual(['not-a-commit']);
-    // The link is not a cached commit: neither it nor what it points at is touched.
-    expect(readFileSync(join(outside, sha('9'), 'keep.txt'), 'utf8')).toBe('keep');
-    expect(existsSync(join(dir, 'octo', 'setup', sha('9')))).toBe(true);
-    expect(pruneCache(join(dir, 'missing'), 0)).toEqual({ removed: 0 });
+    const old = join(dir, 'octo', 'ship', SHA);
+    mkdirSync(old, { recursive: true });
+    writeFileSync(join(old, 'action.yml'), 'name: old\n');
+    expect(pruneUsed(dir, new Set())).toMatchObject({ removed: 0 });
+    expect(existsSync(join(old, 'action.yml'))).toBe(true);
+    const action = parseRemoteRef('octo/ship@v1', 'action')!;
+    expect(cachedSource(directoryRemoteCache(dir), 'github.com', action, SHA)).toBeUndefined();
   });
 });

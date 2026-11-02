@@ -3,7 +3,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseRemoteRef, type RemoteFetchError, remoteRefsOf } from '@ciatlas/core';
+import { directoryRemoteCache, parseRemoteRef, type RemoteFetchError, remoteRefsOf } from '@ciatlas/core';
 import {
   cachedSource,
   commitOf,
@@ -691,7 +691,10 @@ describe('the files read, for the sources cache', () => {
   it('downloads the sources of the locked commits without resolving a ref, then finds them cached', async () => {
     const dir = tempDir();
     const a = api();
-    const d = await downloadRemoteSources(index, await lock(), dir, { fetch: a.fetch, token: 't' });
+    const d = await downloadRemoteSources(index, await lock(), directoryRemoteCache(dir), {
+      fetch: a.fetch,
+      token: 't',
+    });
     expect(d.downloaded).toEqual(['octo/setup@v2', 'octo/ship/.github/workflows/deploy.yml@v1']);
     // octo/gone@v1 is recorded as unreadable: there is nothing to download.
     expect(d.notLocked).toEqual([]);
@@ -704,10 +707,17 @@ describe('the files read, for the sources cache', () => {
     ]);
     expect(d.failed).toEqual([]);
     expect(a.seen.map((r) => new URL(r.url).pathname).filter((p) => p.includes('/commits/'))).toEqual([]);
-    const setup = cachedSource(dir, parseRemoteRef('octo/setup@v2', 'action')!, SHA('b'))!;
+    const setup = cachedSource(
+      directoryRemoteCache(dir),
+      'github.com',
+      parseRemoteRef('octo/setup@v2', 'action')!,
+      SHA('b'),
+    )!;
     expect(readFileSync(setup.path, 'utf8')).toBe(SETUP);
     const again = api();
-    const d2 = await downloadRemoteSources(index, await lock(), dir, { fetch: again.fetch });
+    const d2 = await downloadRemoteSources(index, await lock(), directoryRemoteCache(dir), {
+      fetch: again.fetch,
+    });
     expect(d2.downloaded).toEqual([]);
     expect(d2.cached).toEqual(['octo/setup@v2', 'octo/ship/.github/workflows/deploy.yml@v1']);
     expect(again.seen).toEqual([]);
@@ -720,7 +730,10 @@ describe('the files read, for the sources cache', () => {
     };
     const ghes = { apiUrl: 'https://ghes.example/api/v3', token: 'ghes' };
     const a = api();
-    const skipped = await downloadRemoteSources(index, locked, tempDir(), { ...ghes, fetch: a.fetch });
+    const skipped = await downloadRemoteSources(index, locked, directoryRemoteCache(tempDir()), {
+      ...ghes,
+      fetch: a.fetch,
+    });
     expect(skipped.skipped).toEqual([
       {
         ref: 'octo/setup@v2',
@@ -730,14 +743,18 @@ describe('the files read, for the sources cache', () => {
     expect(a.seen).toEqual([]);
     const b = api();
     const fallback = { apiUrl: 'https://api.github.com', token: 'dotcom' };
-    const d = await downloadRemoteSources(index, locked, tempDir(), { ...ghes, fetch: b.fetch, fallback });
+    const d = await downloadRemoteSources(index, locked, directoryRemoteCache(tempDir()), {
+      ...ghes,
+      fetch: b.fetch,
+      fallback,
+    });
     expect(d.downloaded).toEqual(['octo/setup@v2']);
     expect(
       b.seen.every((r) => r.url.startsWith('https://api.github.com/') && r.auth === 'Bearer dotcom'),
     ).toBe(true);
     // Without a github.com token it asks github.com without one, never with the enterprise token.
     const c = api();
-    const anon = await downloadRemoteSources(index, locked, tempDir(), {
+    const anon = await downloadRemoteSources(index, locked, directoryRemoteCache(tempDir()), {
       ...ghes,
       fetch: c.fetch,
       fallback: { apiUrl: 'https://api.github.com' },
@@ -754,7 +771,7 @@ describe('the files read, for the sources cache', () => {
     const locked = await lock();
     const outcomes = async () => {
       const seen: string[] = [];
-      await downloadRemoteSources(index, locked, dir, {
+      await downloadRemoteSources(index, locked, directoryRemoteCache(dir), {
         fetch: api().fetch,
         onProgress: (p) => seen.push(`${p.ref} ${p.outcome}`),
       });
@@ -777,7 +794,9 @@ describe('the files read, for the sources cache', () => {
       version: 1,
       remotes: { 'OCTO/SETUP@v2': { sha: SHA('b'), kind: 'action' } },
     };
-    const d = await downloadRemoteSources(index, locked, tempDir(), { fetch: api().fetch });
+    const d = await downloadRemoteSources(index, locked, directoryRemoteCache(tempDir()), {
+      fetch: api().fetch,
+    });
     expect(d.downloaded).toEqual(['octo/setup@v2']);
     expect(d.notLocked).not.toContain('octo/setup@v2');
   });
@@ -791,7 +810,9 @@ describe('the files read, for the sources cache', () => {
       { paths: [`${WF}/a.yml`] },
     ).index;
     const a = api();
-    const d = await downloadRemoteSources(scoped, await lock(), tempDir(), { fetch: a.fetch });
+    const d = await downloadRemoteSources(scoped, await lock(), directoryRemoteCache(tempDir()), {
+      fetch: a.fetch,
+    });
     expect(d.downloaded).toEqual(['octo/setup@v2']);
     expect(a.seen.some((r) => r.url.includes('/octo/ship/'))).toBe(false);
   });
@@ -801,10 +822,14 @@ describe('the files read, for the sources cache', () => {
       version: 1,
       remotes: { 'octo/setup@v2': { sha: SHA('b'), kind: 'action', host } },
     });
-    const own = await downloadRemoteSources(index, at('github.com'), tempDir(), { fetch: api().fetch });
+    const own = await downloadRemoteSources(index, at('github.com'), directoryRemoteCache(tempDir()), {
+      fetch: api().fetch,
+    });
     expect(own.downloaded).toEqual(['octo/setup@v2']);
     const a = api();
-    const evil = await downloadRemoteSources(index, at('evil.example'), tempDir(), { fetch: a.fetch });
+    const evil = await downloadRemoteSources(index, at('evil.example'), directoryRemoteCache(tempDir()), {
+      fetch: a.fetch,
+    });
     expect(evil.skipped.map((s) => s.ref)).toContain('octo/setup@v2');
     expect(a.seen).toEqual([]);
   });
@@ -819,7 +844,7 @@ describe('the files read, for the sources cache', () => {
       remotes: { 'octo/setup/con@v2': { sha: SHA('b'), kind: 'action' } },
     };
     const a = api();
-    const d = await downloadRemoteSources(odd, locked, tempDir(), { fetch: a.fetch });
+    const d = await downloadRemoteSources(odd, locked, directoryRemoteCache(tempDir()), { fetch: a.fetch });
     expect(d.skipped).toEqual([
       { ref: 'octo/setup/con@v2', reason: 'its path cannot be a file name in the cache' },
     ]);
@@ -840,19 +865,22 @@ describe('the files read, for the sources cache', () => {
       { [`octo/setup/action.yml@${pinned}`]: SETUP, [`octo/setup/action.yml@${SHA('b')}`]: 'name: x' },
     );
     const dir = tempDir();
-    const d = await downloadRemoteSources(at, locked, dir, { fetch: a.fetch });
+    const d = await downloadRemoteSources(at, locked, directoryRemoteCache(dir), { fetch: a.fetch });
     expect(d.downloaded).toEqual([`octo/setup@${pinned}`]);
     const ref = parseRemoteRef(`octo/setup@${pinned}`, 'action')!;
-    expect(cachedSource(dir, ref, pinned)).toBeDefined();
-    expect(cachedSource(dir, ref, SHA('b'))).toBeUndefined();
+    expect(cachedSource(directoryRemoteCache(dir), 'github.com', ref, pinned)).toBeDefined();
+    expect(cachedSource(directoryRemoteCache(dir), 'github.com', ref, SHA('b'))).toBeUndefined();
     expect(commitOf({ ref: 'v2' }, { sha: SHA('b') })).toBe(SHA('b'));
     expect(commitOf({ ref: pinned.toUpperCase() }, { sha: SHA('b') })).toBe(pinned);
   });
 
   it('marks a failure to write the cache, which no token would fix', async () => {
     const dir = tempDir();
-    writeFileSync(join(dir, 'octo'), '');
-    const d = await downloadRemoteSources(index, await lock(), dir, { fetch: api().fetch });
+    // A file where the host's directory would go.
+    writeFileSync(join(dir, 'github.com'), '');
+    const d = await downloadRemoteSources(index, await lock(), directoryRemoteCache(dir), {
+      fetch: api().fetch,
+    });
     expect(d.failed.map((f) => [f.ref, f.cache])).toEqual([
       ['octo/setup@v2', true],
       ['octo/ship/.github/workflows/deploy.yml@v1', true],
@@ -868,7 +896,9 @@ describe('the files read, for the sources cache', () => {
         'octo/ship/.github/workflows/deploy.yml@v1': { sha: SHA('a'), kind: 'workflow' },
       },
     };
-    const d = await downloadRemoteSources(index, locked, tempDir(), { fetch: api().fetch });
+    const d = await downloadRemoteSources(index, locked, directoryRemoteCache(tempDir()), {
+      fetch: api().fetch,
+    });
     expect(d.downloaded).toEqual(['octo/ship/.github/workflows/deploy.yml@v1']);
     expect(d.notLocked).toEqual(['octo/gone@v1']);
     expect(d.failed).toEqual([
@@ -939,13 +969,31 @@ describe('two versions of one action in the same workflow', () => {
     ]);
     const dir = mkdtempSync(join(tmpdir(), 'flowpact-versions-'));
     try {
-      const d = await downloadRemoteSources(lint(files(both)).index, u.lock, dir, { fetch: api().fetch });
+      const d = await downloadRemoteSources(lint(files(both)).index, u.lock, directoryRemoteCache(dir), {
+        fetch: api().fetch,
+      });
       expect(d.downloaded).toEqual(['octo/setup@v1', 'octo/setup@v2']);
       expect(
-        readFileSync(cachedSource(dir, parseRemoteRef('octo/setup@v1', 'action')!, SHA('1'))!.path, 'utf8'),
+        readFileSync(
+          cachedSource(
+            directoryRemoteCache(dir),
+            'github.com',
+            parseRemoteRef('octo/setup@v1', 'action')!,
+            SHA('1'),
+          )!.path,
+          'utf8',
+        ),
       ).toBe(V1);
       expect(
-        readFileSync(cachedSource(dir, parseRemoteRef('octo/setup@v2', 'action')!, SHA('2'))!.path, 'utf8'),
+        readFileSync(
+          cachedSource(
+            directoryRemoteCache(dir),
+            'github.com',
+            parseRemoteRef('octo/setup@v2', 'action')!,
+            SHA('2'),
+          )!.path,
+          'utf8',
+        ),
       ).toBe(V2);
     } finally {
       rmSync(dir, { recursive: true, force: true });

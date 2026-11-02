@@ -501,8 +501,9 @@ describe('navigation', () => {
     ].join('\n');
     const dir = repo({ [R]: text, '.github/flowpact/remotes.lock.yaml': lock });
     const cache = repo({});
-    const cached = join(cache, 'remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
-    write(cache, { [join('remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml')]: source });
+    const rel = join('remotes', 'github.com', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
+    const cached = join(cache, rel);
+    write(cache, { [rel]: source });
     const before = process.env.FLOWPACT_CACHE_DIR;
     process.env.FLOWPACT_CACHE_DIR = cache;
     let client: Client;
@@ -542,7 +543,7 @@ describe('navigation', () => {
     const dir = repo({ [R]: text, '.github/flowpact/remotes.lock.yaml': lock });
     const first = repo({});
     const second = repo({});
-    const rel = join('remotes', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
+    const rel = join('remotes', 'github.com', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml');
     write(first, { [rel]: 'on:\n  workflow_call: {}\njobs: {}\n' });
     write(second, { [rel]: '# second\non:\n  workflow_call: {}\njobs: {}\n' });
     const client = await start(dir, { cacheDir: first });
@@ -565,7 +566,7 @@ describe('navigation', () => {
 
   it('does not analyze a workspace folder inside the sources cache', async () => {
     const cache = repo({});
-    const folder = join(cache, 'remotes', 'octo', 'ship', 'c'.repeat(40));
+    const folder = join(cache, 'remotes', 'github.com', 'octo', 'ship', 'c'.repeat(40));
     write(folder, {
       '.github/workflows/deploy.yml': 'on: push\njobs:\n  a:\n    uses: elsewhere/unlocked@v1\n',
     });
@@ -1294,7 +1295,7 @@ describe('completion', () => {
   it("adds the descriptions of a remote reference's cached source", async () => {
     const cache = repo({});
     write(cache, {
-      [join('remotes', 'octo', 'setup', SHA, 'action.yml')]:
+      [join('remotes', 'github.com', 'octo', 'setup', SHA, 'action.yml')]:
         "name: setup\ninputs:\n  version: { required: true, description: 'The version to install' }\nruns:\n  using: node24\n  main: x.js\n",
     });
     const items = await complete({}, step(['      - uses: octo/setup@v2', '        with:', '          |']), {

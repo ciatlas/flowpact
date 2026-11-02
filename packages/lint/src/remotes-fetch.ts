@@ -7,6 +7,7 @@
 import {
   apiHost,
   createParseContext,
+  type DirectoryRemoteCache,
   type FetchLike,
   type FileSystem,
   fetchRemoteSourceAt,
@@ -22,6 +23,8 @@ import {
   type RemoteRef,
   type RemoteSource,
   type RemoteSourceCache,
+  type RemoteSourceKey,
+  remoteCachePath,
   remoteKey,
   remoteRefsOf,
   remoteSourceFiles,
@@ -36,7 +39,7 @@ import {
   type RemotesLock,
   targetedUnits,
 } from './remotes';
-import { cachedSource, cachedSourcePath, cacheSource, commitKey, touchCommit } from './remotes-cache';
+import { cachedSource, commitKey } from './remotes-cache';
 import { undeclaredSecretsRead } from './rules/secrets';
 
 export interface FetchRemotesOptions {
@@ -62,7 +65,7 @@ export interface FetchRemotesOptions {
   fallback?: { apiUrl: string; token?: string };
   /**
    * Where each workflow file or `action.yml` read is written once its digest is checked, for the sources cache (see
-   * `cacheSource`). Written through: what it returns for a read is used instead of asking the API.
+   * `remotesCacheDir`). Written through: what it returns for a read is used instead of asking the API.
    */
   cache?: RemoteSourceCache;
   /**
@@ -424,7 +427,7 @@ export interface RemotesDownload {
    * (see `RemoteFailureKind`), `cache` when writing the cache failed.
    */
   failed: { ref: string; error: string; kind?: RemoteFailureKind; cache?: true }[];
-  /** The cached commits this run uses (`commitKey`), marked as just used: what a prune keeps. */
+  /** The cached commits this run uses (`commitKey`), marked as just used by the cache: what a prune keeps. */
   commits: string[];
 }
 
@@ -436,7 +439,7 @@ export interface RemotesDownload {
 export async function downloadRemoteSources(
   index: ProjectIndex,
   lock: RemotesLock,
-  dir: string,
+  cache: DirectoryRemoteCache,
   opts: FetchRemotesOptions = {},
 ): Promise<RemotesDownload> {
   const refs = remoteRefsOf(index.project, targetedUnits(index));
@@ -449,11 +452,8 @@ export async function downloadRemoteSources(
     commits: [],
   };
   await eachRef(refs, opts, async (r, run, count) => {
-    const done = await downloadOne(r, lock, dir, run);
-    if (done.list === 'downloaded' || done.list === 'cached') {
-      touchCommit(dir, r, done.sha);
-      out.commits.push(commitKey(r, done.sha));
-    }
+    const done = await downloadOne(r, lock, cache, run);
+    if (done.list === 'downloaded' || done.list === 'cached') out.commits.push(commitKey(r, done.sha));
     const outcome = record(out, r.raw, done);
     count.done++;
     opts.onProgress?.({ ...count, ref: r.raw, ...outcome });
@@ -476,7 +476,7 @@ type Downloaded =
 async function downloadOne(
   r: RemoteRef,
   lock: RemotesLock,
-  dir: string,
+  cache: DirectoryRemoteCache,
   opts: FetchRemotesOptions,
 ): Promise<Downloaded> {
   const { entry, unreadable } = lockedRemote(lock, r.raw);
@@ -484,17 +484,25 @@ async function downloadOne(
     return { list: 'skipped', reason: `the lockfile records it as not readable (${unreadable})` };
   if (!entry) return { list: 'notLocked' };
   const sha = commitOf(r, entry);
-  if (cachedSource(dir, r, sha)) return { list: 'cached', sha };
-  // Before any request: a path the cache cannot hold would be downloaded on every run and never kept.
-  if (!remoteSourceFiles(r).some((f) => cachedSourcePath(dir, r, sha, f))) return UNSAFE;
+  // Where the entry was read: the fallback's host when it served it, else the API this run uses.
+  const host = entry.host ?? apiHost(apiOf(opts).apiUrl);
+  const cached = cachedSource(cache, host, r, sha);
+  // Read, so the cache marks the commit as just used, and keeps it from its own pruning.
+  if (cached && cache.get({ host, owner: r.owner, repo: r.repo, sha, file: cached.file }))
+    return { list: 'cached', sha };
   const api = apiFor(entry, opts);
   if (!api)
     return {
       list: 'skipped',
       reason: `on ${entry.host}, which this run does not read: look there with --github-com`,
     };
+  // Before any request: a path the cache cannot hold would be downloaded on every run and never kept.
+  const keyOf = (file: string) => ({ host, owner: r.owner, repo: r.repo, sha, file });
+  if (!remoteSourceFiles(r).some((f) => remoteCachePath(cache.dir, keyOf(f)))) return UNSAFE;
   const source = await sourceOrError(r, sha, api);
-  return 'error' in source ? { list: 'failed', ...source } : keepSource(dir, r, sha, source);
+  return 'error' in source
+    ? { list: 'failed', ...source }
+    : keepSource(cache, keyOf(source.file), source.bytes);
 }
 
 /** A reference's file at a commit, or why it could not be read; any other error is a bug and is thrown. */
@@ -515,18 +523,13 @@ async function sourceOrError(
   }
 }
 
-/** A downloaded file into the cache. */
-function keepSource(
-  dir: string,
-  r: RemoteRef,
-  sha: string,
-  source: { file: string; text: string },
-): Downloaded {
-  const cached = cacheSource(dir, r, sha, source.file, source.text);
+/** A downloaded file into the cache, as served. */
+function keepSource(cache: DirectoryRemoteCache, key: RemoteSourceKey, bytes: Uint8Array): Downloaded {
+  const cached = cache.write(key, bytes);
   if (cached === 'unsafe') return UNSAFE;
   if (typeof cached === 'object')
     return { list: 'failed', error: `could not write the cache: ${cached.failed}`, cache: true };
-  return { list: cached === 'written' ? 'downloaded' : 'cached', sha };
+  return { list: cached === 'written' ? 'downloaded' : 'cached', sha: key.sha };
 }
 
 const UNSAFE: Downloaded = { list: 'skipped', reason: 'its path cannot be a file name in the cache' };
