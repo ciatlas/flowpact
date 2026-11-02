@@ -947,7 +947,8 @@ describe('two versions of one action in the same workflow', () => {
 
   it('locks each version as its own entry, checks each call against its own version, and caches both', async () => {
     const u = await updateRemotesLock(lint(files(both)).index, undefined, { fetch: api().fetch });
-    expect(Object.keys(u.lock.remotes)).toEqual(['octo/setup@v1', 'octo/setup@v2']);
+    // In the order the fetches finished; `serializeRemotesLock` sorts them.
+    expect(Object.keys(u.lock.remotes).sort()).toEqual(['octo/setup@v1', 'octo/setup@v2']);
     expect(u.lock.remotes['octo/setup@v1']).toMatchObject({
       sha: SHA('1'),
       inputs: { old: { required: true } },
