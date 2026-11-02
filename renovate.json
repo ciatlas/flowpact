@@ -42,6 +42,13 @@
       "semanticCommitType": "chore"
     },
     {
+      "description": "The docs site's dependencies (Next.js, React, Fumadocs) are peers of one another, and pnpm-lock.yaml writes peers into every entry that depends on them: one update rewrites the lines the others change, so they share one pull request instead of conflicting after each merge. Its development dependencies stay in the dev dependencies group, with the same packages elsewhere in the workspace.",
+      "matchFileNames": ["apps/docs/package.json"],
+      "matchDepTypes": ["dependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "docs dependencies (non-major)"
+    },
+    {
       "description": "Non-major updates merge themselves once every required check passes; Renovate bypasses only the code owner review (.github/rulesets/main-reviews.json). Anything that ships still waits for the release pull request, which needs approval.",
       "matchUpdateTypes": ["minor", "patch", "pin", "digest", "pinDigest"],
       "automerge": true
