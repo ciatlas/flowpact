@@ -4,6 +4,15 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.29.1](https://github.com/ciatlas/flowpact/compare/v0.29.0...v0.29.1) (2026-11-02)
+
+
+### Bug Fixes
+
+* **cli:** keep remote sources in core's directory cache, under a host directory; run `flowpact remotes download` once to fill it again ([#273](https://github.com/ciatlas/flowpact/issues/273)) ([4e3ae8f](https://github.com/ciatlas/flowpact/commit/4e3ae8f96f3c4a723fa655b3f7210d495528536e))
+* **deps:** update dependency vscode-languageserver-textdocument to v1.0.16 ([#270](https://github.com/ciatlas/flowpact/issues/270)) ([eeacf58](https://github.com/ciatlas/flowpact/commit/eeacf58ce3d34b4be3d5967f1220e2550b6b07bf))
+* **deps:** update dependency zod to v4.6.7 ([#271](https://github.com/ciatlas/flowpact/issues/271)) ([e02b69f](https://github.com/ciatlas/flowpact/commit/e02b69f2220461953fdbbc3e8ced5e951750e017))
+
 ## [0.29.0](https://github.com/ciatlas/flowpact/compare/v0.28.0...v0.29.0) (2026-10-29)
 
 
