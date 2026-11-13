@@ -12,6 +12,7 @@ import {
   parseActionFile,
   parseRemoteRef,
   parseWorkflowFile,
+  type RemoteRef,
   type SymbolLocator,
   type UnitDecl,
 } from '@ciatlas/core';
@@ -63,12 +64,7 @@ export class RemoteSources {
     const r = entry && parseRemoteRef(ref, entry.kind);
     const cache = this.cache;
     if (!r || !cache) return undefined;
-    const sha = commitOf(r, entry);
-    const on = (hosts: readonly string[]) =>
-      hosts.map((host) => cachedSource(cache, host, r, sha)).find((f) => f !== undefined);
-    const found = entry.host
-      ? on([entry.host])
-      : (on(this.hosts) ?? on(cachedHosts(cache.dir).filter((h) => !this.hosts.includes(h))));
+    const found = findCached(cache, this.hosts, entry, r);
     if (!found) return undefined;
     const unit =
       this.parsed.get(found.path) ?? parseCached(found.path, found.file, entry, `${r.owner}/${r.repo}`);
@@ -101,6 +97,23 @@ function defaultHosts(env: Record<string, string | undefined>): string[] {
     // Not a URL: `remotes update` could not have read with it.
   }
   return [...new Set([...hosts, apiHost(GITHUB_COM_API)])];
+}
+
+/**
+ * A remote reference's file in the cache at the commit it runs (`commitOf`): on the host its entry was read from, else on
+ * the `hosts` an entry without one was read from by default, else on any other host the cache has.
+ */
+function findCached(
+  cache: DirectoryRemoteCache,
+  hosts: readonly string[],
+  entry: RemoteEntry,
+  r: RemoteRef,
+): { path: string; file: string } | undefined {
+  const sha = commitOf(r, entry);
+  const on = (list: readonly string[]) =>
+    list.map((host) => cachedSource(cache, host, r, sha)).find((f) => f !== undefined);
+  if (entry.host) return on([entry.host]);
+  return on(hosts) ?? on(cachedHosts(cache.dir).filter((h) => !hosts.includes(h)));
 }
 
 /**
