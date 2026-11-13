@@ -163,6 +163,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Go to Definition opens the sources of remote references from the server's cache: another repository's files at a
   // pinned commit, so they open read-only. The server says where its cache is.
   let sourcesDir: string | undefined;
+  /** The cache last named in the output, so a missing source can be looked for where the server looks. */
+  let sourcesNamed: string | null | undefined;
   // Decided by the active tab, which the command marks: focusing a Peek or a side of a diff changes the active text
   // editor but not the tab, and must not mark the file that holds it.
   const readOnlyIfSource = () => {
@@ -173,6 +175,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const askSourcesDir = (c: LanguageClient) =>
     c.sendRequest<string | null>('flowpact/sourcesDir').then(
       (dir) => {
+        if (dir !== sourcesNamed)
+          output.info(
+            dir
+              ? `remote sources cache: ${dir}`
+              : 'no remote sources cache: no home directory to keep one in (set flowpact.cacheDir)',
+          );
+        sourcesNamed = dir;
         sourcesDir = dir ?? undefined;
         readOnlyIfSource();
       },

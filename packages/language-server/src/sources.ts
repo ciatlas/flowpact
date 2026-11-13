@@ -1,4 +1,4 @@
-import { readFileSync, realpathSync } from 'node:fs';
+import { readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import {
   apiHost,
@@ -36,15 +36,16 @@ export interface CachedUnit {
 
 /**
  * The remote sources cache as the editor reads it (see `remotesCacheDir`): the file of a remote reference at the commit
- * it runs (`commitOf`: its own full SHA, else the commit the lockfile pins), on the host it was read from. Each file is
- * parsed once: a file at a commit never changes. Without a directory (no home directory to keep one in), it has nothing.
+ * it runs (`commitOf`: its own full SHA, else the commit the lockfile pins), on the host it was read from, else on any
+ * host the cache has it. Each file is parsed once: a file at a commit never changes. Without a directory (no home
+ * directory to keep one in), it has nothing.
  */
 export class RemoteSources {
   /** Files parsed, by path. Only files read: one that could not be (pruned meanwhile) is read again next time. */
   private readonly parsed = new Map<string, UnitDecl>();
   private readonly realDir: string | undefined;
   private readonly cache: DirectoryRemoteCache | undefined;
-  /** Where an entry without a host was read: see `defaultHosts`. */
+  /** Where an entry without a host was read, first: see `defaultHosts`. */
   private readonly hosts: string[];
 
   constructor(
@@ -63,9 +64,11 @@ export class RemoteSources {
     const cache = this.cache;
     if (!r || !cache) return undefined;
     const sha = commitOf(r, entry);
-    const found = (entry.host ? [entry.host] : this.hosts)
-      .map((host) => cachedSource(cache, host, r, sha))
-      .find((f) => f !== undefined);
+    const on = (hosts: readonly string[]) =>
+      hosts.map((host) => cachedSource(cache, host, r, sha)).find((f) => f !== undefined);
+    const found = entry.host
+      ? on([entry.host])
+      : (on(this.hosts) ?? on(cachedHosts(cache.dir).filter((h) => !this.hosts.includes(h))));
     if (!found) return undefined;
     const unit =
       this.parsed.get(found.path) ?? parseCached(found.path, found.file, entry, `${r.owner}/${r.repo}`);
@@ -98,6 +101,22 @@ function defaultHosts(env: Record<string, string | undefined>): string[] {
     // Not a URL: `remotes update` could not have read with it.
   }
   return [...new Set([...hosts, apiHost(GITHUB_COM_API)])];
+}
+
+/**
+ * The hosts a cache directory has sources of. An entry without a host was read from the API the command line had
+ * (`GITHUB_API_URL`, `--api-url`), which the editor may not know: VS Code started from the Dock has no variable set in a
+ * terminal. Its commit names the file on whichever host the cache keeps it.
+ */
+function cachedHosts(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 const inside = (dir: string, path: string) => {
