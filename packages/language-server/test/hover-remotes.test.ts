@@ -325,7 +325,7 @@ describe('remote references with their sources cached', () => {
     }
   });
 
-  it("opens a source on the host the lockfile entry was read from, else the API's", () => {
+  it("opens a source on the host the lockfile entry was read from, else the API's, else any the cache has", () => {
     const at = mkdtempSync(join(tmpdir(), 'flowpact-hosts-'));
     try {
       keep(at, 'ship', '.github/workflows/deploy.yml', DEPLOY_SOURCE, 'ghes.example');
@@ -336,16 +336,25 @@ describe('remote references with their sources cached', () => {
       expect(new RemoteSources(at, ghes).of(lockOf, DEPLOY)?.path).toBe(
         join(at, 'ghes.example', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'),
       );
-      expect(new RemoteSources(at, {}).of(lockOf, DEPLOY)).toBeUndefined();
-      // The action's entry says github.com (the fallback): there, whatever the API.
+      // An editor without the variable (VS Code started from the Dock) finds it on the host the cache keeps it.
+      expect(new RemoteSources(at, {}).of(lockOf, DEPLOY)?.path).toBe(
+        join(at, 'ghes.example', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'),
+      );
+      // The action's entry says github.com (the fallback): there, whatever the API, and nowhere else.
       expect(new RemoteSources(at, ghes).of(lockOf, 'octo/setup@v2')?.path).toBe(
         join(at, 'github.com', 'octo', 'setup', SHA, 'action.yml'),
       );
-      // A source read from github.com is found from an editor that has GITHUB_API_URL for another host.
+      rmSync(join(at, 'github.com'), { recursive: true });
+      keep(at, 'setup', 'action.yml', SETUP_SOURCE, 'ghes.example');
+      expect(new RemoteSources(at, ghes).of(lockOf, 'octo/setup@v2')).toBeUndefined();
+      // Kept on several hosts: the API's first, then github.com's.
       keep(at, 'ship', '.github/workflows/deploy.yml', DEPLOY_SOURCE);
       expect(
         new RemoteSources(at, { GITHUB_API_URL: 'https://other.example/api/v3' }).of(lockOf, DEPLOY)?.path,
       ).toBe(join(at, 'github.com', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'));
+      expect(new RemoteSources(at, ghes).of(lockOf, DEPLOY)?.path).toBe(
+        join(at, 'ghes.example', 'octo', 'ship', SHA, '.github', 'workflows', 'deploy.yml'),
+      );
     } finally {
       rmSync(at, { recursive: true, force: true });
     }

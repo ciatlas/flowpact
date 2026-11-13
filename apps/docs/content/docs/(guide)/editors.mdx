@@ -146,8 +146,9 @@ the file on its host when that host is certain: github.com for an entry read the
 For any other origin (an enterprise server without `GITHUB_API_URL`, an SSH alias, another forge) it gives no link
 rather than a wrong one.
 
-If you keep the cache elsewhere (`--cache-dir`), set `flowpact.cacheDir` (`cacheDir` in other editors) to the same
-directory.
+The editor finds a cached source on whichever host it was read from, so it needs no `GITHUB_API_URL` to open one, only
+to link it. If you keep the cache elsewhere (`--cache-dir`), set `flowpact.cacheDir` (`cacheDir` in other editors) to
+the same directory: VS Code's flowpact output names the one it reads.
 
 ## Quick fixes
 
