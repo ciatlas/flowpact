@@ -27,7 +27,7 @@
     "@ciatlas/core": "github:ciatlas/core#v2.7.0",
     "@flowpact/lint": "workspace:*",
     "@flowpact/reporters": "workspace:*",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.0.0",
     "@vitest/coverage-v8": "^5.0.3",
     "fallow": "^3.33.1",
     "fast-check": "^4.10.2",
