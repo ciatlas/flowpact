@@ -43,7 +43,7 @@ from extension 0.32.3 (2026-10-15). It checks calls to reusable workflows and re
 in, and calls to local reusable workflows only when GitHub also returns the workspace's repository; otherwise it misses
 them and can warn about outputs that exist. It reports nothing for local composite actions.
 
-<InlineTOC items={toc} />
+<InlineTOC items={Array.isArray(toc) ? toc : toc(props)} />
 
 ## Side by side
 

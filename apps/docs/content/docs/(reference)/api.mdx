@@ -27,7 +27,7 @@ process.exitCode = analysis.exitCode();
   problem with the options, the config or a plugin.
 - Nothing is logged unless you pass `log`.
 
-<InlineTOC items={toc} />
+<InlineTOC items={Array.isArray(toc) ? toc : toc(props)} />
 
 ## Functions
 
