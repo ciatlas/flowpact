@@ -13,3 +13,10 @@ allowBuilds:
 virtualStoreDirMaxLength: 120
 minimumReleaseAgeExclude:
   - execa@10.1.0
+overrides:
+  # GHSA-g3hv-75wg-m249 is fixed only in minimatch 11, and vscode-languageclient and @vscode/vsce still require ^10.
+  # vscode-languageclient also calls makeRe(), which 11 removes: patches/ replaces those calls. Drop both once
+  # https://github.com/microsoft/vscode-languageserver-node/issues/1938 ships.
+  minimatch@^10: ^11.0.9
+patchedDependencies:
+  vscode-languageclient@10.1.2: patches/vscode-languageclient@10.1.2.patch

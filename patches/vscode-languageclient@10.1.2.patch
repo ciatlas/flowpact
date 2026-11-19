@@ -1,0 +1,28 @@
+diff --git a/lib/common/fileOperations.js b/lib/common/fileOperations.js
+index 286ef1e84c8a198b3b94cab972fb68d8a82e398f..8443692d45c0d1162ebbe3a56bcdf0d322bfd13f 100644
+--- a/lib/common/fileOperations.js
++++ b/lib/common/fileOperations.js
+@@ -108,7 +108,8 @@ class FileOperationFeature {
+         }
+         const minimatchFilter = data.registerOptions.filters.map((filter) => {
+             const matcher = new minimatch.Minimatch(filter.pattern.glob, FileOperationFeature.asMinimatchOptions(filter.pattern.options));
+-            if (!matcher.makeRe()) {
++            // minimatch 11 removes makeRe(); an empty set is what made it return false.
++            if (matcher.set.length === 0) {
+                 throw new Error(`Invalid pattern ${filter.pattern.glob}!`);
+             }
+             return { scheme: filter.scheme, matcher, kind: filter.pattern.matches };
+diff --git a/lib/common/utils/globPattern.js b/lib/common/utils/globPattern.js
+index 644722806efdab79e5181863f14d3eaae1c0b8d4..9ec207597d25c71feb990701b434f2680a9f08ec 100644
+--- a/lib/common/utils/globPattern.js
++++ b/lib/common/utils/globPattern.js
+@@ -55,7 +55,8 @@ function matchGlobPattern(pattern, resource) {
+         }
+     }
+     const matcher = new minimatch.Minimatch(miniMatchPattern, { noext: true });
+-    if (!matcher.makeRe()) {
++    // minimatch 11 removes makeRe(); an empty set is what made it return false.
++    if (matcher.set.length === 0) {
+         return false;
+     }
+     return matcher.match(resource.fsPath);
