@@ -120,11 +120,15 @@ export function startServer(connection: Connection): void {
       sink: {
         write: (r: LogRecord) => {
           const line = `[${r.scope}] ${r.message}${r.data ? ` ${JSON.stringify(r.data)}` : ''}`;
-          if (r.level === 'error') connection.console.error(line);
-          else if (r.level === 'warn') connection.console.warn(line);
-          else if (r.level === 'info') connection.console.info(line);
-          // Not `log`: editors filter `debug` by the output's log level, while `log` lines always show.
-          else connection.console.debug(line);
+          try {
+            if (r.level === 'error') connection.console.error(line);
+            else if (r.level === 'warn') connection.console.warn(line);
+            else if (r.level === 'info') connection.console.info(line);
+            // Not `log`: editors filter `debug` by the output's log level, while `log` lines always show.
+            else connection.console.debug(line);
+          } catch {
+            // The connection may already be closed (e.g. during test cleanup); nothing can log there any more.
+          }
         },
       },
     });
