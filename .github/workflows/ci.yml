@@ -259,7 +259,8 @@ jobs:
     # Workflow security (zizmor.sh): template injection, credentials left in the checkout, cache poisoning, unpinned or
     # impostor actions and more, in this repository's workflows and in the action's own action.yml. flowpact checks how
     # data flows through workflows; zizmor checks how they can be attacked. Findings fail the job and annotate the
-    # pull request.
+    # pull request. In a fork they only annotate: the fork's own workflow files are its owner's to fix, and pull
+    # requests to this repository run with this repository as the base, where findings still fail.
     name: Workflow security (zizmor)
     runs-on: ubuntu-latest
     steps:
@@ -267,6 +268,7 @@ jobs:
         with:
           persist-credentials: false
       - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+        continue-on-error: ${{ github.event.repository.fork }}
         with:
           # The fixtures are test inputs that are unsafe on purpose.
           inputs: .github/workflows action.yml

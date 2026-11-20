@@ -19,8 +19,9 @@ concurrency:
 
 jobs:
   # The build runs the locked dependencies and the CLI with read access only; only the deploy job, which runs no
-  # build tool, can write to GitHub Pages.
+  # build tool, can write to GitHub Pages. A fork skips both: it has no Pages site, and CI already builds the docs.
   build:
+    if: ${{ !github.event.repository.fork }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

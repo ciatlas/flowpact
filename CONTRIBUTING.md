@@ -94,6 +94,11 @@ minors) merge themselves once every required check passes: Renovate may skip the
 Nothing reaches users that way — a dependency fix only updates the release pull request, which the maintainer merges.
 Actions are pinned to commit SHAs, with the version in a comment.
 
+Forks run the same CI on their own pushes and pull requests. Jobs that need the release bot (the release pull
+request, applying repository settings, committing a rebuilt bundle) run only where `RELEASE_BOT_CLIENT_ID` is set,
+and a fork doesn't deploy the docs. In a fork, zizmor findings annotate the run without failing it, because a fork
+can add workflow files of its own. Pull requests to this repository are still checked here in full.
+
 ## Dependencies
 
 **Selecting.** The published packages have no runtime dependencies: the CLI, the GitHub Action and the VS Code

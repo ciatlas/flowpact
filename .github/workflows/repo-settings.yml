@@ -49,7 +49,8 @@ jobs:
 
   apply:
     name: Apply settings
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Applying needs the release bot's administration permission, which a fork doesn't have.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.RELEASE_BOT_CLIENT_ID != ''
     runs-on: ubuntu-latest
     steps:
       - id: app

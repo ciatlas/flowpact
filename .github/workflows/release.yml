@@ -26,7 +26,8 @@ concurrency:
 jobs:
   release-please:
     name: Release pull request
-    if: github.event_name == 'push'
+    # A fork has no release bot, so it skips the release pull request and, with it, every publishing job below.
+    if: github.event_name == 'push' && vars.RELEASE_BOT_CLIENT_ID != ''
     runs-on: ubuntu-latest
     # Writes go through the ciatlas-release-bot app: unlike GITHUB_TOKEN, its pull requests, pushes and tags start the
     # usual workflows, so the release pull request gets the required checks like any other.

@@ -53,7 +53,8 @@ jobs:
   commit:
     name: Commit the rebuilt bundle
     needs: build
-    if: needs.build.outputs.changed == 'true'
+    # A fork running Renovate has no release bot to commit with; CI's bundle check then reports the stale bundle.
+    if: needs.build.outputs.changed == 'true' && vars.RELEASE_BOT_CLIENT_ID != ''
     runs-on: ubuntu-latest
     steps:
       - id: app
