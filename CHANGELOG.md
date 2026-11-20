@@ -4,6 +4,13 @@ All notable changes to flowpact (called wfc before 0.2.0) are documented here. T
 [Semantic Versioning](https://semver.org/). Rule codes (`FPnnn`) are stable: a code never changes meaning, and removed
 codes are not reused. They were renamed once, from `WFCnnn` to `FPnnn` with the same numbers, in 0.2.0.
 
+## [0.29.3](https://github.com/ciatlas/flowpact/compare/v0.29.2...v0.29.3) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** move the extension to minimatch 11 for GHSA-g3hv-75wg-m249 ([#285](https://github.com/ciatlas/flowpact/issues/285)) ([bd646e0](https://github.com/ciatlas/flowpact/commit/bd646e0de1b809010ac0232d7cca22e0d2e020ce))
+
 ## [0.29.2](https://github.com/ciatlas/flowpact/compare/v0.29.1...v0.29.2) (2026-11-13)
 
 
